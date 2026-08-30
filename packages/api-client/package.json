@@ -4,7 +4,8 @@
   "main": "src/index.ts",
   "types": "src/index.ts",
   "scripts": {
-    "build": "tsc --noEmit"
+    "build": "tsc --noEmit",
+    "test": "vitest run"
   },
   "dependencies": {
     "@reduxjs/toolkit": "2.12.0",
@@ -14,6 +15,7 @@
   },
   "devDependencies": {
     "@types/react": "18.3.31",
-    "typescript": "5.9.3"
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
   }
 }
