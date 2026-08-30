@@ -38,9 +38,22 @@ export interface InitI18nOptions {
 let singleton: I18nInstance | null = null;
 
 /**
+ * Cross-bundle bridge: @hub-store/shared KHÔNG phải MF-shared (bundle
+ * riêng vào từng app), nên module-level `singleton` của shell copy không
+ * nhìn thấy được từ remote copy. Publish lên window để remote bundles
+ * (orders/fulfillment expose modules gọi `getI18n()`) nhận đúng instance
+ * shell đã init.
+ */
+declare global {
+  interface Window {
+    __HUB_STORE_I18N__?: I18nInstance;
+  }
+}
+
+/**
  * Tạo + init một i18next instance mới (factory — không side effect,
  * không đụng global i18next). Instance cuối cùng cũng được ghi nhận
- * làm singleton cho `getI18n()`.
+ * làm singleton cho `getI18n()` + publish lên window (cross-MF-bundle).
  */
 export function initI18n(options: InitI18nOptions = {}): I18nInstance {
   const instance = i18next.createInstance();
@@ -53,11 +66,21 @@ export function initI18n(options: InitI18nOptions = {}): I18nInstance {
     interpolation: { escapeValue: false },
   });
   singleton = instance;
+  if (typeof window !== 'undefined') {
+    window.__HUB_STORE_I18N__ = instance;
+  }
   return instance;
 }
 
-/** Singleton getter — instance cuối được init qua factory. null nếu chưa init. */
+/**
+ * Singleton getter — instance cuối được init qua factory. null nếu chưa
+ * init. Fallback sang window global để remote federation bundles (copy
+ * riêng của package này) vẫn thấy instance shell đã init.
+ */
 export function getI18n(): I18nInstance | null {
+  if (!singleton && typeof window !== 'undefined' && window.__HUB_STORE_I18N__) {
+    singleton = window.__HUB_STORE_I18N__;
+  }
   return singleton;
 }
 
