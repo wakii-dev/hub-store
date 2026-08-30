@@ -1,0 +1,9 @@
+node_modules/
+dist/
+.turbo/
+*.tsbuildinfo
+coverage/
+.env.local
+.env.*.local
+.vite/
+*.log

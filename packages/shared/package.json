@@ -1,0 +1,19 @@
+{
+  "name": "@hub-store/shared",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit"
+  },
+  "dependencies": {
+    "antd": "4.24.16",
+    "i18next": "26.4.0",
+    "react": "18.3.1",
+    "react-i18next": "17.0.12"
+  },
+  "devDependencies": {
+    "@types/react": "18.3.31",
+    "typescript": "5.9.3"
+  }
+}
