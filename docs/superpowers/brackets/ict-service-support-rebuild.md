@@ -1,6 +1,6 @@
-# Story: EPIC-PENDING — ICT Service Support: Đơn hàng kho chi nhánh (hub-store-order rebuild)
+# Story: FI-232 — ICT Service Support: Đơn hàng kho chi nhánh (hub-store-order rebuild)
 
-Destination: story/EPIC-PENDING-ict-service-support-rebuild
+Destination: story/fi232-ict-service-support-rebuild
 
 > Spec epic: docs/superpowers/specs/ict-service-support-rebuild-spec.md
 > Source of truth: REQUIREMENTS.md — acceptance §8b KHÔNG đổi; boundary §10 KHÔNG đổi.
@@ -8,7 +8,7 @@ Destination: story/EPIC-PENDING-ict-service-support-rebuild
 > đặc biệt D7 (DnD lib fallback dnd-kit), D11 (complete-picking ở D2), OIDC mock (D1).
 > Design: none cho mọi SF — đây là rebuild 1:1 từ production UI; layout + tokens đã spec
 > sẵn trong REQUIREMENTS §3/§7, không có visual direction mở → không cần designer phase.
-> Team Linear: FI. Destination branch sẽ đổi EPIC-PENDING → epic id thật sau khi tạo issue.
+> Team Linear: FI. Epic: FI-232 (In Progress).
 
 ## SF-1 Foundation + Shared Primitives
 Tier: 0
