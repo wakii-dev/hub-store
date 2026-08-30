@@ -10,7 +10,7 @@ Destination: story/fi233-polyglot-grpc-mf
 
 ## SF-1 FE Foundation + Spikes
 Tier: 0
-linear:
+linear: FI-234
 Design: none
 What: monorepo scaffold + packages/shared + api-client + 3 FE spikes + federation skeleton
 Depends on: —
@@ -18,7 +18,7 @@ Tasks: monorepo-scaffold / shared-types-enums / formatters / status-tag / theme-
 
 ## SF-2 Proto + BFF Gateway
 Tier: 1
-linear:
+linear: FI-235
 Design: none
 What: buf + 3 protos + SPIKE 4 codegen + BFF Fastify 18 REST endpoints + envelopes + contracts + canonical seed
 Depends on: SF-1
@@ -26,7 +26,7 @@ Tasks: buf-setup / proto-fulfillment / proto-batching / proto-print / spike-4-co
 
 ## SF-3 fulfillment-service Java
 Tier: 2
-linear:
+linear: FI-237
 Design: none
 What: Spring Boot 3 gRPC service — owns orders store + master-data, seed load, validations
 Depends on: SF-2
@@ -34,7 +34,7 @@ Tasks: spring-grpc-bootstrap / orders-repo-seed / impl-filter-detail / impl-muta
 
 ## SF-4 batching-service Go
 Tier: 2
-linear:
+linear: FI-238
 Design: none
 What: Go gRPC service — owns batches store, rule-1 hydration qua Java, batch lifecycle
 Depends on: SF-2
@@ -42,7 +42,7 @@ Tasks: go-grpc-bootstrap / batches-store-seed / impl-packing-suggest / impl-crea
 
 ## SF-5 print-service Python
 Tier: 2
-linear:
+linear: FI-239
 Design: none
 What: grpcio service — printers registry + print jobs + PDF 5 templates (reportlab)
 Depends on: SF-2
@@ -50,7 +50,7 @@ Tasks: grpcio-bootstrap / printers-registry-seed / impl-list-printers / impl-pri
 
 ## SF-6 Shell app
 Tier: 1
-linear:
+linear: FI-236
 Design: none
 What: MF host — layout, router, dynamic remote loading, auth stub + role switcher, i18n + theme init
 Depends on: SF-1
@@ -58,7 +58,7 @@ Tasks: mf-host / app-layout / router-dynamic-remotes / auth-stub-role-switcher /
 
 ## SF-7 Orders remote — D1 + D1c
 Tier: 3
-linear:
+linear: FI-240
 Design: none
 What: remote orders — D1 danh sách đơn (8 filters, bulk actions) + HubStoreTransferModal
 Depends on: SF-2, SF-3, SF-6
@@ -66,7 +66,7 @@ Tasks: remote-scaffold-orders / rtkq-slices / filters-8-urlstate / regions-shops
 
 ## SF-8 Orders remote — D1b CreateBatchingModal
 Tier: 4
-linear:
+linear: FI-242
 Design: none
 What: modal 1310×918 — DnD sortable, packing suggest, gán shipper, tạo phiếu
 Depends on: SF-7, SF-4
@@ -74,7 +74,7 @@ Tasks: modal-shell / dnd-sortable-stoporder / packing-suggest-ui / recalc-distan
 
 ## SF-9 Fulfillment remote — D2
 Tier: 3
-linear:
+linear: FI-241
 Design: none
 What: remote fulfillment scaffold + D2 danh sách phiếu soạn (hủy, hoàn tất, nút In)
 Depends on: SF-2, SF-3, SF-4, SF-6
@@ -82,7 +82,7 @@ Tasks: remote-scaffold-fulfillment / rtkq-batches-slices / filters-3-urlstate / 
 
 ## SF-10 Fulfillment remote — D3 Print Shipment
 Tier: 4
-linear:
+linear: FI-243
 Design: none
 What: PrintPage thêm vào remote fulfillment (scaffold từ SF-9) — 5 tabs PDF preview + in
 Depends on: SF-9, SF-2, SF-5, SF-6
@@ -90,7 +90,7 @@ Tasks: printpage-expose-route / tabs-5-printtypes / react-pdf-preview-zoom / pri
 
 ## SF-11 Convergence + QA
 Tier: 5
-linear:
+linear: FI-244
 Design: none
 What: backend integration verify + E2E cross-remotes + audit + compose + regression + close
 Depends on: SF-8, SF-9, SF-10
