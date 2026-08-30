@@ -1,48 +1,40 @@
-# SF-3 Context Pack — D2 Danh sách phiếu soạn
+# SF-3 Context Pack — Shell app (MF host)
 
-> Đọc file này THAY VÌ tự tổng hợp. Epic spec: docs/superpowers/specs/ict-service-support-rebuild-spec.md · Bracket: docs/superpowers/brackets/ict-service-support-rebuild.md
-> Dep: SF-1 (merged — dùng db contract + StatusTag + formatters). Chạy PARALLEL với SF-2 (cùng tier 1).
+> Đọc file này THAY VÌ tự tổng hợp. Spec: docs/superpowers/specs/ict-service-support-mf-spec.md (§2 federation contracts) · Bracket: docs/superpowers/brackets/ict-service-support-rebuild.md
+> Dep: SF-1 (merged — federation skeleton + spike verdicts; LÀM THEO SPIKE 1 VERDICT). Chạy PARALLEL với SF-2.
 
 ## Spec slice (SF-3 chịu trách nhiệm)
 
-1. **Handlers batches** (mutate `mocks/db.ts` đúng contract SF-1):
-   - `POST /fulfillment/batches/filter` → list BatchingItem (§4), hỗ trợ 3 filters + pagination.
-   - `GET /fulfillment/batches/{code}` → detail (đủ items[]).
-   - `GET /fulfillment/batches/criteria` → config trạng thái cho phép hủy (chưa hoàn tất).
-   - `PUT /fulfillment/batches/{code}/cancel` → mutation: phiếu hủy + **TẤT CẢ đơn trong phiếu revert batchStatus=0 (Chưa soạn)** — không mất đơn.
-   - `PUT /fulfillment/complete-picking` → mutation: phiếu + đơn batchStatus=2 (Đã soạn) — quyết định D11.
-2. **3 filters + URL state** (useUrlState SF-1): Số phiếu/Số đơn (text search) / Trạng thái phiếu (StatusSelect) / Thời gian tạo phiếu (DatePicker) + reload giữ filter.
-3. **Bảng 8 cột**: stopOrder (thứ tự giao) / orderCode (mã đơn RSA) / customerAddress / distance (km) / `fromDeliveryTime–toDeliveryTime` / orderStatus StatusTag / totalQuantity / codAmount — **VND format "15.000.000đ"** (VI).
-4. **Expand row** → chi tiết + items[] sản phẩm.
-5. **Hủy phiếu**: nút Hủy chỉ enable khi criteria cho phép → modal confirm + input LÝ DO (bắt buộc) → gọi cancel → refresh → assert đơn đã revert.
-6. **Nút "Hoàn tất soạn"** (D11): batch-level action ở D2 — confirm → complete-picking → batchStatus đổi Đã soạn.
-7. **Nút In + navigation**: điều hướng `/hub-store-order/batch/print?batchCode=<code>` (SF-5 consume param này) — chỉ nút + route, KHÔNG build trang print.
-8. **Revert-consistency test**: assert qua db state + batches API của SF-3 (gọi cancel rồi GET batch/đơn qua db export hoặc handler trực tiếp) — **KHÔNG gọi filter handler của SF-2**; verify cross-screen "đơn quay lại D1" là việc SF-6.
-9. i18n keys `batch.*` (VI/EN đủ).
-10. Unit tests: filters, cancel gating theo criteria, COD format.
-11. **Acceptance walkthrough** §8b D2 (browser, Rule 0) — đúng 5 dòng.
+1. **Vite MF host** theo spike verdict (@module-federation/enhanced hoặc webpack MF fallback): remotes config trỏ orders (3001) + fulfillment (3002); dynamic remote loading + **fallback UI khi remote chưa lên** (không trắng trang).
+2. **AppLayout**: sidebar 48px + header 55px (§7 REQUIREMENTS), menu 3 mục → routes `/hub-store-order/order` | `/hub-store-order/batch` | `/hub-store-order/batch/print`; shell owns BrowserRouter (RRD singleton).
+3. **Auth stub**: login giả lập (không trang login thật — nút chọn role hoặc auto-login dev) → fake JWT (SF-1 util, `JWT_DEV_SECRET` root .env) → auth context cung cấp token cho api-client interceptor → **role switcher dev toolbar** (Coordinator / Warehouse Ops / Manager — chuyển role = ký token mới + reload state).
+4. **api-client init**: singleton do shell init (store per-remote riêng của từng remote, nhưng api-client baseQuery/interceptor setup từ shell); token inject.
+5. **i18next init**: 1 instance, namespaces `shell.*` / `orders.*` / `fulfillment.*` / `common.*`; VI mặc định; toggle VI/EN ở header; remotes dùng chung instance (singleton).
+6. **AntD ConfigProvider** wrap mount region (theme tokens §7 từ packages/shared) — hiệu lực nhờ antd singleton.
+7. **Route gating** role matrix §2 qua `usePermissions` (shared): Coordinator → cả 3 routes; WarehouseOps → batch + print (KHÔNG order); Manager → tất cả. Không đủ quyền → redirect + 403 page. Route `/hub-store-order/order` map expose `orders/D1Page`, `/hub-store-order/batch` → `fulfillment/BatchListPage`, `/hub-store-order/batch/print` → `fulfillment/PrintPage` (exposes contract SF-1 — đúng tên).
+8. 404 page.
+9. i18n keys `shell.*` (menu, header, role switcher, 403/404).
+10. Smoke test: shell load 2 remote skeletons (hoặc remotes thật nếu SF-2/4/6 đã merge — nhưng KHÔNG phụ thuộc).
 
 ## Touch map
 
 ```
-src/pages/batch-list/            ← SF-3 SỞ HỮU (BatchListPage, BatchFilters, BatchTable, CancelBatchModal)
-src/mocks/handlers/batches.ts    ← SF-3 SỞ HỮU (filter/detail/criteria/cancel/complete-picking)
-src/api/batchesApi.ts            ← SF-3 SỞ HỮU
-src/mocks/db.ts                  ← READ-ONLY (mutation qua handler, không thêm seed)
-src/components/, src/utils/       ← READ-ONLY consume
+apps/shell/**                     ← SF-3 SỞ HỮU (skeleton SF-1 → app hoàn chỉnh)
+packages/api-client (init wiring) ← chỉnh NHỎ nếu cần init hook — giữ baseApi/tag scheme SF-1
+packages/shared/**                ← READ-ONLY (consume; frozen)
+services/fulfillment-api/**       ← KHÔNG đụng (SF-2)
 ```
-KHÔNG đụng: `src/pages/order-list/` (kể cả link D1→D2 của SF-2 — họ own), `src/pages/print/` (SF-5), `src/mocks/handlers/fulfillment.ts` (SF-2).
 
-## ACCEPTANCE (user-visible — §8b D2, 5 dòng)
+## ACCEPTANCE (user-visible)
 
-- Mở `/hub-store-order/batch` → bảng phiếu hiện với seed data.
-- Search theo mã phiếu → đúng phiếu; filter trạng thái → lọc đúng.
-- Hủy phiếu (đúng criteria) → confirm + lý do → phiếu hủy, đơn revert Chưa soạn (kiểm qua db/API).
-- COD format "15.000.000đ" đúng (VI).
-- Nút In điều hướng đúng route print với batchCode.
+- Mở shell :3000 → layout (sidebar 48px, header 55px, FPT orange) + menu 3 mục; remote placeholder/fallback hiện đúng route.
+- Role switcher đổi Coordinator ↔ Warehouse Ops ↔ Manager → menu/routes thay đổi theo matrix §2 (Ops không thấy D1).
+- Toggle VI/EN → text shell đổi; reload giữ lựa chọn.
+- Tắt 1 remote → fallback message hiện, phần còn lại vẫn chạy.
+- Route không có → 404; route không đủ quyền → 403/redirect.
 
 ## Boundary (KHÔNG làm)
 
-- KHÔNG build trang print / PDF (SF-5 — chỉ route + param).
-- KHÔNG verify "đơn thấy lại ở D1" qua UI D1 (SF-6).
-- KHÔNG sửa db.ts seed (contract SF-1).
+- KHÔNG code UI business của remotes (placeholder expose modules của SF-1 giữ nguyên — SF-4/6 thay).
+- KHÔNG sửa exposes contract / shared types; KHÔNG backend.
+- Gating dùng `usePermissions` stub matrix có sẵn — KHÔNG tự chế permission riêng.

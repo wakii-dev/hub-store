@@ -1,5 +1,7 @@
 # Epic Spec — ICT Service Support: Đơn hàng kho chi nhánh (hub-store-order rebuild)
 
+> **⚠️ SUPERSEDED 2026-08-31** — bởi `ict-service-support-mf-spec.md` (pivot kiến trúc: microservice backend thật + microfrontend). Spec này KHÔNG còn là spec thực thi; chỉ tham khảo decisions D1-D13 được kế thừa (bảng trong spec v2 §4).
+
 > Source of truth: `/REQUIREMENTS.md` (viết lại từ production code ict-service-support-web).
 > Spec này bổ sung quyết định kiến trúc + phân rã SF. Acceptance criteria = §8b REQUIREMENTS.md (không đổi).
 

@@ -1,6 +1,8 @@
 # ICT Service Support — Đơn hàng kho chi nhánh
 ## Requirements (viết lại từ production code ict-service-support-web)
 
+> **PIVOT 2026-08-31:** Thực thi theo kiến trúc microservice + microfrontend — backend NestJS implement đầy đủ §5 (full handlers), FE module federation. Các dòng §6 "Rebuild" và §10 "KHÔNG: Backend API" dưới đây bị supersede bởi `docs/superpowers/specs/ict-service-support-mf-spec.md`. Nghiệp vụ §1-§5, §8-§9 giữ nguyên.
+
 ---
 
 ## 1. SẢN PHẨM LÀ GÌ

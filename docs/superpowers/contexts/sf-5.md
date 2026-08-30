@@ -1,42 +1,44 @@
-# SF-5 Context Pack — D3 Print Shipment
+# SF-5 Context Pack — Orders remote: D1b CreateBatchingModal
 
-> Đọc file này THAY VÌ tự tổng hợp. Epic spec: docs/superpowers/specs/ict-service-support-rebuild-spec.md · Bracket: docs/superpowers/brackets/ict-service-support-rebuild.md
-> Dep: SF-3 (merged — route print nhận `?batchCode=` từ D2). ĐỌC TRƯỚC: docs/superpowers/spikes/react-pdf-vite.md — implement theo verdict (worker config là phần khó nhất).
+> Đọc file này THAY VÌ tự tổng hợp. Spec: docs/superpowers/specs/ict-service-support-mf-spec.md (§5 SF-5 + tier-gate) · Bracket: docs/superpowers/brackets/ict-service-support-rebuild.md
+> Dep: SF-4 (merged — D1 + điểm mount modal + rows props contract). ĐỌC TRƯỚC: docs/superpowers/spikes/dnd-react18.md — lib DnD BẮT BUỘC theo verdict.
 
 ## Spec slice (SF-5 chịu trách nhiệm)
 
-1. **Route + page**: `/hub-store-order/batch/print` — đọc `?batchCode=` (SF-3 đã điều hướng sang); nếu thiếu batchCode → empty state hướng dẫn quay lại D2.
-2. **5 tabs** đúng thứ tự + label (i18n): Biên bản (`bill` — phiếu thu COD) / Vận đơn (`delivery` — label giao hàng) / Bàn giao (`handover_receipt` — bàn giao shipper) / Bàn giao hàng (`goods_handover` — bàn giao kho) / Lắp đặt (`installation_acceptance` — nghiệm thu lắp đặt).
-3. **react-pdf integration** theo spike SF-1: pdfjs worker config Vite đúng (`?url` / optimizeDeps), lazy-mount tab active (perf — KHÔNG mount 5 PDF cùng lúc).
-4. **Mock PDF data 5 loại phiếu**: fixtures LOCAL trong `src/pages/print/fixtures/` (KHÔNG đụng db.ts — touch map SF-1); handler `GET /fulfillment/print/data?batchCode=&type=` trả data phiếu (tự định nghĩa shape hợp lý, ghi rõ trong file).
-5. **PDF preview + zoom slider**: react-pdf Document/Page, zoom 50–200%.
-6. **Printers**: `GET /fulfillment/print/printers?shopCode=` (printers từ seed SF-1) → dropdown chọn máy in.
-7. **In**: `POST /fulfillment/print` (body: batchCode, printType, printerCode) → handler trả kết quả success/fail → feedback UI (message success/error).
-8. **"In tất cả"**: in 5 loại một lượt → feedback tổng hợp.
-9. i18n keys `print.*` (VI/EN).
-10. Unit tests: tabs render, zoom state, printer select wiring, print payload đúng.
-11. **Acceptance walkthrough** §8b D3 — đúng 4 dòng (browser, Rule 0; PDF preview phải NHÌN THẬT bằng screenshot — tầng 2 visual).
+1. **Modal shell 1310×918** mở từ nút "Tạo phiếu soạn" (SF-4 để điểm mount) — nhận **full rows qua props** (interface pin — KHÔNG re-fetch lúc mở).
+2. **Bảng đơn đã chọn** (sortable): Thứ tự giao | Mã đơn RSA | Địa chỉ KH | Khoảng cách (km) | TG hẹn giao | Trạng thái | SL SP | COD (VND).
+3. **DnD sortable** (theo spike verdict: react-sortable-hoc+array-move, hoặc dnd-kit nếu verdict fallback — FLAG deviation trong notes): kéo thả → stopOrder cập nhật toàn bộ.
+4. **Packing suggest**: `POST /fulfillment/batches/packing-suggest` + UI gợi ý nhóm theo khoảng cách.
+5. **Recalculate distance**: `POST /fulfillment/batches/recalculate-distance` + nút tính lại km.
+6. **Thêm đơn**: search qua `POST /fulfillment/filter` với `shopCode` + `excludeFulfillCodes` (BE chỉ trả batchStatus=0 cùng kho — SF-2 đã chốt) → thêm vào CUỐI bảng.
+7. **Gán shipper**: `DeliveryStaffSelect` — `GET /master-data/delivery-staff` (endpoint bổ sung SF-2).
+8. **Chọn TG giao**: DatePicker + hint từ `GET /order-promising/time-delivery` (D4).
+9. **Tạo phiếu**: `POST /fulfillment/batches/create` (BE reject đơn batchStatus≠0) — gửi thứ tự stopOrder theo DnD + shipper + TG giao.
+10. **Success flow**: đóng modal + same-remote tag invalidation (Fulfillment/Batches); **cross-remote (D2 thấy phiếu) KHÔNG phải việc bạn** — cơ chế `refetchOnMount: 'always'` đã chốt §2, SF-7 verify.
+11. i18n keys `orders.createBatch.*`.
+12. Tests: DnD đổi stopOrder, payload create đúng thứ tự, thêm đơn vào cuối.
+13. **Acceptance walkthrough §8b D1b — 6/7 dòng** (browser Rule 0). **Tier-gate: KHÔNG test "phiếu xuất hiện ở D2" (cross-SF → SF-7); gate của bạn test mutation qua API thật (phiếu sinh, đơn đổi status) — kiểm bằng response/GET batches trực tiếp.**
 
 ## Touch map
 
 ```
-src/pages/print/                 ← SF-5 SỞ HỮU (PrintPage, PdfTab, PdfPreview, PrinterSelect, fixtures/)
-src/mocks/handlers/print.ts      ← SF-5 SỞ HỮU (printers + print + print/data)
-src/api/printApi.ts              ← SF-5 SỞ HỮU
-vite.config.ts (CHỈ thêm pdf worker config nếu spike yêu cầu)  ← chỉnh cẩn trọng, ghi trong commit message
-src/mocks/db.ts                  ← READ-ONLY (printers là seed SF-1)
+apps/orders/src/.../create-batch/**   ← SF-5 SỞ HỮU (Modal, SortableTable, AddOrderSearch, ShipperSelect, PackingSuggest)
+apps/orders BulkActionBar (điểm mount) ← chỉnh NHỎ, giữ props contract SF-4
+packages/shared, api-client            ← READ-ONLY frozen
+apps/fulfillment/**, apps/shell/**     ← KHÔNG đụng
+services/fulfillment-api/**            ← KHÔNG đụng
+docs/superpowers/spikes/dnd-react18.md ← READ-ONLY — verdict quyết định lib
 ```
-KHÔNG đụng: `src/pages/order-list/` (SF-2/4), `src/pages/batch-list/` (SF-3), batches handlers.
 
-## ACCEPTANCE (user-visible — §8b D3, 4 dòng)
+## ACCEPTANCE (user-visible — §8b D1b, 6/7 dòng)
 
-- Mở print từ D2 (hoặc route trực tiếp với batchCode) → 5 tab hiện đúng tên/thứ tự.
-- PDF preview load THẬT (thấy nội dung PDF) + zoom slider kéo được 50–200%.
-- Chọn máy in → dropdown từ API (seed printers).
-- Click "In" → gửi lệnh → feedback kết quả hiện; "In tất cả" chạy 5 loại.
+- Mở modal từ 3 đơn cùng kho → bảng 8 cột hiện.
+- Kéo thả hàng → thứ tự giao (stopOrder) đổi.
+- "Packing suggest" → gợi ý nhóm hiện.
+- Search + thêm đơn → thêm vào cuối.
+- Gán shipper (dropdown staff) + TG giao (DatePicker + gợi ý) chọn được.
+- Tạo phiếu → modal đóng, D1 refresh; (API) phiếu sinh + đơn batchStatus=1 đúng thứ tự DnD.
 
 ## Boundary (KHÔNG làm)
 
-- KHÔNG có máy in thật / OS print dialog thật — mock API phản hồi là đủ.
-- KHÔNG sửa D2 (nút In là của SF-3) — chỉ consume `?batchCode=`.
-- KHÔNG đổi seed db.ts.
+- KHÔNG verify D2 UI (SF-7); KHÔNG sửa backend/shell/fulfillment remote; KHÔNG đổi rows props contract.

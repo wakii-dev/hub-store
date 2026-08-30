@@ -1,44 +1,44 @@
-# SF-6 Context Pack — Convergence + QA
+# SF-6 Context Pack — Fulfillment remote: D2 + D3
 
-> Đọc file này THAY VÌ tự tổng hợp. Epic spec: docs/superpowers/specs/ict-service-support-rebuild-spec.md · Bracket: docs/superpowers/brackets/ict-service-support-rebuild.md
-> Dep: SF-1..SF-5 (TẤT CẢ merged vào story-base). Đây là tier cuối — story-verify final chạy trên output của bạn.
+> Đọc file này THAY VÌ tự tổng hợp. Spec: docs/superpowers/specs/ict-service-support-mf-spec.md (§5 SF-6) · Bracket: docs/superpowers/brackets/ict-service-support-rebuild.md
+> Dep: SF-1, SF-2 (api thật), SF-3 (shell). Chạy PARALLEL với SF-4 (cùng tier 2). Đọc exposes contract sf-1.md — expose ĐÚNG `fulfillment/BatchListPage` + `fulfillment/PrintPage`.
 
 ## Spec slice (SF-6 chịu trách nhiệm)
 
-1. **usePermissions thật**: thay stub all-allowed của SF-1 bằng implementation 3 roles §2:
-   - Coordinator (`Coordinate_Fulfillment_List`, `Coordinate_Fulfillment_Shop`) → D1 + D2 + Print
-   - Warehouse Ops (`WarehouseOps_CN_PickingList_View|Batch_Create|PickingList_Print`) → D2 + Print
-   - Manager (`ServiceOrder_List`, `ServiceOrder_Update`) → tất cả
-   - Route gating (`RoleGate`): không đủ quyền → redirect/403 page; ẩn menu/entry không đủ quyền. Auth flow E2E mock: "đăng nhập" (fake SSO) → token → Bearer → role áp dụng.
-2. **Luồng E2E §8 ĐẦY ĐỦ** (browser, Rule 0 tầng 3 FLOW): đơn đến (seed) → D1 filter → tick 3 đơn cùng kho → CreateBatchingModal (DnD, suggest, shipper, TG) → tạo phiếu → D2 thấy phiếu → hủy phiếu + lý do → **đơn quay lại D1 filter Chưa soạn (UI THẬT qua D1)** → tạo lại → In (D3) → Hoàn tất soạn (§8 bước 6 — batchStatus Đã soạn). Chứng minh từng bước bằng screenshot/log trong Linear comment.
-3. **i18n completeness audit**: scan code còn hardcoded string UI → checklist pass/fail (output: Linear comment có checklist tick).
-4. **URL state cross-screen audit**: filter D1 + D2 giữ qua reload → checklist.
-5. **COD/format audit**: VI `15.000.000đ` / EN `15,000,000 ₫` / formatPeriodOfTime nhất quán cả 3 screens → checklist.
-6. **Build**: `vite build` pass; Dockerfile + nginx.conf SPA fallback (`try_files ... /index.html`) — **cấu hình mẫu, không phải deliverable deploy** (§10).
-7. **Full §8b regression**: chạy TOÀN BỘ checklist 4 screens (9+7+5+4 dòng) → báo từng dòng pass/fail.
-8. **README**: cách chạy dev/test/build, mock data, role switcher, known-limitations (D9 StrictMode, D10 a11y DnD, spike verdicts).
-9. **Final gate**: story-verify sạch + tổng hợp kết quả cho STORY-COMPLETE.
+1. **Remote scaffold**: 2 expose modules đúng contract; namespace `fulfillment.*`; RTK store per-remote; slices batches API (tag `Batches`).
+2. **D2 — 3 filters + URL state**: Số phiếu/Số đơn (text) / Trạng thái phiếu (StatusSelect từ `GET /batches/criteria`) / Thời gian tạo phiếu (DatePicker); reload giữ filter.
+3. **Bảng 8 cột**: stopOrder / orderCode (mã RSA) / customerAddress / distance (km) / fromDeliveryTime–toDeliveryTime / orderStatus StatusTag / totalQuantity / codAmount (**VND `15.000.000đ`** VI).
+4. **Expand row** → detail + items[].
+5. **Hủy phiếu**: enable theo criteria → modal confirm + lý do BẮT BUỘC → `PUT /batches/{code}/cancel` (BE revert đơn batchStatus=0) → refresh.
+6. **"Hoàn tất soạn"** (D11): confirm → `PUT /fulfillment/complete-picking` → batch+đơn batchStatus=2.
+7. **Nút In** → navigate `/hub-store-order/batch/print?batchCode=<code>` (param pin — PrintPage đọc; cross-remote nav qua RRD singleton).
+8. **D3 Print**: route đọc `?batchCode=` (thiếu → empty state quay lại D2); **5 tabs** đúng thứ tự: Biên bản (bill) / Vận đơn (delivery) / Bàn giao (handover_receipt) / Bàn giao hàng (goods_handover) / Lắp đặt (installation_acceptance).
+9. **react-pdf** theo spike verdict (`docs/superpowers/spikes/react-pdf-remote.md`): preview **PDF bytes từ BE** (`POST /fulfillment/print` trả application/pdf — contract chốt §3, KHÔNG có endpoint data riêng; cần khác → REQUIREMENT-GAP lên epic FI-232), lazy-mount tab active; zoom slider 50–200%.
+10. **Printers**: `GET /fulfillment/print/printers?shopCode=` → dropdown.
+11. **In + feedback**: POST print (batchCode, printType, printerCode) → success/error message; **"In tất cả"** = 5 loại một lượt + feedback tổng hợp.
+12. i18n keys `fulfillment.*` (VI/EN).
+13. Unit tests: filters, cancel gating, COD format, print payload.
+14. **Acceptance walkthrough §8b D2 (5 dòng) + D3 (4 dòng)** (browser Rule 0; PDF preview phải NHÌN THẬT — tầng 2 visual screenshot).
 
 ## Touch map
 
 ```
-src/auth/permissions.ts + RoleGate  ← SF-6 SỞ HỮU (thay stub SF-1 — giữ interface usePermissions)
-src/app/layout/ (menu theo role)     ← chỉnh nhỏ
-Dockerfile, nginx.conf, README.md    ← SF-6 SỞ HỮU (tạo mới)
-tests/e2e/ (walkthrough specs)       ← SF-6 SỞ HỮU
-src/** khác                          ← READ-ONLY — phát hiện bug screen khác: KHÔNG tự fix, báo BLOCKED/escalate
+apps/fulfillment/** (trừ skeleton exposes tên) ← SF-6 SỞ HỮU
+packages/shared, api-client                     ← READ-ONLY frozen
+apps/shell/**, apps/orders/**                   ← KHÔNG đụng
+services/fulfillment-api/**                     ← KHÔNG đụng
+docs/superpowers/spikes/react-pdf-remote.md     ← READ-ONLY — verdict quyết định config
 ```
-KHÔNG đụng: seed db.ts, handlers (trừ khi bug chặn E2E — khi đó flag, không sửa lén).
 
-## ACCEPTANCE (user-visible)
+## ACCEPTANCE (user-visible — §8b D2 + D3, 9 dòng)
 
-- Chọn role Coordinator → thấy đủ D1/D2/Print; chọn Warehouse Ops → không thấy D1; Manager → tất cả. Chạy trực tiếp route không đủ quyền → bị chặn.
-- Luồng E2E §8 chạy trọn từ đầu đến cuối KHÔNG reload tay, dữ liệu nhất quán (tạo → thấy → hủy → revert → tạo lại → in → hoàn tất).
-- Toàn bộ checklist §8b (25 dòng) pass — chứng minh bằng browser thật.
-- `vite build` + `docker build` (cấu hình mẫu) thành công; README đủ cho người mới chạy app.
+- Mở `/hub-store-order/batch` → bảng phiếu; search mã phiếu đúng; filter trạng thái đúng.
+- Hủy phiếu (đúng criteria) → confirm + lý do → phiếu hủy, đơn revert (kiểm qua API/GET).
+- COD format "15.000.000đ".
+- Nút In → route print với batchCode đúng.
+- Print: 5 tabs đúng tên/thứ tự; PDF preview NHÌN THẬT + zoom 50–200%; máy in dropdown từ API; In → feedback; In tất cả chạy 5 loại.
 
 ## Boundary (KHÔNG làm)
 
-- KHÔNG refactor code screens (chỉ fix bug chặn E2E, và phải flag).
-- KHÔNG thêm feature mới; KHÔNG deploy thật (chỉ cấu hình mẫu).
-- KHÔNG đổi acceptance criteria.
+- KHÔNG đụng orders remote / shell / backend; KHÔNG test cross-remote invalidation (SF-7); KHÔNG máy in thật (mock API đủ).
+- SF nặng nhất — nếu Phase 3 detail >15 tasks → tách D3 thành SF riêng, báo PM trước.
