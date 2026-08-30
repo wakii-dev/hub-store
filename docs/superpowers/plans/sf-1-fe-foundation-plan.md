@@ -23,5 +23,5 @@
 - [x] Task 8 — packages/api-client: RTK Query singleton + axiosBaseQuery (axios) + setTokenGetter(fn) + tag scheme Fulfillment/Batches/MasterData + default list-query refetchOnMount:'always' + slices skeleton.
 - [x] Task 9 — fake JWT util: `jose` HS256, JWT_DEV_SECRET từ root .env, payload {sub, role}, dev-only. Đặt packages/shared.
 - [x] Task 10 — Federation skeleton THEO SPIKE 1 VERDICT (GATE: verdicts 1-3 tồn tại + go): shell host + orders + fulfillment remotes; exposes PIN orders=`orders/D1Page`→/hub-store-order/order, fulfillment=`fulfillment/BatchListPage`→/hub-store-order/batch, `fulfillment/PrintPage`→/hub-store-order/batch/print; singletons react/react-dom/antd/@reduxjs/toolkit/react-redux/react-router-dom/i18next/react-i18next + packages/shared + api-client; RRD singleton shell owns BrowserRouter; remotes.config.json PRE-SEED 2 entries skeleton; fallback message remote chưa lên; VI↔EN toggle + theme #EB6E09 ở shell.
-- [ ] Task 11 — Build + test sạch: `pnpm install && pnpm build` pass; `pnpm test` smoke xanh (formatters/StatusTag/usePermissions).
+- [x] Task 11 — Build + test sạch: `pnpm install && pnpm build` pass; `pnpm test` smoke xanh (formatters/StatusTag/usePermissions).
 - [ ] Task 12 — Verify + review + merge: browser 3 tầng; verifier từng dòng ACCEPTANCE; code-reviewer APPROVED; merge no-ff vào story branch; audit comment FI-234.
