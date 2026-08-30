@@ -1,50 +1,45 @@
-# SF-1 Context Pack — Foundation + Spikes (microservice + microfrontend)
-
-> Đọc file này THAY VÌ tự tổng hợp. Spec: docs/superpowers/specs/ict-service-support-mf-spec.md (v2 — MF pivot) · Bracket: docs/superpowers/brackets/ict-service-support-rebuild.md
-> Tier 0 — mọi SF khác fork từ output. SAFETY > TỐC ĐỘ; contracts + spike verdicts là sản phẩm chính.
+# SF-1 Context Pack — FE Foundation + Spikes (polyglot gRPC + MF)
+> Đọc file này THAY VÌ tự tổng hợp. Spec thực thi: docs/superpowers/specs/ict-service-support-polyglot-spec.md (v3). Bracket: docs/superpowers/brackets/fi233-polyglot-grpc-mf.md. Epic: FI-233.
+> Tier 0 — mọi SF khác fork từ output. SAFETY > TỐC ĐỘ: contracts + spike verdicts là sản phẩm chính.
 
 ## Spec slice (SF-1 chịu trách nhiệm)
-
-1. **Monorepo scaffold**: pnpm workspaces + turbo; `services/fulfillment-api`, `apps/{shell,orders,fulfillment}`, `packages/{shared,api-client}`; tsconfig.base; **pin versions mọi root deps** (agents sau không bump); port map dev: api 8080, shell 3000, orders 3001, fulfillment 3002; root script `pnpm dev` (turbo orchestrate).
-2. **packages/shared**: types §4 REQUIREMENTS (HubStoreOrderFilterItem, BatchingItem) + enums (BatchStatus 0-3, OrderStatus 0-2, CoordinationStatus, PrintType union bill|delivery|handover_receipt|goods_handover|installation_acceptance) · formatters: VND (VI `15.000.000đ` / EN `15,000,000 ₫`), `formatPeriodOfTime` (`HH:mm DD/MM/YYYY – HH:mm DD/MM/YYYY` locale-neutral, D5/D13) · StatusTag (màu tokens: success/error/warning/info) · theme tokens §7 → AntD 4.24 ConfigProvider preset (primary #EB6E09, radius 2px/8px, Roboto, typo scale) · i18n infra (i18next, namespaces convention `shell.*` / `orders.*` / `fulfillment.*` + `common.*`) · FilterBar primitives (TextSearch, MultiSelect, DateRange, DateTimeRange; grid 2×4 + Reset/Search slot) · `useUrlState` (filter ↔ URL query, serialize array) · `usePermissions` role matrix §2 (Coordinator `Coordinate_Fulfillment_List|Shop` → D1+D2+Print; WarehouseOps `WarehouseOps_CN_PickingList_View|Batch_Create|PickingList_Print` → D2+Print; Manager `ServiceOrder_List|Update` → tất cả).
-3. **packages/api-client**: RTK Query singleton — baseApi (fetch/axios, Bearer interceptor đọc token từ auth context shell init), **tag scheme `Fulfillment` / `Batches` / `MasterData`**, slices skeleton (fulfillment/batches/print/master-data/order-promising — endpoints rỗng, SF sau điền).
-4. **SPIKE 1 — MF Vite × AntD4 singleton** (P0, verdict `docs/superpowers/spikes/mf-vite-antd4.md`): @module-federation/enhanced với Vite — dev + build + publicPath; singleton `react, react-dom, antd, @reduxjs/toolkit, react-redux, react-router-dom, i18next, react-i18next` shared đúng (2 instance AntD = theme gãy); **fallback nếu gãy: webpack MF** — flag deviation tường minh.
-5. **SPIKE 2 — react-pdf trong remote** (`docs/superpowers/spikes/react-pdf-remote.md`): pdfjs worker trong Vite remote bundle (`?url`, optimizeDeps), render 1 PDF tĩnh.
-6. **SPIKE 3 — DnD × React 18** (`docs/superpowers/spikes/dnd-react18.md`): react-sortable-hoc + array-move (findDOMNode/StrictMode) → gãy thì verdict = dnd-kit (deviation flag, D7).
-7. **Federation scaffold theo SPIKE 1 verdict** (KHÔNG chứa business logic):
-   - **Exposes contract PIN (bảng này là hợp đồng — SF-3/4/6 phải theo đúng tên):**
-     | Remote | Exposed module | Route |
-     |--------|---------------|-------|
-     | orders | `orders/D1Page` | `/hub-store-order/order` |
-     | fulfillment | `fulfillment/BatchListPage` | `/hub-store-order/batch` |
-     | fulfillment | `fulfillment/PrintPage` | `/hub-store-order/batch/print` |
-   - shell skeleton đủ dynamic-load 2 remotes; remotes skeleton đủ expose remoteEntry; remotes chưa lên → fallback message (không trắng trang).
-8. **fake JWT util dùng chung**: HS256 sign/decode, bí mật `JWT_DEV_SECRET` đọc từ root `.env` (MỘT chỗ — FE stub và BE guard cùng đọc; **dev-only, không phải secret thật**). Payload: `{ sub, role }`.
+1. **Monorepo scaffold**: pnpm workspaces + turbo; `services/{bff-gateway,fulfillment-service,batching-service,print-service}`, `apps/{shell,orders,fulfillment}`, `packages/{shared,api-client}`, `api/{proto,seed}` (dir placeholders); tsconfig.base; **pin versions mọi root deps**; root `.env` chứa `JWT_DEV_SECRET`; port map dev: bff 8080, shell 3000, orders 3001, fulfillment 3002, gRPC 50051/50052/50053. Turbo CHỈ orchestrate JS/TS — KHÔNG thêm Java/Go/Python vào turbo pipeline.
+2. **packages/shared**: types §4 REQUIREMENTS (HubStoreOrderFilterItem, BatchingItem, Product) + enums (BatchStatus 0-3, OrderStatus 0-2, CoordinationStatus 0-2, BatchStatus-phiếu 0 ACTIVE|1 COMPLETED|2 CANCELLED, PrintType union `bill|delivery|handover_receipt|goods_handover|installation_acceptance`) · formatters: VND (VI `15.000.000đ` / EN `15,000,000 ₫`), `formatPeriodOfTime` (`HH:mm DD/MM/YYYY – HH:mm DD/MM/YYYY` locale-neutral số) · StatusTag (success/error/warning/info tokens) · theme §7 → AntD 4.24 ConfigProvider preset (primary #EB6E09, radius 2px/8px, Roboto, typo scale) · i18n infra (1 instance, namespaces `shell.*`/`orders.*`/`fulfillment.*` + `common.*`) · FilterBar primitives (TextSearch, MultiSelect, DateRange, DateTimeRange; grid 2×4 + Reset/Search) · `useUrlState` (filter ↔ URL query, serialize array) · `usePermissions` role matrix §2 (Coordinator=`Coordinate_Fulfillment_List|Shop` → D1+D2+Print; WarehouseOps=`WarehouseOps_CN_PickingList_View|Batch_Create|PickingList_Print` → D2+Print; Manager=all).
+3. **packages/api-client**: RTK Query singleton + **axiosBaseQuery** (chốt axios) + `setTokenGetter(fn)` registration (shell đăng ký lúc init — KHÔNG truyền token qua React context cross-MF) + tag scheme `Fulfillment`/`Batches`/`MasterData` + **default list-query `refetchOnMount: 'always'`** (cơ chế cross-remote invalidation — mọi remote inherit) + slices skeleton.
+4. **SPIKE 1** (`docs/superpowers/spikes/mf-vite-antd4.md`): MF Vite × AntD4 singleton — plugin candidates `@originjs/vite-plugin-federation` vs `@module-federation/vite` (spike quyết); verify dev + `vite build` + publicPath prod + antd KHÔNG duplicate. Fallback gãy: webpack MF (deviation flag).
+5. **SPIKE 2** (`docs/superpowers/spikes/react-pdf-remote.md`): react-pdf + pdfjs worker trong remote (worker `?url`, optimizeDeps), render 1 PDF tĩnh.
+6. **SPIKE 3** (`docs/superpowers/spikes/dnd-react18.md`): react-sortable-hoc + array-move trên React 18; gãy → dnd-kit (deviation flag, D7).
+7. **Federation scaffold THEO SPIKE 1 VERDICT** — **SPIKES CHẠY TRƯỚC scaffold** (thứ tự bắt buộc trong SF):
+   - Exposes contract PIN: orders=`orders/D1Page`→`/hub-store-order/order`; fulfillment=`fulfillment/BatchListPage`→`/hub-store-order/batch`, `fulfillment/PrintPage`→`/hub-store-order/batch/print`.
+   - Singleton shared: `react, react-dom, antd, @reduxjs/toolkit, react-redux, react-router-dom, i18next, react-i18next` + packages/shared + api-client. RRD singleton → shell owns BrowserRouter.
+   - Shell skeleton + 2 remote skeletons đủ remoteEntry load + fallback message khi remote chưa lên.
+   - `remotes.config.json` **PRE-SEED cả 2 remote entries dạng skeleton** (SF-7/SF-9 chỉ điền giá trị entry của mình — tránh merge conflict).
+8. **fake JWT util dùng chung**: `jose` (Web Crypto async — KHÔNG jwt-simple sync), HS256, `JWT_DEV_SECRET` từ root `.env` (dev-only stub). Payload `{ sub, role }`.
+9. Spike verdict format: checklist dev-pass / build-pass / publicPath-prod-pass / singleton-no-duplicate-bundle + plugin/lib chọn + config snippet.
 
 ## Touch map (SF-1 sở hữu — SF khác READ-ONLY)
-
-**Staging nội bộ (waves ≤4 — tránh cap-4):** Wave A: monorepo-scaffold → Wave B: shared packages (types → formatters → theme/i18n → filterbar/usepermissions) ∥ 3 spikes → Wave C: api-client + exposes-pin (cần spike 1 verdict) → Wave D: federation scaffold shell + remotes (theo verdict) + fake-jwt-util.
-
 ```
 package.json, pnpm-workspace.yaml, turbo.json, tsconfig.base.json, .env (JWT_DEV_SECRET)
-packages/shared/**          (types, enums, formatters, StatusTag, theme, i18n infra, FilterBar, useUrlState, usePermissions)
-packages/api-client/**      (baseApi, tag scheme, slices skeleton)
-apps/shell/**               (CHỈ skeleton: entry + federation config + placeholder layout — AppLayout thật là SF-3)
-apps/orders/** apps/fulfillment/**   (CHỈ skeleton: entry + federation exposes + placeholder page modules đúng tên exposes contract)
+packages/shared/**          (SAU SF NÀY FROZEN — trừ api-contracts/ do SF-2 thêm)
+packages/api-client/**
+apps/shell/**               (CHỈ skeleton — SF-6 sở hữu phần thân)
+apps/orders/**              (CHỈ skeleton — SF-7/SF-8 sở hữu phần thân)
+apps/fulfillment/**         (CHỈ skeleton — SF-9/SF-10 sở hữu phần thân)
+remotes.config.json         (pre-seed skeleton)
 docs/superpowers/spikes/{mf-vite-antd4,react-pdf-remote,dnd-react18}.md
 ```
+KHÔNG đụng: `services/**` (SF-2..5), `api/**` (SF-2).
 
 ## ACCEPTANCE (user-visible)
-
-- `pnpm dev` từ root: shell 3000 + 2 remotes (3001/3002) lên; shell load được 2 remote skeletons vào mount region (thấy placeholder từng remote).
-- Remote chưa chạy → fallback message, không trắng trang.
-- Đổi ngôn ngữ VI↔EN chạy ở shell (i18n infra); theme FPT orange #EB6E09 hiện.
-- 3 spike files tồn tại, mỗi file có VERDICT rõ (go / fallback + lý do + config snippet).
-- `pnpm test` smoke xanh (shared formatters/StatusTag/usePermissions unit tests).
+- `pnpm install && pnpm build` pass sạch trên monorepo.
+- `pnpm dev` root: shell :3000 + 2 remotes (:3001/:3002) lên; shell load 2 remote skeletons vào mount region (placeholder thấy trên browser); remote chưa chạy → fallback message, không trắng trang.
+- VI↔EN toggle chạy ở shell; theme FPT orange #EB6E09 hiện.
+- 3 spike files tồn tại, mỗi file VERDICT rõ (go/fallback + lý do + config) theo 4-item checklist.
+- `pnpm test` smoke xanh (formatters/StatusTag/usePermissions unit tests).
 
 ## Boundary (KHÔNG làm)
-
-- KHÔNG screen business logic nào (D1/D1b/D2/D3 — SF-4/5/6); KHÔNG backend NestJS thật (SF-2, chỉ fake JWT util dùng chung).
-- KHÔNG AppLayout hoàn chỉnh/role switcher UI (SF-3 — bạn chỉ để skeleton + tokens).
-- KHÔNG sửa exposes contract table — đổi tên = toàn DAG gãy; cần đổi → REQUIREMENT-GAP lên epic.
-- KHÔNG tự chọn fallback (webpack MF/dnd-kit) nếu spike chưa chạy — verdict phải dựa trên thử thật.
+- KHÔNG screen business logic (SF-6..10); KHÔNG backend/proto/seed thật (SF-2 — chỉ fake JWT util).
+- KHÔNG AppLayout hoàn chỉnh/role switcher UI (SF-6 — chỉ skeleton + tokens).
+- KHÔNG sửa exposes contract table — đổi tên = toàn DAG gãy → REQUIREMENT-GAP lên epic FI-233.
+- KHÔNG tự chọn fallback nếu spike chưa chạy — verdict dựa trên thử thật.
+- KHÔNG đụng services/** hoặc api/** (SF-2).

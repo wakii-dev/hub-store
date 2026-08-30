@@ -1,5 +1,7 @@
 # Story: FI-232 — ICT Service Support: Đơn hàng kho chi nhánh (hub-store-order — microservice + microfrontend)
 
+> **⚠️ SUPERSEDED 2026-08-31 — GỘP VÀO MỘT STORY: FI-233** (user: "gop lai thanh 1 story" + kiến trúc polyglot Java/Python/Go/JS gRPC). Story thực thi duy nhất: `fi233-polyglot-grpc-mf.md` + epic FI-233. File này chỉ còn là audit trail (Linear FI-232 Canceled).
+
 Destination: story/fi232-hub-order-mf
 
 > **PIVOT 2026-08-31** — thực thi theo spec v2: docs/superpowers/specs/ict-service-support-mf-spec.md

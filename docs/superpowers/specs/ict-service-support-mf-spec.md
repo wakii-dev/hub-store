@@ -1,5 +1,7 @@
 # Epic Spec v2 — ICT Service Support: microservice + microfrontend (hub-store-order)
 
+> **⚠️ SUPERSEDED 2026-08-31** — bởi `ict-service-support-polyglot-spec.md` (v3 — polyglot Java/Python/Go/JS gRPC, epic FI-233). File này chỉ còn là audit trail.
+
 > **SUPERSEDES** `ict-service-support-rebuild-spec.md` (v1 — standalone Vite + msw). User pivot ngày 2026-08-31: backend microservice THẬT (full 18 endpoints) + microfrontend THẬT. v1 chỉ còn giá trị ở các decisions được kế thừa tường minh (§5).
 > Source of truth nghiệp vụ: `/REQUIREMENTS.md` — acceptance §8b KHÔNG đổi.
 

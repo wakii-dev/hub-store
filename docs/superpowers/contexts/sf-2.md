@@ -1,44 +1,40 @@
-# SF-2 Context Pack — Backend fulfillment-api (NestJS)
-
-> Đọc file này THAY VÌ tự tổng hợp. Spec: docs/superpowers/specs/ict-service-support-mf-spec.md (§3 Backend contract) · Bracket: docs/superpowers/brackets/ict-service-support-rebuild.md
-> Dep: SF-1 (merged — dùng packages/shared types + fake JWT util). Chạy PARALLEL với SF-3 (cùng tier 1).
+# SF-2 Context Pack — Proto + BFF Gateway
+> Đọc file này THAY VÌ tự tổng hợp. Spec thực thi: docs/superpowers/specs/ict-service-support-polyglot-spec.md (v3 §3). Bracket: docs/superpowers/brackets/fi233-polyglot-grpc-mf.md. Epic: FI-233.
+> Tier 1 (dep SF-1). Bạn là CONTRACT AUTHOR của toàn backend — services SF-3/4/5 implement theo proto + seed của bạn.
 
 ## Spec slice (SF-2 chịu trách nhiệm)
+1. **buf setup + 3 proto files** (`api/proto/`):
+   - `fulfillment.proto`: order filter(+`excludeFulfillCodes`)/detail/**MutateOrderStatus**/**GetOrdersByCodes (hydration — Go sẽ gọi để validate rule 1)**/assign-shop-hub/history/delivery-time/**note** + regions + delivery-staff + distinct-shops + order-promising.
+   - `batching.proto`: batch create/filter/detail/cancel/criteria/complete-picking/packing-suggest/recalculate-distance.
+   - `print.proto`: `list-printers` + `print(batchPayload, printType, printerId) → PDF bytes` (batchPayload do BFF hydrate — Python KHÔNG gọi Go).
+2. **SPIKE 4** (`docs/superpowers/spikes/grpc-codegen-multilang.md`): codegen java + go + python + ts **compile pass** — KHÔNG service nào start trước verdict này.
+3. **BFF Gateway** (`services/bff-gateway/`, Node 20 + TypeScript + Fastify, :8080): bootstrap + JWT guard (verify HS256 bằng `JWT_DEV_SECRET` từ root `.env`) + CORS (whitelist 3000-3002).
+4. **REST 18 endpoints §5 REQUIREMENTS + 2 extension**, wiring qua gRPC clients: filter, detail, complete-picking, assign-shop-hub, history (POST nhưng READ semantics — không mutate), note, delivery-time, time-delivery, batches×7, print×2, regions. Extensions: `GET /master-data/delivery-staff` + `GET /master-data/shops` (FLAG scope addition — đã ghi trên epic).
+5. **Envelopes**: pagination `{ items, total, page, pageSize }`; error `{ statusCode, message, code?, details? }` — gRPC status→HTTP mapping; validation `InvalidArgument`+metadata details → HTTP 422 + `details[]` per-field.
+6. **Resilience policy**: gRPC deadline 5s/upstream; upstream unavailable → HTTP 503 + `code: "UPSTREAM_UNAVAILABLE"` + tên service; degraded documented (Java sống + Go chết → D1 render, batchCode trống).
+7. **Author contracts (carve-out khỏi shared-freeze)**: `packages/shared/api-contracts/` (REST DTO — DTO KHÔNG trùng shape có sẵn, extend/re-export) + **canonical seed fixture `api/seed/canonical-seed.json`**.
+8. **Canonical seed content**: ≥25 đơn trải kho, **shop `30201` ≥5 đơn batchStatus=0**, đủ 4 batchStatus (status 3 đặt tay 1-2 đơn), 3 orderStatus, có `isDebtSplittingOrder=true`; phiếu đủ 3 trạng thái Batch với `items[].orderCode` TRỎ ĐÚNG orders seed (một nguồn — không mismatch); delivery staff; printers theo shopCode (gồm 30201); regions hierarchical `{code, name, type: 'province'|'ward', parentCode?}`.
+9. **Contract test harness**: REST tests với gRPC service stubs (mock 3 services), assert envelope + resilience policy.
+10. **Proto change process**: sau SPIKE 4, chỉ SF-2 own buf; đổi proto = PM approval + regenerate 4 ngôn ngữ + comment epic.
 
-1. **NestJS 10 + TypeScript bootstrap**: `services/fulfillment-api`; modules: `fulfillment` / `batches` / `print` / `master-data` / `order-promising`; global validation pipe + error shape thống nhất (`{ statusCode, message, error? }`).
-2. **In-memory repository + seed contract (P0 — §3 v2):**
-   - ≥ 25 đơn trải nhiều kho (**shop `30201` PHẢI có** — acceptance filter), đủ **4** batchStatus (status 3 "Lỗi vượt trọng lượng" seed đặt tay 1-2 đơn — không sinh tự nhiên), 3 orderStatus, có `isDebtSplittingOrder=true`, đủ cho pagination.
-   - Phiếu đủ trạng thái; delivery staff; printers theo shopCode; regions `{code, name, type:'province'|'ward', parentCode?}`.
-3. **Endpoints — đủ 18 §5 + 1 bổ sung:**
-   - fulfillment: `POST /fulfillment/filter` (pagination + search + 8 filters + **`excludeFulfillCodes` + `shopCode`**), `GET /fulfillment/{fulfillCode}` (detail — BỎ waiver D12), `PUT /fulfillment/complete-picking`, `POST /fulfillment/{code}/assign-shop-hub`, `POST /fulfillment/{code}/history` (**semantics ĐỌC** — không mutate dù tên POST), `PUT /fulfillment/{code}/delivery-time`.
-   - batches: `POST /fulfillment/batches/packing-suggest` (nhóm theo khoảng cách), `POST /fulfillment/batches/create` (**REJECT đơn batchStatus≠0**), `POST /fulfillment/batches/filter`, `GET /fulfillment/batches/{code}`, `PUT /fulfillment/batches/{code}/cancel`, `GET /fulfillment/batches/criteria`, `POST /fulfillment/batches/recalculate-distance`.
-   - print: `GET /fulfillment/print/printers?shopCode=`, `POST /fulfillment/print` → **trả PDF bytes (application/pdf), generate bằng `pdf-lib`, 5 template theo PrintType** (bill/delivery/handover_receipt/goods_handover/installation_acceptance — nội dung hợp lý từ batch data: mã, địa chỉ, COD, items...).
-   - master-data: `GET /master-data/regions`, **`GET /master-data/delivery-staff`** (endpoint bổ sung — FLAG scope addition, chờ user veto; SF-5 blocked nếu thiếu).
-   - order-promising: `GET /order-promising/time-delivery` (slot gợi ý).
-4. **Mutation contract (§3 v2):** tạo phiếu → đơn batchStatus=1 + sinh batchCode + stopOrder theo thứ tự; hủy phiếu → đơn revert batchStatus=0; chuyển kho → đổi shopAssignment + append history; complete-picking → batch + đơn batchStatus=2; criteria: chỉ hủy phiếu chưa hoàn tất.
-5. **DTO carve-out:** DTOs request/response (filter, packing-suggest groups, print payload, criteria...) thêm vào `packages/shared` — ĐƯỢC PHÉP cho SF-2 (carve-out §3); FROZEN áp dụng từ SF-4 trở đi.
-6. **Auth + CORS**: JWT guard (`JWT_DEV_SECRET` từ root `.env`, verify signature + role claim — KHÔNG check permission chi tiết ở BE, role→permission là FE); CORS cho ports 3000/3001/3002.
-7. **Tests Vitest + supertest** — verify mutation ĐỘC LẬP với FE: create → status 1; cancel → revert 0; complete-picking → 2; transfer → shopAssignment đổi + history; create reject đơn đã soạn; search thêm đơn chỉ trả batchStatus=0.
-8. README run api.
-
-## Touch map
-
+## Touch map (SF-2 sở hữu)
 ```
-services/fulfillment-api/**        ← SF-2 SỞ HỮU
-packages/shared (thêm DTOs)        ← chỉnh ĐƯỢC (carve-out), giữ types SF-1 nguyên
-docs/superpowers/spikes/*          ← READ-ONLY
-apps/**                            ← KHÔNG đụng (SF-3/4/6)
+api/proto/** (buf.yaml + 3 protos)
+api/seed/canonical-seed.json
+services/bff-gateway/**
+packages/shared/api-contracts/**   (carve-out duy nhất vào shared)
+docs/superpowers/spikes/grpc-codegen-multilang.md
 ```
+READ-ONLY: packages/shared/** (trừ api-contracts/), apps/**, KHÔNG đụng services/fulfillment-service|batching-service|print-service (SF-3/4/5 sở hữu — bạn chỉ định nghĩa contracts cho họ).
 
 ## ACCEPTANCE (user-visible)
-
-- `pnpm dev` (hoặc run api riêng): api lên port 8080, `GET /master-data/regions` trả seed có dữ liệu.
-- Flow mutation chạy thật qua HTTP: filter → create batch (3 đơn) → đơn batchStatus=1 → cancel → revert 0 → create lại OK → complete-picking → 2.
-- `POST /fulfillment/print` trả PDF bytes hợp lệ (mở được file PDF) cho đủ 5 PrintType.
-- Token sai/không có → 401 từ guard.
-- `pnpm test` trong service xanh (supertest suite mutation contract).
+- SPIKE 4 verdict: codegen 4 ngôn ngữ compile pass (bằng chứng lệnh thật trong file).
+- BFF chạy standalone :8080 theo README; 20 REST endpoints (18+2) respond ĐÚNG envelope (curl thấy JSON).
+- Contract test harness pass: envelope đúng + 503 UPSTREAM_UNAVAILABLE khi stub down + 422 details khi InvalidArgument.
+- `api/seed/canonical-seed.json` valid: 30201 ≥5 đơn Chưa soạn, orderCode↔batchCode integrity, đủ staff/printers/regions.
 
 ## Boundary (KHÔNG làm)
-
-- KHÔNG FE nào cả (kể cả sửa shell skeleton); KHÔNG DB thật / persistence (in-memory là đủ); KHÔNG OIDC thật (stub JWT theo SF-1 util); KHÔNG thêm endpoint ngoài 18+1 đã liệt kê.
-- KHÔNG đổi seed contract shape (SF-4/5/6 phụ thuộc); thiếu gì → REQUIREMENT-GAP lên epic FI-232.
+- KHÔNG implement service thật (Java/Go/Python — SF-3/4/5; bạn chỉ viết stubs cho test).
+- KHÔNG FE nào (shell/remotes — SF-6..10).
+- KHÔNG sửa packages/shared ngoài api-contracts/.
+- KHÔNG deploy/Docker (SF-11).
