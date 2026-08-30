@@ -13,6 +13,11 @@ const mfShared = {
   "react-router-dom": { singleton: true, requiredVersion: "^6.30.0" },
   i18next: { singleton: true, requiredVersion: "^26.0.0" },
   "react-i18next": { singleton: true, requiredVersion: "^17.0.0" },
+  // Workspace packages — TS source qua pnpm symlink (Vite compile được).
+  // Singleton để setTokenGetter / usePermissions state là MỘT instance
+  // chung shell + remotes.
+  "@hub-store/shared": { singleton: true },
+  "@hub-store/api-client": { singleton: true },
 };
 
 export default defineConfig({

@@ -1,4 +1,5 @@
-import { describe, expect, it } from 'vitest';
+import i18next from 'i18next';
+import { describe, expect, it, vi } from 'vitest';
 import {
   DEFAULT_LANGUAGE,
   FALLBACK_LANGUAGE,
@@ -40,6 +41,28 @@ describe('i18n infra', () => {
     const b = initI18n();
     expect(a).not.toBe(b);
     expect(getI18n()).toBe(b);
+  });
+
+  it('getI18n fallback: chưa init nhưng window.__HUB_STORE_I18N__ đã có (cross-MF-bundle) → trả về instance đó', async () => {
+    vi.resetModules();
+    // Dynamic re-import sau resetModules → module-level `singleton` = null.
+    const seeded = i18next.createInstance();
+    window.__HUB_STORE_I18N__ = seeded;
+    try {
+      const fresh = await import('./i18n');
+      expect(fresh.getI18n()).toBe(seeded);
+    } finally {
+      delete window.__HUB_STORE_I18N__;
+    }
+  });
+
+  it('initI18n publish instance lên window.__HUB_STORE_I18N__ (bridge cho remote bundles)', async () => {
+    vi.resetModules();
+    delete window.__HUB_STORE_I18N__;
+    const fresh = await import('./i18n');
+    const instance = fresh.initI18n();
+    expect(window.__HUB_STORE_I18N__).toBe(instance);
+    expect(fresh.getI18n()).toBe(instance);
   });
 
   it('mergeResources: gộp theo lng → ns, sau đè trước', () => {
