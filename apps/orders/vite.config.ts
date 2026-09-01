@@ -40,5 +40,8 @@ export default defineConfig({
       less: { javascriptEnabled: true, modifyVars: antdLessModifyVars },
     },
   },
-  test: { environment: "jsdom" },
+  test: {
+    environment: "jsdom",
+    setupFiles: ["./src/testing/setup.ts"],
+  },
 });
