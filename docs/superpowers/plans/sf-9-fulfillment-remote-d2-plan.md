@@ -53,10 +53,17 @@
 - [x] Task 9 — Unit tests (vitest + RTL, mock @hub-store/api-client): flatten+rowSpan,
       COD format VI, criteria gating, cancel flow (confirm+reason+mutation),
       filter→query args mapping, URL state round-trip.
-- [ ] Task 10 — Browser walkthrough Rule 0 3 tầng (shell :3000 → BFF :8080 →
+- [x] Task 10 — Browser walkthrough Rule 0 3 tầng (shell :3000 → BFF :8080 →
       Java :50051 + Go :50052): login → /hub-store-order/batch data thật → search →
       filter status → hủy ACTIVE (confirm+reason, đơn revert) → complete picking →
       nút In đổi URL. Screenshots từng bước.
+      (Verdict: PASS toàn bộ flow — cancel BATCH-0006 → message "Đã hủy phiếu" +
+      modal portal removed + row "Đã hủy" live + RSA-700402 batchStatus=0;
+      complete BATCH-0003 → "Hoàn tất" + RSA-700203 batchStatus=2 + nút Hoàn tất ẩn;
+      In → /hub-store-order/batch/print?batchCode=BATCH-0001 → SF-10 stub.
+      ⚠ Screenshot pixel-level KHÔNG chụp được: orca CDP captureScreenshot timeout
+      persistent + computer-use a11y helper down — đã verify bằng a11y DOM snapshot +
+      network entries + backend curl asserts; cần user xác nhận bằng mắt lần mở sau.)
 - [ ] Task 11 — Code-reviewer độc lập (verdict /tmp/story/fi233/reviewer-sf9.md) →
       fix P0/P1 → APPROVED → merge vào story/fi233-polyglot-grpc-mf (commit-tree +
       update-ref full refname + ancestor guard) + audit comment → story-verify sạch →
