@@ -1,0 +1,436 @@
+package com.hubstore.fulfillment.service;
+
+import com.hubstore.fulfillment.seed.SeedModels;
+import com.hubstore.fulfillment.store.FilterResult;
+import com.hubstore.fulfillment.store.OrderFilter;
+import com.hubstore.fulfillment.store.OrderRepository;
+import com.hubstore.fulfillment.v1.AssignShopHubRequest;
+import com.hubstore.fulfillment.v1.AssignShopHubResponse;
+import com.hubstore.fulfillment.v1.BatchStatus;
+import com.hubstore.fulfillment.v1.CoordinationStatus;
+import com.hubstore.fulfillment.v1.DeliveryStaff;
+import com.hubstore.fulfillment.v1.FilterOrdersRequest;
+import com.hubstore.fulfillment.v1.FilterOrdersResponse;
+import com.hubstore.fulfillment.v1.FulfillmentServiceGrpc;
+import com.hubstore.fulfillment.v1.GetAssignHistoryRequest;
+import com.hubstore.fulfillment.v1.GetAssignHistoryResponse;
+import com.hubstore.fulfillment.v1.GetOrderDetailRequest;
+import com.hubstore.fulfillment.v1.GetOrderDetailResponse;
+import com.hubstore.fulfillment.v1.GetOrdersByCodesRequest;
+import com.hubstore.fulfillment.v1.GetOrdersByCodesResponse;
+import com.hubstore.fulfillment.v1.GetTimeDeliveryRequest;
+import com.hubstore.fulfillment.v1.GetTimeDeliveryResponse;
+import com.hubstore.fulfillment.v1.HubStoreOrderFilterItem;
+import com.hubstore.fulfillment.v1.ListDeliveryStaffRequest;
+import com.hubstore.fulfillment.v1.ListDeliveryStaffResponse;
+import com.hubstore.fulfillment.v1.ListDistinctShopsRequest;
+import com.hubstore.fulfillment.v1.ListDistinctShopsResponse;
+import com.hubstore.fulfillment.v1.ListRegionsRequest;
+import com.hubstore.fulfillment.v1.ListRegionsResponse;
+import com.hubstore.fulfillment.v1.MutateOrderStatusRequest;
+import com.hubstore.fulfillment.v1.MutateOrderStatusResponse;
+import com.hubstore.fulfillment.v1.MutateOrderStatusResult;
+import com.hubstore.fulfillment.v1.OrderStatus;
+import com.hubstore.fulfillment.v1.Product;
+import com.hubstore.fulfillment.v1.Region;
+import com.hubstore.fulfillment.v1.RegionType;
+import com.hubstore.fulfillment.v1.Shop;
+import com.hubstore.fulfillment.v1.ShopAssignment;
+import com.hubstore.fulfillment.v1.TimeRange;
+import com.hubstore.fulfillment.v1.UpdateDeliveryTimeRequest;
+import com.hubstore.fulfillment.v1.UpdateDeliveryTimeResponse;
+import com.hubstore.fulfillment.v1.UpdateNoteRequest;
+import com.hubstore.fulfillment.v1.UpdateNoteResponse;
+import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
+import io.grpc.stub.StreamObserver;
+import net.devh.boot.grpc.server.service.GrpcService;
+
+import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
+import java.util.LinkedHashSet;
+import java.util.List;
+import java.util.Set;
+
+/**
+ * Impl đủ 12 RPC của FulfillmentService (plan Task 3) + validations rule 2+3
+ * (plan Task 4). Reject = INVALID_ARGUMENT + metadata x-error-details (pin SF-2).
+ */
+@GrpcService
+public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentServiceImplBase {
+
+    private final OrderRepository repo;
+
+    public FulfillmentServiceImpl(OrderRepository repo) {
+        this.repo = repo;
+    }
+
+    // ---------------- D1 list + detail + hydration ----------------
+
+    @Override
+    public void filterOrders(FilterOrdersRequest request, StreamObserver<FilterOrdersResponse> responseObserver) {
+        try {
+            OrderFilter filter = new OrderFilter(
+                    request.getFulfillCode(),
+                    enumsOf(request.getBatchStatusesList(), BatchStatus.class, BatchStatus::getNumber),
+                    request.hasDeliveryTime() ? fromProto(request.getDeliveryTime()) : null,
+                    Set.copyOf(request.getRegionCodesList()),
+                    Set.copyOf(request.getShopCodesList()),
+                    enumsOf(request.getOrderStatusesList(), OrderStatus.class, OrderStatus::getNumber),
+                    request.hasCreatedTime() ? fromProto(request.getCreatedTime()) : null,
+                    request.hasOriginalTime() ? fromProto(request.getOriginalTime()) : null,
+                    Set.copyOf(request.getExcludeFulfillCodesList()),
+                    request.getPage(),
+                    request.getPageSize());
+            FilterResult result = repo.filter(filter);
+            FilterOrdersResponse.Builder resp = FilterOrdersResponse.newBuilder()
+                    .setTotal(result.total())
+                    .setPage(Math.max(request.getPage(), 1))
+                    .setPageSize(request.getPageSize() <= 0 ? 10 : request.getPageSize());
+            result.items().forEach(o -> resp.addItems(toFilterItem(o)));
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    @Override
+    public void getOrderDetail(GetOrderDetailRequest request, StreamObserver<GetOrderDetailResponse> responseObserver) {
+        try {
+            SeedModels.OrderSeed order = repo.findByFulfillCode(request.getFulfillCode())
+                    .orElseThrow(() -> GrpcErrors.notFound("fulfillCode", request.getFulfillCode()));
+            responseObserver.onNext(GetOrderDetailResponse.newBuilder()
+                    .setOrder(toFilterItem(order))
+                    .build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /** Hydration — Go gọi validate rule 1 (cùng kho + batchStatus=0). Trả truth, không filter. */
+    @Override
+    public void getOrdersByCodes(GetOrdersByCodesRequest request, StreamObserver<GetOrdersByCodesResponse> responseObserver) {
+        try {
+            GetOrdersByCodesResponse.Builder resp = GetOrdersByCodesResponse.newBuilder();
+            repo.findByCodes(request.getFulfillCodesList())
+                    .forEach(o -> resp.addOrders(toFilterItem(o)));
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    // ---------------- MutateOrderStatus (Go caller) ----------------
+
+    @Override
+    public void mutateOrderStatus(MutateOrderStatusRequest request, StreamObserver<MutateOrderStatusResponse> responseObserver) {
+        try {
+            int target = request.getTargetBatchStatus().getNumber();
+            if (target < 0 || target > 2) {
+                // 3 (lỗi vượt trọng lượng) chỉ seed đặt tay — mutation chỉ 0/1/2.
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "targetBatchStatus", "Chỉ chấp nhận target 0 (Chưa soạn) / 1 (Đang soạn) / 2 (Đã soạn).")));
+            }
+            MutateOrderStatusResponse.Builder resp = MutateOrderStatusResponse.newBuilder();
+            // Dedup codes — mỗi code đúng 1 result.
+            List<String> codes = List.copyOf(new LinkedHashSet<>(request.getFulfillCodesList()));
+            for (String code : codes) {
+                if (repo.findByFulfillCode(code).isEmpty()) {
+                    resp.addResults(MutateOrderStatusResult.newBuilder()
+                            .setFulfillCode(code).setSuccess(false)
+                            .setMessage("Order " + code + " không tồn tại."));
+                }
+            }
+            List<SeedModels.OrderSeed> updated = repo.mutateBatchStatus(codes, target);
+            for (SeedModels.OrderSeed o : updated) {
+                resp.addResults(MutateOrderStatusResult.newBuilder()
+                        .setFulfillCode(o.fulfillCode()).setSuccess(true)
+                        .setMessage("batchStatus=" + o.batchStatus() + "."));
+            }
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    // ---------------- Chuyển kho + history ----------------
+
+    /**
+     * Rule 2 (spec §3.6): đúng 1 đơn + isDebtSplittingOrder=false + batchStatus=0.
+     * Mỗi lần chỉ 1 fulfillCode (proto single field); code trống = 0 đơn → reject.
+     */
+    @Override
+    public void assignShopHub(AssignShopHubRequest request, StreamObserver<AssignShopHubResponse> responseObserver) {
+        try {
+            if (request.getFulfillCode().isBlank()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "fulfillCode", "Chuyển kho yêu cầu đúng 1 đơn.")));
+            }
+            if (request.getTargetShopCode().isBlank()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "targetShopCode", "targetShopCode bắt buộc.")));
+            }
+            SeedModels.OrderSeed order = repo.findByFulfillCode(request.getFulfillCode())
+                    .orElseThrow(() -> GrpcErrors.notFound("fulfillCode", request.getFulfillCode()));
+            if (order.isDebtSplittingOrder()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "fulfillCode", "Đơn chia nợ (" + order.fulfillCode() + ") không được chuyển kho.")));
+            }
+            if (order.batchStatus() != 0) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "batchStatus", "Chỉ đơn Chưa soạn (0) được chuyển kho; đơn đang batchStatus="
+                                + order.batchStatus() + " (có thể nằm trong phiếu ACTIVE).")));
+            }
+            SeedModels.ShopSeed targetShop = repo.distinctShops().stream()
+                    .filter(s -> s.code().equals(request.getTargetShopCode()))
+                    .findFirst()
+                    .orElseThrow(() -> GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                            "targetShopCode", "Không tồn tại kho CN '" + request.getTargetShopCode() + "'."))));
+            SeedModels.OrderSeed updated = repo.assignShopHub(
+                    request.getFulfillCode(),
+                    new SeedModels.ShopAssignmentSeed(targetShop.code(), targetShop.name(), targetShop.address()),
+                    "fulfillment-service",
+                    Instant.now());
+            responseObserver.onNext(AssignShopHubResponse.newBuilder()
+                    .setOrder(toFilterItem(updated))
+                    .build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /** READ semantics (spec §3.8): POST-ngữ-nhưng-ĐỌC — trả history hiện có, KHÔNG mutate. */
+    @Override
+    public void getAssignHistory(GetAssignHistoryRequest request, StreamObserver<GetAssignHistoryResponse> responseObserver) {
+        try {
+            GetAssignHistoryResponse.Builder resp = GetAssignHistoryResponse.newBuilder();
+            repo.getHistory(request.getFulfillCode()).forEach(resp::addEntries);
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    // ---------------- Edit TG giao / ghi chú ----------------
+
+    /** Rule 3 (spec §3.6): chỉ hợp lệ khi batchStatus=0. */
+    @Override
+    public void updateDeliveryTime(UpdateDeliveryTimeRequest request, StreamObserver<UpdateDeliveryTimeResponse> responseObserver) {
+        try {
+            if (request.getFulfillCode().isBlank()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "fulfillCode", "fulfillCode bắt buộc.")));
+            }
+            if (!request.hasDeliveryTime() || request.getDeliveryTime().getFrom().isBlank()
+                    || request.getDeliveryTime().getTo().isBlank()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "deliveryTime", "deliveryTime phải có from/to.")));
+            }
+            SeedModels.OrderSeed order = repo.findByFulfillCode(request.getFulfillCode())
+                    .orElseThrow(() -> GrpcErrors.notFound("fulfillCode", request.getFulfillCode()));
+            if (order.batchStatus() != 0) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "batchStatus", "Chỉ sửa TG giao khi đơn Chưa soạn (0); đơn đang batchStatus="
+                                + order.batchStatus() + ".")));
+            }
+            SeedModels.OrderSeed updated = repo.updateDeliveryTime(request.getFulfillCode(),
+                    fromProto(request.getDeliveryTime()));
+            responseObserver.onNext(UpdateDeliveryTimeResponse.newBuilder()
+                    .setOrder(toFilterItem(updated))
+                    .build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    @Override
+    public void updateNote(UpdateNoteRequest request, StreamObserver<UpdateNoteResponse> responseObserver) {
+        try {
+            if (request.getFulfillCode().isBlank()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "fulfillCode", "fulfillCode bắt buộc.")));
+            }
+            SeedModels.OrderSeed order = repo.findByFulfillCode(request.getFulfillCode())
+                    .orElseThrow(() -> GrpcErrors.notFound("fulfillCode", request.getFulfillCode()));
+            SeedModels.OrderSeed updated = repo.updateNote(request.getFulfillCode(), request.getNote());
+            responseObserver.onNext(UpdateNoteResponse.newBuilder()
+                    .setOrder(toFilterItem(updated))
+                    .build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    // ---------------- Master data / order-promising ----------------
+
+    @Override
+    public void listRegions(ListRegionsRequest request, StreamObserver<ListRegionsResponse> responseObserver) {
+        try {
+            ListRegionsResponse.Builder resp = ListRegionsResponse.newBuilder();
+            for (SeedModels.RegionSeed r : repo.regions()) {
+                Region.Builder b = Region.newBuilder().setCode(orEmpty(r.code())).setName(orEmpty(r.name()));
+                boolean isWard = "ward".equals(r.type());
+                b.setType(isWard ? RegionType.REGION_TYPE_WARD : RegionType.REGION_TYPE_PROVINCE);
+                if (isWard && r.parentCode() != null) {
+                    b.setParentCode(r.parentCode());
+                }
+                resp.addRegions(b);
+            }
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    @Override
+    public void listDeliveryStaff(ListDeliveryStaffRequest request, StreamObserver<ListDeliveryStaffResponse> responseObserver) {
+        try {
+            ListDeliveryStaffResponse.Builder resp = ListDeliveryStaffResponse.newBuilder();
+            boolean filterByShop = request.hasShopCode() && !request.getShopCode().isBlank();
+            for (SeedModels.DeliveryStaffSeed s : repo.deliveryStaff()) {
+                if (filterByShop && !request.getShopCode().equals(s.shopCode())) {
+                    continue;
+                }
+                resp.addItems(DeliveryStaff.newBuilder()
+                        .setId(orEmpty(s.staffId()))
+                        .setName(orEmpty(s.name()))
+                        .setShopCode(orEmpty(s.shopCode()))
+                        .build());
+            }
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    @Override
+    public void listDistinctShops(ListDistinctShopsRequest request, StreamObserver<ListDistinctShopsResponse> responseObserver) {
+        try {
+            ListDistinctShopsResponse.Builder resp = ListDistinctShopsResponse.newBuilder();
+            for (SeedModels.ShopSeed s : repo.distinctShops()) {
+                resp.addItems(Shop.newBuilder()
+                        .setCode(s.code()).setName(orEmpty(s.name())).setAddress(orEmpty(s.address()))
+                        .build());
+            }
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /**
+     * D4 hint TG giao — deterministic đơn giản (spike, không phải order-promising thật):
+     * from = now + 2h (làm tròn lên giờ kế), to = from + 1 ngày, timezone +07:00.
+     */
+    @Override
+    public void getTimeDelivery(GetTimeDeliveryRequest request, StreamObserver<GetTimeDeliveryResponse> responseObserver) {
+        try {
+            ZoneId tz = ZoneId.of("Asia/Ho_Chi_Minh");
+            ZonedDateTime from = ZonedDateTime.ofInstant(Instant.now().plus(Duration.ofHours(2)), tz)
+                    .plusHours(1).truncatedTo(java.time.temporal.ChronoUnit.HOURS);
+            ZonedDateTime to = from.plusDays(1);
+            DateTimeFormatter iso = DateTimeFormatter.ISO_OFFSET_DATE_TIME;
+            responseObserver.onNext(GetTimeDeliveryResponse.newBuilder()
+                    .setSuggestedTime(TimeRange.newBuilder()
+                            .setFrom(from.format(iso)).setTo(to.format(iso)))
+                    .build());
+            responseObserver.onCompleted();
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    // ---------------- mapping helpers ----------------
+
+    private static HubStoreOrderFilterItem toFilterItem(SeedModels.OrderSeed o) {
+        HubStoreOrderFilterItem.Builder b = HubStoreOrderFilterItem.newBuilder()
+                .setFulfillCode(orEmpty(o.fulfillCode()))
+                .setStatusCodeValue(o.statusCode())
+                .setBatchStatusValue(o.batchStatus())
+                .setOrderStatusValue(o.orderStatus())
+                .setCodAmount(o.codAmount())
+                .setTotalQuantity(o.totalQuantity())
+                .setIsDebtSplittingOrder(o.isDebtSplittingOrder())
+                .setCustomerAddress(orEmpty(o.customerAddress()));
+        if (o.batchCode() != null) {
+            b.setBatchCode(o.batchCode());
+        }
+        if (o.shopAssignment() != null) {
+            b.setShopAssignment(ShopAssignment.newBuilder()
+                    .setShopCode(orEmpty(o.shopAssignment().shopCode()))
+                    .setShopName(orEmpty(o.shopAssignment().shopName()))
+                    .setAddress(orEmpty(o.shopAssignment().address())));
+        }
+        if (o.originalTime() != null) {
+            b.setOriginalTime(toTimeRange(o.originalTime()));
+        }
+        if (o.deliveryTime() != null) {
+            b.setDeliveryTime(toTimeRange(o.deliveryTime()));
+        }
+        for (SeedModels.ProductSeed p : o.items()) {
+            b.addItems(Product.newBuilder()
+                    .setProductCode(orEmpty(p.productCode()))
+                    .setProductName(orEmpty(p.productName()))
+                    .setQuantity(p.quantity()));
+        }
+        if (o.distance() != null) {
+            b.setDistance(o.distance());
+        }
+        if (o.note() != null) {
+            b.setNote(o.note());
+        }
+        return b.build();
+    }
+
+    private static TimeRange toTimeRange(SeedModels.TimeRangeSeed t) {
+        TimeRange.Builder b = TimeRange.newBuilder();
+        if (t.from() != null) {
+            b.setFrom(t.from());
+        }
+        if (t.to() != null) {
+            b.setTo(t.to());
+        }
+        return b.build();
+    }
+
+    private static SeedModels.TimeRangeSeed fromProto(TimeRange t) {
+        return new SeedModels.TimeRangeSeed(t.getFrom(), t.getTo());
+    }
+
+    private static String orEmpty(String s) {
+        return s == null ? "" : s;
+    }
+
+    private static <E extends Enum<E>> Set<Integer> enumsOf(List<E> values, Class<E> type,
+                                                            java.util.function.Function<E, Integer> toNumber) {
+        Set<Integer> out = new LinkedHashSet<>();
+        values.forEach(v -> out.add(toNumber.apply(v)));
+        return out;
+    }
+}
