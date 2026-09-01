@@ -1,7 +1,10 @@
+import { resolve } from "node:path";
 import react from "@vitejs/plugin-react";
 import { federation } from "@module-federation/vite";
 import { defineConfig } from "vitest/config";
 import { antdLessModifyVars } from "../../packages/shared/src/theme/shared-theme";
+
+const configDir = __dirname;
 
 /** Singleton share scope — per spike verdict + spec §2 P0 list. */
 const mfShared = {
@@ -41,5 +44,5 @@ export default defineConfig({
       less: { javascriptEnabled: true, modifyVars: antdLessModifyVars },
     },
   },
-  test: { environment: "jsdom" },
+  test: { environment: "jsdom", setupFiles: [resolve(configDir, "src/testing/setup.ts")] },
 });
