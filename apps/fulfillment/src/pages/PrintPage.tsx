@@ -1,16 +1,213 @@
-import { Result } from "antd";
-import { useTranslation } from "react-i18next";
-import { registerFulfillmentResources } from "../i18n";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Alert, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Typography, message } from 'antd';
+import { PrinterOutlined } from '@ant-design/icons';
+import { useTranslation } from 'react-i18next';
+import { useSearchParams } from 'react-router-dom';
+import { PRINT_TYPES, type PrintType } from '@hub-store/shared';
+import { printDocument, useGetBatchDetailQuery, useGetPrintersQuery } from '../api/printApi';
+import { registerFulfillmentResources } from '../i18n';
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
 registerFulfillmentResources();
 
-/** Exposed qua federation là `fulfillment/PrintPage` → route /hub-store-order/batch/print. */
+/**
+ * D3 Print Shipment (SF-10) — exposed qua federation là `fulfillment/PrintPage`
+ * → route /hub-store-order/batch/print?batchCode=<code> (param pin SF-9).
+ *
+ * 5 tab = 5 PrintType; PDF bytes THẬT từ print-service qua BFF (spec §3.7).
+ * "In tất cả" = 5 calls TUẦN TỰ 1 call/PDF — KHÔNG có endpoint printAll (pin §3.7).
+ */
+const PdfPreview = lazy(() => import('../print/PdfPreview'));
+
+type PreviewCache = Partial<Record<PrintType, Uint8Array>>;
+
 export default function PrintPage() {
-  const { t } = useTranslation("fulfillment");
+  const { t } = useTranslation('fulfillment');
+  const [searchParams] = useSearchParams();
+  const batchCode = searchParams.get('batchCode') ?? '';
+
+  const [activeType, setActiveType] = useState<PrintType>(PRINT_TYPES[0]);
+  const [zoomPct, setZoomPct] = useState(100);
+  const [previews, setPreviews] = useState<PreviewCache>({});
+  const [previewLoading, setPreviewLoading] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
+  const [printerId, setPrinterId] = useState<string | undefined>(undefined);
+  const [printing, setPrinting] = useState(false);
+  const [printAll, setPrintAll] = useState<{ done: number; total: number; current: string } | null>(null);
+
+  const { data: batch } = useGetBatchDetailQuery(batchCode, { skip: !batchCode });
+  const shopCode = batch?.shopCode ?? '';
+  const { data: printersData, isLoading: printersLoading } = useGetPrintersQuery(shopCode, {
+    skip: !shopCode,
+  });
+  const printers = printersData?.items ?? [];
+
+  // Load PDF bytes cho tab active (cache per tab — không refetch tab đã load).
+  const requestSeq = useRef(0);
+  const loadPreview = useCallback(
+    async (type: PrintType) => {
+      if (!batchCode || previews[type]) return;
+      const seq = ++requestSeq.current;
+      setPreviewLoading(true);
+      setPreviewError(null);
+      try {
+        const bytes = await printDocument({ batchCode, printType: type, printerId: '' });
+        if (seq !== requestSeq.current) return; // tab đã đổi — bỏ kết quả cũ
+        setPreviews((prev) => ({ ...prev, [type]: bytes }));
+      } catch (err) {
+        if (seq !== requestSeq.current) return;
+        setPreviewError(err instanceof Error ? err.message : String(err));
+      } finally {
+        if (seq === requestSeq.current) setPreviewLoading(false);
+      }
+    },
+    [batchCode, previews],
+  );
+
+  useEffect(() => {
+    void loadPreview(activeType);
+  }, [activeType, loadPreview]);
+
+  const ensurePrinter = (): string | null => {
+    if (printerId) return printerId;
+    message.warning(t('print.printer.required'));
+    return null;
+  };
+
+  const handlePrint = async () => {
+    const pid = ensurePrinter();
+    if (!pid || !batchCode) return;
+    setPrinting(true);
+    try {
+      await printDocument({ batchCode, printType: activeType, printerId: pid });
+      message.success(t('print.success', { doc: t(`print.tab.${activeType}`) }));
+    } catch (err) {
+      message.error(`${t('print.failed')}: ${err instanceof Error ? err.message : String(err)}`);
+    } finally {
+      setPrinting(false);
+    }
+  };
+
+  // "In tất cả" — 5 calls TUẦN TỰ (pin §3.7): await từng PDF trước call kế.
+  const handlePrintAll = async () => {
+    const pid = ensurePrinter();
+    if (!pid || !batchCode || printAll) return;
+    setPrintAll({ done: 0, total: PRINT_TYPES.length, current: '' });
+    let ok = 0;
+    for (const type of PRINT_TYPES) {
+      setPrintAll({ done: ok, total: PRINT_TYPES.length, current: t(`print.tab.${type}`) });
+      try {
+        await printDocument({ batchCode, printType: type, printerId: pid });
+        ok += 1;
+        setPrintAll({ done: ok, total: PRINT_TYPES.length, current: t(`print.tab.${type}`) });
+      } catch (err) {
+        message.error(
+          `${t('print.failed')} (${t(`print.tab.${type}`)}): ${
+            err instanceof Error ? err.message : String(err)
+          }`,
+        );
+      }
+    }
+    message.success(t('print.all.done', { ok, total: PRINT_TYPES.length }));
+    setPrintAll(null);
+  };
+
+  if (!batchCode) {
+    return (
+      <div data-probe="fulfillment-print">
+        <Result status="warning" title={t('print.missingBatch')} />
+      </div>
+    );
+  }
+
+  const busy = printing || printAll !== null;
+
+  const tabItems = PRINT_TYPES.map((type) => ({
+    key: type,
+    label: t(`print.tab.${type}`),
+    children: (
+      <div className="print-preview-area" style={{ overflow: 'auto', maxHeight: 640, background: '#f5f5f5', textAlign: 'center', padding: 16 }}>
+        {previewLoading && <Spin size="large" style={{ marginTop: 80 }} />}
+        {!previewLoading && previewError && (
+          <Alert type="error" showIcon message={`${t('print.preview.error')}: ${previewError}`} />
+        )}
+        {!previewLoading && !previewError && previews[type] && (
+          <Suspense fallback={<Spin size="large" style={{ marginTop: 80 }} />}>
+            <PdfPreview bytes={previews[type]!} scale={zoomPct / 100} />
+          </Suspense>
+        )}
+      </div>
+    ),
+  }));
+
   return (
-    <div data-probe="fulfillment-print">
-      <Result status="info" title={t("page.print.title")} subTitle={t("page.print.subtitle")} />
+    <div data-probe="fulfillment-print" style={{ padding: 24 }}>
+      <Typography.Title level={4}>{t('page.print.title')}</Typography.Title>
+      <Typography.Text type="secondary">
+        {t('print.batch.label')}: {batchCode}
+        {batch?.shopCode ? ` · ${t('print.shop.label')}: ${shopCode}` : ''}
+      </Typography.Text>
+
+      <Space wrap style={{ display: 'flex', marginTop: 16, gap: 12 }} align="center">
+        <Select
+          style={{ minWidth: 240 }}
+          placeholder={t('print.printer.placeholder')}
+          value={printerId}
+          onChange={setPrinterId}
+          loading={printersLoading}
+          disabled={busy}
+          notFoundContent={printersLoading ? <Spin size="small" /> : t('print.printer.empty')}
+          options={printers.map((p) => ({
+            value: p.printerId,
+            label: p.location ? `${p.name} — ${p.location}` : p.name,
+          }))}
+        />
+        <Button
+          type="primary"
+          icon={<PrinterOutlined />}
+          onClick={handlePrint}
+          loading={printing}
+          disabled={busy && !printing}
+        >
+          {t('action.print')}
+        </Button>
+        <Button onClick={handlePrintAll} loading={printAll !== null} disabled={busy && printAll === null}>
+          {t('print.action.printAll')}
+        </Button>
+        <Space align="center" style={{ marginLeft: 'auto' }}>
+          <Typography.Text>{t('print.zoom.label')}</Typography.Text>
+          <Slider
+            style={{ width: 140, marginBottom: 0 }}
+            min={50}
+            max={200}
+            step={10}
+            value={zoomPct}
+            onChange={setZoomPct}
+            tooltip={{ formatter: (v) => `${v}%` }}
+            aria-label={t('print.zoom.label')}
+          />
+        </Space>
+      </Space>
+
+      {printAll && (
+        <div style={{ marginTop: 12, maxWidth: 480 }}>
+          <Progress
+            percent={Math.round((printAll.done / printAll.total) * 100)}
+            status="active"
+            aria-label={t('print.all.progress')}
+          />
+          <Typography.Text type="secondary">
+            {t('print.all.progress', { done: printAll.done, total: printAll.total, doc: printAll.current })}
+          </Typography.Text>
+        </div>
+      )}
+
+      <Tabs
+        activeKey={activeType}
+        onChange={(key) => setActiveType(key as PrintType)}
+        items={tabItems}
+        style={{ marginTop: 16 }}
+      />
     </div>
   );
 }
