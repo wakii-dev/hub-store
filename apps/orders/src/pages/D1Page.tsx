@@ -219,8 +219,13 @@ function D1Content() {
     showSizeChanger: true,
     showQuickJumper: true,
     showTotal: (tTotal: number) => t("pagination.total", { total: tTotal }),
-    onChange: (page: number, pageSize: number) =>
-      setFilters({ page: String(page), pageSize: String(pageSize) }),
+    onChange: (page: number, pageSize: number) => {
+      // Selection chỉ hợp lệ trong trang đang hiển thị (server-side pagination —
+      // selectedRows được filter từ rows trang hiện tại) → clear khi đổi trang
+      // để bulk bar không tính sai số lượng/kho.
+      setSelectedRowKeys([]);
+      setFilters({ page: String(page), pageSize: String(pageSize) });
+    },
   };
 
   return (
