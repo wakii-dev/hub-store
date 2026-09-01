@@ -1,0 +1,16 @@
+# fulfillment-service (SF-3) — standalone gRPC server, KHÔNG thuộc turbo.
+spring:
+  application:
+    name: fulfillment-service
+  main:
+    web-application-type: none
+
+grpc:
+  server:
+    # Spec §3.3: :50051 — override qua env GRPC_FULFILLMENT.
+    port: ${GRPC_FULFILLMENT:50051}
+
+fulfillment:
+  # Nguồn dữ liệu duy nhất: api/seed/canonical-seed.json (SF-2 authored).
+  # Rỗng = auto-resolve (README): SEED_PATH > ../../api/seed > ../api/seed > api/seed.
+  seed-path: ${SEED_PATH:}
