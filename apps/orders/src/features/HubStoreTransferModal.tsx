@@ -8,7 +8,7 @@
  *   load khi mở modal, refetch sau khi chuyển thành công.
  */
 import { useMemo, useState } from "react";
-import { Alert, Button, Modal, Select, Space, Table, Typography } from "antd";
+import { Alert, Button, Modal, Select, Space, Table, Typography, message } from "antd";
 import { useTranslation } from "react-i18next";
 import { useGetShopsQuery } from "@hub-store/api-client";
 import type { HubStoreOrderFilterItem, OrderHistoryEntry, ShopsResponse } from "@hub-store/shared";
@@ -54,9 +54,11 @@ export function HubStoreTransferModal({ open, order, onClose }: HubStoreTransfer
     if (!order || !targetShop) return;
     try {
       await assign({ code: order.fulfillCode, toShopCode: targetShop }).unwrap();
+      message.success(t("transfer.success"));
       void refetchHistory();
-    } catch {
-      // lỗi đã hiển thị qua envelope — giữ modal mở cho user thử lại/đóng.
+    } catch (err) {
+      const data = (err as { data?: { message?: string } }).data;
+      message.error(data?.message ?? t("transfer.error"));
     }
   };
 
