@@ -115,3 +115,64 @@ Imported message construction AND `FulfillmentServiceStub` class both verified. 
 4. **go plugin pins are go-1.19-bound**; when go is upgraded to ≥1.21, bump to latest protoc-gen-go(‑grpc) and grpc module versions.
 5. **protobuf-es (protoc-gen-es v2) vs ts-proto choice left open** — codegen+compile proven for protobuf-es; client-transport ergonomics for the FE not compared. SF-2 should decide per FE gRPC transport needs.
 6. Python imports need the generated dir on `PYTHONPATH` and the package structure mirrored (`fulfillment/v1/...` in real layout → keep `--proto_path` root stable).
+
+---
+
+## In-repo verification (SF-2, FI-235)
+
+- **Date:** 2026-09-01 · **Scope:** real production protos (`api/proto/hubstore/*/v1/`) — 3 files, 22 RPCs total. Sandbox verdict above kept unchanged; this section proves it holds IN-REPO with the real contracts.
+- **Layout:** protos at `api/proto/hubstore/{fulfillment,batching,print}/v1/` (buf `PACKAGE_DIRECTORY_MATCH`); gen committed at `api/proto/gen/{ts,go,java,python}/`.
+- **Envelope convention (authored this SF):** per-RPC `<Rpc>Request/Response` (buf STANDARD), list responses carry `items + total + page + page_size` inline → REST `{items, total, page, pageSize}`; datetimes = ISO-8601 strings (mirror shared `TimeRange`); `int64` renders as JS number via ts-proto `forceLong=number` (values « 2^53).
+
+### GATE: PASS — all 4 languages compile from the real protos
+
+| Language | Codegen | Compile | Toolchain (exact) |
+|---|---|---|---|
+| buf lint | PASS | — | `npx @bufbuild/buf@1.72.0 lint .` (cwd `api/proto`) — 0 findings |
+| Go | PASS | **PASS** `go build ./...` | protoc 29.3 + protoc-gen-go v1.28.1 + protoc-gen-go-grpc 1.2.0; `go 1.19.4`; `google.golang.org/grpc v1.56.3` + `protobuf v1.30.0` (pinned — tidy initially drifted to v1.57/v1.31, re-pinned via `go get @v1.56.3 @v1.30.0`, rebuild clean) |
+| Java | PASS (128 .java) | **PASS** `javac` exit 0 | protoc 29.3 + protoc-gen-grpc-java 1.64.0 (osx-aarch_64); classpath `protobuf-java 4.29.3` (NOT 3.25.x — protoc 29.3 gencode) + grpc-stub/api/protobuf(-lite)/context 1.64.0 + guava 33 + failureaccess + annotations-api 6.0.53 |
+| Python | PASS | **PASS** `py_compile` + import + message/Stub construction | grpcio-tools 1.83.1 (venv, py 3.14.3); `PYTHONPATH=gen/python` imports all 6 modules |
+| TypeScript | PASS | **PASS** `tsc --strict --noEmit` | ts-proto **2.7.7** (plugin bin renamed `protoc-gen-ts_proto`); runtime **@bufbuild/protobuf 2.14.0** (ts-proto 2.x switched from protobufjs); `outputServices=grpc-js,forceLong=number,esModuleInterop=true` |
+
+### Working commands (in-repo, cwd = `api/proto`)
+
+```sh
+# buf lint
+npx @bufbuild/buf@1.72.0 lint .
+
+# Go (plugins in /tmp/sf1-spikes/bin)
+PATH=/tmp/sf1-spikes/bin:$PATH protoc -I . \
+  --go_out=gen/go --go_opt=module=hubstore/gen/go \
+  --go-grpc_out=gen/go --go-grpc_opt=module=hubstore/gen/go \
+  hubstore/{fulfillment,batching,print}/v1/*.proto
+cd gen/go && go build ./...        # go.mod pins grpc 1.56.3 / protobuf 1.30.0
+
+# Java
+protoc -I . --java_out=gen/java \
+  --plugin=protoc-gen-grpc-java=/tmp/sf1-spikes/spike4/jars/protoc-gen-grpc-java-1.64.0-osx-aarch_64.exe \
+  --grpc-java_out=gen/java hubstore/{fulfillment,batching,print}/v1/*.proto
+javac -cp "<jars §3 above>" -d /tmp/out $(find gen/java -name '*.java')
+
+# Python (venv with grpcio-tools 1.83.1)
+python -m grpc_tools.protoc -I . --python_out=gen/python --grpc_python_out=gen/python \
+  hubstore/{fulfillment,batching,print}/v1/*.proto
+find gen/python -name '*.py' -exec python -m py_compile {} +
+PYTHONPATH=gen/python python -c "from hubstore.fulfillment.v1 import fulfillment_pb2, fulfillment_pb2_grpc"  # + batching/print
+
+# TypeScript
+protoc -I . --plugin=protoc-gen-ts_proto=<path> \
+  --ts_proto_out=gen/ts --ts_proto_opt=outputServices=grpc-js \
+  --ts_proto_opt=forceLong=number --ts_proto_opt=esModuleInterop=true \
+  hubstore/{fulfillment,batching,print}/v1/*.proto
+tsc --strict --noEmit gen/ts/hubstore/*/v1/*.ts   # needs @bufbuild/protobuf + @grpc/grpc-js resolvable
+```
+
+### Decisions + deltas vs sandbox verdict (feed SF-3/4/5/7)
+
+1. **buf lint STANDARD except `ENUM_ZERO_VALUE_SUFFIX`** (buf.yaml documents why): domain zero values are meaningful wire codes pinned to `packages/shared/src/enums.ts` (0 = NOT_PREPARED / PENDING_APPROVAL / ACTIVE). print.PrintType DOES have UNSPECIFIED=0 (synthetic, not on wire).
+2. **ts-proto over protobuf-es** for the BFF (Task 7): grpc-js service clients needed. ts-proto 2.x runtime is `@bufbuild/protobuf` (not protobufjs) — pin `@bufbuild/protobuf@2.14.0` alongside `ts-proto@2.7.7`.
+3. **ts-proto 2.x plugin binary is `protoc-gen-ts_proto`** (not `protoc-gen-ts` as in 1.x docs) — protoc `--plugin` name must match.
+4. **`go mod tidy` drifts pins** (pulled grpc v1.57/protobuf v1.31 on go 1.19) — regenerate with `go get @v1.56.3 @v1.30.0` before tidy, or accept the bump consciously. SF-4 owns this module (`api/proto/gen/go/go.mod`).
+5. **Package dirs:** go module `hubstore/gen/go` · java `com.hubstore.*.v1` · python mirrors proto path (namespace packages, no `__init__.py` needed on `PYTHONPATH`).
+6. Gen output of ALL 4 languages is committed (`api/proto/gen/**`) so SF-3/4/5 can review contracts without regenerating; proto change = regenerate all 4 (spec §3.2 freeze).
+

@@ -1,0 +1,67 @@
+syntax = "proto3";
+
+package hubstore.print.v1;
+
+option go_package = "hubstore/gen/go/hubstore/print/v1;printv1";
+option java_multiple_files = true;
+option java_package = "com.hubstore.print.v1";
+
+// ============================================================================
+// Envelope convention: same as fulfillment.proto (per-RPC Request/Response,
+// NO shared wrapper). print.proto is STANDALONE — no imports.
+//
+// Owned by print-service (Python, :50053) — spec §3.3: owns printers registry
+// (seed theo shopCode) + print jobs (in-memory) + PDF generation (stateless).
+// Data flow (spec §3.7): BFF hydrate batch từ Go → push FAT PAYLOAD sang đây
+// (Python KHÔNG gọi Go — P1 pin) → render PDF → BFF stream bytes.
+// "In tất cả" = FE gọi Print 5 lần (1 call/PDF) — KHÔNG có printAll (pin).
+// ============================================================================
+
+// PrintType — 5 loại phiếu in (D3 tabs, REQUIREMENTS §3 D3).
+// Wire values map sang packages/shared PRINT_TYPES strings:
+// 1 bill · 2 delivery · 3 handover_receipt · 4 goods_handover · 5 installation_acceptance.
+// Proto enums cần giá trị 0 (buf ENUM_FIRST_VALUE_ZERO) → UNSPECIFIED = 0,
+// không dùng trên wire (BFF reject request có UNSPECIFIED).
+enum PrintType {
+  PRINT_TYPE_UNSPECIFIED = 0;
+  PRINT_TYPE_BILL = 1;                     // Biên bản / phiếu thu COD
+  PRINT_TYPE_DELIVERY = 2;                 // Vận đơn / label giao hàng
+  PRINT_TYPE_HANDOVER_RECEIPT = 3;         // Bàn giao shipper
+  PRINT_TYPE_GOODS_HANDOVER = 4;           // Bàn giao kho
+  PRINT_TYPE_INSTALLATION_ACCEPTANCE = 5;  // Nghiệm thu lắp đặt
+}
+
+// Printer — máy in theo shopCode (canonical seed, SF-2 Task 4).
+message Printer {
+  string id = 1;
+  string name = 2;
+  string shop_code = 3;
+}
+
+service PrintService {
+  // GET /fulfillment/print/printers?shopCode= — BFF lọc theo shop.
+  rpc ListPrinters(ListPrintersRequest) returns (ListPrintersResponse);
+  // POST /fulfillment/print — trả PDF bytes (application/pdf) qua BFF stream.
+  rpc Print(PrintRequest) returns (PrintResponse);
+}
+
+message ListPrintersRequest {
+  string shop_code = 1;
+}
+
+message ListPrintersResponse {
+  repeated Printer printers = 1;
+}
+
+message PrintRequest {
+  // Fat payload: Batch (spec §3.4) do BFF hydrate từ batching-service rồi
+  // serialize (canonical JSON) — Python KHÔNG gọi Go (spec §3.2 P1 pin).
+  bytes batch_payload = 1;
+  PrintType print_type = 2;
+  string printer_id = 3;
+}
+
+message PrintResponse {
+  // PDF bytes (reportlab render, stateless).
+  bytes pdf_content = 1;
+}

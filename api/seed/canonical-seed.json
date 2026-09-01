@@ -1,0 +1,1681 @@
+{
+  "orders": [
+    {
+      "fulfillCode": "ORD-3001",
+      "orderCode": "RSA-700101",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 1850000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 15, ngách 12/Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": null,
+      "note": "Giao giờ hành chính",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3002",
+      "orderCode": "RSA-700102",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 0,
+      "items": [
+        {
+          "productCode": "PRD-002",
+          "productName": "Set-top box TV360",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-003",
+          "productName": "Camera IP FPT",
+          "quantity": 2
+        }
+      ],
+      "codAmount": 3200000,
+      "totalQuantity": 3,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 8, phố Hoàng Quốc Việt, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3003",
+      "orderCode": "RSA-700103",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-004",
+          "productName": "Smart Tivi 43\"",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 9490000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 221, phố Keangnam, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3004",
+      "orderCode": "RSA-700104",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 2,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-005",
+          "productName": "Bộ chia mạng PoE 8 cổng",
+          "quantity": 3
+        }
+      ],
+      "codAmount": 450000,
+      "totalQuantity": 4,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 6, ngõ 85 Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3005",
+      "orderCode": "RSA-700105",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-003",
+          "productName": "Camera IP FPT",
+          "quantity": 2
+        }
+      ],
+      "codAmount": 1290000,
+      "totalQuantity": 2,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 47, phố Trần Đăng Ninh, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3006",
+      "orderCode": "RSA-700106",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-002",
+          "productName": "Set-top box TV360",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 2750000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": true,
+      "customerAddress": "Số 19, phố Phạm Hùng, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-08-29T11:20:00+07:00",
+          "action": "ASSIGN_SHOP_HUB",
+          "fromShopCode": "30202",
+          "toShopCode": "30201",
+          "actor": "coordinator-01",
+          "note": "Chuyển kho về gần địa chỉ KH"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3007",
+      "orderCode": "RSA-700107",
+      "statusCode": 2,
+      "batchStatus": 1,
+      "batchCode": "BATCH-0001",
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-002",
+          "productName": "Set-top box TV360",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 5600000,
+      "totalQuantity": 2,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 33, phố Cầu Giấy, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": 2.5,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-09-02T08:30:00+07:00",
+          "action": "CREATE_BATCH",
+          "toShopCode": "30201",
+          "note": "Nhập phiếu BATCH-0001"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3008",
+      "orderCode": "RSA-700108",
+      "statusCode": 2,
+      "batchStatus": 1,
+      "batchCode": "BATCH-0001",
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-005",
+          "productName": "Bộ chia mạng PoE 8 cổng",
+          "quantity": 3
+        }
+      ],
+      "codAmount": 980000,
+      "totalQuantity": 3,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 12, ngõ 29 Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": 3.1,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-09-02T08:30:00+07:00",
+          "action": "CREATE_BATCH",
+          "toShopCode": "30201",
+          "note": "Nhập phiếu BATCH-0001"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3009",
+      "orderCode": "RSA-700109",
+      "statusCode": 2,
+      "batchStatus": 1,
+      "batchCode": "BATCH-0001",
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "orderStatus": 0,
+      "items": [
+        {
+          "productCode": "PRD-004",
+          "productName": "Smart Tivi 43\"",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-003",
+          "productName": "Camera IP FPT",
+          "quantity": 2
+        }
+      ],
+      "codAmount": 11200000,
+      "totalQuantity": 3,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 128, phố Phạm Văn Đồng, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": 5.4,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-09-02T08:30:00+07:00",
+          "action": "CREATE_BATCH",
+          "toShopCode": "30201",
+          "note": "Nhập phiếu BATCH-0001"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3010",
+      "orderCode": "RSA-700110",
+      "statusCode": 2,
+      "batchStatus": 2,
+      "batchCode": "BATCH-0002",
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-01T08:00:00+07:00",
+        "to": "2026-09-01T10:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 1650000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 5, phố Nguyễn Khang, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": 1.8,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-08-31T09:00:00+07:00",
+          "action": "CREATE_BATCH",
+          "toShopCode": "30201",
+          "note": "Nhập phiếu BATCH-0002"
+        },
+        {
+          "timestamp": "2026-09-01T16:00:00+07:00",
+          "action": "COMPLETE_PICKING",
+          "note": "Hoàn tất soạn"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3011",
+      "orderCode": "RSA-700111",
+      "statusCode": 0,
+      "batchStatus": 3,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-004",
+          "productName": "Smart Tivi 43\"",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-002",
+          "productName": "Set-top box TV360",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 14800000,
+      "totalQuantity": 3,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 9, phố Xuân Thủy, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3012",
+      "orderCode": "RSA-700112",
+      "statusCode": 0,
+      "batchStatus": 3,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30201",
+        "shopName": "FPT Shop Cầu Giấy",
+        "address": "124 Xuân Thủy, Cầu Giấy, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 2,
+      "items": [
+        {
+          "productCode": "PRD-005",
+          "productName": "Bộ chia mạng PoE 8 cổng",
+          "quantity": 3
+        },
+        {
+          "productCode": "PRD-005",
+          "productName": "Bộ chia mạng PoE 8 cổng",
+          "quantity": 3
+        }
+      ],
+      "codAmount": 720000,
+      "totalQuantity": 6,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 74, phố Hồ Tùng Mậu, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3013",
+      "orderCode": "RSA-700201",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30202",
+        "shopName": "FPT Shop Ba Đình",
+        "address": "25 Liễu Giai, Ba Đình, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-003",
+          "productName": "Camera IP FPT",
+          "quantity": 2
+        }
+      ],
+      "codAmount": 2100000,
+      "totalQuantity": 2,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 3, phố Đào Tấn, Phường Liễu Giai, Ba Đình, Hà Nội",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3014",
+      "orderCode": "RSA-700202",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30202",
+        "shopName": "FPT Shop Ba Đình",
+        "address": "25 Liễu Giai, Ba Đình, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 0,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 1150000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 28, phố Kim Mã, Phường Liễu Giai, Ba Đình, Hà Nội",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3015",
+      "orderCode": "RSA-700203",
+      "statusCode": 2,
+      "batchStatus": 1,
+      "batchCode": "BATCH-0003",
+      "shopAssignment": {
+        "shopCode": "30202",
+        "shopName": "FPT Shop Ba Đình",
+        "address": "25 Liễu Giai, Ba Đình, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T13:00:00+07:00",
+        "to": "2026-09-03T17:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-002",
+          "productName": "Set-top box TV360",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-005",
+          "productName": "Bộ chia mạng PoE 8 cổng",
+          "quantity": 3
+        }
+      ],
+      "codAmount": 4300000,
+      "totalQuantity": 4,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 156, phố Bà Triệu, Phường Liễu Giai, Ba Đình, Hà Nội",
+      "distance": 4.2,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-09-02T10:15:00+07:00",
+          "action": "CREATE_BATCH",
+          "toShopCode": "30202",
+          "note": "Nhập phiếu BATCH-0003"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3016",
+      "orderCode": "RSA-700204",
+      "statusCode": 2,
+      "batchStatus": 1,
+      "batchCode": "BATCH-0003",
+      "shopAssignment": {
+        "shopCode": "30202",
+        "shopName": "FPT Shop Ba Đình",
+        "address": "25 Liễu Giai, Ba Đình, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T13:00:00+07:00",
+        "to": "2026-09-03T17:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 2050000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 61, phố Thái Hà, Phường Liễu Giai, Ba Đình, Hà Nội",
+      "distance": 6.0,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-09-02T10:15:00+07:00",
+          "action": "CREATE_BATCH",
+          "toShopCode": "30202",
+          "note": "Nhập phiếu BATCH-0003"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3017",
+      "orderCode": "RSA-700205",
+      "statusCode": 2,
+      "batchStatus": 2,
+      "batchCode": "BATCH-0004",
+      "shopAssignment": {
+        "shopCode": "30202",
+        "shopName": "FPT Shop Ba Đình",
+        "address": "25 Liễu Giai, Ba Đình, Hà Nội"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-08-31T08:00:00+07:00",
+        "to": "2026-08-31T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-004",
+          "productName": "Smart Tivi 43\"",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 8990000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 10, phố Nguyễn Chí Thanh, Phường Liễu Giai, Ba Đình, Hà Nội",
+      "distance": 3.3,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-08-30T14:00:00+07:00",
+          "action": "CREATE_BATCH",
+          "toShopCode": "30202",
+          "note": "Nhập phiếu BATCH-0004"
+        },
+        {
+          "timestamp": "2026-09-01T16:00:00+07:00",
+          "action": "COMPLETE_PICKING",
+          "note": "Hoàn tất soạn"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3018",
+      "orderCode": "RSA-700301",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30203",
+        "shopName": "FPT Shop Quận 1",
+        "address": "41 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-003",
+          "productName": "Camera IP FPT",
+          "quantity": 2
+        }
+      ],
+      "codAmount": 3450000,
+      "totalQuantity": 3,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 72, đường Lê Thánh Tôn, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+      "distance": null,
+      "note": "Giao giờ hành chính",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3019",
+      "orderCode": "RSA-700302",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30203",
+        "shopName": "FPT Shop Quận 1",
+        "address": "41 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 0,
+      "items": [
+        {
+          "productCode": "PRD-002",
+          "productName": "Set-top box TV360",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 1600000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 15, đường Nguyễn Huệ, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3020",
+      "orderCode": "RSA-700303",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30203",
+        "shopName": "FPT Shop Quận 1",
+        "address": "41 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 2,
+      "items": [
+        {
+          "productCode": "PRD-005",
+          "productName": "Bộ chia mạng PoE 8 cổng",
+          "quantity": 3
+        }
+      ],
+      "codAmount": 860000,
+      "totalQuantity": 3,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 230, đường Võ Văn Tần, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3021",
+      "orderCode": "RSA-700304",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30203",
+        "shopName": "FPT Shop Quận 1",
+        "address": "41 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 1990000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 5, đường Nguyễn Thị Minh Khai, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+      "distance": 7.9,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3022",
+      "orderCode": "RSA-700305",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30203",
+        "shopName": "FPT Shop Quận 1",
+        "address": "41 Nguyễn Huệ, Quận 1, TP. Hồ Chí Minh"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-003",
+          "productName": "Camera IP FPT",
+          "quantity": 2
+        },
+        {
+          "productCode": "PRD-002",
+          "productName": "Set-top box TV360",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 3800000,
+      "totalQuantity": 3,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 41, đường Cách Mạng Tháng Tám, Phường Bến Nghé, Quận 1, TP. Hồ Chí Minh",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3023",
+      "orderCode": "RSA-700401",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30204",
+        "shopName": "FPT Shop Hải Châu",
+        "address": "12 Lê Duẩn, Hải Châu, Đà Nẵng"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 1700000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 26, đường Pasteur, Phường Hoà Cường, Hải Châu, Đà Nẵng",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3024",
+      "orderCode": "RSA-700402",
+      "statusCode": 2,
+      "batchStatus": 1,
+      "batchCode": "BATCH-0006",
+      "shopAssignment": {
+        "shopCode": "30204",
+        "shopName": "FPT Shop Hải Châu",
+        "address": "12 Lê Duẩn, Hải Châu, Đà Nẵng"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-004",
+          "productName": "Smart Tivi 43\"",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 9290000,
+      "totalQuantity": 1,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 8, đường Nguyễn Văn Linh, Phường Hoà Cường, Hải Châu, Đà Nẵng",
+      "distance": 5.1,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-09-02T11:00:00+07:00",
+          "action": "CREATE_BATCH",
+          "toShopCode": "30204",
+          "note": "Nhập phiếu BATCH-0006"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3025",
+      "orderCode": "RSA-700403",
+      "statusCode": 2,
+      "batchStatus": 2,
+      "batchCode": "BATCH-0007",
+      "shopAssignment": {
+        "shopCode": "30204",
+        "shopName": "FPT Shop Hải Châu",
+        "address": "12 Lê Duẩn, Hải Châu, Đà Nẵng"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-01T13:00:00+07:00",
+        "to": "2026-09-01T17:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-002",
+          "productName": "Set-top box TV360",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-003",
+          "productName": "Camera IP FPT",
+          "quantity": 2
+        }
+      ],
+      "codAmount": 4120000,
+      "totalQuantity": 3,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 19, đường 2/9, Phường Hoà Cường, Hải Châu, Đà Nẵng",
+      "distance": 2.2,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        },
+        {
+          "timestamp": "2026-08-31T15:30:00+07:00",
+          "action": "CREATE_BATCH",
+          "toShopCode": "30204",
+          "note": "Nhập phiếu BATCH-0007"
+        },
+        {
+          "timestamp": "2026-09-01T16:00:00+07:00",
+          "action": "COMPLETE_PICKING",
+          "note": "Hoàn tất soạn"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3026",
+      "orderCode": "RSA-700501",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30205",
+        "shopName": "FPT Shop Quận 3",
+        "address": "88 Nguyễn Đình Chiểu, Quận 3, TP. Hồ Chí Minh"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 0,
+      "items": [
+        {
+          "productCode": "PRD-001",
+          "productName": "Modem WiFi 6 FPT",
+          "quantity": 1
+        },
+        {
+          "productCode": "PRD-002",
+          "productName": "Set-top box TV360",
+          "quantity": 1
+        }
+      ],
+      "codAmount": 2640000,
+      "totalQuantity": 2,
+      "isDebtSplittingOrder": true,
+      "customerAddress": "Số 7, đường Nam Kỳ Khởi Nghĩa, Phường Phạm Ngũ Lão, Quận 3, TP. Hồ Chí Minh",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    },
+    {
+      "fulfillCode": "ORD-3027",
+      "orderCode": "RSA-700502",
+      "statusCode": 0,
+      "batchStatus": 0,
+      "batchCode": null,
+      "shopAssignment": {
+        "shopCode": "30205",
+        "shopName": "FPT Shop Quận 3",
+        "address": "88 Nguyễn Đình Chiểu, Quận 3, TP. Hồ Chí Minh"
+      },
+      "originalTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-04T12:00:00+07:00"
+      },
+      "orderStatus": 1,
+      "items": [
+        {
+          "productCode": "PRD-005",
+          "productName": "Bộ chia mạng PoE 8 cổng",
+          "quantity": 3
+        }
+      ],
+      "codAmount": 640000,
+      "totalQuantity": 3,
+      "isDebtSplittingOrder": false,
+      "customerAddress": "Số 103, đường Nguyễn Đình Chiểu, Phường Phạm Ngũ Lão, Quận 3, TP. Hồ Chí Minh",
+      "distance": null,
+      "note": "",
+      "history": [
+        {
+          "timestamp": "2026-08-28T09:00:00+07:00",
+          "action": "ORDER_RECEIVED",
+          "note": "Đơn nhận từ RSA"
+        }
+      ]
+    }
+  ],
+  "batches": [
+    {
+      "batchCode": "BATCH-0001",
+      "shopCode": "30201",
+      "shipperId": "STAFF-001",
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "status": 0,
+      "items": [
+        {
+          "batchCode": "BATCH-0001",
+          "stopOrder": 1,
+          "orderCode": "RSA-700107",
+          "customerAddress": "Số 33, phố Cầu Giấy, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+          "distance": 2.5,
+          "fromDeliveryTime": "2026-09-03T08:00:00+07:00",
+          "toDeliveryTime": "2026-09-03T12:00:00+07:00",
+          "orderStatus": 1,
+          "orderType": 1,
+          "items": [
+            {
+              "productCode": "PRD-001",
+              "productName": "Modem WiFi 6 FPT",
+              "quantity": 1
+            },
+            {
+              "productCode": "PRD-002",
+              "productName": "Set-top box TV360",
+              "quantity": 1
+            }
+          ],
+          "totalQuantity": 2,
+          "codAmount": 5600000
+        },
+        {
+          "batchCode": "BATCH-0001",
+          "stopOrder": 2,
+          "orderCode": "RSA-700108",
+          "customerAddress": "Số 12, ngõ 29 Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+          "distance": 3.1,
+          "fromDeliveryTime": "2026-09-03T08:00:00+07:00",
+          "toDeliveryTime": "2026-09-03T12:00:00+07:00",
+          "orderStatus": 1,
+          "orderType": 1,
+          "items": [
+            {
+              "productCode": "PRD-005",
+              "productName": "Bộ chia mạng PoE 8 cổng",
+              "quantity": 3
+            }
+          ],
+          "totalQuantity": 3,
+          "codAmount": 980000
+        },
+        {
+          "batchCode": "BATCH-0001",
+          "stopOrder": 3,
+          "orderCode": "RSA-700109",
+          "customerAddress": "Số 128, phố Phạm Văn Đồng, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+          "distance": 5.4,
+          "fromDeliveryTime": "2026-09-03T08:00:00+07:00",
+          "toDeliveryTime": "2026-09-03T12:00:00+07:00",
+          "orderStatus": 0,
+          "orderType": 1,
+          "items": [
+            {
+              "productCode": "PRD-004",
+              "productName": "Smart Tivi 43\"",
+              "quantity": 1
+            },
+            {
+              "productCode": "PRD-003",
+              "productName": "Camera IP FPT",
+              "quantity": 2
+            }
+          ],
+          "totalQuantity": 3,
+          "codAmount": 11200000
+        }
+      ],
+      "createdAt": "2026-09-02T08:30:00+07:00"
+    },
+    {
+      "batchCode": "BATCH-0002",
+      "shopCode": "30201",
+      "shipperId": "STAFF-002",
+      "deliveryTime": {
+        "from": "2026-09-01T08:00:00+07:00",
+        "to": "2026-09-01T10:00:00+07:00"
+      },
+      "status": 1,
+      "items": [
+        {
+          "batchCode": "BATCH-0002",
+          "stopOrder": 1,
+          "orderCode": "RSA-700110",
+          "customerAddress": "Số 5, phố Nguyễn Khang, Phường Dịch Vọng, Cầu Giấy, Hà Nội",
+          "distance": 1.8,
+          "fromDeliveryTime": "2026-09-01T08:00:00+07:00",
+          "toDeliveryTime": "2026-09-01T10:00:00+07:00",
+          "orderStatus": 1,
+          "orderType": 1,
+          "items": [
+            {
+              "productCode": "PRD-001",
+              "productName": "Modem WiFi 6 FPT",
+              "quantity": 1
+            }
+          ],
+          "totalQuantity": 1,
+          "codAmount": 1650000
+        }
+      ],
+      "createdAt": "2026-08-31T09:00:00+07:00"
+    },
+    {
+      "batchCode": "BATCH-0003",
+      "shopCode": "30202",
+      "shipperId": "STAFF-003",
+      "deliveryTime": {
+        "from": "2026-09-03T13:00:00+07:00",
+        "to": "2026-09-03T17:00:00+07:00"
+      },
+      "status": 0,
+      "items": [
+        {
+          "batchCode": "BATCH-0003",
+          "stopOrder": 1,
+          "orderCode": "RSA-700203",
+          "customerAddress": "Số 156, phố Bà Triệu, Phường Liễu Giai, Ba Đình, Hà Nội",
+          "distance": 4.2,
+          "fromDeliveryTime": "2026-09-03T13:00:00+07:00",
+          "toDeliveryTime": "2026-09-03T17:00:00+07:00",
+          "orderStatus": 1,
+          "orderType": 1,
+          "items": [
+            {
+              "productCode": "PRD-002",
+              "productName": "Set-top box TV360",
+              "quantity": 1
+            },
+            {
+              "productCode": "PRD-005",
+              "productName": "Bộ chia mạng PoE 8 cổng",
+              "quantity": 3
+            }
+          ],
+          "totalQuantity": 4,
+          "codAmount": 4300000
+        },
+        {
+          "batchCode": "BATCH-0003",
+          "stopOrder": 2,
+          "orderCode": "RSA-700204",
+          "customerAddress": "Số 61, phố Thái Hà, Phường Liễu Giai, Ba Đình, Hà Nội",
+          "distance": 6.0,
+          "fromDeliveryTime": "2026-09-03T13:00:00+07:00",
+          "toDeliveryTime": "2026-09-03T17:00:00+07:00",
+          "orderStatus": 1,
+          "orderType": 1,
+          "items": [
+            {
+              "productCode": "PRD-001",
+              "productName": "Modem WiFi 6 FPT",
+              "quantity": 1
+            }
+          ],
+          "totalQuantity": 1,
+          "codAmount": 2050000
+        }
+      ],
+      "createdAt": "2026-09-02T10:15:00+07:00"
+    },
+    {
+      "batchCode": "BATCH-0004",
+      "shopCode": "30202",
+      "shipperId": "STAFF-003",
+      "deliveryTime": {
+        "from": "2026-08-31T08:00:00+07:00",
+        "to": "2026-08-31T12:00:00+07:00"
+      },
+      "status": 1,
+      "items": [
+        {
+          "batchCode": "BATCH-0004",
+          "stopOrder": 1,
+          "orderCode": "RSA-700205",
+          "customerAddress": "Số 10, phố Nguyễn Chí Thanh, Phường Liễu Giai, Ba Đình, Hà Nội",
+          "distance": 3.3,
+          "fromDeliveryTime": "2026-08-31T08:00:00+07:00",
+          "toDeliveryTime": "2026-08-31T12:00:00+07:00",
+          "orderStatus": 1,
+          "orderType": 1,
+          "items": [
+            {
+              "productCode": "PRD-004",
+              "productName": "Smart Tivi 43\"",
+              "quantity": 1
+            }
+          ],
+          "totalQuantity": 1,
+          "codAmount": 8990000
+        }
+      ],
+      "createdAt": "2026-08-30T14:00:00+07:00"
+    },
+    {
+      "batchCode": "BATCH-0005",
+      "shopCode": "30203",
+      "shipperId": "STAFF-004",
+      "deliveryTime": {
+        "from": "2026-08-30T08:00:00+07:00",
+        "to": "2026-08-30T12:00:00+07:00"
+      },
+      "status": 2,
+      "items": [],
+      "createdAt": "2026-08-29T08:45:00+07:00"
+    },
+    {
+      "batchCode": "BATCH-0006",
+      "shopCode": "30204",
+      "shipperId": "STAFF-005",
+      "deliveryTime": {
+        "from": "2026-09-03T08:00:00+07:00",
+        "to": "2026-09-03T12:00:00+07:00"
+      },
+      "status": 0,
+      "items": [
+        {
+          "batchCode": "BATCH-0006",
+          "stopOrder": 1,
+          "orderCode": "RSA-700402",
+          "customerAddress": "Số 8, đường Nguyễn Văn Linh, Phường Hoà Cường, Hải Châu, Đà Nẵng",
+          "distance": 5.1,
+          "fromDeliveryTime": "2026-09-03T08:00:00+07:00",
+          "toDeliveryTime": "2026-09-03T12:00:00+07:00",
+          "orderStatus": 1,
+          "orderType": 1,
+          "items": [
+            {
+              "productCode": "PRD-004",
+              "productName": "Smart Tivi 43\"",
+              "quantity": 1
+            }
+          ],
+          "totalQuantity": 1,
+          "codAmount": 9290000
+        }
+      ],
+      "createdAt": "2026-09-02T11:00:00+07:00"
+    },
+    {
+      "batchCode": "BATCH-0007",
+      "shopCode": "30204",
+      "shipperId": "STAFF-005",
+      "deliveryTime": {
+        "from": "2026-09-01T13:00:00+07:00",
+        "to": "2026-09-01T17:00:00+07:00"
+      },
+      "status": 1,
+      "items": [
+        {
+          "batchCode": "BATCH-0007",
+          "stopOrder": 1,
+          "orderCode": "RSA-700403",
+          "customerAddress": "Số 19, đường 2/9, Phường Hoà Cường, Hải Châu, Đà Nẵng",
+          "distance": 2.2,
+          "fromDeliveryTime": "2026-09-01T13:00:00+07:00",
+          "toDeliveryTime": "2026-09-01T17:00:00+07:00",
+          "orderStatus": 1,
+          "orderType": 1,
+          "items": [
+            {
+              "productCode": "PRD-002",
+              "productName": "Set-top box TV360",
+              "quantity": 1
+            },
+            {
+              "productCode": "PRD-003",
+              "productName": "Camera IP FPT",
+              "quantity": 2
+            }
+          ],
+          "totalQuantity": 3,
+          "codAmount": 4120000
+        }
+      ],
+      "createdAt": "2026-08-31T15:30:00+07:00"
+    }
+  ],
+  "deliveryStaff": [
+    {
+      "staffId": "STAFF-001",
+      "name": "Nguyễn Văn An",
+      "shopCode": "30201",
+      "phone": "0901000001"
+    },
+    {
+      "staffId": "STAFF-002",
+      "name": "Trần Thị Bình",
+      "shopCode": "30201",
+      "phone": "0901000002"
+    },
+    {
+      "staffId": "STAFF-003",
+      "name": "Lê Văn Cường",
+      "shopCode": "30202",
+      "phone": "0901000003"
+    },
+    {
+      "staffId": "STAFF-004",
+      "name": "Phạm Thị Dung",
+      "shopCode": "30203",
+      "phone": "0901000004"
+    },
+    {
+      "staffId": "STAFF-005",
+      "name": "Hoàng Văn Em",
+      "shopCode": "30204",
+      "phone": "0901000005"
+    },
+    {
+      "staffId": "STAFF-006",
+      "name": "Vũ Thị Hoa",
+      "shopCode": "30205",
+      "phone": "0901000006"
+    }
+  ],
+  "printers": [
+    {
+      "printerId": "PRN-30201-01",
+      "name": "HP LaserJet M404",
+      "shopCode": "30201",
+      "location": "Khu soạn A"
+    },
+    {
+      "printerId": "PRN-30201-02",
+      "name": "Brother HL-L2350DW",
+      "shopCode": "30201",
+      "location": "Khu soạn B"
+    },
+    {
+      "printerId": "PRN-30202-01",
+      "name": "HP LaserJet M404",
+      "shopCode": "30202",
+      "location": "Quầy thu ngân"
+    },
+    {
+      "printerId": "PRN-30203-01",
+      "name": "Canon LBP2900",
+      "shopCode": "30203",
+      "location": "Khu soạn"
+    },
+    {
+      "printerId": "PRN-30204-01",
+      "name": "HP LaserJet P1102",
+      "shopCode": "30204",
+      "location": "Quầy thu ngân"
+    },
+    {
+      "printerId": "PRN-30205-01",
+      "name": "Brother HL-L2350DW",
+      "shopCode": "30205",
+      "location": "Khu soạn"
+    }
+  ],
+  "regions": [
+    {
+      "code": "01",
+      "name": "Hà Nội",
+      "type": "province"
+    },
+    {
+      "code": "0101",
+      "name": "Quận Cầu Giấy",
+      "type": "ward",
+      "parentCode": "01"
+    },
+    {
+      "code": "0102",
+      "name": "Quận Ba Đình",
+      "type": "ward",
+      "parentCode": "01"
+    },
+    {
+      "code": "0103",
+      "name": "Quận Đống Đa",
+      "type": "ward",
+      "parentCode": "01"
+    },
+    {
+      "code": "79",
+      "name": "TP. Hồ Chí Minh",
+      "type": "province"
+    },
+    {
+      "code": "7901",
+      "name": "Quận 1",
+      "type": "ward",
+      "parentCode": "79"
+    },
+    {
+      "code": "7902",
+      "name": "Quận 3",
+      "type": "ward",
+      "parentCode": "79"
+    },
+    {
+      "code": "7903",
+      "name": "Quận Bình Thạnh",
+      "type": "ward",
+      "parentCode": "79"
+    },
+    {
+      "code": "48",
+      "name": "Đà Nẵng",
+      "type": "province"
+    },
+    {
+      "code": "4801",
+      "name": "Quận Hải Châu",
+      "type": "ward",
+      "parentCode": "48"
+    },
+    {
+      "code": "4802",
+      "name": "Quận Sơn Trà",
+      "type": "ward",
+      "parentCode": "48"
+    }
+  ]
+}
