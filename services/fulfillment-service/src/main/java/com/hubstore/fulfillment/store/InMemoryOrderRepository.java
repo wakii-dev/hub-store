@@ -72,9 +72,18 @@ public class InMemoryOrderRepository implements OrderRepository {
         return new FilterResult(new ArrayList<>(matched.subList(fromIndex, toIndex)), matched.size());
     }
 
+    /**
+     * Resolve đơn theo MỖI mã trong 2 mã: fulfillCode (ORD-…, dùng nội bộ D1)
+     * hoặc orderCode (RSA-…, "mã đơn RSA" — BatchingItem.orderCode mà Go gửi lên
+     * khi revert/mutate qua MutateOrderStatus + GetOrdersByCodes, spec §3.3/§3.6).
+     * Fix integration SF-3↔SF-4 (FI-241 walkthrough): Go KHÔNG có fulfillCode
+     * trong BatchingItem (proto chỉ có order_code) — lookup 1 mã không đủ.
+     */
     @Override
     public synchronized Optional<SeedModels.OrderSeed> findByFulfillCode(String fulfillCode) {
-        return orders.stream().filter(o -> o.fulfillCode().equals(fulfillCode)).findFirst();
+        return orders.stream()
+                .filter(o -> o.fulfillCode().equals(fulfillCode) || o.orderCode().equals(fulfillCode))
+                .findFirst();
     }
 
     @Override
