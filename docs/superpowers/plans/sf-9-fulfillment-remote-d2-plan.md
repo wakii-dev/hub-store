@@ -33,24 +33,24 @@
 
 ## Tasks
 
-- [ ] Task 1 — RTKQ batches slices + store: `apps/fulfillment/src/api/batchesApi.ts`
+- [x] Task 1 — RTKQ batches slices + store: `apps/fulfillment/src/api/batchesApi.ts`
       (typed theo @hub-store/shared api-contracts: filterBatches, getBatchCriteria,
       cancelBatch, completePicking; tags Batches) + `store.ts` (createAppStore) +
       Provider wrap trong BatchListPage & standalone App.
-- [ ] Task 2 — Filters 3 + URL state: TextSearch (Số phiếu/Số đơn) · MultiSelect
+- [x] Task 2 — Filters 3 + URL state: TextSearch (Số phiếu/Số đơn) · MultiSelect
       Trạng thái phiếu (3 option BatchEntityStatus) · DatePicker Thời gian tạo ·
       FilterBar Search/Reset wiring.
-- [ ] Task 3 — Bảng 8 cột + COD + flatten + rowSpan action column + pagination envelope
+- [x] Task 3 — Bảng 8 cột + COD + flatten + rowSpan action column + pagination envelope
       (server-paginated batches; total từ envelope).
-- [ ] Task 4 — Expand detail: BatchingItem.items[] Product list (sub-table).
-- [ ] Task 5 — Hủy phiếu: Modal confirm + reason (bắt buộc), criteria-gated disable,
+- [x] Task 4 — Expand detail: BatchingItem.items[] Product list (sub-table).
+- [x] Task 5 — Hủy phiếu: Modal confirm + reason (bắt buộc), criteria-gated disable,
       error envelope → message, success → invalidate + message.
-- [ ] Task 6 — "Hoàn tất soạn" (D11): batch ACTIVE → Modal.confirm →
+- [x] Task 6 — "Hoàn tất soạn" (D11): batch ACTIVE → Modal.confirm →
       PUT complete-picking → invalidate.
-- [ ] Task 7 — Nút In → `navigate('/hub-store-order/batch/print?batchCode=...')`
+- [x] Task 7 — Nút In → `navigate('/hub-store-order/batch/print?batchCode=...')`
       (URL assert; PrintPage giữ stub SF-10).
-- [ ] Task 8 — i18n keys `fulfillment.*` VI + EN (title/filters/columns/actions/messages).
-- [ ] Task 9 — Unit tests (vitest + RTL, mock @hub-store/api-client): flatten+rowSpan,
+- [x] Task 8 — i18n keys `fulfillment.*` VI + EN (title/filters/columns/actions/messages).
+- [x] Task 9 — Unit tests (vitest + RTL, mock @hub-store/api-client): flatten+rowSpan,
       COD format VI, criteria gating, cancel flow (confirm+reason+mutation),
       filter→query args mapping, URL state round-trip.
 - [ ] Task 10 — Browser walkthrough Rule 0 3 tầng (shell :3000 → BFF :8080 →
