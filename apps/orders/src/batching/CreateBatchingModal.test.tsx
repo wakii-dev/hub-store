@@ -228,6 +228,20 @@ describe("CreateBatchingModal", () => {
 
     expect(rowCodes()).toEqual(["ORD-3001", "ORD-3002", "ORD-3003", "ORD-9001"]);
     expect(stopOrders()).toEqual(["1", "2", "3", "4"]);
+
+    // P1 review: double-select trong window trước khi exclude-refetch chạy xong
+    // → KHÔNG được append đôi (guard trùng theo fulfillCode hiện hành).
+    const optAgain = Array.from(document.querySelectorAll<HTMLElement>(".ant-select-item-option")).find(
+      (o) => o.textContent?.includes("ORD-9001"),
+    );
+    if (optAgain) {
+      ["mousedown", "mouseup", "click"].forEach((t) =>
+        optAgain.dispatchEvent(new MouseEvent(t, { bubbles: true })),
+      );
+    }
+    await flush();
+    expect(rowCodes()).toEqual(["ORD-3001", "ORD-3002", "ORD-3003", "ORD-9001"]);
+    expect(stopOrders()).toEqual(["1", "2", "3", "4"]);
   });
 
   it("submit: payload create theo stopOrder hiện hành (orderCodes sau DnD)", async () => {

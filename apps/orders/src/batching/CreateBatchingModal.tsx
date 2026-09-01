@@ -128,12 +128,10 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
   const [groups, setGroups] = useState<PackingGroup[] | null>(null);
   const [shipperId, setShipperId] = useState<string | undefined>(undefined);
   const [deliveryTime, setDeliveryTime] = useState<TimeRange | null>(null);
-  const [addedCodes, setAddedCodes] = useState<string[]>([]);
 
   useEffect(() => {
     if (open) {
       setRows(orders);
-      setAddedCodes([]);
       setGroups(null);
       setShipperId(undefined);
       setDeliveryTime(null);
@@ -184,8 +182,13 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
   const handleAddOrders = (codes: string[]) => {
     if (codes.length === 0) return;
     const byCode = new Map(addItems.map((o) => [o.fulfillCode, o]));
-    const fresh = codes.map((c) => byCode.get(c)).filter((o): o is HubStoreOrderFilterItem => !!o);
-    setAddedCodes((prev) => [...prev, ...fresh.map((o) => o.fulfillCode)]);
+    // Guard trùng: option vừa chọn vẫn nằm trong dropdown cho tới khi
+    // exclude-refetch chạy xong — click lại không được append đôi (P1 review SF-8).
+    const existing = new Set(rows.map((r) => r.fulfillCode));
+    const fresh = codes
+      .filter((c) => !existing.has(c))
+      .map((c) => byCode.get(c))
+      .filter((o): o is HubStoreOrderFilterItem => !!o);
     setRows((prev) => [...prev, ...fresh]); // thêm vào CUỐI danh sách
     setSearchText("");
   };
