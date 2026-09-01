@@ -64,10 +64,12 @@
       ⚠ Screenshot pixel-level KHÔNG chụp được: orca CDP captureScreenshot timeout
       persistent + computer-use a11y helper down — đã verify bằng a11y DOM snapshot +
       network entries + backend curl asserts; cần user xác nhận bằng mắt lần mở sau.)
-- [ ] Task 11 — Code-reviewer độc lập (verdict /tmp/story/fi233/reviewer-sf9.md) →
+- [x] Task 11 — Code-reviewer độc lập (verdict /tmp/story/fi233/reviewer-sf9.md) →
       fix P0/P1 → APPROVED → merge vào story/fi233-polyglot-grpc-mf (commit-tree +
       update-ref full refname + ancestor guard) + audit comment → story-verify sạch →
       FI-241 Done → cleanup worktree + branch.
+      (APPROVED attempt 1 sau fix 6bc4df0; merge 7955430 CAS + ancestor guard OK;
+      audit comment c0d22450 trên FI-241.)
 
 ## Acceptance (§8b D2 — walkthrough gate)
 
