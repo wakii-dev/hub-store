@@ -1,0 +1,270 @@
+package com.hubstore.fulfillment.store;
+
+import com.hubstore.fulfillment.seed.SeedLoader;
+import com.hubstore.fulfillment.seed.SeedModels;
+import com.hubstore.fulfillment.v1.ShopAssignment;
+import com.hubstore.fulfillment.v1.ShopAssignmentHistoryEntry;
+import org.springframework.beans.factory.annotation.Value;
+import org.springframework.stereotype.Component;
+
+import java.time.Instant;
+import java.time.OffsetDateTime;
+import java.time.format.DateTimeParseException;
+import java.util.ArrayList;
+import java.util.Comparator;
+import java.util.LinkedHashMap;
+import java.util.List;
+import java.util.Locale;
+import java.util.Map;
+import java.util.Optional;
+import java.util.Set;
+
+/**
+ * In-memory store — load canonical-seed.json lúc boot, validate fail-fast
+ * (SeedLoader → SeedValidator). Deliverable là in-memory (context pack §Boundary):
+ * không DB thật, OrderRepository interface sẵn cho DB sau.
+ */
+@Component
+public class InMemoryOrderRepository implements OrderRepository {
+
+    private final List<SeedModels.OrderSeed> orders;
+    private final List<SeedModels.RegionSeed> regions;
+    private final List<SeedModels.DeliveryStaffSeed> staff;
+    /** Lịch sử chuyển kho theo fulfillCode — khởi tạo từ seed history, append khi assign. */
+    private final Map<String, List<ShopAssignmentHistoryEntry>> historyByCode = new LinkedHashMap<>();
+
+    @org.springframework.beans.factory.annotation.Autowired
+    public InMemoryOrderRepository(@Value("${fulfillment.seed-path:}") String seedPathEnv) {
+        this(SeedLoader.load(SeedLoader.resolve(seedPathEnv)));
+    }
+
+    /** Dùng trong test — seed đã load sẵn; Spring chọn constructor @Autowired ở trên. */
+    public InMemoryOrderRepository(SeedModels.SeedFile seed) {
+        this.orders = new ArrayList<>(seed.orders());
+        this.regions = new ArrayList<>(seed.regions());
+        this.staff = new ArrayList<>(seed.deliveryStaff());
+        for (SeedModels.OrderSeed o : seed.orders()) {
+            List<ShopAssignmentHistoryEntry> entries = new ArrayList<>();
+            for (SeedModels.HistoryEntrySeed h : o.history()) {
+                entries.add(ShopAssignmentHistoryEntry.newBuilder()
+                        .setFulfillCode(o.fulfillCode())
+                        // Seed history shape {timestamp, action, note} — map sang proto
+                        // history entry: changedAt=timestamp, changedBy=action (dấu vết gốc).
+                        .setChangedAt(h.timestamp() == null ? "" : h.timestamp())
+                        .setChangedBy(h.action() == null ? "" : h.action())
+                        .build());
+            }
+            historyByCode.put(o.fulfillCode(), entries);
+        }
+    }
+
+    // ---------------- reads ----------------
+
+    @Override
+    public synchronized FilterResult filter(OrderFilter filter) {
+        List<SeedModels.OrderSeed> matched = orders.stream()
+                .filter(o -> matches(o, filter))
+                .toList();
+        int page = Math.max(filter.page(), 1);
+        int pageSize = filter.pageSize() <= 0 ? 10 : filter.pageSize();
+        int fromIndex = Math.min((page - 1) * pageSize, matched.size());
+        int toIndex = Math.min(fromIndex + pageSize, matched.size());
+        return new FilterResult(new ArrayList<>(matched.subList(fromIndex, toIndex)), matched.size());
+    }
+
+    @Override
+    public synchronized Optional<SeedModels.OrderSeed> findByFulfillCode(String fulfillCode) {
+        return orders.stream().filter(o -> o.fulfillCode().equals(fulfillCode)).findFirst();
+    }
+
+    @Override
+    public synchronized List<SeedModels.OrderSeed> findByCodes(List<String> fulfillCodes) {
+        List<SeedModels.OrderSeed> out = new ArrayList<>();
+        for (String code : fulfillCodes) {
+            findByFulfillCode(code).ifPresent(out::add);
+        }
+        return out;
+    }
+
+    // ---------------- mutations ----------------
+
+    @Override
+    public synchronized List<SeedModels.OrderSeed> mutateBatchStatus(List<String> fulfillCodes, int targetBatchStatus) {
+        List<SeedModels.OrderSeed> updated = new ArrayList<>();
+        for (String code : fulfillCodes) {
+            Optional<SeedModels.OrderSeed> found = findByFulfillCode(code);
+            if (found.isEmpty()) {
+                continue;
+            }
+            // target=0 (cancel-revert §9): đơn rời phiếu → clear batchCode.
+            String batchCode = targetBatchStatus == 0 ? null : found.get().batchCode();
+            SeedModels.OrderSeed next = found.get().withBatchStatus(targetBatchStatus, batchCode);
+            replace(next);
+            updated.add(next);
+        }
+        return updated;
+    }
+
+    @Override
+    public synchronized SeedModels.OrderSeed assignShopHub(String fulfillCode, SeedModels.ShopAssignmentSeed targetShop,
+                                                           String changedBy, Instant changedAt) {
+        SeedModels.OrderSeed order = findByFulfillCode(fulfillCode)
+                .orElseThrow(() -> new IllegalArgumentException("Order không tồn tại: " + fulfillCode));
+        SeedModels.ShopAssignmentSeed from = order.shopAssignment();
+        SeedModels.OrderSeed next = order.withShopAssignment(targetShop);
+        replace(next);
+        historyByCode.computeIfAbsent(fulfillCode, k -> new ArrayList<>()).add(
+                ShopAssignmentHistoryEntry.newBuilder()
+                        .setFulfillCode(fulfillCode)
+                        .setFromShop(toProtoShop(from))
+                        .setToShop(toProtoShop(targetShop))
+                        .setChangedAt(changedAt.toString())
+                        .setChangedBy(changedBy == null ? "fulfillment-service" : changedBy)
+                        .build());
+        return next;
+    }
+
+    @Override
+    public synchronized SeedModels.OrderSeed updateDeliveryTime(String fulfillCode, SeedModels.TimeRangeSeed deliveryTime) {
+        SeedModels.OrderSeed order = findByFulfillCode(fulfillCode)
+                .orElseThrow(() -> new IllegalArgumentException("Order không tồn tại: " + fulfillCode));
+        SeedModels.OrderSeed next = order.withDeliveryTime(deliveryTime);
+        replace(next);
+        return next;
+    }
+
+    @Override
+    public synchronized SeedModels.OrderSeed updateNote(String fulfillCode, String note) {
+        SeedModels.OrderSeed order = findByFulfillCode(fulfillCode)
+                .orElseThrow(() -> new IllegalArgumentException("Order không tồn tại: " + fulfillCode));
+        SeedModels.OrderSeed next = order.withNote(note);
+        replace(next);
+        return next;
+    }
+
+    @Override
+    public synchronized List<ShopAssignmentHistoryEntry> getHistory(String fulfillCode) {
+        // READ semantics (spec §3.8): trả copy — KHÔNG mutate state.
+        return List.copyOf(historyByCode.getOrDefault(fulfillCode, List.of()));
+    }
+
+    // ---------------- master data ----------------
+
+    @Override
+    public synchronized List<SeedModels.RegionSeed> regions() {
+        return List.copyOf(regions);
+    }
+
+    @Override
+    public synchronized List<SeedModels.DeliveryStaffSeed> deliveryStaff() {
+        return List.copyOf(staff);
+    }
+
+    @Override
+    public synchronized List<SeedModels.ShopSeed> distinctShops() {
+        Map<String, SeedModels.ShopSeed> byCode = new LinkedHashMap<>();
+        for (SeedModels.OrderSeed o : orders) {
+            if (o.shopAssignment() != null) {
+                byCode.putIfAbsent(o.shopAssignment().shopCode(), new SeedModels.ShopSeed(
+                        o.shopAssignment().shopCode(), o.shopAssignment().shopName(),
+                        o.shopAssignment().address()));
+            }
+        }
+        return byCode.values().stream().sorted(Comparator.comparing(SeedModels.ShopSeed::code)).toList();
+    }
+
+    // ---------------- helpers ----------------
+
+    private void replace(SeedModels.OrderSeed next) {
+        for (int i = 0; i < orders.size(); i++) {
+            if (orders.get(i).fulfillCode().equals(next.fulfillCode())) {
+                orders.set(i, next);
+                return;
+            }
+        }
+    }
+
+    private boolean matches(SeedModels.OrderSeed o, OrderFilter f) {
+        if (f.fulfillCode() != null && !f.fulfillCode().isBlank()
+                && !o.fulfillCode().toLowerCase(Locale.ROOT)
+                        .contains(f.fulfillCode().toLowerCase(Locale.ROOT))) {
+            return false;
+        }
+        if (!f.batchStatuses().isEmpty() && !f.batchStatuses().contains(o.batchStatus())) {
+            return false;
+        }
+        if (!f.orderStatuses().isEmpty() && !f.orderStatuses().contains(o.orderStatus())) {
+            return false;
+        }
+        if (!f.shopCodes().isEmpty()
+                && (o.shopAssignment() == null || !f.shopCodes().contains(o.shopAssignment().shopCode()))) {
+            return false;
+        }
+        if (!f.regionCodes().isEmpty() && !matchesAnyRegion(o, f.regionCodes())) {
+            return false;
+        }
+        if (!overlaps(o.deliveryTime(), f.deliveryTime())) {
+            return false;
+        }
+        if (!overlaps(o.originalTime(), f.originalTime())) {
+            return false;
+        }
+        // created_time: seed orders không có createdAt — nhận nhưng chưa filter (spike).
+        return f.excludeFulfillCodes() == null || !f.excludeFulfillCodes().contains(o.fulfillCode());
+    }
+
+    /**
+     * Region filter (D1 "Địa chỉ"): seed đơn không có regionCode — match
+     * deterministic bằng cách customerAddress chứa tên region (province/ward,
+     * case-insensitive). Đủ cho spike; DB thật sẽ join qua regionCode.
+     */
+    private boolean matchesAnyRegion(SeedModels.OrderSeed o, Set<String> regionCodes) {
+        String address = o.customerAddress() == null ? "" : o.customerAddress().toLowerCase(Locale.ROOT);
+        return regions.stream()
+                .filter(r -> regionCodes.contains(r.code()))
+                .anyMatch(r -> r.name() != null && address.contains(r.name().toLowerCase(Locale.ROOT)));
+    }
+
+    /** Range overlap — ISO-8601 datetime (Instant.parse); khoảng trống = unbounded. */
+    private boolean overlaps(SeedModels.TimeRangeSeed orderRange, SeedModels.TimeRangeSeed filterRange) {
+        if (filterRange == null || (isBlank(filterRange.from()) && isBlank(filterRange.to()))) {
+            return true;
+        }
+        if (orderRange == null) {
+            return false;
+        }
+        Instant fFrom = parseOrMin(filterRange.from());
+        Instant fTo = parseOrMax(filterRange.to());
+        Instant oFrom = parseOrMin(orderRange.from());
+        Instant oTo = parseOrMax(orderRange.to());
+        return oFrom.compareTo(fTo) <= 0 && oTo.compareTo(fFrom) >= 0;
+    }
+
+    private static boolean isBlank(String s) {
+        return s == null || s.isBlank();
+    }
+
+    private static Instant parseOrMin(String iso) {
+        try {
+            return OffsetDateTime.parse(iso).toInstant();
+        } catch (DateTimeParseException | NullPointerException e) {
+            return Instant.MIN;
+        }
+    }
+
+    private static Instant parseOrMax(String iso) {
+        try {
+            return OffsetDateTime.parse(iso).toInstant();
+        } catch (DateTimeParseException | NullPointerException e) {
+            return Instant.MAX;
+        }
+    }
+
+    private static ShopAssignment toProtoShop(SeedModels.ShopAssignmentSeed s) {
+        return ShopAssignment.newBuilder()
+                .setShopCode(s.shopCode() == null ? "" : s.shopCode())
+                .setShopName(s.shopName() == null ? "" : s.shopName())
+                .setAddress(s.address() == null ? "" : s.address())
+                .build();
+    }
+}
