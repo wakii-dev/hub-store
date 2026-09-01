@@ -23,10 +23,10 @@
 - [x] Task 7 — templates handover_receipt (bàn giao shipper: shipper + danh sách đơn) + goods_handover (bàn giao kho: danh sách sản phẩm tổng hợp từ items). (commit 762eefa — OrderedDict gộp theo productCode)
 - [x] Task 8 — template installation_acceptance (nghiệm thu lắp đặt: đơn lắp đặt + ô khách ký). Registry `templates/__init__.py` map PrintType → renderer (1 chỗ). (commit 762eefa)
 - [x] Task 9 — pytest: 5 templates sinh PDF hợp lệ (pypdf open + non-empty + đúng số trang); list-printers filter shopCode đúng (gồm 30201); print trả bytes non-empty mỗi PrintType (end-to-end qua servicer, payload mẫu từ canonical seed); job status tracking; error cases (payload hỏng, UNSPECIFIED). Chạy bằng venv service. (commit Task 9-10 — 31/31 pass)
-- [ ] Task 10 — README + verify + merge: README chạy standalone :50053 (smoke gRPC call mẫu — grpcurl hoặc python client snippet); verify từng dòng ACCEPTANCE context pack (service chạy, smoke OK, pytest pass, print bytes non-empty 5/5); code-reviewer APPROVED; merge no-ff vào story branch; audit comment FI-239. (README + smoke đã xong — commit c46520d; tick SAU review APPROVED + merge; review round 1: CHANGES-REQUESTED P1 premature tick → fix)
+- [x] Task 10 — README + verify + merge: README chạy standalone :50053 (smoke gRPC call mẫu — grpcurl hoặc python client snippet); verify từng dòng ACCEPTANCE context pack (service chạy, smoke OK, pytest pass, print bytes non-empty 5/5); code-reviewer APPROVED; merge no-ff vào story branch; audit comment FI-239. (README + smoke c46520d; review round 1 CHANGES-REQUESTED P1 premature tick → fix 94bd565 → round 2 APPROVED; verifier PASS 4/4)
 
 ## ACCEPTANCE checklist (từ context pack — verifier dùng)
-- [ ] Service chạy standalone :50053 theo README; smoke gRPC call thành công.
-- [ ] pytest pass: 5 PDF render hợp lệ (mở được, không rỗng); printers trả đúng theo shopCode seed.
-- [ ] print() trả PDF bytes non-empty cho mỗi PrintType với payload mẫu.
-- [ ] Boundary: KHÔNG gọi Go/Java; KHÔNG sửa proto/seed/BFF; KHÔNG FE; KHÔNG printAll.
+- [x] Service chạy standalone :50053 theo README; smoke gRPC call thành công.
+- [x] pytest pass: 5 PDF render hợp lệ (mở được, không rỗng); printers trả đúng theo shopCode seed.
+- [x] print() trả PDF bytes non-empty cho mỗi PrintType với payload mẫu.
+- [x] Boundary: KHÔNG gọi Go/Java; KHÔNG sửa proto/seed/BFF; KHÔNG FE; KHÔNG printAll.
