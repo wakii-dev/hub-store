@@ -60,6 +60,9 @@ export default defineConfig({
       shared: mfShared,
     }),
   ],
+  // Root .env là nguồn env chung (JWT_DEV_SECRET + VITE_* FE config) — shell
+  // đọc VITE_JWT_DEV_SECRET / VITE_OIDC_* từ đó cho auth stub.
+  envDir: resolve(configDir, "../.."),
   server: { port: 3000, host: true },
   build: { target: "esnext" },
   css: {
@@ -70,6 +73,7 @@ export default defineConfig({
   },
   test: {
     environment: "jsdom",
+    setupFiles: [resolve(configDir, "src/testing/setup.ts")],
     // Bare federation specifiers không resolve được trong vitest (import-analysis
     // chạy trước MF transform) → alias vào stub ném lỗi = mô phỏng remote chết.
     alias: {
