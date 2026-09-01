@@ -166,6 +166,51 @@ describe('Task 6 — pagination envelope + gRPC status mapping', () => {
 });
 
 describe('Task 7 — semantics + print PDF bytes', () => {
+  it('GET /fulfillment/:fulfillCode — OrderDetail + history aggregation (Promise.all)', async () => {
+    // Mock mặc định: GetOrderDetail → fixtureOrder, GetAssignHistory → 1 entry.
+    // Aggregation cả 2 call xảy ra (route dùng Promise.all) — assert shape cuối.
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/fulfillment/ORD-3001',
+      headers: { authorization: `Bearer ${await signTestToken()}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    // OrderDetail = HubStoreOrderFilterItem §4 + orderCode + note + history.
+    expect(body.fulfillCode).toBe('ORD-3001');
+    expect(body.shopAssignment.shopCode).toBe('30201');
+    expect(body.codAmount).toBe(1850000);
+    // GAP documented (README): proto detail không mang orderCode → "".
+    expect(body.orderCode).toBe('');
+    expect(body.note).toBe('');
+    // history[] aggregate từ GetAssignHistory, mapped qua mapHistoryEntry.
+    expect(body.history).toHaveLength(1);
+    expect(body.history[0]).toMatchObject({
+      timestamp: '2026-08-30T10:00:00+07:00',
+      action: 'ASSIGN_SHOP_HUB',
+      fromShopCode: '30201',
+      toShopCode: '30202',
+      actor: 'admin',
+    });
+  });
+
+  it('GET /fulfillment/:fulfillCode — order không tồn tại → 404 envelope NOT_FOUND', async () => {
+    // Detail response rỗng (order absent — proto3 message field unset).
+    h.fulfillment.override({
+      getOrderDetail: (_call, cb) => cb(null, {}),
+    });
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/fulfillment/ORD-KHONG-TON-TAI',
+      headers: { authorization: `Bearer ${await signTestToken()}` },
+    });
+    expect(res.statusCode).toBe(404);
+    const body = res.json();
+    expect(body.statusCode).toBe(404);
+    expect(body.code).toBe('NOT_FOUND');
+    expect(body.message).toContain('ORD-KHONG-TON-TAI');
+  });
+
   it('POST /fulfillment/:code/history = READ — trả mảng lịch sử, không mutate', async () => {
     const res = await h.app.inject({
       method: 'POST',
@@ -228,6 +273,24 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().details[0].field).toBe('printType');
+  });
+
+  it('POST /fulfillment/print với batch không tồn tại → 404 NOT_FOUND (không 422)', async () => {
+    // Hydration rỗng — batching GetBatchDetail trả {} (batch absent).
+    h.batching.override({
+      getBatchDetail: (_call, cb) => cb(null, {}),
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/fulfillment/print',
+      payload: { batchCode: 'BAT-KHONG-TON-TAI', printType: 'bill', printerId: 'P' },
+      headers: { authorization: `Bearer ${await signTestToken()}` },
+    });
+    expect(res.statusCode).toBe(404);
+    const body = res.json();
+    expect(body.statusCode).toBe(404);
+    expect(body.code).toBe('NOT_FOUND');
+    expect(body.message).toContain('BAT-KHONG-TON-TAI');
   });
 
   it('malformed JSON body → error envelope (không crash HTML error)', async () => {

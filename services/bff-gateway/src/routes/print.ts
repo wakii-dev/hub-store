@@ -8,11 +8,12 @@
  * canonical JSON → push FAT PAYLOAD sang print-service → stream PDF về FE.
  */
 import type { FastifyInstance } from 'fastify';
+import { status as GrpcStatus } from '@grpc/grpc-js';
 import type { PrintersResponse, BatchDto } from '@hub-store/shared';
 import type { BatchingApi, PrintApi } from '../clients/index.js';
 import { SERVICE_NAMES } from '../config.js';
 import { requireUser } from '../plugins/auth.js';
-import { sendGrpcError, sendBadRequest } from '../lib/grpc-error.js';
+import { sendGrpcError, sendBadRequest, grpcError } from '../lib/grpc-error.js';
 import { printTypeToProto } from '../mappers/print.js';
 import { mapBatch } from '../mappers/batching.js';
 
@@ -65,9 +66,13 @@ export function registerPrintRoutes(
         // batching-service (resilience policy §3.1).
         const detail = await deps.batching.getBatchDetail({ batchCode }, role);
         if (!detail.batch) {
-          return sendBadRequest(reply, [
-            { field: 'batchCode', message: `Batch ${batchCode} not found.` },
-          ]);
+          // Batch không tồn tại = resource missing → 404 NOT_FOUND (nhất quán
+          // với GET /fulfillment/batches/:code), KHÔNG phải 422 validation.
+          return sendGrpcError(
+            reply,
+            grpcError(GrpcStatus.NOT_FOUND, `Batch ${batchCode} not found.`),
+            SERVICE_NAMES.batching,
+          );
         }
         const batch: BatchDto = mapBatch(detail.batch);
         try {
