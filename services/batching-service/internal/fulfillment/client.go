@@ -20,6 +20,23 @@ import (
 	"google.golang.org/grpc/metadata"
 )
 
+// roleKey — context key mang x-user-role đã extract từ incoming metadata
+// (unary interceptor của batching server gắn vào trước khi handler gọi Java).
+type roleKey struct{}
+
+// NewRoleContext gắn role vào context (gọi từ interceptor).
+func NewRoleContext(ctx context.Context, role string) context.Context {
+	return context.WithValue(ctx, roleKey{}, role)
+}
+
+// RoleFromContext đọc role từ context.
+func RoleFromContext(ctx context.Context) string {
+	if v, ok := ctx.Value(roleKey{}).(string); ok {
+		return v
+	}
+	return ""
+}
+
 // Client is the surface batching-service needs from Java. Interface (thay vì
 // concrete stub) để unit test thay thế bằng mock server.
 type Client interface {
@@ -32,10 +49,16 @@ type Client interface {
 }
 
 // GRPCClient is the real Client over a gRPC connection to Java (:50051).
+// x-user-role: server interceptor extract từ incoming metadata (BFF gắn) →
+// NewRoleContext → mỗi call forward outgoing metadata sang Java.
 type GRPCClient struct {
-	conn   *grpc.ClientConn
-	stub   fulfillmentv1.FulfillmentServiceClient
-	role   string // x-user-role forwarded from BFF context (services trust BFF)
+	conn *grpc.ClientConn
+	stub fulfillmentv1.FulfillmentServiceClient
+}
+
+// NewGRPCClientFromConn wraps an existing connection (bufconn test / DI).
+func NewGRPCClientFromConn(conn *grpc.ClientConn) *GRPCClient {
+	return &GRPCClient{conn: conn, stub: fulfillmentv1.NewFulfillmentServiceClient(conn)}
 }
 
 // NewGRPCClient dials the Java fulfillment-service at addr.
@@ -51,15 +74,9 @@ func NewGRPCClient(ctx context.Context, addr string) (*GRPCClient, error) {
 	return &GRPCClient{conn: conn, stub: fulfillmentv1.NewFulfillmentServiceClient(conn)}, nil
 }
 
-// WithRole sets the x-user-role metadata forwarded on every call.
-func (c *GRPCClient) WithRole(role string) *GRPCClient {
-	c.role = role
-	return c
-}
-
 func (c *GRPCClient) ctx(ctx context.Context) context.Context {
-	if c.role != "" {
-		return metadata.AppendToOutgoingContext(ctx, "x-user-role", c.role)
+	if role := RoleFromContext(ctx); role != "" {
+		return metadata.AppendToOutgoingContext(ctx, "x-user-role", role)
 	}
 	return ctx
 }

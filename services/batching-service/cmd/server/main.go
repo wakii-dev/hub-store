@@ -4,9 +4,10 @@
 // boot. Stands alone — KHÔNG thêm vào turbo (context pack rule).
 //
 // Env:
-//   BATCHING_PORT       default 50052
-//   FULFILLMENT_ADDR    default localhost:50051 (Java; hydration + mutate)
-//   CANONICAL_SEED_PATH default ../../api/seed/canonical-seed.json (từ run.sh)
+//
+//	BATCHING_PORT       default 50052
+//	FULFILLMENT_ADDR    default localhost:50051 (Java; hydration + mutate)
+//	CANONICAL_SEED_PATH default ../../api/seed/canonical-seed.json (từ run.sh)
 package main
 
 import (
@@ -55,7 +56,7 @@ func main() {
 	if err != nil {
 		log.Fatalf("batching-service: listen :%s: %v", port, err)
 	}
-	grpcServer := grpc.NewServer()
+	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(server.RoleUnaryInterceptor))
 	batchingv1.RegisterBatchingServiceServer(grpcServer, server.New(st, fc))
 	reflection.Register(grpcServer)
 

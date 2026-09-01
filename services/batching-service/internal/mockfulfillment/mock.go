@@ -16,17 +16,18 @@ import (
 
 	fulfillmentv1 "hubstore/gen/go/hubstore/fulfillment/v1"
 
+	"google.golang.org/grpc/metadata"
 	"google.golang.org/protobuf/proto"
 )
 
 // seedFile — chỉ phần orders được mock sử dụng.
 type seedFile struct {
 	Orders []struct {
-		FulfillCode string `json:"fulfillCode"`
-		OrderCode   string `json:"orderCode"`
-		BatchStatus int32  `json:"batchStatus"`
-		StatusCode  int32  `json:"statusCode"`
-		BatchCode   *string `json:"batchCode"`
+		FulfillCode    string  `json:"fulfillCode"`
+		OrderCode      string  `json:"orderCode"`
+		BatchStatus    int32   `json:"batchStatus"`
+		StatusCode     int32   `json:"statusCode"`
+		BatchCode      *string `json:"batchCode"`
 		ShopAssignment struct {
 			ShopCode string `json:"shopCode"`
 			ShopName string `json:"shopName"`
@@ -40,7 +41,7 @@ type seedFile struct {
 			From string `json:"from"`
 			To   string `json:"to"`
 		} `json:"deliveryTime"`
-		OrderStatus          int32 `json:"orderStatus"`
+		OrderStatus          int32                   `json:"orderStatus"`
 		Items                []fulfillmentv1.Product `json:"items"`
 		TotalQuantity        int32                   `json:"totalQuantity"`
 		CodAmount            int64                   `json:"codAmount"`
@@ -51,20 +52,21 @@ type seedFile struct {
 }
 
 // MutationCall — 1 lần MutateOrderStatus đã ghi nhận (mock-verify hydration/
-// mutation contract trong test).
+// mutation contract trong test). Role = x-user-role metadata Go forward sang.
 type MutationCall struct {
 	FulfillCodes []string
 	Target       fulfillmentv1.BatchStatus
 	Reason       string
+	Role         string
 }
 
 // Server implements fulfillmentv1.FulfillmentServiceServer over the seed.
 type Server struct {
 	fulfillmentv1.UnimplementedFulfillmentServiceServer
 
-	mu          sync.Mutex
-	orders      map[string]*fulfillmentv1.HubStoreOrderFilterItem // by fulfillCode
-	mutations   []MutationCall
+	mu            sync.Mutex
+	orders        map[string]*fulfillmentv1.HubStoreOrderFilterItem // by fulfillCode
+	mutations     []MutationCall
 	FailHydration bool // test hook: GetOrdersByCodes trả lỗi
 	FailMutation  bool // test hook: MutateOrderStatus trả lỗi
 }
@@ -82,18 +84,18 @@ func New(seedPath string) (*Server, error) {
 	s := &Server{orders: map[string]*fulfillmentv1.HubStoreOrderFilterItem{}}
 	for _, o := range f.Orders {
 		item := &fulfillmentv1.HubStoreOrderFilterItem{
-			FulfillCode:  o.FulfillCode,
-			StatusCode:   fulfillmentv1.CoordinationStatus(o.StatusCode),
-			BatchStatus:  fulfillmentv1.BatchStatus(o.BatchStatus),
+			FulfillCode: o.FulfillCode,
+			StatusCode:  fulfillmentv1.CoordinationStatus(o.StatusCode),
+			BatchStatus: fulfillmentv1.BatchStatus(o.BatchStatus),
 			ShopAssignment: &fulfillmentv1.ShopAssignment{
 				ShopCode: o.ShopAssignment.ShopCode,
 				ShopName: o.ShopAssignment.ShopName,
 				Address:  o.ShopAssignment.Address,
 			},
-			OriginalTime: &fulfillmentv1.TimeRange{From: o.OriginalTime.From, To: o.OriginalTime.To},
-			DeliveryTime: &fulfillmentv1.TimeRange{From: o.DeliveryTime.From, To: o.DeliveryTime.To},
-			OrderStatus:  fulfillmentv1.OrderStatus(o.OrderStatus),
-			Items:        cloneProducts(o.Items),
+			OriginalTime:         &fulfillmentv1.TimeRange{From: o.OriginalTime.From, To: o.OriginalTime.To},
+			DeliveryTime:         &fulfillmentv1.TimeRange{From: o.DeliveryTime.From, To: o.DeliveryTime.To},
+			OrderStatus:          fulfillmentv1.OrderStatus(o.OrderStatus),
+			Items:                cloneProducts(o.Items),
 			TotalQuantity:        o.TotalQuantity,
 			CodAmount:            o.CodAmount,
 			IsDebtSplittingOrder: o.IsDebtSplittingOrder,
@@ -183,8 +185,22 @@ func (s *Server) MutateOrderStatus(ctx context.Context, req *fulfillmentv1.Mutat
 		FulfillCodes: append([]string(nil), req.GetFulfillCodes()...),
 		Target:       req.GetTargetBatchStatus(),
 		Reason:       req.GetReason(),
+		Role:         incomingRole(ctx),
 	})
 	return resp, nil
+}
+
+// incomingRole đọc x-user-role từ metadata của call đến (mock-verify việc Go
+// forward role sang Java).
+func incomingRole(ctx context.Context) string {
+	md, ok := metadata.FromIncomingContext(ctx)
+	if !ok {
+		return ""
+	}
+	if vals := md.Get("x-user-role"); len(vals) > 0 {
+		return vals[0]
+	}
+	return ""
 }
 
 // FulfillCodes returns all seeded fulfill codes sorted (test convenience).

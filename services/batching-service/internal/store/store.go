@@ -27,7 +27,7 @@ import (
 // parts this service consumes are modeled; orders are kept raw because the
 // orders store belongs to Java (SF-3) — Go only cross-checks orderCode keys.
 type seedFile struct {
-	Orders []seedOrder `json:"orders"`
+	Orders  []seedOrder `json:"orders"`
 	Batches []seedBatch `json:"batches"`
 }
 
@@ -53,18 +53,18 @@ type seedTimeRange struct {
 }
 
 type seedBatchItem struct {
-	BatchCode        string          `json:"batchCode"`
-	StopOrder        int32           `json:"stopOrder"`
-	OrderCode        string          `json:"orderCode"`
-	CustomerAddress  string          `json:"customerAddress"`
-	Distance         float64         `json:"distance"`
-	FromDeliveryTime string          `json:"fromDeliveryTime"`
-	ToDeliveryTime   string          `json:"toDeliveryTime"`
-	OrderStatus      int32           `json:"orderStatus"`
-	OrderType        int32           `json:"orderType"`
-	Items            []seedProduct   `json:"items"`
-	TotalQuantity    int32           `json:"totalQuantity"`
-	CodAmount        int64           `json:"codAmount"`
+	BatchCode        string        `json:"batchCode"`
+	StopOrder        int32         `json:"stopOrder"`
+	OrderCode        string        `json:"orderCode"`
+	CustomerAddress  string        `json:"customerAddress"`
+	Distance         float64       `json:"distance"`
+	FromDeliveryTime string        `json:"fromDeliveryTime"`
+	ToDeliveryTime   string        `json:"toDeliveryTime"`
+	OrderStatus      int32         `json:"orderStatus"`
+	OrderType        int32         `json:"orderType"`
+	Items            []seedProduct `json:"items"`
+	TotalQuantity    int32         `json:"totalQuantity"`
+	CodAmount        int64         `json:"codAmount"`
 }
 
 type seedProduct struct {
@@ -162,13 +162,14 @@ func mapSeedItem(b *seedBatch, it *seedBatchItem) *batchingv1.BatchingItem {
 	}
 }
 
-// List returns a snapshot of all batches sorted by createdAt then batchCode.
+// List returns a snapshot (deep copies) of all batches sorted by createdAt
+// then batchCode — callers có thể tự do mutate phần tử trả về.
 func (s *Store) List() []*batchingv1.Batch {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
 	out := make([]*batchingv1.Batch, 0, len(s.batches))
 	for _, b := range s.batches {
-		out = append(out, b)
+		out = append(out, proto.Clone(b).(*batchingv1.Batch))
 	}
 	sort.Slice(out, func(i, j int) bool {
 		if out[i].CreatedAt != out[j].CreatedAt {
@@ -205,10 +206,43 @@ func (s *Store) Delete(batchCode string) {
 	delete(s.batches, batchCode)
 }
 
+// CreateWithNextCode atomically derives the next BATCH-NNNN code and inserts
+// the built batch under ONE lock (loại race hai create cùng cướp một code).
+// build nhận code vừa derive. Trả (batch, true); false nếu code đã tồn tại.
+func (s *Store) CreateWithNextCode(build func(code string) *batchingv1.Batch) (*batchingv1.Batch, bool) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	code := s.nextBatchCodeLocked()
+	if _, exists := s.batches[code]; exists {
+		return nil, false
+	}
+	b := build(code)
+	s.batches[code] = b
+	return b, true
+}
+
+// Transition atomically flips status from→to (CAS trên status). Trả batch
+// ĐÃ cập nhật (clone), nil nếu không thấy code HOẶC status hiện ≠ from
+// (caller phân biệt qua Get).
+func (s *Store) Transition(batchCode string, from, to batchingv1.BatchEntityStatus) *batchingv1.Batch {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	b, ok := s.batches[batchCode]
+	if !ok || b.GetStatus() != from {
+		return nil
+	}
+	b.Status = to
+	return proto.Clone(b).(*batchingv1.Batch)
+}
+
 // NextBatchCode derives BATCH-%04d from the max numeric suffix in the store.
 func (s *Store) NextBatchCode() string {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
+	return s.nextBatchCodeLocked()
+}
+
+func (s *Store) nextBatchCodeLocked() string {
 	max := 0
 	for code := range s.batches {
 		if !strings.HasPrefix(code, "BATCH-") {

@@ -28,42 +28,6 @@ import (
 
 const seedPath = "../../../../api/seed/canonical-seed.json"
 
-// wireClient adapts the generated stub (dialed over bufconn) to the
-// fulfillment.Client interface — exercises the REAL client code path.
-type wireClient struct {
-	stub fulfillmentv1.FulfillmentServiceClient
-}
-
-func (w *wireClient) GetOrdersByCodes(ctx context.Context, codeList []string) ([]*fulfillmentv1.HubStoreOrderFilterItem, error) {
-	resp, err := w.stub.GetOrdersByCodes(ctx, &fulfillmentv1.GetOrdersByCodesRequest{FulfillCodes: codeList})
-	if err != nil {
-		return nil, err
-	}
-	return resp.Orders, nil
-}
-
-func (w *wireClient) MutateOrderStatus(ctx context.Context, codeList []string, target fulfillmentv1.BatchStatus, reason string) error {
-	req := &fulfillmentv1.MutateOrderStatusRequest{FulfillCodes: codeList, TargetBatchStatus: target}
-	if reason != "" {
-		r := reason
-		req.Reason = &r
-	}
-	resp, err := w.stub.MutateOrderStatus(ctx, req)
-	if err != nil {
-		return err
-	}
-	for _, r := range resp.Results {
-		if !r.Success {
-			return status.Errorf(codes.Internal, "mutate %s: %s", r.FulfillCode, r.Message)
-		}
-	}
-	return nil
-}
-
-func (w *wireClient) Close() error { return nil }
-
-var _ fulfillment.Client = (*wireClient)(nil)
-
 func insecureCreds() credentials.TransportCredentials { return insecure.NewCredentials() }
 
 type fixture struct {
@@ -101,10 +65,10 @@ func startFixture(t *testing.T) *fixture {
 	if err != nil {
 		t.Fatalf("seed: %v", err)
 	}
-	srv := New(st, &wireClient{stub: fulfillmentv1.NewFulfillmentServiceClient(jconn)})
+	srv := New(st, fulfillment.NewGRPCClientFromConn(jconn))
 
 	blis := bufconn.Listen(1024 * 1024)
-	bgrpc := grpc.NewServer()
+	bgrpc := grpc.NewServer(grpc.UnaryInterceptor(RoleUnaryInterceptor))
 	batchingv1.RegisterBatchingServiceServer(bgrpc, srv)
 	go func() { _ = bgrpc.Serve(blis) }()
 	t.Cleanup(bgrpc.Stop)
@@ -461,14 +425,26 @@ func TestRecalculateDistance(t *testing.T) {
 
 // --- metadata x-user-role (spec §3.9: services tin BFF) ---
 
-func TestRoleFromContext(t *testing.T) {
-	ctx := metadata.NewIncomingContext(context.Background(),
+func TestRoleInterceptor_ExtractsAndAttaches(t *testing.T) {
+	in := metadata.NewIncomingContext(context.Background(),
 		metadata.Pairs("x-user-role", "HubStoreManager"))
-	if got := RoleFromContext(ctx); got != "HubStoreManager" {
-		t.Fatalf("RoleFromContext = %q, want HubStoreManager", got)
+	var got string
+	handler := func(c context.Context, _ interface{}) (interface{}, error) {
+		got = fulfillment.RoleFromContext(c)
+		return nil, nil
 	}
-	if got := RoleFromContext(context.Background()); got != "" {
-		t.Fatalf("empty context role = %q, want \"\"", got)
+	if _, err := RoleUnaryInterceptor(in, nil, &grpc.UnaryServerInfo{FullMethod: "test"}, handler); err != nil {
+		t.Fatalf("interceptor: %v", err)
+	}
+	if got != "HubStoreManager" {
+		t.Fatalf("role in handler ctx = %q, want HubStoreManager", got)
+	}
+	// Không có metadata → role rỗng.
+	if _, err := RoleUnaryInterceptor(context.Background(), nil, &grpc.UnaryServerInfo{FullMethod: "test"}, handler); err != nil {
+		t.Fatalf("interceptor: %v", err)
+	}
+	if got != "" {
+		t.Fatalf("role without metadata = %q, want \"\"", got)
 	}
 }
 
@@ -516,4 +492,20 @@ func TestSmokeRealServer(t *testing.T) {
 	}
 	t.Logf("SMOKE OK: criteria + filter(7) + detail + create %s (stopOrder=%d)",
 		cresp.GetBatch().GetBatchCode(), cresp.GetBatch().GetItems()[1].GetStopOrder())
+}
+
+// P1 fix verify — x-user-role phải forward được Go → Java qua metadata thật.
+func TestCreateBatch_ForwardsUserRoleMetadata(t *testing.T) {
+	f := startFixture(t)
+	ctx := metadata.AppendToOutgoingContext(context.Background(), "x-user-role", "HubStoreManager")
+	_, err := f.client.CreateBatch(ctx, &batchingv1.CreateBatchRequest{
+		FulfillCodes: []string{"ORD-3001", "ORD-3002"},
+	})
+	if err != nil {
+		t.Fatalf("create: %v", err)
+	}
+	muts := f.java.Mutations()
+	if len(muts) != 1 || muts[0].Role != "HubStoreManager" {
+		t.Fatalf("role forwarded = %+v, want HubStoreManager trên mutation call", muts)
+	}
 }

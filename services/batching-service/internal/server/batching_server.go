@@ -19,6 +19,7 @@ import (
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
 	fulfillmentv1 "hubstore/gen/go/hubstore/fulfillment/v1"
 
+	"google.golang.org/grpc"
 	grpccodes "google.golang.org/grpc/codes"
 	"google.golang.org/grpc/metadata"
 	"google.golang.org/grpc/status"
@@ -62,26 +63,32 @@ func (s *BatchingServer) CreateBatch(ctx context.Context, req *batchingv1.Create
 	if err != nil {
 		return nil, status.Errorf(grpccodes.Unavailable, "hydration failed: %v", err)
 	}
-	if err := validateRule1(orderCodes, orders); err != nil {
+	byCode, err := correlate(orderCodes, orders)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRule1(orderCodes, byCode); err != nil {
 		return nil, err
 	}
 
-	batchCode := s.store.NextBatchCode()
-	batch := &batchingv1.Batch{
-		BatchCode: batchCode,
+	batch, ok := s.store.CreateWithNextCode(func(code string) *batchingv1.Batch {
 		// shopCode trống từ BFF → derive từ orders truth (spec §3.3).
-		ShopCode:  orders[0].GetShopAssignment().GetShopCode(),
-		ShipperId: req.GetShipperId(),
-		DeliveryTime: &fulfillmentv1.TimeRange{
-			From: req.GetDeliveryTime().GetFrom(),
-			To:   req.GetDeliveryTime().GetTo(),
-		},
-		Status:    batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE,
-		Items:     buildItems(batchCode, orderCodes, orders),
-		CreatedAt: s.now().Format(time.RFC3339),
+		return &batchingv1.Batch{
+			BatchCode: code,
+			ShopCode:  orders[0].GetShopAssignment().GetShopCode(),
+			ShipperId: req.GetShipperId(),
+			DeliveryTime: &fulfillmentv1.TimeRange{
+				From: req.GetDeliveryTime().GetFrom(),
+				To:   req.GetDeliveryTime().GetTo(),
+			},
+			Status:    batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE,
+			Items:     buildItems(code, orderCodes, byCode),
+			CreatedAt: s.now().Format(time.RFC3339),
+		}
+	})
+	if !ok {
+		return nil, status.Error(grpccodes.Internal, "batchCode collision")
 	}
-
-	s.store.Put(batch)
 
 	// Mutate chain: đơn batchStatus NOT_PREPARED → PREPARING qua Java.
 	if err := s.fulfill.MutateOrderStatus(ctx, orderCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARING, ""); err != nil {
@@ -113,15 +120,15 @@ func correlate(wantCodes []string, orders []*fulfillmentv1.HubStoreOrderFilterIt
 }
 
 // validateRule1: mọi đơn tồn tại, CÙNG kho, batchStatus=0 (§3.6 rule 1).
-func validateRule1(wantCodes []string, orders []*fulfillmentv1.HubStoreOrderFilterItem) error {
-	byCode, err := correlate(wantCodes, orders)
-	if err != nil {
-		return err
-	}
+func validateRule1(wantCodes []string, byCode map[string]*fulfillmentv1.HubStoreOrderFilterItem) error {
 	var shop string
 	for _, c := range wantCodes {
 		o := byCode[c]
 		sc := o.GetShopAssignment().GetShopCode()
+		if sc == "" {
+			return status.Errorf(grpccodes.InvalidArgument,
+				"rule 1 violated: order %s has no shop assignment", o.GetFulfillCode())
+		}
 		if shop == "" {
 			shop = sc
 		} else if sc != shop {
@@ -140,11 +147,7 @@ func validateRule1(wantCodes []string, orders []*fulfillmentv1.HubStoreOrderFilt
 // buildItems maps hydrated orders → BatchingItems. Thứ tự trong
 // fulfill_codes = stopOrder (D1b drag-drop sort pin). item.order_code giữ
 // NGUYÊN code phía request (D2 hiển thị đúng mã user đã chọn).
-func buildItems(batchCode string, wantCodes []string, orders []*fulfillmentv1.HubStoreOrderFilterItem) []*batchingv1.BatchingItem {
-	byCode, err := correlate(wantCodes, orders)
-	if err != nil {
-		return nil // unreachable — validateRule1 đã chạy trước
-	}
+func buildItems(batchCode string, wantCodes []string, byCode map[string]*fulfillmentv1.HubStoreOrderFilterItem) []*batchingv1.BatchingItem {
 	items := make([]*batchingv1.BatchingItem, 0, len(wantCodes))
 	for i, c := range wantCodes {
 		o := byCode[c]
@@ -261,43 +264,52 @@ func (s *BatchingServer) GetBatchDetail(ctx context.Context, req *batchingv1.Get
 // ---------------------------------------------------------------------------
 
 func (s *BatchingServer) CancelBatch(ctx context.Context, req *batchingv1.CancelBatchRequest) (*batchingv1.CancelBatchResponse, error) {
-	b := s.store.Get(req.GetBatchCode())
+	// Rule 4 §3.6: chỉ batch ACTIVE được hủy — CAS atomic chặn double-cancel
+	// và cancel-vs-complete race.
+	b := s.store.Transition(req.GetBatchCode(),
+		batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE,
+		batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_CANCELLED)
 	if b == nil {
-		return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
-	}
-	// Rule 4 §3.6: chỉ batch ACTIVE được hủy.
-	if b.GetStatus() != batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE {
+		cur := s.store.Get(req.GetBatchCode())
+		if cur == nil {
+			return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
+		}
 		return nil, status.Errorf(grpccodes.FailedPrecondition,
 			"rule 4 violated: batch %s is %s (only ACTIVE cancellable)",
-			b.GetBatchCode(), b.GetStatus())
+			cur.GetBatchCode(), cur.GetStatus())
 	}
 
 	itemCodes := itemOrderCodes(b)
-	// Revert đơn batchStatus → 0 qua Java trước khi flip phiếu.
+	// Revert đơn batchStatus → 0 qua Java; fail → hoàn tác phiếu về ACTIVE.
 	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_NOT_PREPARED, req.GetReason()); err != nil {
+		s.store.Transition(req.GetBatchCode(),
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_CANCELLED,
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE)
 		return nil, status.Errorf(grpccodes.Unavailable, "order revert failed: %v", err)
 	}
-	b.Status = batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_CANCELLED
-	s.store.Put(b)
 	return &batchingv1.CancelBatchResponse{Batch: b}, nil
 }
 
 func (s *BatchingServer) CompletePicking(ctx context.Context, req *batchingv1.CompletePickingRequest) (*batchingv1.CompletePickingResponse, error) {
-	b := s.store.Get(req.GetBatchCode())
+	b := s.store.Transition(req.GetBatchCode(),
+		batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE,
+		batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_COMPLETED)
 	if b == nil {
-		return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
-	}
-	if b.GetStatus() != batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE {
+		cur := s.store.Get(req.GetBatchCode())
+		if cur == nil {
+			return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
+		}
 		return nil, status.Errorf(grpccodes.FailedPrecondition,
 			"batch %s is %s (only ACTIVE can complete picking)",
-			b.GetBatchCode(), b.GetStatus())
+			cur.GetBatchCode(), cur.GetStatus())
 	}
 	itemCodes := itemOrderCodes(b)
 	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARED, ""); err != nil {
+		s.store.Transition(req.GetBatchCode(),
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_COMPLETED,
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE)
 		return nil, status.Errorf(grpccodes.Unavailable, "order mutation failed: %v", err)
 	}
-	b.Status = batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_COMPLETED
-	s.store.Put(b)
 	return &batchingv1.CompletePickingResponse{Batch: b}, nil
 }
 
@@ -438,15 +450,19 @@ func round1(f float64) float64 {
 	return float64(int(f*10+0.5)) / 10
 }
 
-// RoleFromContext extracts x-user-role metadata (BFF forwards; services trust
-// BFF — zero-trust service-to-service = known-limitation, spec §3.9).
+// RoleUnaryInterceptor extracts x-user-role từ incoming metadata (BFF gắn —
+// services trust BFF, spec §3.9) và gắn vào context để mọi call sang Java
+// (hydration/mutate) forward tiếp outgoing metadata.
+func RoleUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if vals := md.Get("x-user-role"); len(vals) > 0 && vals[0] != "" {
+			ctx = fulfillment.NewRoleContext(ctx, vals[0])
+		}
+	}
+	return handler(ctx, req)
+}
+
+// RoleFromContext đọc x-user-role đã extract từ context (wrapper tiện test).
 func RoleFromContext(ctx context.Context) string {
-	md, ok := metadata.FromIncomingContext(ctx)
-	if !ok {
-		return ""
-	}
-	if vals := md.Get("x-user-role"); len(vals) > 0 {
-		return vals[0]
-	}
-	return ""
+	return fulfillment.RoleFromContext(ctx)
 }
