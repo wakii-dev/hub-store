@@ -38,35 +38,35 @@
 
 ## Tasks
 
-- [ ] Task 1 — printApi: `src/api/printApi.ts` — injectEndpoints (getBatchDetail GET
+- [x] Task 1 — printApi: `src/api/printApi.ts` — injectEndpoints (getBatchDetail GET
       /fulfillment/batches/:code; getPrinters GET /fulfillment/print/printers?shopCode=) +
       helper `printDocument({batchCode, printType, printerId}): Promise<Uint8Array>` qua
       getAxiosInstance (responseType 'blob' → arrayBuffer; lỗi: response.data là Blob →
       .text() → JSON.parse envelope message).
-- [ ] Task 2 — vite config + env types: `vite.config.ts` +optimizeDeps (include pdfjs-dist /
+- [x] Task 2 — vite config + env types: `vite.config.ts` +optimizeDeps (include pdfjs-dist /
       exclude worker mjs); `src/vite-env.d.ts` NEW (`/// <reference types="vite/client" />`).
-- [ ] Task 3 — PdfPreview: `src/print/PdfPreview.tsx` — lazy module: pdfjs worker wiring +
+- [x] Task 3 — PdfPreview: `src/print/PdfPreview.tsx` — lazy module: pdfjs worker wiring +
       `<Document file={{data}}>` + `<Page scale>`; props {bytes, zoom}; loading/error states.
-- [ ] Task 4 — PrintPage shell: 5 Tabs (PRINT_TYPES; labels i18n `print.tab.*`), đọc
+- [x] Task 4 — PrintPage shell: 5 Tabs (PRINT_TYPES; labels i18n `print.tab.*`), đọc
       ?batchCode= (không có → Result warning), batch detail + printers query wiring,
       zoom Slider 50–200%, active tab → load PDF bytes (cache per tab).
-- [ ] Task 5 — In + feedback: Select máy in (disable khi chưa chọn; printers empty → hint),
+- [x] Task 5 — In + feedback: Select máy in (disable khi chưa chọn; printers empty → hint),
       nút In → printDocument(active tab) → message.success job; lỗi envelope → message.error.
-- [ ] Task 6 — "In tất cả": 5 calls TUẦN TỰ (for-of PRINT_TYPES, await từng call — pin §3.7,
+- [x] Task 6 — "In tất cả": 5 calls TUẦN TỰ (for-of PRINT_TYPES, await từng call — pin §3.7,
       KHÔNG printAll) + Progress hiển thị (done/total + tên phiếu đang in); disable In/In tất
       cả khi đang chạy; tổng kết thành công/thất bại.
-- [ ] Task 7 — i18n keys `print.*` VI + EN (tabs, printer, zoom, actions, feedback, progress,
+- [x] Task 7 — i18n keys `print.*` VI + EN (tabs, printer, zoom, actions, feedback, progress,
       states) + update subtitle. Lazy-load viewer trong PrintPage (React.lazy + Suspense).
-- [ ] Task 8 — Unit tests: PrintPage.test.tsx (tabs 5 render + switching, printers từ query,
+- [x] Task 8 — Unit tests: PrintPage.test.tsx (tabs 5 render + switching, printers từ query,
       print call payload đúng {batchCode, printType, printerId}, In tất cả tuần tự — assert
       call order + await tuần tự, feedback message) + printApi.test.ts (printDocument payload +
       blob→bytes + error envelope parse). Mock react-pdf + api-client + axios.
-- [ ] Task 9 — Browser walkthrough Rule 0 3 tầng (backend stack: Java :50051 + Go :50052 +
+- [x] Task 9 — Browser walkthrough Rule 0 3 tầng (backend stack: Java :50051 + Go :50052 +
       print :50053 + BFF :8080 + shell :3000 + fulfillment :3002): DOM (5 tabs, select, zoom) →
       VISUAL (screenshot so production-clone tone) → FLOW (D2 → In → PrintPage → từng tab PDF
       bytes thật → chọn printer → In → feedback; In tất cả + progress). Screenshots lưu
       /tmp/story/fi233/screens/sf10-*.
-- [ ] Task 10 — Code-reviewer độc lập (verdict /tmp/story/fi233/reviewer-sf10.md) → fix P0/P1 →
+- [x] Task 10 — Code-reviewer độc lập (verdict /tmp/story/fi233/reviewer-sf10.md) → fix P0/P1 →
       APPROVED → verifier PASS → merge story/fi233-polyglot-grpc-mf (merge ngược + update-ref
       full refname + ancestor guard) + audit comment tổng (batch-audit) → story-verify sf-10
       sạch → FI-243 Done → cleanup worktree + branch (KHÔNG đích).
