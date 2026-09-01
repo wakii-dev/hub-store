@@ -77,8 +77,10 @@ function PrintPageInner() {
   const [activeType, setActiveType] = useState<PrintType>(PRINT_TYPES[0]);
   const [zoomPct, setZoomPct] = useState(100);
   const [previews, setPreviews] = useState<PreviewCache>({});
-  const [previewLoading, setPreviewLoading] = useState(false);
-  const [previewError, setPreviewError] = useState<string | null>(null);
+  // Per-PrintType (P1 reviewer-sf10): state global gây lỗi chéo tab — tab đã
+  // cache hiện nhầm Alert lỗi của tab khác khi quay lại.
+  const [previewLoading, setPreviewLoading] = useState<Partial<Record<PrintType, boolean>>>({});
+  const [previewError, setPreviewError] = useState<Partial<Record<PrintType, string>>>({});
   const [printerId, setPrinterId] = useState<string | undefined>(undefined);
   const [printing, setPrinting] = useState(false);
   const [printAll, setPrintAll] = useState<{ done: number; total: number; current: string } | null>(null);
@@ -90,23 +92,27 @@ function PrintPageInner() {
   });
   const printers = printersData?.items ?? [];
 
-  // Load PDF bytes cho tab active (cache per tab — không refetch tab đã load).
+  // Load PDF bytes cho tab active (cache per tab — không refetch tab đã load;
+  // lỗi/loading theo TỪNG type — không chấm nhầm tab kế).
   const requestSeq = useRef(0);
   const loadPreview = useCallback(
     async (type: PrintType) => {
       if (!batchCode || previews[type]) return;
       const seq = ++requestSeq.current;
-      setPreviewLoading(true);
-      setPreviewError(null);
+      setPreviewLoading((prev) => ({ ...prev, [type]: true }));
+      setPreviewError((prev) => ({ ...prev, [type]: undefined }));
       try {
         const bytes = await printDocument({ batchCode, printType: type, printerId: '' });
         if (seq !== requestSeq.current) return; // tab đã đổi — bỏ kết quả cũ
         setPreviews((prev) => ({ ...prev, [type]: bytes }));
+        setPreviewLoading((prev) => ({ ...prev, [type]: false }));
       } catch (err) {
         if (seq !== requestSeq.current) return;
-        setPreviewError(err instanceof Error ? err.message : String(err));
-      } finally {
-        if (seq === requestSeq.current) setPreviewLoading(false);
+        setPreviewError((prev) => ({
+          ...prev,
+          [type]: err instanceof Error ? err.message : String(err),
+        }));
+        setPreviewLoading((prev) => ({ ...prev, [type]: false }));
       }
     },
     [batchCode, previews],
@@ -175,11 +181,11 @@ function PrintPageInner() {
     label: t(`print.tab.${type}`),
     children: (
       <div className="print-preview-area" style={{ overflow: 'auto', maxHeight: 640, background: '#f5f5f5', textAlign: 'center', padding: 16 }}>
-        {previewLoading && <Spin size="large" style={{ marginTop: 80 }} />}
-        {!previewLoading && previewError && (
-          <Alert type="error" showIcon message={`${t('print.preview.error')}: ${previewError}`} />
+        {previewLoading[type] && <Spin size="large" style={{ marginTop: 80 }} />}
+        {!previewLoading[type] && previewError[type] && (
+          <Alert type="error" showIcon message={`${t('print.preview.error')}: ${previewError[type]}`} />
         )}
-        {!previewLoading && !previewError && previews[type] && (
+        {!previewLoading[type] && !previewError[type] && previews[type] && (
           <PreviewErrorBoundary label={t('print.preview.error')}>
             <Suspense fallback={<Spin size="large" style={{ marginTop: 80 }} />}>
               <PdfPreview bytes={previews[type]!} scale={zoomPct / 100} />

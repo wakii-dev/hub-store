@@ -1,4 +1,4 @@
-import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
+import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
 import { MemoryRouter } from "react-router-dom";
@@ -151,6 +151,22 @@ describe("PrintPage (D3)", () => {
     // Quay lại tab bill → KHÔNG refetch (cache per tab).
     fireEvent.click(screen.getByText("Biên bản"));
     expect(printDocMock).toHaveBeenCalledTimes(2);
+  });
+
+  it("preview lỗi 1 tab KHÔNG chấm nhầm tab đã cache (P1 reviewer-sf10)", async () => {
+    printDocMock.mockImplementation((req: { printType: string }) =>
+      req.printType === "delivery"
+        ? Promise.reject(new Error("BFF 500"))
+        : Promise.resolve(PDF_BYTES),
+    );
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy()); // bill cached
+    fireEvent.click(screen.getByText("Vận đơn"));
+    await waitFor(() => expect(screen.getAllByText(/BFF 500/).length).toBeGreaterThan(0));
+    // Quay lại bill (đã cache) → PDF vẫn hiện, KHÔNG dính lỗi của delivery.
+    fireEvent.click(screen.getByText("Biên bản"));
+    const previewPanel = screen.getByTestId("pdf-preview").closest("[role=tabpanel]") as HTMLElement;
+    expect(within(previewPanel).queryByText(/BFF 500/)).toBeNull();
   });
 
   it("In — chưa chọn máy in → cảnh báo, KHÔNG gọi print", async () => {
