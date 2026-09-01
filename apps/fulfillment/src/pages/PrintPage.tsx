@@ -1,9 +1,11 @@
-import { Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Component, type ReactNode, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Provider } from 'react-redux';
 import { Alert, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Typography, message } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { PRINT_TYPES, type PrintType } from '@hub-store/shared';
+import { fulfillmentStore } from '../store';
 import { printDocument, useGetBatchDetailQuery, useGetPrintersQuery } from '../api/printApi';
 import { registerFulfillmentResources } from '../i18n';
 
@@ -21,7 +23,53 @@ const PdfPreview = lazy(() => import('../print/PdfPreview'));
 
 type PreviewCache = Partial<Record<PrintType, Uint8Array>>;
 
+/** Bắt lỗi lazy-load/render preview (vd worker/fetch fail) — hiển thị thay vì chết cả route. */
+class PreviewErrorBoundary extends Component<
+  { children: ReactNode; label: string },
+  { error: string | null }
+> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+  render() {
+    const { error } = this.state;
+    if (error !== null) {
+      return <Alert type="error" showIcon message={`${this.props.label}: ${error}`} />;
+    }
+    return this.props.children;
+  }
+}
+
+/** Boundary cấp route: bắt mọi lỗi render/effect của PrintPage (kể cả ngoài preview). */
+class PageErrorBoundary extends Component<
+  { children: ReactNode },
+  { error: string | null }
+> {
+  state = { error: null as string | null };
+  static getDerivedStateFromError(err: unknown) {
+    return { error: err instanceof Error ? err.message : String(err) };
+  }
+  render() {
+    const { error } = this.state;
+    if (error !== null) {
+      return <Alert type="error" showIcon message={error} style={{ margin: 24 }} />;
+    }
+    return this.props.children;
+  }
+}
+
 export default function PrintPage() {
+  return (
+    <Provider store={fulfillmentStore}>
+      <PageErrorBoundary>
+        <PrintPageInner />
+      </PageErrorBoundary>
+    </Provider>
+  );
+}
+
+function PrintPageInner() {
   const { t } = useTranslation('fulfillment');
   const [searchParams] = useSearchParams();
   const batchCode = searchParams.get('batchCode') ?? '';
@@ -132,9 +180,11 @@ export default function PrintPage() {
           <Alert type="error" showIcon message={`${t('print.preview.error')}: ${previewError}`} />
         )}
         {!previewLoading && !previewError && previews[type] && (
-          <Suspense fallback={<Spin size="large" style={{ marginTop: 80 }} />}>
-            <PdfPreview bytes={previews[type]!} scale={zoomPct / 100} />
-          </Suspense>
+          <PreviewErrorBoundary label={t('print.preview.error')}>
+            <Suspense fallback={<Spin size="large" style={{ marginTop: 80 }} />}>
+              <PdfPreview bytes={previews[type]!} scale={zoomPct / 100} />
+            </Suspense>
+          </PreviewErrorBoundary>
         )}
       </div>
     ),
