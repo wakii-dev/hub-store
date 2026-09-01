@@ -25,4 +25,4 @@
   → 23/23 pass (surefire: Tests run 23, Failures 0, Errors 0).
 - [x] Task 6 — README + run script: chạy standalone :50051; smoke gRPC call mẫu (test client hoặc grpcurl nếu có); ghi rõ KHÔNG thuộc turbo (`pnpm dev` root không đụng). Build `mvn -q package` pass.
   → run.sh (run/smoke/test) + SmokeClient (grpcurl không có sẵn) + README; `mvn -q -DskipTests package` PASS.
-- [ ] Task 7 — Verify + review + merge: smoke gRPC thật (filter ≥25 đơn, 30201 ≥5 Chưa soạn — bằng chứng output); verifier từng dòng ACCEPTANCE; code-reviewer APPROVED; merge no-ff vào story branch; audit comment FI-237.
+- [x] Task 7 — Verify + review + merge: smoke gRPC thật (filter ≥25 đơn, 30201 ≥5 Chưa soạn — bằng chứng output); verifier từng dòng ACCEPTANCE; code-reviewer APPROVED (verdict /tmp/story/fi233/reviewer-sf3.md + Linear); merge no-ff vào story branch (d6b598d); audit comment FI-237.
