@@ -33,11 +33,12 @@ public class InMemoryOrderRepository implements OrderRepository {
     /** Lịch sử chuyển kho theo fulfillCode — khởi tạo từ seed history, append khi assign. */
     private final Map<String, List<ShopAssignmentHistoryEntry>> historyByCode = new LinkedHashMap<>();
 
+    @org.springframework.beans.factory.annotation.Autowired
     public InMemoryOrderRepository(@Value("${fulfillment.seed-path:}") String seedPathEnv) {
         this(SeedLoader.load(SeedLoader.resolve(seedPathEnv)));
     }
 
-    /** Dùng trong test — seed đã load sẵn. */
+    /** Dùng trong test — seed đã load sẵn; Spring chọn constructor @Autowired ở trên. */
     public InMemoryOrderRepository(SeedModels.SeedFile seed) {
         this.orders = new ArrayList<>(seed.orders());
         this.regions = new ArrayList<>(seed.regions());
