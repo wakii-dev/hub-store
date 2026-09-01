@@ -49,7 +49,7 @@ import { buildRegionOptions } from "../utils/regions";
 import { OrdersExpandContent } from "../features/OrdersExpandContent";
 import { DeliveryTimeCell } from "../features/DeliveryTimeCell";
 import { HubStoreTransferModal } from "../features/HubStoreTransferModal";
-import { CreateBatchModal } from "../features/CreateBatchModal";
+import { CreateBatchingModal } from "../batching/CreateBatchingModal";
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
 registerOrdersResources();
@@ -345,7 +345,11 @@ function D1Content() {
         order={transferOrder}
         onClose={() => setTransferOrder(null)}
       />
-      <CreateBatchModal open={createBatchOpen} onClose={() => setCreateBatchOpen(false)} />
+      <CreateBatchingModal
+        open={createBatchOpen}
+        orders={selectedRows}
+        onClose={() => setCreateBatchOpen(false)}
+      />
     </div>
   );
 }
