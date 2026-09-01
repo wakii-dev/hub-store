@@ -24,6 +24,12 @@ const mfShared = {
 };
 
 export default defineConfig({
+  optimizeDeps: {
+    // react-pdf/SPIKE 2 verdict (SF-10): pre-bundle pdfjs main entry; worker qua
+    // ?url import phải ở RAW asset — không pre-bundle.
+    include: ['pdfjs-dist'],
+    exclude: ['pdfjs-dist/build/pdf.worker.min.mjs'],
+  },
   plugins: [
     react(),
     federation({
