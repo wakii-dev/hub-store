@@ -1,6 +1,7 @@
 import { ConfigProvider } from "antd";
 import viVN from "antd/es/locale/vi_VN";
 import { I18nextProvider } from "react-i18next";
+import { BrowserRouter } from "react-router-dom";
 import { getI18n } from "@hub-store/shared";
 import { registerOrdersResources } from "./i18n";
 import D1Page from "./pages/D1Page";
@@ -19,7 +20,10 @@ export default function App() {
   return (
     <I18nextProvider i18n={i18n}>
       <ConfigProvider locale={viVN}>
-        <D1Page />
+        {/* Standalone owns router — federated dưới shell dùng RRD singleton của shell */}
+        <BrowserRouter>
+          <D1Page />
+        </BrowserRouter>
       </ConfigProvider>
     </I18nextProvider>
   );

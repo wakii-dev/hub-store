@@ -5,10 +5,10 @@ import { ordersResources, registerOrdersResources } from "./i18n";
 import App from "./App";
 
 describe("App (orders standalone)", () => {
-  it("renders the D1 skeleton page title", () => {
+  it("renders the D1 page title", () => {
     initI18n({ resources: ordersResources });
     registerOrdersResources();
     render(<App />);
-    expect(screen.getByText("Đơn hàng (D1)")).toBeTruthy();
+    expect(screen.getByText("Danh sách đơn hàng kho chi nhánh")).toBeTruthy();
   });
 });
