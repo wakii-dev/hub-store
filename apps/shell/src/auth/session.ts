@@ -72,9 +72,9 @@ export async function restoreSession(): Promise<AuthSession | null> {
   if (!persisted) return null;
   try {
     const decoded: DecodedFakeJwt = await decodeFakeJwt(persisted.token);
-    if (decoded.role !== persisted.role) {
+    if (decoded.role !== persisted.role || decoded.sub !== persisted.sub) {
       // Token và session mismatch (đã bị sửa localStorage) → coi như hết hạn.
-      throw new Error('role mismatch');
+      throw new Error('session/token mismatch');
     }
     setRole(decoded.role);
     return persisted;

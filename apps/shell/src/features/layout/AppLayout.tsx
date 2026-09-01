@@ -9,45 +9,20 @@ import {
   PrinterOutlined,
   LogoutOutlined,
 } from '@ant-design/icons';
-import { ROLES, usePermissions, sharedCssVariables, type Permission, type Role } from '@hub-store/shared';
+import { ROLES, usePermissions, sharedCssVariables, type Role } from '@hub-store/shared';
 import { signOut, switchRole, type AuthSession } from '../../auth/session';
+import { NAV_ROUTES, firstPermittedPath } from '../../nav';
 
 // Tokens §7 — sidebar 48px dark, header 55px trắng, FPT orange qua LESS modifyVars.
 const SIDEBAR_WIDTH = 48;
 const HEADER_HEIGHT = 55;
 
-interface NavItem {
-  path: string;
-  labelKey: string;
-  icon: ReactNode;
-  permission: Permission;
-}
-
-const NAV_ITEMS: NavItem[] = [
-  {
-    path: '/hub-store-order/order',
-    labelKey: 'nav.orders',
-    icon: <ProfileOutlined />,
-    permission: 'orders.view',
-  },
-  {
-    path: '/hub-store-order/batch',
-    labelKey: 'nav.batch',
-    icon: <SolutionOutlined />,
-    permission: 'fulfillment.view',
-  },
-  {
-    path: '/hub-store-order/batch/print',
-    labelKey: 'nav.print',
-    icon: <PrinterOutlined />,
-    permission: 'fulfillment.print',
-  },
-];
-
-/** Route nào user hiện KHÔNG có quyền xem → đưa về route được phép đầu tiên. */
-function firstPermittedPath(can: (p: Permission) => boolean): string {
-  return NAV_ITEMS.find((item) => can(item.permission))?.path ?? NAV_ITEMS[2].path;
-}
+/** Icon map theo path — data route/permission nằm ở src/nav.ts (shared với LoginPage). */
+const NAV_ICONS: Record<string, ReactNode> = {
+  '/hub-store-order/order': <ProfileOutlined />,
+  '/hub-store-order/batch': <SolutionOutlined />,
+  '/hub-store-order/batch/print': <PrinterOutlined />,
+};
 
 /**
  * AppLayout — chrome shell theo tokens §7: sidebar 48px dark (nav icon filter
@@ -67,12 +42,12 @@ export default function AppLayout(props: {
   const location = useLocation();
   const [switching, setSwitching] = useState(false);
 
-  const visibleNav = NAV_ITEMS.filter((item) => can(item.permission));
+  const visibleNav = NAV_ROUTES.filter((item) => can(item.permission));
 
   // Role switch xong: nếu route hiện tại không còn được phép → về route được phép.
   useEffect(() => {
     if (!switching) return;
-    const current = NAV_ITEMS.find((item) => location.pathname.startsWith(item.path));
+    const current = NAV_ROUTES.find((item) => location.pathname.startsWith(item.path));
     if (current && !can(current.permission)) {
       navigate(firstPermittedPath(can), { replace: true });
     }
@@ -171,7 +146,7 @@ export default function AppLayout(props: {
                   }}
                   data-testid={`nav-${item.labelKey.split('.')[1]}`}
                 >
-                  {item.icon}
+                  {NAV_ICONS[item.path]}
                 </a>
               </Tooltip>
             );

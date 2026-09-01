@@ -4,6 +4,7 @@ import { useTranslation } from 'react-i18next';
 import { Button, Card, Form, Input, Select } from 'antd';
 import { ROLES, type Role } from '@hub-store/shared';
 import { signIn } from '../../auth/session';
+import { firstPathForRole } from '../../nav';
 
 /**
  * Login stub — giả lập SSO (spec: KHÔNG OTP/KHÔNG user-pass thật; production
@@ -23,7 +24,9 @@ export default function LoginPage(props: {
     try {
       await signIn(sub, role);
       props.onSignIn(sub, role);
-      navigate('/hub-store-order/order', { replace: true });
+      // Landing về route ĐẦU TIÊN role được phép (§2) — WarehouseOps không
+      // có orders.view, hard-code /order sẽ rơi thẳng vào 403.
+      navigate(firstPathForRole(role), { replace: true });
     } finally {
       setSigningIn(false);
     }

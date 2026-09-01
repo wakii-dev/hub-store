@@ -2,7 +2,7 @@
 // Node env — lý do xem session.test.ts (jose realm). localStorage stub giống hệt.
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { getAxiosInstance, setTokenGetter } from "@hub-store/api-client";
-import { signIn, signOut } from "./session";
+import { getSessionToken, signIn, signOut } from "./session";
 
 const store = new Map<string, string>();
 const localStorageStub: Storage = {
@@ -32,11 +32,8 @@ describe("setTokenGetter + session", () => {
 
   it("interceptor attaches Bearer token from the session to every request", async () => {
     const { token } = await signIn("dev-user", "Coordinator");
-    setTokenGetter(() => {
-      // mirror main.tsx wiring
-      const raw = localStorage.getItem("hub-store.session");
-      return raw ? (JSON.parse(raw) as { token: string }).token : null;
-    });
+    // Đăng ký CHÍNH getter mà main.tsx dùng lúc init — test đúng wiring thật.
+    setTokenGetter(() => getSessionToken());
 
     const instance = getAxiosInstance();
     const adapter = vi.fn((config: { headers: { get: (k: string) => string } }) => {
