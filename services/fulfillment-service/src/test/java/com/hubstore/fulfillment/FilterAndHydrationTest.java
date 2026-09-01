@@ -10,7 +10,11 @@ import com.hubstore.fulfillment.v1.FilterOrdersResponse;
 import com.hubstore.fulfillment.v1.FulfillmentServiceGrpc;
 import com.hubstore.fulfillment.v1.GetOrdersByCodesRequest;
 import com.hubstore.fulfillment.v1.GetOrdersByCodesResponse;
+import com.hubstore.fulfillment.v1.GetTimeDeliveryRequest;
+import com.hubstore.fulfillment.v1.GetTimeDeliveryResponse;
 import com.hubstore.fulfillment.v1.HubStoreOrderFilterItem;
+import com.hubstore.fulfillment.v1.ListDeliveryStaffRequest;
+import com.hubstore.fulfillment.v1.ListDeliveryStaffResponse;
 import com.hubstore.fulfillment.v1.ListRegionsRequest;
 import com.hubstore.fulfillment.v1.ListRegionsResponse;
 import com.hubstore.fulfillment.v1.RegionType;
@@ -21,6 +25,9 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.time.ZoneOffset;
+import java.time.ZonedDateTime;
+import java.time.format.DateTimeFormatter;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -153,6 +160,49 @@ class FilterAndHydrationTest {
                     assertThat(r.getType()).isEqualTo(RegionType.REGION_TYPE_WARD);
                     assertThat(r.getParentCode()).isNotEmpty();
                 });
+    }
+
+    @Test
+    void listDeliveryStaffAllAndFilterByShop() {
+        CollectingObserver<ListDeliveryStaffResponse> allObs = new CollectingObserver<>();
+        service.listDeliveryStaff(ListDeliveryStaffRequest.newBuilder().build(), allObs);
+        assertThat(allObs.error).isNull();
+        ListDeliveryStaffResponse all = allObs.values.get(0);
+        assertThat(all.getItemsCount()).isEqualTo(seed.deliveryStaff().size());
+        assertThat(all.getItemsList()).allSatisfy(s -> {
+            assertThat(s.getId()).isNotEmpty();
+            assertThat(s.getName()).isNotEmpty();
+            assertThat(s.getShopCode()).isNotEmpty();
+        });
+
+        CollectingObserver<ListDeliveryStaffResponse> shopObs = new CollectingObserver<>();
+        service.listDeliveryStaff(ListDeliveryStaffRequest.newBuilder()
+                .setShopCode("30201").build(), shopObs);
+        assertThat(shopObs.error).isNull();
+        ListDeliveryStaffResponse shop = shopObs.values.get(0);
+        long seedCount = seed.deliveryStaff().stream()
+                .filter(s -> "30201".equals(s.shopCode())).count();
+        assertThat(shop.getItemsCount()).isEqualTo(seedCount);
+        assertThat(shop.getItemsList()).allSatisfy(
+                s -> assertThat(s.getShopCode()).isEqualTo("30201"));
+    }
+
+    @Test
+    void getTimeDeliverySuggestsFutureWindowPlus07() {
+        CollectingObserver<GetTimeDeliveryResponse> obs = new CollectingObserver<>();
+        service.getTimeDelivery(GetTimeDeliveryRequest.newBuilder()
+                .setShopCode("30201").setCustomerAddress("Q1, TP.HCM").build(), obs);
+        assertThat(obs.error).isNull();
+        GetTimeDeliveryResponse resp = obs.values.get(0);
+        ZonedDateTime from = ZonedDateTime.parse(resp.getSuggestedTime().getFrom(),
+                DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        ZonedDateTime to = ZonedDateTime.parse(resp.getSuggestedTime().getTo(),
+                DateTimeFormatter.ISO_OFFSET_DATE_TIME);
+        // Window +07:00 (Asia/Ho_Chi_Minh), from trong tương lai gần (2..3h), to = from + 1 ngày.
+        assertThat(from.getOffset()).isEqualTo(ZoneOffset.of("+07:00"));
+        assertThat(from).isAfter(ZonedDateTime.now(ZoneOffset.of("+07:00")).plusHours(1));
+        assertThat(from).isBefore(ZonedDateTime.now(ZoneOffset.of("+07:00")).plusHours(4));
+        assertThat(to).isEqualTo(from.plusDays(1));
     }
 
     @Test
