@@ -24,6 +24,12 @@ const mfShared = {
 };
 
 export default defineConfig({
+  optimizeDeps: {
+    // react-pdf/SPIKE 2 verdict (SF-10): pre-bundle pdfjs main entry.
+    // Worker dùng FAKE WORKER (globalThis.pdfjsWorker — import trực tiếp
+    // pdf.worker.min.mjs trong PdfPreview), không cần exclude gì.
+    include: ['pdfjs-dist'],
+  },
   plugins: [
     react(),
     federation({
