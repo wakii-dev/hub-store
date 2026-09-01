@@ -115,6 +115,22 @@ class ValidationAndMutationTest {
     }
 
     @Test
+    void mutateAndLookupResolveByOrderCodeRsa() {
+        // Go chỉ có order_code (RSA-…) trong BatchingItem (proto không có
+        // fulfill_code) — MutateOrderStatus + GetOrdersByCodes từ Go phải
+        // resolve được theo orderCode (fix integration FI-241 walkthrough).
+        SeedModels.OrderSeed order = aNotPreparedOrder();
+        String rsa = order.orderCode();
+
+        MutateOrderStatusResponse resp = mutate(List.of(rsa), BatchStatus.BATCH_STATUS_PREPARING);
+        assertThat(resp.getResults(0).getSuccess()).isTrue();
+        assertThat(repo.findByFulfillCode(rsa).orElseThrow().batchStatus()).isEqualTo(1);
+
+        // Cả findByCodes (Go validate rule 1 khi tạo phiếu) resolve theo RSA.
+        assertThat(repo.findByCodes(List.of(rsa))).hasSize(1);
+    }
+
+    @Test
     void mutateReportsUnknownCodeAsFailureNotError() {
         MutateOrderStatusResponse resp = mutate(
                 List.of("ORD-KHONG-TON-TAI", aNotPreparedOrder().fulfillCode()),
