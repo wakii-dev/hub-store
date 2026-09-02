@@ -113,7 +113,36 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Màn đối soát theo shop: tổng COD theo kỳ (ngày), so khớp đơn hoàn tất-COD vs đã-thu vs chênh lệch; export CSV đối soát (pattern SF-7).
 - Bảng/fields lưu settlement trong DB `fulfillment` (Flyway V3+); không đụng batching DB.
 
-### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14 — CUỐI)
+### 3.15 NVC backend + mock carrier provider (SF-15, deps SF-3)
+- Carrier adapter interface + **MockAhamove provider** (compose service mô phỏng quotes/booking/tracking, contract khớp Ahamove — swap provider thật sau chỉ cần adapter impl + env).
+- Endpoints: quotes (theo tải trọng xe, phí, distance, isExceedFeeLimit), planning/confirm, booking (batchCode + shipmentPlannings COD/totalBill/stopOrder), cancel per-đơn/cả batch, searchbookingdetail (timeline).
+- Storage batching DB (migration V2): plannings, bookings, shipment statuses, tracking events, addon catalog, **fee limits per-SP**.
+- Fee-limit rules BE-authoritative: baseFee > limit → disable; total > limit → block (FE chỉ render).
+
+### 3.16 NVC FE — carrier section + replan/rebook/tracking (SF-16, deps SF-15+SF-6)
+- D1b modal: 3 nhóm carrier (Tự giao / xe tải quotes / FPT_DELIVERY), quotes display + recalculate, addon services (ROUTE/LOADING radio, DOCUMENT checkbox, ROUND-TRIP), hạn mức phí gates.
+- D2: replan / rebook (gate theo trạng thái), hủy vận đơn per-đơn/cả batch + note.
+- Tracking modal: timeline 2 cột (BE + partner), link tracking; 15 mã trạng thái vận đơn master mapping.
+
+### 3.17 Khu vực hoạt động NV (SF-17, deps SF-2)
+- BE (Flyway V4 fulfillment): service_employees + regions/wards + payment account (verify mock); CRUD + active toggle.
+- FE: list + lọc (chức danh/NV/vùng) + expand wards; define/edit form (vùng multi → chức danh → NV → payment account → khu vực tỉnh/phường); chỉ Admin viết, roles khác xem.
+
+### 3.18 D2C/Dropship module (SF-18, deps SF-2)
+- BE: d2c_orders (Flyway) + filter đa chiều (carrier, shop, NV xuất, ngành hàng, khung giờ đẩy) + ghi chú + **export Excel/CSV ≤31 ngày** (pattern SF-7).
+- FE: list + expand (push/export info, người nhận, tách nợ) + note modal; role WarehouseEmployee.
+
+### 3.19 Đơn dịch vụ kỹ thuật BE (SF-19, deps SF-2)
+- delivery_orders + installation_orders + technicians (Flyway); 10 mã trạng thái giao; assign/re-assign + **suggest employee**; timelines; service fees (payout/adjust); receiver/sender lat-long.
+
+### 3.20 Đơn dịch vụ kỹ thuật FE (SF-20, deps SF-19+SF-6)
+- 3 tab Giao hàng / Lắp đặt / KTV-CTV; filter lưu URL; assign modal + gợi ý NV; KTV-CTV detail theo ngày; gọi điện `tel:`; buttons BE-authoritative.
+
+### 3.21 Print expansion + platform polish (SF-21, deps SF-15+SF-6)
+- In mở rộng 5 loại chứng từ (bill, vận đơn, handover_receipt, goods_handover, installation_acceptance); printer management (bảng printers + chọn theo shop, bill vs A4); print errors per-đơn; preview; "in tất cả".
+- Platform: hotkeys (F4 save/F6 create/F8 cancel), empty-states dùng chung.
+
+### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14+SF-16+SF-20+SF-21 — CUỐI, Tier 5)
 - **M-3 resolved**: s2s auth — token passthrough (BFF forward access token, services verify JWKS) HOẶC mTLS nội mạng compose — SF-12 chọn 1, ghi rationale.
 - Secrets: `.env` ra khỏi git (gitignore + rotate credentials), compose đọc từ env file local.
 - Monitoring: healthcheck endpoints mọi service + uptime checks compose; logs structured.
@@ -134,6 +163,9 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 11. CI chạy test + E2E mỗi PR; backup `pg_dump` cron chạy; s2s auth không còn plain x-user-role.
 12. Coordinator import file đơn (CSV/Excel) → đơn vào D1 xử lý được; tạo đơn thủ công OK; đơn giao thất bại có lý do + giao lại được.
 13. COD thu được xác nhận per-order; Manager xem màn đối soát theo shop + export; số liệu khớp DB.
+14. NVC: tạo phiếu có báo giá xe tải + addon + chặn vượt hạn mức phí; book/replan/rebook/hủy vận đơn; tracking timeline; (provider mock local — swap Ahamove thật sau).
+15. Đủ 4 module của app gốc: khu vực NV, hub-store-order, D2C, đơn dịch vụ kỹ thuật (3 tab + KTV-CTV) — hoạt động trên DB/auth/design mới.
+16. In đủ 5 loại chứng từ + chọn máy in theo shop + theo dõi lỗi in.
 
 ## 5. Boundary (KHÔNG làm)
 - KHÔNG TLS/HA; KHÔNG k8s/helm; KHÔNG horizontal scaling. (Backup automation + monitoring giờ IN scope — SF-12.)

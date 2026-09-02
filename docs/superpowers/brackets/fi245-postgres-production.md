@@ -81,10 +81,10 @@ Depends on: SF-6, SF-7, SF-8, SF-9, SF-10, SF-13
 Tasks: audit-viewer-screen / export-ui / mobile-responsive / design-harmonize-screens / skeletons-new-screens / e2e-new-features-green
 
 ## SF-12 Production hardening
-Tier: 4
+Tier: 5
 linear: FI-257
 What: M-3 resolved (token passthrough HOẶC mTLS s2s — chọn 1 + rationale); .env ra khỏi git + rotate credentials + compose env-file local; healthcheck endpoints mọi service + logs structured; CI GitHub Actions (lint + unit + E2E E2E=1 + docker build mỗi PR); backup cron pg_dump 2 DB + restore doc
-Depends on: SF-5, SF-11, SF-14
+Depends on: SF-5, SF-11, SF-14, SF-16, SF-20, SF-21
 Tasks: s2s-token-passthrough-or-mtls / secrets-out-of-git / rotate-credentials / healthchecks-all / structured-logs / ci-pipeline / e2e-in-ci / backup-cron / restore-doc / security-final-audit
 
 ## SF-13 Order intake + delivery exceptions
@@ -100,3 +100,52 @@ linear: FI-259
 What: xác nhận thu COD per-order (số tiền + người thu + thời điểm, mặc định từ batch hoàn tất); màn đối soát theo shop theo kỳ — hoàn tất-COD vs đã-thu vs chênh lệch; export CSV đối soát (pattern SF-7); Flyway V3 settlement trong DB fulfillment
 Depends on: SF-7, SF-13
 Tasks: cod-confirm-flow / settlement-table / settlement-aggregate-api / fe-settlement-screen / settlement-export / e2e-settlement-spec
+
+## SF-15 NVC backend + mock carrier provider
+Tier: 3
+linear: FI-260
+What: carrier adapter interface + MockAhamove provider (compose service — quotes/booking/tracking, contract Ahamove, swap thật sau bằng adapter+env); endpoints quotes/planning-confirm/booking/cancel/searchbookingdetail; batching DB V2 (plannings/bookings/statuses/tracking events/addon catalog/fee limits per-SP); fee-limit rules BE-authoritative
+Depends on: SF-3
+Tasks: carrier-adapter-interface / mock-ahamove-service / quotes-endpoint / planning-confirm-endpoint / booking-endpoint / cancel-shipment-endpoints / tracking-detail-endpoint / addon-catalog / fee-limits-rules / batching-db-v2 / e2e-nvc-api-spec
+
+## SF-16 NVC FE — carrier section + replan/rebook/tracking
+Tier: 4
+linear: FI-261
+What: D1b carrier section (3 nhóm carrier, quotes + recalculate, addon radio/checkbox, fee-limit gates); D2 replan/rebook (gate trạng thái) + hủy vận đơn per-đơn/batch + note; tracking modal timeline 2 cột + link; master mapping 15 trạng thái vận đơn; theo design system SF-6
+Depends on: SF-15, SF-6
+Tasks: carrier-section-d1b / quotes-display-recalc / addon-selector / fee-limit-gates / replan-rebook-flows / cancel-shipment-ui / tracking-modal / status-master-map / e2e-nvc-fe-spec
+
+## SF-17 Khu vực hoạt động NV
+Tier: 3
+linear: FI-262
+What: BE Flyway V4 (service_employees + regions/wards + payment account verify mock) CRUD + active toggle; FE list + lọc chức danh/NV/vùng + expand wards; define/edit form (vùng multi → chức danh → NV → payment → khu vực tỉnh/phường); Admin viết, role khác xem; design system SF-6
+Depends on: SF-2
+Tasks: area-staff-schema / area-staff-crud-api / payment-verify-mock / fe-area-list / fe-area-form / active-toggle / role-guard / e2e-area-spec
+
+## SF-18 D2C/Dropship module
+Tier: 3
+linear: FI-263
+What: BE d2c_orders schema + filter đa chiều (carrier/shop/NV xuất/ngành hàng/khung giờ đẩy) + ghi chú + export Excel/CSV ≤31 ngày (pattern SF-7); FE list + expand (push/export info, người nhận, tách nợ) + note modal; role WarehouseEmployee; design system SF-6
+Depends on: SF-2
+Tasks: d2c-schema / d2c-filter-api / d2c-note-api / d2c-export / fe-d2c-list / fe-d2c-expand-note / role-guard / e2e-d2c-spec
+
+## SF-19 Đơn dịch vụ kỹ thuật BE
+Tier: 3
+linear: FI-264
+What: delivery_orders + installation_orders + technicians (Flyway); 10 mã trạng thái giao; assign/re-assign + suggest employee; timelines; service fees (payout/adjust); receiver/sender lat-long
+Depends on: SF-2
+Tasks: tech-schema / delivery-order-api / installation-order-api / assign-reassign-api / suggest-employee / timelines / service-fees / unit-tests
+
+## SF-20 Đơn dịch vụ kỹ thuật FE
+Tier: 4
+linear: FI-265
+What: 3 tab Giao hàng/Lắp đặt/KTV-CTV; filter lưu URL; assign modal + gợi ý NV; KTV-CTV detail theo ngày; gọi điện tel:; buttons BE-authoritative; design system SF-6
+Depends on: SF-19, SF-6
+Tasks: fe-3-tabs / filters-url-persist / assign-modal-suggest / ktv-ctv-detail / phone-call / be-buttons-render / e2e-tech-spec
+
+## SF-21 Print expansion + platform polish
+Tier: 4
+linear: FI-266
+What: in 5 loại chứng từ (bill/delivery/handover_receipt/goods_handover/installation_acceptance); printer management (bảng printers + chọn theo shop, bill vs A4); print errors per-đơn; preview; "in tất cả"; hotkeys F4/F6/F8; empty-states dùng chung
+Depends on: SF-15, SF-6
+Tasks: print-types-5 / printer-management / print-errors / preview-improve / print-all / hotkeys / empty-states-shared / e2e-print-expansion
