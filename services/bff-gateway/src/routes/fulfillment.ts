@@ -162,7 +162,7 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.post<{ Params: { code: string }; Body: AssignShopHubRequest }>(
     '/fulfillment/:code/assign-shop-hub',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const { role, sub } = requireUser(request);
       try {
         const resp = await f.assignShopHub(
           { fulfillCode: request.params.code, targetShopCode: request.body.toShopCode },
@@ -170,7 +170,7 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
         );
         // SF-7 audit — fire-and-forget SAU gRPC thành công, fail-open.
         logActivity({
-          actor: request.user.sub,
+          actor: sub,
           action: 'order.assign_shop',
           targetType: 'order',
           targetId: request.params.code,
@@ -200,14 +200,14 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.put<{ Params: { code: string }; Body: UpdateNoteRequest }>(
     '/fulfillment/:code/note',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const { role, sub } = requireUser(request);
       try {
         const resp = await f.updateNote(
           { fulfillCode: request.params.code, note: request.body.note },
           role,
         );
         logActivity({
-          actor: request.user.sub,
+          actor: sub,
           action: 'order.update_note',
           targetType: 'order',
           targetId: request.params.code,
@@ -224,14 +224,14 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.put<{ Params: { code: string }; Body: UpdateDeliveryTimeRequest }>(
     '/fulfillment/:code/delivery-time',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const { role, sub } = requireUser(request);
       try {
         const resp = await f.updateDeliveryTime(
           { fulfillCode: request.params.code, deliveryTime: request.body.deliveryTime },
           role,
         );
         logActivity({
-          actor: request.user.sub,
+          actor: sub,
           action: 'order.update_delivery_time',
           targetType: 'order',
           targetId: request.params.code,
@@ -309,14 +309,14 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   // batching-service (Go owns batch transitions, spec §3.3) dù path nằm dưới
   // /fulfillment (REQUIREMENTS §5 giữ nguyên path).
   app.put<{ Body: { batchCode: string } }>('/fulfillment/complete-picking', async (request, reply) => {
-    const { role } = requireUser(request);
+    const { role, sub } = requireUser(request);
     try {
       const resp = await deps.batching.completePicking(
         { batchCode: request.body.batchCode },
         role,
       );
       logActivity({
-        actor: request.user.sub,
+        actor: sub,
         action: 'batch.complete',
         targetType: 'batch',
         targetId: request.body.batchCode,

@@ -61,7 +61,7 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
   // Tạo phiếu (D1b) — rule 1 §3.6 validate server-side ở Go (GetOrdersByCodes
   // → Java). shopCode trống → Go derive.
   app.post<{ Body: CreateBatchRequest }>('/fulfillment/batches/create', async (request, reply) => {
-    const { role } = requireUser(request);
+    const { role, sub } = requireUser(request);
     try {
       const resp = await batching.createBatch(
         {
@@ -74,7 +74,7 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
       );
       // SF-7 audit — fire-and-forget SAU gRPC thành công, fail-open.
       logActivity({
-        actor: request.user.sub,
+        actor: sub,
         action: 'batch.create',
         targetType: 'batch',
         targetId: resp.batch?.batchCode ?? '',
@@ -146,14 +146,14 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
   app.put<{ Params: { code: string }; Body: CancelBatchRequest }>(
     '/fulfillment/batches/:code/cancel',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const { role, sub } = requireUser(request);
       try {
         const resp = await batching.cancelBatch(
           { batchCode: request.params.code, reason: request.body.reason },
           role,
         );
         logActivity({
-          actor: request.user.sub,
+          actor: sub,
           action: 'batch.cancel',
           targetType: 'batch',
           targetId: request.params.code,
