@@ -1,0 +1,205 @@
+/**
+ * SF-6 antd-internal overrides — direction B Modern SaaS Airy.
+ * Escape hatch cho những gì LESS modifyVars không cover được (gradient,
+ * pseudo-element, animation, focus ring composite).
+ * Values dẫn từ DESIGN_TOKENS (packages/shared/src/theme/design-tokens.ts)
+ * — hex ở đây mirror token, đổi token phải đổi mirror (guard bởi review).
+ * Import SAU 'antd/dist/antd.less' trong main.tsx của từng app.
+ */
+
+/* ─── §2.5 Buttons ─── */
+
+/* Primary: gradient cam, KHÔNG border, shadow.primary; hover brightness; active dịch xuống */
+.ant-btn-primary {
+  background: linear-gradient(135deg, #f68a2e 0%, #eb6e09 60%, #d96408 100%); /* primaryGradient */
+  border: none;
+  box-shadow: 0 3px 10px rgba(235, 110, 9, 0.35); /* shadow.primary */
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.ant-btn-primary:not([disabled]):hover {
+  filter: brightness(1.05);
+  box-shadow: 0 3px 10px rgba(235, 110, 9, 0.35);
+}
+.ant-btn-primary:not([disabled]):active {
+  transform: translateY(1px);
+  box-shadow: 0 1px 4px rgba(235, 110, 9, 0.3);
+}
+
+/* Default/Ghost: bg trắng, border #EAECF0, shadow.xs; hover bg #F2F4F7 */
+.ant-btn-default {
+  background: #ffffff;
+  border-color: #eaecf0; /* divider */
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05); /* shadow.xs */
+  color: #344054; /* textSecondary */
+  font-weight: 500;
+  transition: all 0.15s ease;
+}
+.ant-btn-default:not([disabled]):hover,
+.ant-btn-default:not([disabled]):focus {
+  background: #f2f4f7; /* dividerSoft */
+  border-color: #d0d5dd; /* border */
+  color: #344054;
+}
+.ant-btn-default:not([disabled]):active {
+  background: #eaecf0;
+}
+
+/* Danger: solid @error-color */
+.ant-btn-danger {
+  background: #d92d20; /* status.error */
+  border: none;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+}
+.ant-btn-danger:not([disabled]):hover {
+  background: #b42318;
+}
+
+/* Button a11y focus: outline (không thay shadow) */
+.ant-btn:focus-visible {
+  outline: 2px solid #f68a2e; /* primaryHover */
+  outline-offset: 2px;
+}
+
+/* Link button: cam + hover bg nhạt */
+.ant-btn-link {
+  color: #eb6e09;
+  font-weight: 600;
+}
+.ant-btn-link:not([disabled]):hover {
+  color: #f68a2e;
+  background: #fef6ee; /* primaryBg */
+}
+
+/* ─── §3 Focus ring input/select/textarea ─── */
+
+.ant-input:focus,
+.ant-input-focused,
+.ant-input-affix-wrapper:focus,
+.ant-input-affix-wrapper-focused,
+.ant-select:not(.ant-select-customize-input) .ant-select-selector:focus,
+.ant-select:not(.ant-select-customize-input).ant-select-focused
+  .ant-select-selector,
+.ant-picker:focus,
+.ant-picker-focused,
+.ant-input-number:focus,
+.ant-input-number-focused {
+  border-color: #eb6e09 !important; /* primary */
+  box-shadow: 0 0 0 4px rgba(235, 110, 9, 0.12) !important; /* shadow.focus */
+}
+
+/* ─── §3 Modal animation (.sf6-modal-animation bọc trên Modal) ─── */
+
+@keyframes sf6-modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(8px) scale(0.98);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+.sf6-modal-animation .ant-modal-content {
+  animation: sf6-modal-in 0.15s ease-out;
+}
+
+/* ─── §2.2 Pagination ─── */
+
+.ant-pagination .ant-pagination-item {
+  width: 30px;
+  height: 30px;
+  line-height: 28px;
+  border-radius: 8px; /* radius.control */
+  border-color: #eaecf0;
+  transition: all 0.15s ease;
+}
+.ant-pagination .ant-pagination-item-active {
+  background: linear-gradient(135deg, #f68a2e 0%, #eb6e09 60%, #d96408 100%);
+  border: none;
+}
+.ant-pagination .ant-pagination-item-active a {
+  color: #ffffff;
+}
+.ant-pagination .ant-pagination-prev .ant-pagination-item-link,
+.ant-pagination .ant-pagination-next .ant-pagination-item-link {
+  border-radius: 8px;
+  border-color: #eaecf0;
+}
+
+/* ─── §2.2 Skeleton shimmer ─── */
+
+@keyframes sf6-shimmer {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+.sf6-shimmer {
+  background: linear-gradient(90deg, #f2f4f7 25%, #e9ecef 50%, #f2f4f7 75%);
+  background-size: 200% 100%;
+  animation: sf6-shimmer 1.4s ease infinite;
+  border-radius: 6px;
+}
+
+/* ─── §2.3 Tag pill pastel (StatusTag) ─── */
+
+.sf6-status-tag.ant-tag {
+  border-radius: 999px; /* radius.pill */
+  padding: 3px 11px;
+  font-size: 12px;
+  font-weight: 500;
+  border-width: 1px;
+  line-height: 18px;
+}
+.sf6-status-tag.ant-tag::before {
+  content: '';
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: currentColor;
+  margin-right: 6px;
+  vertical-align: 2px;
+}
+
+/* ─── §3 Transition mặc định cho card/pill (nav item class ở shell) ─── */
+
+.sf6-nav-item {
+  transition: all 0.13s ease;
+}
+.sf6-nav-item:hover {
+  background: rgba(255, 255, 255, 0.08);
+}
+.sf6-nav-item-active {
+  background: linear-gradient(135deg, #f68a2e 0%, #eb6e09 60%, #d96408 100%);
+  box-shadow: 0 3px 10px rgba(235, 110, 9, 0.35); /* shadow.primary */
+  position: relative;
+}
+.sf6-nav-item-active::after {
+  content: '';
+  position: absolute;
+  right: -12px;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 3px;
+  height: 18px;
+  border-radius: 2px;
+  background: #eb6e09;
+}
+.sf6-stat-card {
+  transition: all 0.15s ease;
+}
+.sf6-stat-card:hover {
+  box-shadow: 0 6px 16px -4px rgba(16, 24, 40, 0.1), 0 2px 6px -2px rgba(16, 24, 40, 0.06);
+  transform: translateY(-1px);
+}
+
+/* ─── §2.3 Message/notification reskin theo semantic ─── */
+
+.ant-message .ant-message-notice-content {
+  border-radius: 10px; /* radius.md */
+  box-shadow: 0 6px 16px -4px rgba(16, 24, 40, 0.1), 0 2px 6px -2px rgba(16, 24, 40, 0.06);
+}
