@@ -222,7 +222,7 @@ export function normalizeAuditPage(q: AuditQuery): { page: number; pageSize: num
 - Modify: `services/bff-gateway/src/routes/batches.ts` (create, cancel)
 - Create: `services/bff-gateway/test/audit.hooks.test.ts`
 
-- [ ] **Step 1: Pattern chung** — import `logActivity` từ `../lib/audit.js`; sau gRPC thành công, trước `reply.send`:
+- [x] **Step 1: Pattern chung** — import `logActivity` từ `../lib/audit.js`; sau gRPC thành công, trước `reply.send`:
 
 ```typescript
 // ví dụ fulfillment.ts assign-shop-hub (port tương tự cho 5 route còn lại):
@@ -238,9 +238,9 @@ return await reply.send(...);
 ```
 
 Mapping đầy đủ: `order.assign_shop` (detail `{toShopCode}`) · `order.update_note` (`{noteLength: (note??'').length}`) · `order.update_delivery_time` (`{from, to}` của deliveryTime) · `batch.create` (batches.ts, `{orderCodes: request.body.orderCodes}` — targetId = `resp.batch.batchCode` nếu có, fallback `''`) · `batch.cancel` (`{reason}`) · `batch.complete` (complete-picking ở fulfillment.ts, targetId = batchCode body). Actor: `request.user.sub` (đã verify = preferred_username).
-- [ ] **Step 2: test hooks** — dùng pattern harness (`authedInject` + mock gRPC upstream); inject pool giả: export `__setAuditPoolForTests(p)` trong audit.ts (set/unset biến `pool`) hoặc mock `getAuditPool` qua vitest `vi.mock`. Assert: mutation 200 → INSERT call 1 lần với đúng actor/action/targetId; pg throwing → mutation VẪN 200 (fail-open).
-- [ ] **Step 3: Run** `npx vitest run` → mới PASS + cũ xanh (routes cũ contract không đổi).
-- [ ] **Step 4: Commit** `feat(fi245-sf7): audit hooks tại 6 mutation route BFF (fire-and-forget fail-open)`
+- [x] **Step 2: test hooks** — dùng pattern harness (`authedInject` + mock gRPC upstream); inject pool giả: export `__setAuditPoolForTests(p)` trong audit.ts (set/unset biến `pool`) hoặc mock `getAuditPool` qua vitest `vi.mock`. Assert: mutation 200 → INSERT call 1 lần với đúng actor/action/targetId; pg throwing → mutation VẪN 200 (fail-open).
+- [x] **Step 3: Run** `npx vitest run` → mới PASS + cũ xanh (routes cũ contract không đổi).
+- [x] **Step 4: Commit** `feat(fi245-sf7): audit hooks tại 6 mutation route BFF (fire-and-forget fail-open)`
 
 ### Task 3: GET /fulfillment/audit — Manager-only + filter + pagination
 

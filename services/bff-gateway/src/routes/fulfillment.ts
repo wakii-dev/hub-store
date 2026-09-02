@@ -25,6 +25,7 @@ import { SERVICE_NAMES } from '../config.js';
 import { requireUser } from '../plugins/auth.js';
 import { paginated } from '../lib/envelope.js';
 import { sendGrpcError, grpcError } from '../lib/grpc-error.js';
+import { logActivity } from '../lib/audit.js';
 import {
   mapOrderItem,
   mapOrderDetail,
@@ -112,6 +113,14 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
           { fulfillCode: request.params.code, targetShopCode: request.body.toShopCode },
           role,
         );
+        // SF-7 audit — fire-and-forget SAU gRPC thành công, fail-open.
+        logActivity({
+          actor: request.user.sub,
+          action: 'order.assign_shop',
+          targetType: 'order',
+          targetId: request.params.code,
+          detail: { toShopCode: request.body.toShopCode },
+        });
         return await reply.send(resp.order ? mapOrderItem(resp.order) : null);
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -142,6 +151,13 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
           { fulfillCode: request.params.code, note: request.body.note },
           role,
         );
+        logActivity({
+          actor: request.user.sub,
+          action: 'order.update_note',
+          targetType: 'order',
+          targetId: request.params.code,
+          detail: { noteLength: (request.body.note ?? '').length },
+        });
         return await reply.send(resp.order ? mapOrderItem(resp.order) : null);
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -159,6 +175,13 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
           { fulfillCode: request.params.code, deliveryTime: request.body.deliveryTime },
           role,
         );
+        logActivity({
+          actor: request.user.sub,
+          action: 'order.update_delivery_time',
+          targetType: 'order',
+          targetId: request.params.code,
+          detail: { from: request.body.deliveryTime?.from, to: request.body.deliveryTime?.to },
+        });
         return await reply.send(resp.order ? mapOrderItem(resp.order) : null);
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -237,6 +260,12 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
         { batchCode: request.body.batchCode },
         role,
       );
+      logActivity({
+        actor: request.user.sub,
+        action: 'batch.complete',
+        targetType: 'batch',
+        targetId: request.body.batchCode,
+      });
       return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
     } catch (err) {
       return sendGrpcError(reply, err, SERVICE_NAMES.batching);
