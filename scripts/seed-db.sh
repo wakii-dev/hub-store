@@ -210,7 +210,7 @@ psql_cmd -d fulfillment -v ON_ERROR_STOP=1 -v d2c_json="$(cat "$SEED_D2C_JSON")"
 SELECT to_regclass('public.d2c_orders') IS NULL AS missing \gset
 \if :missing
 DO $err$ BEGIN
-  RAISE EXCEPTION 'fulfillment: thiếu bảng seed (d2c_orders) — chạy migration trước (V5)';
+  RAISE EXCEPTION 'fulfillment: thiếu bảng seed (d2c_orders) — chạy migration trước (V7)';
 END $err$;
 \endif
 SELECT EXISTS (SELECT 1 FROM public.d2c_orders) AS has_data \gset

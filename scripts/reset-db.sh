@@ -35,7 +35,7 @@ BEGIN
      OR to_regclass('public.delivery_staff') IS NULL THEN
     RAISE EXCEPTION 'fulfillment: thiếu bảng — %', 'chạy migration trước — see SF-2/SF-3';
   END IF;
-  -- SF-18 (FI-263): d2c_orders chỉ TRUNCATE khi bảng tồn tại (V5) — vắng bảng không crash.
+  -- SF-18 (FI-263): d2c_orders chỉ TRUNCATE khi bảng tồn tại (V7) — vắng bảng không crash.
   IF to_regclass('public.d2c_orders') IS NOT NULL THEN
     TRUNCATE public.orders, public.shop_assignment_history, public.regions,
              public.delivery_staff, public.d2c_orders RESTART IDENTITY CASCADE;

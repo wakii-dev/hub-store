@@ -22,7 +22,7 @@ import static org.junit.jupiter.api.Assumptions.abort;
  * INTEGRATION TEST — CHẠY KHI POSTGRES CÓ SẴN (KHÔNG testcontainers).
  *
  * Chạy thủ công:  mvn test -Dtest=PostgresD2cRepositoryIT
- * (cần: docker compose up -d postgres + migration V5 đã apply — bảng d2c_orders).
+ * (cần: docker compose up -d postgres + migration V7 đã apply — bảng d2c_orders).
  *
  * `mvn test` mặc định KHÔNG chạy file này (surefire chỉ include *Test.java).
  *
@@ -55,7 +55,7 @@ class PostgresD2cRepositoryIT {
         }
         jdbc = new JdbcTemplate(ds);
         if (jdbc.queryForObject("SELECT to_regclass('public.d2c_orders') IS NULL", Boolean.class)) {
-            abort("bảng d2c_orders thiếu (V5 chưa migrate) — bỏ qua integration test.");
+            abort("bảng d2c_orders thiếu (V7 chưa migrate) — bỏ qua integration test.");
         }
         pg = new PostgresD2cOrderRepository(jdbc);
         fixtures = D2cFixture.rows(PREFIX);
@@ -136,7 +136,7 @@ class PostgresD2cRepositoryIT {
         var fEsc = filter(new D2cOrderFilter("%_\\", null, null, null, null,
                 null, null, null, null, null, null, null, null, 1, 100));
         assertThat(pg.filter(fEsc).total()).isZero();
-        var fStatus = filter(new D2cOrderFilter(null, List.of("NEW", "PUSHED"), null, null, null,
+        var fStatus = filter(new D2cOrderFilter(null, List.of("pending", "pushed"), null, null, null,
                 null, null, null, null, null, null, null, null, 1, 100));
         var pStatus = pg.filter(fStatus);
         assertThat(pStatus.total()).isEqualTo(mem().filter(fStatus).total());
