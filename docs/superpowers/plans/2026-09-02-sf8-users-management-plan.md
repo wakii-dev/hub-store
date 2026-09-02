@@ -147,18 +147,18 @@ Trong `loadConfig()` return, thêm:
 
 - [ ] **Step 6: Build + test hiện có phải xanh**
 
-Run: `cd services/bff-gateway && pnpm test` (vitest run). Expected: PASS (config mới chỉ additive — harness literal sẽ thiếu field mới → **cập nhật `test/harness.ts` config literal** thêm:
+Run: `cd services/bff-gateway && pnpm test` (vitest run). Expected: PASS (config mới chỉ additive — **hai test file build BffConfig literal riêng** cần thêm 3 field mới: `test/harness.ts` VÀ `test/auth.route.test.ts` (file này KHÔNG dùng harness — tự build literal tại ~dòng 59-79):
 ```ts
       kcAdminTokenUrl: 'https://keycloak.test/realms/hubstore/protocol/openid-connect/token',
       kcAdminClientId: 'hubstore-admin',
       kcAdminClientSecret: 'test-secret',
 ```
-— sau đó test xanh. Commit Step này gồm harness fix.
+— sau đó test xanh. Exit criteria: `pnpm test` PASS **VÀ `pnpm build` (tsc) PASS** — vitest/esbuild KHÔNG typecheck, tsconfig include `test/` nên literal thiếu field vỡ build dù test xanh. Commit Step này gồm cả 2 file test.
 
 - [ ] **Step 7: Commit**
 
 ```bash
-git add docker/keycloak/hubstore-realm.json docker-compose.yml .env.example services/bff-gateway/src/config.ts services/bff-gateway/test/harness.ts
+git add docker/keycloak/hubstore-realm.json docker-compose.yml .env.example services/bff-gateway/src/config.ts services/bff-gateway/test/harness.ts services/bff-gateway/test/auth.route.test.ts
 git commit -m "feat(fi245-sf8): realm service-account client + KC_ADMIN env wiring"
 ```
 
@@ -168,8 +168,7 @@ git commit -m "feat(fi245-sf8): realm service-account client + KC_ADMIN env wiri
 
 **Files:**
 - Create: `services/bff-gateway/src/kc-admin.ts`
-- Modify: `services/bff-gateway/test/harness.ts` (mock KC admin HTTP server)
-- Test: trong Task 3 test file (client test chung route test — mock server test ở đây bằng 1 unit test nhanh `test/kc-admin.test.ts`)
+- Test: `test/kc-admin.test.ts` (mock KC HTTP server local trong file — harness mock chung là Task 3)
 
 - [ ] **Step 1: Viết `src/kc-admin.ts`**
 
@@ -224,7 +223,7 @@ export class KcAdminClient {
   constructor(private readonly oidc: BffOidcConfig) {}
 
   /** Token cho users API — grant client_credentials, cache tới 30s trước hết hạn. */
-  private async getToken(): Promise<string> {
+  private async getToken(retried = false): Promise<string> {
     if (this.oidc.kcAdminClientSecret === '') {
       throw new KcAdminError(503, 'KC_ADMIN_CLIENT_SECRET is not configured.', 'not-configured');
     }
@@ -241,14 +240,15 @@ export class KcAdminClient {
         client_secret: this.oidc.kcAdminClientSecret,
       }),
     });
-    if (res.status === 401) {
-      // invalid_client — client chưa tồn tại (volume cũ) → self-heal rồi retry 1 lần.
-      await this.selfHeal();
-      return this.fetchFreshToken();
-    }
-    if (res.status === 403) {
-      await this.selfHealAssignRoleOnly();
-      return this.fetchFreshToken();
+    if (res.status === 401 || res.status === 403) {
+      // invalid_client (volume cũ thiếu client) / insufficient_scope — self-heal
+      // rồi retry ĐÚNG 1 lần (retry tiếp tục fail → 503, không recurse vô hạn).
+      if (retried) {
+        throw new KcAdminError(503, `Keycloak admin grant still failing after self-heal (${res.status}).`, 'upstream');
+      }
+      if (res.status === 401) await this.selfHeal();
+      else await this.selfHealAssignRoleOnly();
+      return this.fetchFreshToken(true);
     }
     if (!res.ok) {
       throw new KcAdminError(503, `Keycloak admin token grant failed (${res.status}).`, 'upstream');
@@ -264,9 +264,9 @@ export class KcAdminClient {
     return this.token.value;
   }
 
-  private async fetchFreshToken(): Promise<string> {
+  private async fetchFreshToken(retried: boolean): Promise<string> {
     this.token = null;
-    return this.getToken();
+    return this.getToken(retried);
   }
 
   private async masterAdminToken(): Promise<string> {
@@ -572,6 +572,65 @@ describe('KcAdminClient', () => {
     expect(users).toEqual([]);
     await new Promise<void>((r) => kc.server.close(() => r()));
   });
+
+  it('self-heal: grant 401 invalid_client → master token → tạo client → gán role → retry grant OK', async () => {
+    // Stateful mock: client-credential grant FAIL 1 lần rồi OK; master grant luôn OK;
+    // các self-heal endpoint trả shape tối giản đủ cho assignManageUsers chạy.
+    let clientGrantFails = true;
+    const created: unknown[] = [];
+    const server = createServer((req, res) => {
+      const url = req.url ?? '';
+      const send = (status: number, payload: unknown, headers?: Record<string, string>): void => {
+        res.writeHead(status, { 'content-type': 'application/json', ...headers });
+        res.end(JSON.stringify(payload));
+      };
+      if (url.includes('/realms/hubstore/protocol/openid-connect/token')) {
+        if (clientGrantFails) {
+          clientGrantFails = false;
+          return send(401, { error: 'invalid_client' });
+        }
+        return send(200, { access_token: 'client-tok', expires_in: 60 });
+      }
+      if (url.includes('/realms/master/protocol/openid-connect/token')) {
+        return send(200, { access_token: 'master-tok' });
+      }
+      const chunks: Buffer[] = [];
+      req.on('data', (c: Buffer) => chunks.push(c));
+      req.on('end', () => {
+        const raw = Buffer.concat(chunks).toString('utf8');
+        if (url === '/admin/realms/hubstore/clients' && req.method === 'POST') {
+          created.push(JSON.parse(raw));
+          return send(201, {}, { location: `/admin/realms/hubstore/clients/c-1` });
+        }
+        if (url.startsWith('/admin/realms/hubstore/clients?clientId=hubstore-admin')) {
+          return send(200, []); // chưa tồn tại
+        }
+        if (url.startsWith('/admin/realms/hubstore/clients?clientId=realm-management')) {
+          return send(200, [{ id: 'rm-1' }]);
+        }
+        if (url === '/admin/realms/hubstore/clients/rm-1/roles') {
+          return send(200, [{ id: 'mu-1', name: 'manage-users' }]);
+        }
+        if (url.includes('/users?username=service-account-hubstore-admin')) {
+          return send(200, [{ id: 'sa-1', username: 'service-account-hubstore-admin' }]);
+        }
+        if (url.includes('/role-mappings/clients/rm-1')) {
+          return send(204, {});
+        }
+        if (url === '/admin/realms/hubstore/users') {
+          return send(200, []);
+        }
+        send(200, {});
+      });
+    });
+    await new Promise<void>((r) => server.listen(0, '127.0.0.1', r));
+    const port = (server.address() as AddressInfo).port;
+    const client = new KcAdminClient(oidcOf({ url: `http://127.0.0.1:${port}` }));
+    const users = await client.listUsers(); // phải self-heal rồi thành công
+    expect(users).toEqual([]);
+    expect(created).toHaveLength(1);
+    await new Promise<void>((r) => server.close(() => r()));
+  });
 });
 ```
 
@@ -809,8 +868,8 @@ async function startMockKcAdmin(): Promise<MockKcAdmin> {
       let body: unknown;
       try { body = raw ? JSON.parse(raw) : undefined; } catch { body = raw; }
       state.requests.push({ method: req.method ?? '', url, body });
-      const send = (status: number, payload: unknown): void => {
-        res.writeHead(status, { 'content-type': 'application/json' });
+      const send = (status: number, payload: unknown, headers?: Record<string, string>): void => {
+        res.writeHead(status, { 'content-type': 'application/json', ...headers });
         res.end(JSON.stringify(payload));
       };
       if (url.includes('/protocol/openid-connect/token')) {
@@ -818,12 +877,20 @@ async function startMockKcAdmin(): Promise<MockKcAdmin> {
         return send(200, { access_token: 'kc-tok', expires_in: 60 });
       }
       if (url.startsWith('/admin/realms/hubstore/roles/')) {
-        const name = decodeURIComponent(url.split('/roles/')[1]?.split('/')[0] ?? '');
+        // URL segment có thể là role NAME (GET /roles/{name}) hoặc role ID
+        // (GET /roles/{id}/users — findRoleId trả id rồi usersWithRole dùng id).
+        // Chuẩn hóa về NAME qua inverse của roleIds rồi lookup roleUsers.
+        const seg = decodeURIComponent(url.split('/roles/')[1]?.split('/')[0] ?? '');
+        const idToName = Object.fromEntries(Object.entries(state.roleIds).map(([n, i]) => [i, n]));
+        const name = state.roleIds[seg] !== undefined ? seg : (idToName[seg] ?? seg);
         if (url.includes('/users')) return send(200, (state.roleUsers[name] ?? []).map((u) => ({ id: `uid-${u}`, username: u })));
         const id = state.roleIds[name];
         return id ? send(200, { id, name }) : send(404, { error: 'not found' });
       }
-      if (url === '/admin/realms/hubstore/users' && req.method === 'POST') return send(201, {});
+      if (url === '/admin/realms/hubstore/users' && req.method === 'POST') {
+        // createUser đọc location header để lấy id — mock PHẢI trả header này.
+        return send(201, {}, { location: `${url}/u-new-1` });
+      }
       if (url === '/admin/realms/hubstore/users' && req.method === 'GET') return send(200, state.users);
       if (url.startsWith('/admin/realms/hubstore/users/')) {
         const id = decodeURIComponent(url.split('/users/')[1]?.split('/')[0] ?? '');
@@ -952,8 +1019,9 @@ git commit -m "feat(fi245-sf8): users routes Manager-only + contract tests"
 
 **Files:**
 - Modify: `packages/shared/src/hooks/usePermissions.tsx`
-- Modify: `packages/api-client/src/tags.ts`, create `packages/api-client/src/slices/users.ts`
-- Modify: `apps/shell/src/nav.ts`, `apps/shell/src/features/layout/AppLayout.tsx`, `apps/shell/src/App.tsx`, `apps/shell/src/i18n.ts`
+- Modify: `packages/api-client/src/tags.ts`, create `packages/api-client/src/slices/users.ts`, modify `packages/api-client/src/index.ts`
+- Modify: `apps/shell/src/nav.ts`, `apps/shell/src/features/layout/AppLayout.tsx`, `apps/shell/src/i18n.ts`
+- (App.tsx route dời sang Task 5 — cùng commit với UsersPage để build luôn xanh)
 
 - [ ] **Step 1: `usePermissions.tsx` — thêm `users.manage`**
 
@@ -1031,6 +1099,19 @@ export const usersApi = enhanced;
 
 (Verify `Paginated` export từ `@hub-store/shared` — nếu chưa export công khai thì import type từ path api-contracts tương ứng mà envelope.ts dùng.)
 
+- [ ] **Step 2b: `packages/api-client/src/index.ts` — side-effect import + re-export hooks**
+
+```ts
+import './slices/users';
+export {
+  useListUsersQuery,
+  useCreateUserMutation,
+  useSetUserPasswordMutation,
+  useSetUserEnabledMutation,
+} from './slices/users';
+```
+(`import './slices/users';` thêm vào block side-effect imports; re-export theo pattern named-export hiện có — KHÔNG dùng `export *`.)
+
 - [ ] **Step 3: `nav.ts` — append CUỐI**
 
 ```ts
@@ -1046,22 +1127,7 @@ import { TeamOutlined, /* existing */ } from '@ant-design/icons';
   '/users': <TeamOutlined />,
 ```
 
-- [ ] **Step 5: `App.tsx` — route**
-
-```tsx
-import UsersPage from "./features/users/UsersPage";
-// trong auth Routes, sau route print:
-                <Route
-                  path="/users"
-                  element={
-                    <RequirePermission permission="users.manage">
-                      <UsersPage currentUsername={session.sub} />
-                    </RequirePermission>
-                  }
-                />
-```
-
-- [ ] **Step 6: `i18n.ts` — nav.users + users.* (vi + en)**
+- [ ] **Step 4: `i18n.ts` — nav.users + users.* (vi + en)**
 
 vi:
 ```ts
@@ -1092,12 +1158,12 @@ vi:
 ```
 en (mirror): `"nav.users": "Users"`, `"users.title": "Users"`, `"users.add": "Add user"`, `"users.column.username": "Username"`, `"users.column.enabled": "Status"`, `"users.column.roles": "Roles"`, `"users.column.actions": "Actions"`, `"users.enabled": "Active"`, `"users.disabled": "Disabled"`, `"users.form.username": "Username"`, `"users.form.password": "Password"`, `"users.form.role": "Role"`, `"users.form.submit": "Create user"`, `"users.form.cancel": "Cancel"`, `"users.setpassword": "Reset password"`, `"users.setpassword.title": "Reset password"`, `"users.setpassword.submit": "Confirm"`, `"users.toggle.enable": "Enable"`, `"users.toggle.disable": "Disable"`, `"users.selflock": "You cannot disable your own account."`, `"users.created": "User created."`, `"users.passwordchanged": "Password updated."`, `"users.statuschanged": "Status updated."`, `"users.error": "Action failed."`.
 
-- [ ] **Step 7: Build + commit**
+- [ ] **Step 5: Build + commit**
 
-Run: `cd apps/shell && pnpm build` (hoặc `pnpm typecheck` nếu có). Expected: không lỗi type. (UsersPage chưa tồn tại → tạo file stub tối thiểu trong Task 5 trước khi build, HOẶC để route import Task 5 — tách: Task 4 commit CHƯA có route App.tsx nếu UsersPage chưa có. **Quyết định: Task 4 KHÔNG sửa App.tsx** — dời sang Task 5 (route + page cùng commit để build luôn xanh).)
+Run: `cd packages/api-client && pnpm build 2>/dev/null || true; cd ../../apps/shell && pnpm build`. Expected: không lỗi type (App.tsx chưa đụng — UsersPage ở Task 5).
 
 ```bash
-git add packages/shared/src/hooks/usePermissions.tsx packages/api-client/src/tags.ts packages/api-client/src/slices/users.ts apps/shell/src/nav.ts apps/shell/src/features/layout/AppLayout.tsx apps/shell/src/i18n.ts
+git add packages/shared/src/hooks/usePermissions.tsx packages/api-client/src/tags.ts packages/api-client/src/slices/users.ts packages/api-client/src/index.ts apps/shell/src/nav.ts apps/shell/src/features/layout/AppLayout.tsx apps/shell/src/i18n.ts
 git commit -m "feat(fi245-sf8): users.manage permission + nav/route plumbing + RTKQ slice"
 ```
 
@@ -1331,7 +1397,23 @@ export default function UsersPage(props: { currentUsername: string }) {
 
 Lưu ý: `@hub-store/api-client` export path — verify package.json exports của api-client (nếu chỉ export `./index` thì re-export slice qua `packages/api-client/src/index.ts`: `export * from './slices/users.js';`). Table `data-testid` prop không phải prop hợp lệ của Table antd → bọc div testid hoặc dùng `rootClassName`. **Điều chỉnh: bọc `<div data-testid="users-table">` quanh Table** (bỏ prop trên Table, và onRow giữ).
 
-- [ ] **Step 2: `App.tsx` route (như Task 4 Step 5)**
+- [ ] **Step 2: `App.tsx` — route mount**
+
+Thêm import cùng block imports trên đầu file:
+```tsx
+import UsersPage from "./features/users/UsersPage";
+```
+Trong auth branch `<Routes>` (sau route `/hub-store-order/batch/print`, trước `<Route path="*" element={<NotFound />} />`):
+```tsx
+                <Route
+                  path="/users"
+                  element={
+                    <RequirePermission permission="users.manage">
+                      <UsersPage currentUsername={session.sub} />
+                    </RequirePermission>
+                  }
+                />
+```
 
 - [ ] **Step 3: Build + commit**
 
@@ -1471,15 +1553,24 @@ test.describe("Coordinator/WarehouseOps — nav ẩn + API 403", () => {
 Lưu ý khi implement (điều chỉnh theo thực tế chạy):
 - `test.use` trong vòng lặp **không hoạt động** (test.use phải top-level trong describe) — tách 2 describe riêng cho coordinator/warehouse.
 - Selector KC login (`#username/#password/#kc-login`) khớp auth.setup — verify với auth.setup.ts.
-- Disabled message: chạy 1 lần thủ công, capture chính xác text KC 26 render, rồi siết assertion.
+- Disabled message: chạy 1 lần thủ công, capture chính xác text KC 26 render, rồi siết assertion. Sau `realLogin` fail, KHÔNG `waitForURL` pattern auth nữa (có thể đã redirect `login-actions/authenticate`) — wait trực tiếp locator `.alert-error, #kc-content-wrapper` visible.
 - Self-toggle popconfirm OK button text — nếu Popconfirm tự render OK mặc định thì chọn theo `.ant-popconfirm .ant-btn-primary`.
+- `data-testid` trên antd4 `Modal` forward qua rc-dialog (đã dùng ở users-add-modal trong e2e) — nếu không scope được, bọc qua `wrapClassName`/`rootClassName` hoặc dùng `.ant-modal:visible` như set-password modal.
 
 - [ ] **Step 2: Chạy suite**
 
 ```bash
-cd e2e && E2E_REUSE=1 pnpm exec playwright test --project=chromium
+cd e2e && E2E_REUSE=1 pnpm e2e
 ```
-(boot stack trước bằng `bash ../scripts/boot-all.sh` + KC volume reset nếu cần self-heal test thật.) Expected: 01–04 giữ xanh + 05 PASS.
+(`pnpm e2e` là script configured; config KHÔNG có `projects` — KHÔNG dùng `--project=chromium`. Boot stack trước bằng `bash ../scripts/boot-all.sh` + KC volume reset nếu cần self-heal test thật.) Expected: 01–04 giữ xanh + 05 PASS.
+
+- [ ] **Step 2b: Rule 0 — browser walkthrough 3 tầng (BẮT BUỘC trước khi nói "task xong")**
+
+Tự mở orca browser (`orca tab create --url http://localhost:3000`), đi trọn flow bằng tay + screenshot mỗi màn, LƯU vào `/tmp/story/fi245/sf8-*.png`:
+1. **Manager**: login thật → nav Users → mở /users → list 3 users → tạo user → set-password → toggle disable → screenshot từng màn.
+2. **Coordinator**: login → nav KHÔNG có Users → vào thẳng /users → thấy `forbidden` 403 → screenshot.
+3. **Disable login-fail**: user vừa disable → login → thấy KC disabled message → screenshot.
+So với spec §2 acceptance từng dòng; console F12 sạch. FAIL → fix rồi đi lại flow (không báo xong khi chưa PASS bằng mắt).
 
 - [ ] **Step 3: Commit**
 
