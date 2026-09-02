@@ -94,6 +94,8 @@ test.describe("Manager (storageState)", () => {
     await page.goto("/hub-store-order/dashboard");
     const statToday = page.getByTestId("stat-today");
     await expect(statToday).toBeVisible();
+    // Chờ fetch xong (card skeleton → số) trước khi đọc, chống flake.
+    await expect(statToday).toContainText(/\d/);
     const initialValue = parseStatValue(await statToday.innerText());
     const today = todayHCM();
     const day = `${today}T10:00:00+07:00`;
@@ -126,14 +128,15 @@ test.describe("Manager (storageState)", () => {
     }
   });
 
-  test("responsive: chart gọn trong viewport 1440×900", async ({ page }) => {
+  test("responsive: chart gọn trong viewport 1366×768 (spec §5)", async ({ page }) => {
+    await page.setViewportSize({ width: 1366, height: 768 });
     await page.goto("/hub-store-order/dashboard");
     const chart = page.getByTestId("chart-orders-per-day");
     await expect(chart).toBeVisible();
     const box = await chart.boundingBox();
     expect(box).not.toBeNull();
     expect(box!.width).toBeGreaterThan(0);
-    expect(box!.width).toBeLessThanOrEqual(1440);
+    expect(box!.width).toBeLessThanOrEqual(1366);
   });
 });
 

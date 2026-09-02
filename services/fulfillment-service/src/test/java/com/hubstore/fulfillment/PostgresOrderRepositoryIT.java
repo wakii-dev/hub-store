@@ -520,18 +520,24 @@ class PostgresOrderRepositoryIT {
         LocalDate today = LocalDate.now(zone);
         String codeToday = "ORD-IT-SF9-TODAY";
         String codeOld = "ORD-IT-SF9-OLD";
+        // Baseline trước insert — assert TƯƠNG ĐỐI để deterministic mọi ngày chạy
+        // (seed có thể đã rơi vào cùng bucket với ngày hôm nay).
+        var before = pg.dashboardStats(today, zone);
+        int beforeToday = before.totalToday();
+        int beforeLastBucket = before.ordersPerDay().get(29).count();
+        int beforeMinus5Bucket = before.ordersPerDay().get(24).count();
         try {
             jdbc.update("INSERT INTO orders (fulfill_code, original_time_from) VALUES (?, ?)",
                     codeToday, OffsetDateTime.now(zone));
             jdbc.update("INSERT INTO orders (fulfill_code, original_time_from) VALUES (?, ?)",
                     codeOld, OffsetDateTime.now(zone).minusDays(5));
             var s = pg.dashboardStats(today, zone);
-            // Bug cũ (bounds window 30 ngày): totalToday = 2. Đúng: chỉ đơn hôm nay.
-            assertThat(s.totalToday()).isEqualTo(1);
-            // Ô cuối (hôm nay) = 1, ô 5 ngày trước = 1.
+            // Bug cũ (bounds window 30 ngày): totalToday tăng +2 (cả đơn 5 ngày trước).
+            assertThat(s.totalToday()).isEqualTo(beforeToday + 1);
+            // Ô cuối (hôm nay) +1, ô 5 ngày trước +1.
             assertThat(s.ordersPerDay().get(29).date()).isEqualTo(today.toString());
-            assertThat(s.ordersPerDay().get(29).count()).isEqualTo(1);
-            assertThat(s.ordersPerDay().get(24).count()).isEqualTo(1);
+            assertThat(s.ordersPerDay().get(29).count()).isEqualTo(beforeLastBucket + 1);
+            assertThat(s.ordersPerDay().get(24).count()).isEqualTo(beforeMinus5Bucket + 1);
         } finally {
             jdbc.update("DELETE FROM orders WHERE fulfill_code IN (?, ?)", codeToday, codeOld);
         }
