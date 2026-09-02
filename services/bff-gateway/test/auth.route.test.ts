@@ -66,6 +66,9 @@ function buildTestApp(opts: { devResetPassword?: boolean } = {}): ReturnType<typ
       adminTokenUrl: `http://127.0.0.1:${kcPort}/realms/master/protocol/openid-connect/token`,
       adminUsername: 'admin',
       adminPassword: 'admin-secret',
+      kcAdminTokenUrl: `http://127.0.0.1:${kcPort}/realms/hubstore/protocol/openid-connect/token`,
+      kcAdminClientId: 'hubstore-admin',
+      kcAdminClientSecret: 'test-secret',
     },
     corsOrigins: ['http://localhost:3000'],
     grpc: {

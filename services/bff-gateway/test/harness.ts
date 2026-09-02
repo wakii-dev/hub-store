@@ -241,6 +241,9 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       adminTokenUrl: 'https://keycloak.test/realms/master/protocol/openid-connect/token',
       adminUsername: 'admin',
       adminPassword: 'admin',
+      kcAdminTokenUrl: 'https://keycloak.test/realms/hubstore/protocol/openid-connect/token',
+      kcAdminClientId: 'hubstore-admin',
+      kcAdminClientSecret: 'test-secret',
     },
     corsOrigins: ['http://localhost:3000'],
     grpc: {

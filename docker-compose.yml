@@ -79,7 +79,7 @@ services:
       batches-migrate:
         condition: service_completed_successfully
 
-  keycloak: # OIDC provider — realm JSON thuộc SF-4 (docker/keycloak/), password literal dev-only trong realm (KHÔNG env-substitution)
+  keycloak: # OIDC provider — realm JSON thuộc SF-4 (docker/keycloak/), password literal dev-only trong realm (KHÔNG env-substitution). SF-8: +client hubstore-admin (secret literal dev-only trong realm JSON, khớp KC_ADMIN_CLIENT_SECRET)
     image: quay.io/keycloak/keycloak:26.0
     command: ["start-dev", "--import-realm"]
     environment:
@@ -144,6 +144,8 @@ services:
       OIDC_ISSUER: http://localhost:8081 # claim iss + browser redirect (public)
       OIDC_AUDIENCE: hubstore-api
       OIDC_JWKS_URL: http://keycloak:8081 # JWKS fetch trong network compose — URL riêng (gotcha Keycloak-in-Docker)
+      KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID:-hubstore-admin} # SF-8 — Users management
+      KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:-hubstore-admin-dev-secret}
       ENABLE_DEV_RESET_PASSWORD: "1" # DEV-ONLY — bật /auth/reset-password (prod không set → 404)
     depends_on:
       - fulfillment-service
