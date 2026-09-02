@@ -1,0 +1,15 @@
+version: v2
+modules:
+  - path: .
+lint:
+  use:
+    - STANDARD
+  # ENUM_ZERO_VALUE_SUFFIX off: zero values are MEANINGFUL domain codes pinned
+  # by REQUIREMENTS §4 / spec §3.4 and must mirror packages/shared/src/enums.ts
+  # (0 = NOT_PREPARED / PENDING_APPROVAL / ACTIVE). Renaming 0 to *_UNSPECIFIED
+  # would break wire-code parity with the REST DTOs and the seed fixture.
+  except:
+    - ENUM_ZERO_VALUE_SUFFIX
+breaking:
+  use:
+    - FILE

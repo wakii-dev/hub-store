@@ -1,0 +1,9 @@
+# print-service (Python) — pinned deps (theo SPIKE 4 verdict: grpcio 1.83.1 +
+# protobuf 7.36.0 khớp gencode của api/proto/gen/python — SF-2 authored)
+grpcio==1.83.1
+protobuf==7.36.0
+reportlab==4.3.1
+
+# dev/test
+pytest==8.3.5
+pypdf==5.4.0

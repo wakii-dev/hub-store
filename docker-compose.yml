@@ -1,0 +1,70 @@
+# SF-11 — docker-compose cấu hình MẪU chạy local (KHÔNG prod deploy).
+# 4 service images (java/go/python/node) + nginx static shell/2 remotes
+# (publicPath prod theo SPIKE 1 verdict: remoteEntry ở dist root, chunks
+# import tương đối → mỗi remote phục vụ dưới /remotes/<name>/ với --base riêng).
+#
+#   docker compose up --build
+#   → mở http://localhost:3000
+#
+# State in-memory + canonical-seed.json mount chung → dữ liệu như dev.
+name: hub-store
+
+services:
+  fulfillment-service: # Java 17 gRPC :50051 (SF-3) — context root (pom ../../api/proto/gen/java)
+    build:
+      context: .
+      dockerfile: services/fulfillment-service/Dockerfile
+    environment:
+      SEED_PATH: /seed/canonical-seed.json
+    volumes:
+      - ./api/seed:/seed:ro
+    expose: ["50051"]
+
+  batching-service: # Go gRPC :50052 (SF-4)
+    build:
+      context: .
+      dockerfile: services/batching-service/Dockerfile
+    environment:
+      CANONICAL_SEED_PATH: /seed/canonical-seed.json
+      FULFILLMENT_ADDR: fulfillment-service:50051
+      BATCHING_PORT: "50052"
+    volumes:
+      - ./api/seed:/seed:ro
+    depends_on:
+      - fulfillment-service
+    expose: ["50052"]
+
+  print-service: # Python gRPC :50053 (SF-5) — context root (_proto.py parents[3])
+    build:
+      context: .
+      dockerfile: services/print-service/Dockerfile
+    environment:
+      PRINT_SERVICE_SEED_PATH: /seed/canonical-seed.json
+    volumes:
+      - ./api/seed:/seed:ro
+    expose: ["50053"]
+
+  bff: # Node Fastify REST :8080 (SF-6)
+    build:
+      context: .
+      dockerfile: services/bff-gateway/Dockerfile
+    environment:
+      JWT_DEV_SECRET: ${JWT_DEV_SECRET:?set JWT_DEV_SECRET in root .env}
+      GRPC_FULFILLMENT: fulfillment-service:50051
+      GRPC_BATCHING: batching-service:50052
+      GRPC_PRINT: print-service:50053
+      BFF_CORS_ORIGINS: http://localhost:3000
+    depends_on:
+      - fulfillment-service
+      - batching-service
+      - print-service
+    expose: ["8080"]
+
+  web: # nginx — shell + 2 remotes static + proxy /api → bff
+    build:
+      context: .
+      dockerfile: Dockerfile.web
+    ports:
+      - "3000:3000"
+    depends_on:
+      - bff

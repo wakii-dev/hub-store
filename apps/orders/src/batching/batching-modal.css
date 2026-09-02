@@ -1,0 +1,156 @@
+/* CreateBatchingModal — modal 1310×918 (REQUIREMENTS §3 D1b — kích thước pin). */
+.create-batching-modal {
+  top: 12px;
+  padding-bottom: 0;
+}
+.create-batching-modal .ant-modal-content {
+  height: 918px;
+  display: flex;
+  flex-direction: column;
+}
+.create-batching-modal .ant-modal-body {
+  flex: 1;
+  min-height: 0;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 16px 24px;
+}
+
+/* Toolbar trên cùng: gợi ý đóng gói + tính lại km + thêm đơn */
+.batch-toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+.batch-toolbar .batch-add-order {
+  margin-left: auto;
+  min-width: 360px;
+}
+
+/* Bảng đơn đã chọn — header + sortable rows (grid hàng theo cột) */
+.batch-table-header,
+.batch-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.batch-table-header {
+  font-weight: 600;
+  color: rgba(0, 0, 0, 0.85);
+  padding: 8px 8px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fafafa;
+}
+.batch-list {
+  flex: 1;
+  min-height: 0;
+  overflow-y: auto;
+  border: 1px solid #f0f0f0;
+  border-radius: 4px;
+}
+.batch-list ul {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+}
+.batch-row {
+  padding: 8px;
+  border-bottom: 1px solid #f0f0f0;
+  background: #fff;
+}
+.batch-row.dragging {
+  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  z-index: 10;
+}
+.batch-drag-handle {
+  cursor: grab;
+  color: rgba(0, 0, 0, 0.45);
+  user-select: none;
+  font-size: 16px;
+  line-height: 1;
+}
+.batch-cell-stop {
+  width: 80px;
+  flex-shrink: 0;
+}
+.batch-cell-code {
+  width: 130px;
+  flex-shrink: 0;
+}
+.batch-cell-address {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.batch-cell-distance {
+  width: 100px;
+  flex-shrink: 0;
+}
+.batch-cell-time {
+  width: 190px;
+  flex-shrink: 0;
+  font-size: 12px;
+}
+.batch-cell-status {
+  width: 110px;
+  flex-shrink: 0;
+}
+.batch-cell-qty {
+  width: 64px;
+  flex-shrink: 0;
+  text-align: right;
+}
+.batch-cell-cod {
+  width: 120px;
+  flex-shrink: 0;
+  text-align: right;
+}
+
+/* Nhóm packing suggest */
+.batch-groups {
+  margin: 8px 0 0;
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.batch-group-chip {
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  border: 1px solid;
+}
+
+/* Form dưới: shipper + TG giao + hint */
+.batch-form {
+  border-top: 1px solid #f0f0f0;
+  margin-top: 12px;
+  padding-top: 12px;
+}
+.batch-form-row {
+  display: flex;
+  gap: 16px;
+  align-items: flex-start;
+  flex-wrap: wrap;
+}
+.batch-hint-chip {
+  cursor: pointer;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 12px;
+  border: 1px solid #ffd591;
+  background: #fff7e6;
+}
+.batch-hint-chip:hover {
+  background: #ffe7ba;
+}
+.batch-footer {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  padding-top: 12px;
+}

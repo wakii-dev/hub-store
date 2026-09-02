@@ -1,0 +1,15 @@
+{
+  "orders": {
+    "url": "http://localhost:3001/remoteEntry.js",
+    "exposes": {
+      "D1Page": "./D1Page"
+    }
+  },
+  "fulfillment": {
+    "url": "http://localhost:3002/remoteEntry.js",
+    "exposes": {
+      "BatchListPage": "./BatchListPage",
+      "PrintPage": "./PrintPage"
+    }
+  }
+}

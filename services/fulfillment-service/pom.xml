@@ -1,0 +1,119 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!--
+  fulfillment-service (SF-3 / FI-237) — Spring Boot 3 + gRPC server :50051.
+
+  KHÔNG thuộc turbo (`pnpm dev` root không đụng — build/run riêng qua README/run.sh).
+  Proto gencode: wire trực tiếp vào ../../api/proto/gen/java qua build-helper
+  (KHÔNG copy — tránh drift với source-of-truth SF-2). Proto source READ-ONLY.
+-->
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+  <modelVersion>4.0.0</modelVersion>
+
+  <parent>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-starter-parent</artifactId>
+    <version>3.5.5</version>
+    <relativePath/>
+  </parent>
+
+  <groupId>com.hubstore</groupId>
+  <artifactId>fulfillment-service</artifactId>
+  <version>0.1.0-SNAPSHOT</version>
+  <name>fulfillment-service</name>
+  <description>HubStore fulfillment gRPC service (Java, spec §3.3)</description>
+
+  <properties>
+    <!-- Spec §3.3: Java 17+; toolchain java 21 build với release 17. -->
+    <java.version>17</java.version>
+    <!-- Pins tường minh (plan Task 1): grpc runtime ≥ codegen (SF-2 protoc 29.3). -->
+    <grpc.version>1.69.0</grpc.version>
+    <grpc-spring-boot-starter.version>3.1.0.RELEASE</grpc-spring-boot-starter.version>
+    <!-- Khớp gencode SF-2 (protoc 29.3) — force toàn cây để grpc không kéo 3.x. -->
+    <protobuf.version>4.29.3</protobuf.version>
+  </properties>
+
+  <dependencyManagement>
+    <dependencies>
+      <dependency>
+        <groupId>io.grpc</groupId>
+        <artifactId>grpc-bom</artifactId>
+        <version>${grpc.version}</version>
+        <type>pom</type>
+        <scope>import</scope>
+      </dependency>
+      <dependency>
+        <groupId>com.google.protobuf</groupId>
+        <artifactId>protobuf-java</artifactId>
+        <version>${protobuf.version}</version>
+      </dependency>
+    </dependencies>
+  </dependencyManagement>
+
+  <dependencies>
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Parse canonical-seed.json + serialize x-error-details JSON. -->
+      <groupId>com.fasterxml.jackson.core</groupId>
+      <artifactId>jackson-databind</artifactId>
+    </dependency>
+    <dependency>
+      <groupId>net.devh</groupId>
+      <artifactId>grpc-server-spring-boot-starter</artifactId>
+      <version>${grpc-spring-boot-starter.version}</version>
+    </dependency>
+    <dependency>
+      <groupId>com.google.protobuf</groupId>
+      <artifactId>protobuf-java</artifactId>
+    </dependency>
+    <dependency>
+      <!-- Gencode SF-2 dùng @javax.annotation.Generated — chỉ cần lúc compile. -->
+      <groupId>org.apache.tomcat</groupId>
+      <artifactId>annotations-api</artifactId>
+      <version>6.0.53</version>
+      <scope>provided</scope>
+    </dependency>
+
+    <dependency>
+      <groupId>org.springframework.boot</groupId>
+      <artifactId>spring-boot-starter-test</artifactId>
+      <scope>test</scope>
+    </dependency>
+  </dependencies>
+
+  <build>
+    <plugins>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>build-helper-maven-plugin</artifactId>
+        <version>3.6.0</version>
+        <executions>
+          <execution>
+            <id>add-proto-gen-java</id>
+            <phase>generate-sources</phase>
+            <goals><goal>add-source</goal></goals>
+            <configuration>
+              <sources>
+                <!-- READ-ONLY dùng chung với Go/Python/TS gen (SF-2 owns). -->
+                <source>../../api/proto/gen/java</source>
+              </sources>
+            </configuration>
+          </execution>
+        </executions>
+      </plugin>
+      <plugin>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-maven-plugin</artifactId>
+      </plugin>
+      <plugin>
+        <groupId>org.codehaus.mojo</groupId>
+        <artifactId>exec-maven-plugin</artifactId>
+        <version>3.5.0</version>
+      </plugin>
+    </plugins>
+  </build>
+</project>

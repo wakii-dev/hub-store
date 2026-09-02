@@ -1,0 +1,28 @@
+{
+  "name": "@hub-store/shared",
+  "private": true,
+  "main": "src/index.ts",
+  "types": "src/index.ts",
+  "scripts": {
+    "build": "tsc --noEmit",
+    "test": "vitest run"
+  },
+  "dependencies": {
+    "antd": "4.24.16",
+    "i18next": "26.4.0",
+    "jose": "6.2.10",
+    "moment": "2.30.1",
+    "react": "18.3.1",
+    "react-dom": "18.3.1",
+    "react-i18next": "17.0.12"
+  },
+  "devDependencies": {
+    "@testing-library/jest-dom": "7.0.1",
+    "@testing-library/react": "16.3.3",
+    "@types/react": "18.3.31",
+    "@types/react-dom": "18.3.7",
+    "jsdom": "30.0.1",
+    "typescript": "5.9.3",
+    "vitest": "4.1.11"
+  }
+}

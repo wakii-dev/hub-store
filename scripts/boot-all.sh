@@ -1,0 +1,67 @@
+#!/usr/bin/env bash
+# SF-11 — boot toàn hệ thống cho E2E Playwright (spec §5 SF-11: webServer boot
+# toàn hệ thống, KHÔNG boot tay 7 process). Cũng dùng được standalone:
+#   bash scripts/boot-all.sh          # boot + block (Ctrl-C dừng tất cả)
+#   BOOT_ONLY=1 bash scripts/boot-all.sh   # boot rồi thoát (processes vẫn sống)
+# Ports: 50051 java · 50052 go · 50053 python · 8080 bff · 3000 shell · 3001 orders · 3002 fulfillment
+set -uo pipefail
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+LOG_DIR="${LOG_DIR:-/tmp/story/fi233}"
+mkdir -p "$LOG_DIR"
+PORTS=(50051 50052 50053 8080 3000 3001 3002)
+
+port_busy() { /usr/bin/nc -z localhost "$1" >/dev/null 2>&1; }
+
+# Dọn listener cũ trên các port dev (state in-memory cần seed sạch cho E2E).
+for p in "${PORTS[@]}"; do
+  if port_busy "$p"; then
+    echo "[boot-all] port $p bận — kill listener cũ"
+    lsof -ti tcp:"$p" | xargs kill -9 2>/dev/null || true
+  fi
+done
+sleep 1
+
+wait_port() {
+  local name="$1" port="$2" tries="${3:-120}"
+  for _ in $(seq 1 "$tries"); do
+    if port_busy "$port"; then echo "[boot-all] $name ready :$port"; return 0; fi
+    sleep 2
+  done
+  echo "[boot-all] TIMEOUT chờ $name :$port — log: $LOG_DIR" >&2
+  return 1
+}
+
+echo "[boot-all] boot fulfillment-service (Java :50051)..."
+(cd "$ROOT/services/fulfillment-service" && exec ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
+JAVA_PID=$!
+
+wait_port java 50051 || exit 1
+
+echo "[boot-all] boot batching-service (Go :50052)..."
+(cd "$ROOT/services/batching-service" && exec ./run.sh) >"$LOG_DIR/e2e-go.log" 2>&1 &
+
+echo "[boot-all] boot print-service (Python :50053)..."
+(cd "$ROOT/services/print-service" && exec ./run.sh) >"$LOG_DIR/e2e-python.log" 2>&1 &
+
+wait_port go 50052 || exit 1
+wait_port python 50053 || exit 1
+
+echo "[boot-all] boot BFF (:8080)..."
+(cd "$ROOT/services/bff-gateway" && exec pnpm dev) >"$LOG_DIR/e2e-bff.log" 2>&1 &
+wait_port bff 8080 || exit 1
+
+echo "[boot-all] boot FE remotes (:3001 orders, :3002 fulfillment)..."
+(cd "$ROOT/apps/orders" && exec pnpm dev) >"$LOG_DIR/e2e-orders.log" 2>&1 &
+(cd "$ROOT/apps/fulfillment" && exec pnpm dev) >"$LOG_DIR/e2e-fulfillment.log" 2>&1 &
+wait_port orders 3001 || exit 1
+wait_port fulfillment 3002 || exit 1
+
+echo "[boot-all] boot shell (:3000)..."
+(cd "$ROOT/apps/shell" && exec pnpm dev) >"$LOG_DIR/e2e-shell.log" 2>&1 &
+wait_port shell 3000 || exit 1
+
+echo "[boot-all] HỆ THỐNG SẴN — 7/7 ports lên"
+if [ "${BOOT_ONLY:-0}" = "1" ]; then exit 0; fi
+# Block giữ process sống (Playwright webServer contract) — TERM/INT kill tất cả.
+trap 'kill $(jobs -p) 2>/dev/null; exit 0' TERM INT
+wait
