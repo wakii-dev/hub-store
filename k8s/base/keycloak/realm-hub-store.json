@@ -10,15 +10,25 @@
       "publicClient": true,
       "directAccessGrantsEnabled": true,
       "standardFlowEnabled": true,
-      "redirectUris": ["http://localhost:3000/*"],
-      "webOrigins": ["http://localhost:3000"]
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "http://localhost:3000"
+      ]
     }
   ],
   "roles": {
     "realm": [
-      { "name": "Coordinator" },
-      { "name": "WarehouseOps" },
-      { "name": "Manager" }
+      {
+        "name": "Coordinator"
+      },
+      {
+        "name": "WarehouseOps"
+      },
+      {
+        "name": "Manager"
+      }
     ]
   },
   "users": [
@@ -27,30 +37,54 @@
       "enabled": true,
       "email": "coordinator-dev@hub-store.local",
       "emailVerified": true,
-      "realmRoles": ["Coordinator"],
+      "realmRoles": [
+        "Coordinator"
+      ],
       "credentials": [
-        { "type": "password", "value": "coordinator-dev-pass", "temporary": false }
-      ]
+        {
+          "type": "password",
+          "value": "coordinator-dev-pass",
+          "temporary": false
+        }
+      ],
+      "firstName": "Dev",
+      "lastName": "Coordinator"
     },
     {
       "username": "warehouseops-dev",
       "enabled": true,
       "email": "warehouseops-dev@hub-store.local",
       "emailVerified": true,
-      "realmRoles": ["WarehouseOps"],
+      "realmRoles": [
+        "WarehouseOps"
+      ],
       "credentials": [
-        { "type": "password", "value": "warehouseops-dev-pass", "temporary": false }
-      ]
+        {
+          "type": "password",
+          "value": "warehouseops-dev-pass",
+          "temporary": false
+        }
+      ],
+      "firstName": "Dev",
+      "lastName": "WarehouseOps"
     },
     {
       "username": "manager-dev",
       "enabled": true,
       "email": "manager-dev@hub-store.local",
       "emailVerified": true,
-      "realmRoles": ["Manager"],
+      "realmRoles": [
+        "Manager"
+      ],
       "credentials": [
-        { "type": "password", "value": "manager-dev-pass", "temporary": false }
-      ]
+        {
+          "type": "password",
+          "value": "manager-dev-pass",
+          "temporary": false
+        }
+      ],
+      "firstName": "Dev",
+      "lastName": "Manager"
     }
   ]
 }
