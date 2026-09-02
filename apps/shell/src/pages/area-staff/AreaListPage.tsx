@@ -6,7 +6,7 @@
  * Toggle Switch + nút tạo gate theo `areastaff.manage`.
  */
 import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Button, Select, Space, Table, Tag, Typography, message } from 'antd';
+import { Button, Select, Space, Switch, Table, Tag, Typography, message } from 'antd';
 import type { ColumnsType } from 'antd/es/table';
 import { DownOutlined, PlusOutlined, UpOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
@@ -59,6 +59,21 @@ export default function AreaListPage() {
   useEffect(() => {
     areaStaffApi.regions().then(setRegions).catch(() => message.error(t('area.error.regions')));
   }, [t]);
+
+  /** Task active-toggle (SF-17): PUT /:code/active → refresh list (row vẫn thấy
+   *  khi off — dim + tag client-side theo isActive mới). */
+  const handleToggle = useCallback(
+    (record: ServiceEmployeeDto, checked: boolean) => {
+      areaStaffApi
+        .setActive(record.employeeCode, checked)
+        .then(() => load(filters))
+        .catch(() => {
+          message.error(t('area.form.error.save'));
+          load(filters); // revert switch về state thật
+        });
+    },
+    [filters, load, t],
+  );
 
   const provinceOptions = useMemo(
     () =>
@@ -124,6 +139,24 @@ export default function AreaListPage() {
           </Tag>
         ),
     },
+    // Toggle active — CHỈ role manage (Admin, task 7 thêm gate BFF phía sau).
+    ...(canManage
+      ? [
+          {
+            title: t('area.col.actions'),
+            key: 'actions',
+            width: 90,
+            render: (_v: unknown, record: ServiceEmployeeDto) => (
+              <Switch
+                checked={record.isActive}
+                size="small"
+                onChange={(checked) => handleToggle(record, checked)}
+                data-testid={`area-active-toggle-${record.employeeCode}`}
+              />
+            ),
+          } as ColumnsType<ServiceEmployeeDto>[number],
+        ]
+      : []),
   ];
 
   return (
