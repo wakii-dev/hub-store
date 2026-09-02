@@ -33,8 +33,8 @@ Chốt trong spec §3 (D1-D11) + §4. Điểm mấu chốt cho executor:
 - **Audit** bảng `activity_log(id BIGSERIAL PK, actor VARCHAR, action VARCHAR, target VARCHAR, detail JSONB, created_at TIMESTAMPTZ DEFAULT now())`; Java ghi tại mọi mutation intake; action ∈ {order.imported, order.created, order.failed, order.redelivered}; actor từ gRPC metadata `x-user-name` (BFF truyền `request.user.sub` — KHÔNG phải authn).
 - **Roles (BFF enforce):** Coordinator → preview/confirm/create-manual; WarehouseOps → fail/redeliver; mọi role authenticated → GET audit. Mutation sai role → 403 envelope.
 - **Validation (Java, dùng chung):** customerName/address non-blank; phone `^(\+84|0)\d{9}$`; ≥1 item, item code+name non-blank qty≥1; `quantity == sum(items.qty)` (lệch = lỗi cột quantity); codAmount ≥ 0; shopHint nếu điền phải ∈ distinct shops (nếu không → lỗi cột shopHint). Import lỗi trả theo row 1-based của file + column = tên header template.
-- **Confirm:** gửi lại full list, Java re-validate; 1 row invalid → FAILED_PRECONDITION kèm errors[], không insert cục phần. Insert all-or-nothing 1 transaction.
-- **Redeliver gate:** `fail_reason IS NOT NULL` AND chưa có đơn nào `old_fulfill_code = code`; vi phạm → FAILED_PRECONDITION.
+- **Confirm:** gửi lại full list, Java re-validate; 1 row invalid → INVALID_ARGUMENT kèm mô tả, không insert cục phần. Insert all-or-nothing 1 transaction.
+- **Redeliver gate:** `fail_reason IS NOT NULL` AND chưa có đơn nào `old_fulfill_code = code`; vi phạm → INVALID_ARGUMENT.
 - **Đơn mới:** statusCode=0, orderStatus=1 (APPROVED), batchStatus=0, batchCode=NULL, times=NULL (FE render '-'), note retry = "Giao lại từ ORD-xxxx".
 - **E2E determinism:** DB persist giữa run → specs 05/06 dùng relative assertions (delta count, code > max hiện có).
 
@@ -377,14 +377,14 @@ export function parseOrdersFile(filename: string, buffer: Buffer): { rows: RawRo
 ```
 - [ ] Routes `routes/intake.ts` (đăng ký trong app.ts sau fulfillment):
   - `GET /orders/import/template` — role: Coordinator; `reply.type('text/csv').header('Content-Disposition','attachment; filename="order-import-template.csv"').send(templateCsv())`.
-  - `POST /orders/import/preview` — Coordinator; `request.file()` (multipart) → parseOrdersFile → gRPC validateImportOrders(orders) → errors = resp.errors (response body) + parse errors gộp → `{ valid, errors }` (ImportPreviewResponse). **Row indexing: row parse-fail vẫn giữ vị trí bằng cách gửi IntakeOrder placeholder rỗng vào request — giữ 1-based indexing ổn định giữa parse errors và validation errors.**
+  - `POST /orders/import/preview` — Coordinator; `request.file()` (multipart) → parseOrdersFile → gRPC validateImportOrders(orders) → errors = resp.errors (response body) + parse errors gộp → `{ valid, errors }` (ImportPreviewResponse). **Row indexing: row parse-fail vẫn giữ vị trí bằng cách gửi IntakeOrder placeholder rỗng vào request — giữ 1-based indexing; BFF PHẢI track các index placeholder và DROP resp.errors của các row đó (placeholder rỗng sẽ sinh ~4 validation errors rác mỗi row — không lọc thì preview sai). Contract test thêm case mixed parse+validation errors.**
   - `POST /orders/import/confirm` — Coordinator; body `{orders: IntakeOrderDto[]}` → gRPC confirmImportOrders → `{ fulfillCodes }`; service trả INVALID_ARGUMENT khi re-validate fail → sendGrpcError tự map 422 (đã có sẵn, không đổi grpc-error.ts).
   - `POST /orders` — Coordinator; body IntakeOrderDto → createManualOrder → `{ fulfillCode }` 201.
   - `POST /orders/:code/fail` — WarehouseOps (check `user.role !== 'WarehouseOps'` → 403 envelope); body `{reason: number, note?: string}` → markOrderFailed → 204/`{}`.
   - `POST /orders/:code/redeliver` — WarehouseOps → redeliverOrder → `{ fulfillCode }` 201.
   - `GET /orders/:code/audit` — mọi role → getOrderAudit → `{ items: AuditEntryDto[] }` (detail JSON.parse an toàn — parse fail → null).
   - Role check helper: tạo `requireRole(request, ...roles)` trong route file hoặc plugins/auth.ts (additive export).
-- [ ] Contract tests (harness hiện có — fake gRPC server stub per test như bff.contract.test.ts): template headers đúng; preview map lỗi; confirm 422 khi service FAILED_PRECONDITION; POST /orders 201; fail sai role 403; redeliver 201; audit envelope. Mỗi test assert pagination/envelope pattern như test cũ.
+- [ ] Contract tests (harness hiện có — fake gRPC server stub per test như bff.contract.test.ts): template headers đúng; preview map lỗi; confirm 422 khi service INVALID_ARGUMENT; POST /orders 201; fail sai role 403; redeliver 201; audit envelope. Mỗi test assert pagination/envelope pattern như test cũ.
 - [ ] `cd services/bff-gateway && pnpm build && pnpm test` → xanh.
 - [ ] Commit: `feat(fi245-sf13): BFF intake routes — template/preview/confirm/manual/fail/redeliver/audit + csv/xlsx parse`
 
@@ -422,7 +422,7 @@ Steps:
 Steps:
 - [ ] Route BFF gộp (as BFF owns aggregation — spec §3.3 pattern).
 - [ ] `MarkFailModal`: Select lý do (DELIVERY_FAIL_REASON labels) + TextArea note + submit → failOrder → message + invalidate. data-testid: `mark-fail-button-{orderCode}`, `mark-fail-modal`, `fail-reason-select`, `fail-note`, `fail-submit`, `redeliver-button-{orderCode}`.
-- [ ] BatchListPage expanded row: fetch batch orders → mỗi item render failReason tag (nếu có, data-testid `fail-tag-{code}`) + nút Mark thất bại (ẩn khi đã FAILED) + nút Giao lại (chỉ khi FAILED && chưa có retry — server gate là chốt cuối, FE chỉ ẩn: check có `oldFulfillCode`-order trong list? — đơn giản: luôn hiện nút Giao lại trên đơn FAILED; double-redeliver server chặn FAILED_PRECONDITION → message lỗi).
+- [ ] BatchListPage expanded row: fetch batch orders → mỗi item render failReason tag (nếu có, data-testid `fail-tag-{code}`) + nút Mark thất bại (ẩn khi đã FAILED) + nút Giao lại (chỉ khi FAILED && chưa có retry — server gate là chốt cuối, FE chỉ ẩn: check có `oldFulfillCode`-order trong list? — đơn giản: luôn hiện nút Giao lại trên đơn FAILED; double-redeliver server chặn INVALID_ARGUMENT → message lỗi).
 - [ ] Sau redeliver thành công: message "Đã tạo đơn giao lại ORD-xxxx" + invalidate.
 - [ ] Unit test MarkFailModal (chọn lý do + submit gọi mutation).
 - [ ] `pnpm --filter @hub-store/fulfillment test && pnpm --filter @hub-store/fulfillment build` xanh.
@@ -480,6 +480,5 @@ git update-ref refs/heads/story/fi245-postgres-production "$(git rev-parse HEAD)
 ## 6. Risks & unknowns
 - **Must verify at Task 1:** protoc-gen-grpc-java binary có sẵn không (spike ghi 1.64.0 osx-aarch_64); ts-proto gen ra intake stub đúng outputServices=grpc-js.
 - **Must verify at Task 5:** cách đọc metadata x-user-role hiện có trong fulfillment-service (grep trước khi viết interceptor — dùng đúng pattern).
-- **Must verify at Task 8:** apps/fulfillment dùng axios trực tiếp hay api-client (đọc api/batchesApi.ts trước).
 - **Unverified:** xlsx 0.18.5 parse trên Node 24 (nếu lỗi → fall back chỉ CSV + ghi REQUIREMENT-GAP comment); audit token-read pattern trong E2E (nếu localStorage oidc key khác — inspect page).
 - R1 merge-rule + R6 field-numbers đã chốt trong spec §3 D9 + improvements-log.
