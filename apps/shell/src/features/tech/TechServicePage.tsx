@@ -10,15 +10,17 @@ import { ReloadOutlined } from '@ant-design/icons';
 import moment from 'moment';
 import { useTranslation } from 'react-i18next';
 import { DESIGN_TOKENS, DateRange, MultiSelect } from '@hub-store/shared';
-import { localToday, statusOptions } from './techHelpers';
+import { statusOptions } from './techHelpers';
 import { parseTab, TECH_FILTER_URL_DEFAULTS, useTechFilters, type TechFilterState, type TechTab } from './useTechFilters';
 import { DeliveryTab } from './DeliveryTab';
 import { InstallationTab } from './InstallationTab';
 import { StaffTab } from './StaffTab';
 import { registerTechResources } from './tech.i18n';
 
-// Đăng ký namespace `tech` 1 lần khi module được import (shell-owned screen).
-registerTechResources();
+// LƯU Ý: KHÔNG đăng ký ở module-eval — App.tsx được import tĩnh trong
+// main.tsx TRƯỚC initI18n() → getI18n() null → đăng ký bị skip lặng lẽ
+// (browser render raw key, unit test không bắt vì tự init i18n riêng).
+// Đăng ký idempotent ngay trong component.
 
 const FILTER_FIELD_TESTIDS: Record<string, string> = {
   dStatus: 'tech-filter-d-status',
@@ -35,6 +37,7 @@ const FILTER_FIELD_TESTIDS: Record<string, string> = {
 };
 
 export default function TechServicePage() {
+  registerTechResources();
   const { t, i18n } = useTranslation('tech');
   const [filters, setFilters, resetFilters] = useTechFilters();
   const tab = parseTab(filters.tab);
@@ -68,10 +71,13 @@ export default function TechServicePage() {
     }),
     [filters.iStatus, filters.iTech, filters.iRegion, filters.iProvince, filters.iFrom, filters.iTo],
   );
-  const staffFilter = useMemo(() => {
-    const day = filters.sDate || localToday();
-    return { dateFrom: day, dateTo: day };
-  }, [filters.sDate]);
+  // Staff tab: mặc định KHÔNG lọc ngày (bảng group theo ngày — hiện tất cả);
+  // "filter mặc định hôm nay" của spec áp cho delivery. Lọc theo sDate chỉ
+  // khi user chọn — default today làm bảng rỗng khi đơn lắp ở ngày khác.
+  const staffFilter = useMemo(
+    () => (filters.sDate ? { dateFrom: filters.sDate, dateTo: filters.sDate } : {}),
+    [filters.sDate],
+  );
 
   return (
     <div>

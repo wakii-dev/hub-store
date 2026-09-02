@@ -29,7 +29,7 @@ export function StaffTab(props: {
   // 1 fetch duy nhất: đơn lắp (không paginate — hợp lý cho 1 ngày) rồi
   // derive registry + rows. suggest chạy song song theo regions quan sát được.
   const { data, isLoading, isFetching, error, refetch } = useTechFetch(async () => {
-    const envelope = await filterInstallationOrders({ ...props.filter, pageSize: 200 });
+    const envelope = await filterInstallationOrders({ ...props.filter, page: 1, pageSize: 200 });
     const regions = dedupeRegions(envelope.items.map((o) => o.regionCode ?? ''));
     const registry = await buildRegistry(regions, suggestTechnicians);
     return { envelope, registry };
