@@ -76,13 +76,27 @@ Tasks: bff-sse-endpoint / event-bus-mutations / fe-sse-hook / d1-d2-live-update 
 ## SF-11 FE convergence mới — audit viewer + export UI + mobile
 Tier: 3
 linear: FI-256
-What: audit-log viewer (Manager), export UI theo filter, mobile responsive polish (tablet shipper), toàn bộ screens mới (SF-8/9) hội tụ design system SF-6; skeleton/empty-state screens mới; E2E specs mới cho users/dashboard/export/audit — KHÔNG sửa assertions specs cũ
-Depends on: SF-6, SF-7, SF-8, SF-9, SF-10
+What: audit-log viewer (Manager), export UI theo filter, mobile responsive polish (tablet shipper), toàn bộ screens mới (SF-8/9/13) hội tụ design system SF-6; skeleton/empty-state screens mới; E2E specs mới cho users/dashboard/export/audit — KHÔNG sửa assertions specs cũ
+Depends on: SF-6, SF-7, SF-8, SF-9, SF-10, SF-13
 Tasks: audit-viewer-screen / export-ui / mobile-responsive / design-harmonize-screens / skeletons-new-screens / e2e-new-features-green
 
 ## SF-12 Production hardening
 Tier: 4
 linear: FI-257
 What: M-3 resolved (token passthrough HOẶC mTLS s2s — chọn 1 + rationale); .env ra khỏi git + rotate credentials + compose env-file local; healthcheck endpoints mọi service + logs structured; CI GitHub Actions (lint + unit + E2E E2E=1 + docker build mỗi PR); backup cron pg_dump 2 DB + restore doc
-Depends on: SF-5, SF-11
+Depends on: SF-5, SF-11, SF-14
 Tasks: s2s-token-passthrough-or-mtls / secrets-out-of-git / rotate-credentials / healthchecks-all / structured-logs / ci-pipeline / e2e-in-ci / backup-cron / restore-doc / security-final-audit
+
+## SF-13 Order intake + delivery exceptions
+Tier: 2
+linear: FI-258
+What: import CSV/Excel đơn (template + validate + preview lỗi từng row + confirm insert); tạo đơn thủ công trên D1 (generate fulfillCode dải ORD-*); per-order FAILED + lý do (enum + ghi chú) + flow giao lại (chọn retry/reopen — giữ audit); proto CHỈ additive; UI antd4 sạch — SF-11 harmonize
+Depends on: SF-2, SF-3
+Tasks: import-template / import-validate-preview / import-insert / manual-create-form / fulfillcode-gen / order-failed-status / exception-reasons / redelivery-flow / e2e-intake-spec / e2e-exception-spec
+
+## SF-14 COD đối soát
+Tier: 3
+linear: FI-259
+What: xác nhận thu COD per-order (số tiền + người thu + thời điểm, mặc định từ batch hoàn tất); màn đối soát theo shop theo kỳ — hoàn tất-COD vs đã-thu vs chênh lệch; export CSV đối soát (pattern SF-7); Flyway V3 settlement trong DB fulfillment
+Depends on: SF-7, SF-13
+Tasks: cod-confirm-flow / settlement-table / settlement-aggregate-api / fe-settlement-screen / settlement-export / e2e-settlement-spec

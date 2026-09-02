@@ -102,7 +102,18 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 ### 3.11 Product completion — FE convergence mới (SF-11, deps SF-6+SF-7+SF-8+SF-9+SF-10)
 - Audit-log viewer (Manager), export UI (nút export theo filter), mobile responsive polish (breakpoints cho tablet shipper), all-in design system SF-6; skeleton/empty-state cho screens mới; E2E specs mới cho features mới (users UI, dashboard, export, audit) — không sửa assertions specs cũ.
 
-### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11 — CUỐI)
+### 3.13 Order intake + delivery exceptions (SF-13, deps SF-2+SF-3)
+- **Import đơn**: upload CSV/Excel (template tải được) → validate (địa chỉ, SĐT, items, COD) → preview bảng + rows lỗi báo rõ từng cột → confirm insert vào orders. Coordinator dùng.
+- **Tạo đơn thủ công**: form "Tạo đơn" trên D1 — khách, địa chỉ, items, COD; generate fulfillCode đúng dải `ORD-*` hiện có.
+- **Delivery exceptions**: trạng thái per-order FAILED + lý do (enum: khách vắng/sai địa chỉ/khách từ chối + ghi chú tự do) — thao tác từ D2 (WarehouseOps) và màn shipper nếu có; đơn FAILED → flow giao lại (tạo retry mới hoặc reopen state — chọn 1, giữ audit). Proto thay đổi CHỈ additive (enum/method MỚI, không phá message cũ).
+- UI intake/exceptions xây antd4 sạch; SF-11 harmonize về design system.
+
+### 3.14 COD đối soát (SF-14, deps SF-13)
+- Xác nhận thu COD per-order (số tiền thu + người thu + thời gian) — mặc định từ batch hoàn tất.
+- Màn đối soát theo shop: tổng COD theo kỳ (ngày), so khớp đơn hoàn tất-COD vs đã-thu vs chênh lệch; export CSV đối soát (pattern SF-7).
+- Bảng/fields lưu settlement trong DB `fulfillment` (Flyway V3+); không đụng batching DB.
+
+### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14 — CUỐI)
 - **M-3 resolved**: s2s auth — token passthrough (BFF forward access token, services verify JWKS) HOẶC mTLS nội mạng compose — SF-12 chọn 1, ghi rationale.
 - Secrets: `.env` ra khỏi git (gitignore + rotate credentials), compose đọc từ env file local.
 - Monitoring: healthcheck endpoints mọi service + uptime checks compose; logs structured.
@@ -121,6 +132,8 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 9. Mutate đơn/batch ở 1 tab → tab khác cập nhật gần như tức thì (SSE).
 10. Export CSV theo filter; mọi mutation có audit log, Manager xem được.
 11. CI chạy test + E2E mỗi PR; backup `pg_dump` cron chạy; s2s auth không còn plain x-user-role.
+12. Coordinator import file đơn (CSV/Excel) → đơn vào D1 xử lý được; tạo đơn thủ công OK; đơn giao thất bại có lý do + giao lại được.
+13. COD thu được xác nhận per-order; Manager xem màn đối soát theo shop + export; số liệu khớp DB.
 
 ## 5. Boundary (KHÔNG làm)
 - KHÔNG TLS/HA; KHÔNG k8s/helm; KHÔNG horizontal scaling. (Backup automation + monitoring giờ IN scope — SF-12.)
