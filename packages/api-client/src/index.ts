@@ -40,4 +40,6 @@ export {
   useCreateUserMutation,
   useSetUserPasswordMutation,
   useSetUserEnabledMutation,
+  type UserListItem,
+  type CreateUserArg,
 } from './slices/users';
