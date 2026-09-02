@@ -33,6 +33,7 @@ export default defineConfig({
       filename: "remoteEntry.js",
       exposes: {
         "./D1Page": "./src/pages/D1Page.tsx",
+        "./D2CPage": "./src/pages/D2CPage.tsx",
       },
       shared: mfShared,
     }),

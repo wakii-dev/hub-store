@@ -22,6 +22,7 @@ import RemoteBoundary from "./RemoteBoundary";
 
 // Federation lazy imports — exposes contract ĐÃ PIN (spec §2.7)
 const D1Page = lazy(() => import("orders/D1Page"));
+const D2CPage = lazy(() => import("orders/D2CPage"));
 const BatchListPage = lazy(() => import("fulfillment/BatchListPage"));
 const PrintPage = lazy(() => import("fulfillment/PrintPage"));
 
@@ -175,6 +176,16 @@ export default function App() {
                     <RequirePermission permission="orders.view">
                       <RemoteBoundary>
                         <D1Page />
+                      </RemoteBoundary>
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/hub-store-order/d2c"
+                  element={
+                    <RequirePermission permission="d2c.view">
+                      <RemoteBoundary>
+                        <D2CPage />
                       </RemoteBoundary>
                     </RequirePermission>
                   }

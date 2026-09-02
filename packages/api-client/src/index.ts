@@ -24,11 +24,18 @@ export { createAppStore, type AppStore, type AppDispatch, type RootState } from 
 import './slices/fulfillment';
 import './slices/batches';
 import './slices/masterData';
+import './slices/d2c';
 
 // Re-export the stub hooks for convenience (remotes can deep-import the slice
 // files directly too).
 export { useListOrdersQuery } from './slices/fulfillment';
 export { useListBatchesQuery } from './slices/batches';
+export {
+  useListD2cOrdersQuery,
+  useUpdateD2cNoteMutation,
+  fetchD2cOrdersExport,
+  type D2cExportResult,
+} from './slices/d2c';
 export {
   useGetRegionsQuery,
   useGetShopsQuery,
