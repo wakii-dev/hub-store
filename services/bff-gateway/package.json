@@ -16,11 +16,14 @@
     "dotenv": "^16.4.7",
     "fastify": "^5.2.1",
     "jose": "6.2.10",
+    "kafkajs": "^2.2.4",
+    "pg": "^8.23.0",
     "ts-proto": "2.7.7",
     "tsx": "^4.19.2"
   },
   "devDependencies": {
     "@types/node": "26.4.0",
+    "@types/pg": "^8.23.1",
     "typescript": "5.9.3",
     "vitest": "4.1.11"
   }

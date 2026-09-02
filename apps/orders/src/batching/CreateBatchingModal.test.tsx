@@ -275,7 +275,10 @@ describe("CreateBatchingModal", () => {
       shipperId: "S1",
       deliveryTime: { from: "2026-09-05T01:00:00.000Z", to: "2026-09-05T05:00:00.000Z" },
     });
-    expect(onClose).toHaveBeenCalledTimes(1); // success → modal đóng
+    // SF-6 §3 micro-interaction: "✓ Đã tạo phiếu" 800ms TRƯỚC khi đóng modal.
+    expect(onClose).not.toHaveBeenCalled(); // chưa đóng trong lúc hiển thị "✓"
+    await new Promise((r) => setTimeout(r, 900)); // vượt qua window 800ms
+    expect(onClose).toHaveBeenCalledTimes(1); // success → modal đóng sau micro-interaction
   });
 
   it("backend reject → message lỗi từ details[], modal GIỮ state (không đóng)", async () => {

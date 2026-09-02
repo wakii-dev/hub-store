@@ -20,8 +20,15 @@ import { createServer } from 'node:http';
 type RsaPrivateKey = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 import { buildApp } from '../src/app.js';
 import type { BffConfig } from '../src/config.js';
-import { fulfillmentResponses, batchingResponses, printResponses, deliveryBatchResponses } from './fixtures.js';
+import {
+  fulfillmentResponses,
+  batchingResponses,
+  printResponses,
+  deliveryBatchResponses,
+  techResponses,
+} from './fixtures.js';
 import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
+import { TechServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
 import { BatchingServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/batching';
 import { DeliveryBatchServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/delivery_batch';
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
@@ -110,10 +117,15 @@ type UnaryHandler = (call: ServerUnaryCall<any, any>, cb: sendUnaryData<any>) =>
 function startMockServer(
   definition: Parameters<Server['addService']>[0],
   defaults: Record<string, UnaryHandler>,
+  /** Service phụ cùng server/addr (SF-19: TechService sống cùng fulfillment). */
+  extraServices: Array<{ definition: Parameters<Server['addService']>[0]; defaults: Record<string, UnaryHandler> }> = [],
 ): Promise<MockUpstream> {
   // Delegation indirection — addService copy handler vào internal map, nên
   // override phải swap qua `current` (server vẫn thấy handler mới).
-  const current: Record<string, UnaryHandler> = { ...defaults };
+  const current: Record<string, UnaryHandler> = {
+    ...defaults,
+    ...Object.assign({}, ...extraServices.map((s) => s.defaults)),
+  };
   const delegating: UntypedServiceImplementation = {};
   for (const name of Object.keys(current)) {
     delegating[name] = ((call: ServerUnaryCall<any, any>, cb: sendUnaryData<any>) =>
@@ -121,6 +133,9 @@ function startMockServer(
   }
   const server = new Server();
   server.addService(definition, delegating);
+  for (const extra of extraServices) {
+    server.addService(extra.definition, delegating);
+  }
   return new Promise((resolve, reject) => {
     server.bindAsync('127.0.0.1:0', ServerCredentials.createInsecure(), (err, port) => {
       if (err) {
@@ -145,6 +160,8 @@ export async function signTestToken(role = 'Manager', sub = 'tester'): Promise<s
 
 export interface Harness {
   fulfillment: MockUpstream;
+  /** SF-19 — cùng server/addr với fulfillment (override qua chung current). */
+  tech: MockUpstream;
   batching: MockUpstream;
   deliverybatch: MockUpstream;
   print: MockUpstream;
@@ -167,6 +184,13 @@ const fulfillmentDefaults: Record<string, UnaryHandler> = {
   listDeliveryStaff: (_c, cb) => cb(null, fulfillmentResponses.listDeliveryStaff),
   listDistinctShops: (_c, cb) => cb(null, fulfillmentResponses.listDistinctShops),
   getTimeDelivery: (_c, cb) => cb(null, fulfillmentResponses.getTimeDelivery),
+};
+
+const techDefaults: Record<string, UnaryHandler> = {
+  filterDeliveryOrders: (_c, cb) => cb(null, techResponses.filterDeliveryOrders),
+  filterInstallationOrders: (_c, cb) => cb(null, techResponses.filterInstallationOrders),
+  assignTechnician: (_c, cb) => cb(null, techResponses.assignTechnician),
+  suggestTechnicians: (_c, cb) => cb(null, techResponses.suggestTechnicians),
 };
 
 const batchingDefaults: Record<string, UnaryHandler> = {
@@ -214,6 +238,7 @@ export interface HarnessOptions {
   deadUpstream?: 'fulfillment' | 'batching' | 'deliverybatch' | 'print';
   /** Override handler mặc định lúc boot. */
   fulfillmentHandlers?: Record<string, UnaryHandler>;
+  techHandlers?: Record<string, UnaryHandler>;
   batchingHandlers?: Record<string, UnaryHandler>;
   deliverybatchHandlers?: Record<string, UnaryHandler>;
   printHandlers?: Record<string, UnaryHandler>;
@@ -222,10 +247,27 @@ export interface HarnessOptions {
 export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> {
   const identity = await startTestIdentity();
   currentIdentity = identity;
-  const fulfillment = await startMockServer(FulfillmentServiceService, {
-    ...fulfillmentDefaults,
-    ...opts.fulfillmentHandlers,
-  });
+  const fulfillment = await startMockServer(
+    FulfillmentServiceService,
+    {
+      ...fulfillmentDefaults,
+      ...opts.fulfillmentHandlers,
+    },
+    // SF-19: TechService gRPC sống cùng fulfillment-service → chung mock server
+    // (app.ts tạo tech client từ config.grpc.fulfillment). deadUpstream
+    // 'fulfillment' vì vậy cũng giết tech — khớp topology thật.
+    [
+      {
+        definition: TechServiceService,
+        defaults: { ...techDefaults, ...opts.techHandlers },
+      },
+    ],
+  );
+  const tech: MockUpstream = {
+    addr: fulfillment.addr,
+    close: async () => {}, // đóng chung qua fulfillment.close()
+    override: fulfillment.override,
+  };
   const batching = await startMockServer(BatchingServiceService, {
     ...batchingDefaults,
     ...opts.batchingHandlers,
@@ -269,11 +311,13 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       deadlineMs: opts.deadlineMs ?? 2000,
     },
     devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
+    kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 side-channel — off trong test
   };
   const app = buildApp(config);
 
   return {
     fulfillment,
+    tech,
     batching,
     deliverybatch,
     print,

@@ -54,6 +54,9 @@ export const fulfillmentResources: I18nResources = {
       "expand.productName": "Tên SP",
       "expand.quantity": "SL",
 
+      "empty.title": "Không có phiếu soạn hàng nào",
+      "empty.sub": "Thử xóa bộ lọc hoặc chọn khoảng thời gian khác",
+
       "print.tab.bill": "Biên bản",
       "print.tab.delivery": "Vận đơn",
       "print.tab.handover_receipt": "Bàn giao",
@@ -122,6 +125,9 @@ export const fulfillmentResources: I18nResources = {
       "expand.productCode": "Product code",
       "expand.productName": "Product name",
       "expand.quantity": "Qty",
+
+      "empty.title": "No picking batches found",
+      "empty.sub": "Try clearing filters or picking a different date",
 
       "print.tab.bill": "Receipt note",
       "print.tab.delivery": "Delivery note",

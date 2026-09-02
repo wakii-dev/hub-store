@@ -122,7 +122,7 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
         meta: resp.meta ?? { mock: false },
       });
     } catch (err) {
-      return sendGrpcError(reply, err, svc);
+      return sendGrpcError(reply, err, svc, { preconditionAs422: true });
     }
   });
 
@@ -141,7 +141,7 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
           meta: resp.meta ?? { mock: false },
         });
       } catch (err) {
-        return sendGrpcError(reply, err, svc);
+        return sendGrpcError(reply, err, svc, { preconditionAs422: true });
       }
     },
   );
@@ -169,7 +169,7 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
           meta: resp.meta ?? { mock: false },
         });
       } catch (err) {
-        return sendGrpcError(reply, err, svc);
+        return sendGrpcError(reply, err, svc, { preconditionAs422: true });
       }
     },
   );
@@ -191,7 +191,7 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
           meta: resp.meta ?? { mock: false },
         });
       } catch (err) {
-        return sendGrpcError(reply, err, svc);
+        return sendGrpcError(reply, err, svc, { preconditionAs422: true });
       }
     },
   );
@@ -210,7 +210,7 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
         meta: resp.meta ?? { mock: false },
       });
     } catch (err) {
-      return sendGrpcError(reply, err, svc);
+      return sendGrpcError(reply, err, svc, { preconditionAs422: true });
     }
   });
 
@@ -230,7 +230,7 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
           meta: resp.meta ?? { mock: false },
         });
       } catch (err) {
-        return sendGrpcError(reply, err, svc);
+        return sendGrpcError(reply, err, svc, { preconditionAs422: true });
       }
     },
   );

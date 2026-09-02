@@ -29,6 +29,7 @@ import java.net.URLDecoder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -42,13 +43,15 @@ class ValidationAndMutationTest {
 
     private SeedModels.SeedFile seed;
     private InMemoryOrderRepository repo;
+    private RecordingEventPublisher publisher;
     private FulfillmentServiceImpl service;
 
     @BeforeEach
     void setUp() {
         seed = SeedLoader.load(Path.of("../../api/seed/canonical-seed.json"));
         repo = new InMemoryOrderRepository(seed);
-        service = new FulfillmentServiceImpl(repo);
+        publisher = new RecordingEventPublisher();
+        service = new FulfillmentServiceImpl(repo, publisher);
     }
 
     // ---------------- helpers ----------------
@@ -161,6 +164,56 @@ class ValidationAndMutationTest {
                 .build(), obs);
         assertThat(obs.error).isNull();
         return obs.values.get(0);
+    }
+
+    // ---------------- SF-27 — Kafka side-channel publish ----------------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void mutatePublishesOrderEventsByTarget() {
+        SeedModels.OrderSeed order = aNotPreparedOrder();
+
+        // target 1 (PREPARING) → KHÔNG publish (đủ bởi batch.created phía Go).
+        mutate(List.of(order.fulfillCode()), BatchStatus.BATCH_STATUS_PREPARING);
+        assertThat(publisher.events).isEmpty();
+
+        // target 0 (hủy) → order.cancelled kèm reason.
+        CollectingObserver<MutateOrderStatusResponse> obs = new CollectingObserver<>();
+        service.mutateOrderStatus(MutateOrderStatusRequest.newBuilder()
+                .addFulfillCodes(order.fulfillCode())
+                .setTargetBatchStatus(BatchStatus.BATCH_STATUS_NOT_PREPARED)
+                .setReason("lỗi weights")
+                .build(), obs);
+        assertThat(obs.error).isNull();
+        assertThat(publisher.events).hasSize(1);
+        RecordingEventPublisher.Event ev = publisher.events.get(0);
+        assertThat(ev.type()).isEqualTo("order.cancelled");
+        assertThat(ev.key()).isEqualTo(order.fulfillCode());
+        assertThat(((Map<String, Object>) ev.payload()).get("reason")).isEqualTo("lỗi weights");
+
+        // target 2 (hoàn tất soạn) → order.completed.
+        publisher.events.clear();
+        service.mutateOrderStatus(MutateOrderStatusRequest.newBuilder()
+                .addFulfillCodes(order.fulfillCode())
+                .setTargetBatchStatus(BatchStatus.BATCH_STATUS_PREPARED)
+                .build(), new CollectingObserver<>());
+        assertThat(publisher.events).hasSize(1);
+        assertThat(publisher.events.get(0).type()).isEqualTo("order.completed");
+        assertThat(publisher.events.get(0).key()).isEqualTo(order.fulfillCode());
+    }
+
+    @Test
+    void assignShopHubPublishesOrderAssigned() {
+        SeedModels.OrderSeed order = aNotPreparedOrder();
+        CollectingObserver<AssignShopHubResponse> obs = new CollectingObserver<>();
+        service.assignShopHub(AssignShopHubRequest.newBuilder()
+                .setFulfillCode(order.fulfillCode()).setTargetShopCode("30201").build(), obs);
+        assertThat(obs.error).isNull();
+        assertThat(publisher.events).hasSize(1);
+        RecordingEventPublisher.Event ev = publisher.events.get(0);
+        assertThat(ev.type()).isEqualTo("order.assigned");
+        assertThat(ev.key()).isEqualTo(order.fulfillCode());
+        assertThat(ev.payload().toString()).contains("targetShop");
     }
 
     // ---------------- Rule 2 — chuyển kho ----------------
