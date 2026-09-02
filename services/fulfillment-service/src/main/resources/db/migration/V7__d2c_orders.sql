@@ -1,7 +1,8 @@
 -- SF-18 (FI-263): D2C/Dropship orders.
--- Version 5 per FI-245 bracket contract (SF-7=V2, SF-14=V3, SF-17=V4 owned by sibling branches).
--- Flyway gap-tolerant; if a sibling merges V2-V4 later onto a DB that already applied V5,
--- set flyway.outOfOrder=true for that env or recreate dev DB.
+-- Renumbered V5 -> V7 at convergence: actual sibling claims are
+--   V2=sf-13 intake, V4=sf-17 area_staff, V5=sf-7 activity_log, V6=sf-19 tech_service.
+-- V7 = next free version. Flyway gap-tolerant; lower versions merging later onto
+-- DBs that already applied V7 need flyway.outOfOrder=true or a recreated dev DB.
 CREATE TABLE d2c_orders (
   id                BIGSERIAL PRIMARY KEY,
   order_code        VARCHAR(64)  NOT NULL UNIQUE,

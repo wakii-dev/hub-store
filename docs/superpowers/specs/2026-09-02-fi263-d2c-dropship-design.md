@@ -10,7 +10,7 @@ Hệ thống gốc có màn D2C/Dropship theo dõi đơn đẩy từ sàn D2C sa
 ## 2. Scope
 
 **In:**
-1. Flyway `V5__d2c_orders.sql` trong DB `fulfillment` (số V5 theo bracket contract: SF-7=V2, SF-14=V3, SF-17=V4 — Flyway gap-tolerant, ghi policy trong comment file).
+1. Flyway `V7__d2c_orders.sql` trong DB `fulfillment` (**renumber V5→V7 at convergence** — sibling claims thực tế: V2=sf-13 intake, V4=sf-17, V5=sf-7 activity_log, V6=sf-19; V7 = next free — Flyway gap-tolerant, policy trong comment file).
 2. Proto additive: RPC `FilterD2cOrders` + `UpdateD2cOrderNote` (message mới, KHÔNG đổi message cũ) + buf regen ts/java/go.
 3. fulfillment-service: `D2cOrderRepository` (interface + Postgres impl theo pattern OrderRepository) + gRPC service impl.
 4. BFF: `src/routes/d2c.ts` — `POST /d2c-orders/filter` (envelope paginated), `PUT /d2c-orders/:id/note`, `GET /d2c-orders/export` (CSV BOM stream, guard ≤31 ngày).
@@ -28,7 +28,7 @@ Hệ thống gốc có màn D2C/Dropship theo dõi đơn đẩy từ sàn D2C sa
 
 ## 3. Design
 
-### 3.1 Schema — `d2c_orders` (DB fulfillment, V5)
+### 3.1 Schema — `d2c_orders` (DB fulfillment, V7)
 
 ```sql
 CREATE TABLE d2c_orders (
@@ -95,7 +95,7 @@ SQL pattern y hệt PostgresOrderRepository.filter: 1 statement `COUNT(*) OVER()
 ### 3.6 Seed
 
 - `api/seed/d2c-sample.json`: ~12 dòng phủ mọi chiều lọc (≥3 carrier, ≥3 shop, 2 NV xuất, ≥2 ngành hàng/loại SP, status đủ 4 giá trị, isDebtSplitting true/false, push_time trải nhiều khung giờ/ngày).
-- `scripts/seed-db.sh`: thêm section D2C — dùng `SEED_D2C_JSON` env (default `api/seed/d2c-sample.json`), emptiness-gate như section orders, insert sau khi V5 đã apply.
+- `scripts/seed-db.sh`: thêm section D2C — dùng `SEED_D2C_JSON` env (default `api/seed/d2c-sample.json`), emptiness-gate như section orders, insert sau khi V7 đã apply.
 
 ## 4. ACCEPTANCE → verification mapping
 
@@ -116,7 +116,7 @@ SQL pattern y hệt PostgresOrderRepository.filter: 1 statement `COUNT(*) OVER()
 
 ## 6. Risks
 
-1. V4-skip khi SF-17 merge sau (dev DB recreate nên thấp; policy comment trong V5 file; **verify số free-version khi implement** — recheck migration dir trước khi commit V5).
+1. V4-skip khi SF-17 merge sau (dev DB recreate nên thấp; policy comment trong V5 file; **verify số free-version khi implement** — ĐÃ VERIFY: V7 (collision V5 thật sự — SF-7 chiếm activity_log)).
 2. Proto regen chạm gen/ của 3 ngôn ngữ — chỉ additive; java gencode wired qua build-helper.
 3. Slot filter SQL (time-of-day): khung giờ là khái niệm nghiệp vụ VN → compare `push_time AT TIME ZONE 'Asia/Ho_Chi_Minh'` (EXTRACT hour/minute) — seed ghi timestamp có offset +07.
 4. Seed script section mới phải fail-loud khi bảng chưa có (mirror contract hiện có); `api/seed/validate.py` chỉ validate canonical — d2c-sample.json ngoài scope của nó (note trong README nếu cần).
