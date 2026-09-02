@@ -1,6 +1,9 @@
 # Overlay minikube — glue SF-4: tag images dev (khớp scripts/k8s-build-images.sh) +
 # replica=1 mỗi service. SF-1 tạo skeleton; SF-5 thêm tune.
 # KHÔNG dead-config: NodePort fallback là DOC ở SF-5, không config ở đây.
+# CỐ TÌNH KHÔNG có commonLabels/labels: label transformer includeTemplates mutate
+# template/volumeClaimTemplates của StatefulSet + Job SF-1 ĐÃ apply → kubectl apply
+# re-run fail vĩnh viễn (spec forbidden/immutable) — phá ACCEPTANCE idempotent.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
@@ -30,9 +33,3 @@ replicas:
     count: 1
   - name: web
     count: 1
-
-labels:
-  - pairs:
-      app.kubernetes.io/part-of: hub-store
-    includeSelectors: false
-    includeTemplates: true
