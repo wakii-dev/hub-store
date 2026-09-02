@@ -35,7 +35,7 @@ const BFF = "http://localhost:8080";
 const SHOP = "30203";
 const SHIPPER = "STAFF-004"; // seed deliveryStaff shop 30203
 const LIMIT = 150000; // fee_limits seed 30201..30205
-const STORAGE_STATE = path.join(__dirname, ".auth", "coordinator.json");
+const STORAGE_STATE = path.resolve(__dirname, "..", ".auth", "coordinator.json");
 
 /** mockFleet (internal/ahamove/mock.go) — bảng giá deterministic VND/km. */
 const FLEET = [
