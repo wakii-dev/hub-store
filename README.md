@@ -89,6 +89,27 @@ cd e2e && pnpm exec playwright test
 - Python ≥ 3.11 (print-service)
 - protoc/buf — KHÔNG cần khi chạy: stubs đã generate sẵn trong `api/proto/gen/` (chỉ cần khi đổi `api/proto/*.proto`)
 
+## K8s / minikube deploy — requirements + preflight
+
+Deploy lên Kubernetes local (minikube) cần:
+
+- **minikube** ≥ 1.30 — `brew install minikube`
+- **kubectl** — `brew install kubectl`
+- **Driver**: Docker Desktop hoặc OrbStack (đang chạy)
+- **Resources**: ≥ 6GB RAM, 4 CPU cho VM minikube — stack có 3 JVM services + Keycloak + Kafka, default 2GB sẽ OOM:
+  ```bash
+  minikube start --memory=6g --cpus=4
+  ```
+
+Check trước khi deploy:
+
+```bash
+bash scripts/k8s-preflight.sh
+```
+
+Script báo driver + resource + addon ingress; thoát non-zero khi thiếu gì đó (kèm hướng dẫn fix).
+Lưu ý: toàn bộ secrets trong `k8s/` là DEV-ONLY (giá trị giả lập) — không dùng ở môi trường thật.
+
 ## Roles dev stub
 
 Login page cho chọn 1 trong 3 role (JWT giả, OIDC production): **Coordinator** (D1+D2+D3), **WarehouseOps** (D2+D3), **Manager** (tất cả).
