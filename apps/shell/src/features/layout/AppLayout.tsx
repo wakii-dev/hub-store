@@ -3,6 +3,7 @@ import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button, Tooltip } from 'antd';
 import {
+  DashboardOutlined,
   ProfileOutlined,
   SolutionOutlined,
   PrinterOutlined,
@@ -18,6 +19,7 @@ const HEADER_HEIGHT = 55;
 
 /** Icon map theo path — data route/permission nằm ở src/nav.ts (shared với LoginPage). */
 const NAV_ICONS: Record<string, ReactNode> = {
+  '/hub-store-order/dashboard': <DashboardOutlined />,
   '/hub-store-order/order': <ProfileOutlined />,
   '/hub-store-order/batch': <SolutionOutlined />,
   '/hub-store-order/batch/print': <PrinterOutlined />,

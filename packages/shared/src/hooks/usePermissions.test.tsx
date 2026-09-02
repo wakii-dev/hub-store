@@ -17,9 +17,9 @@ afterEach(() => {
 
 /** Matrix kỳ vọng — transcribe TRỰC TIẾP từ REQUIREMENTS §2. */
 const EXPECTED: Record<Role, Record<Permission, boolean>> = {
-  Coordinator: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true },
-  WarehouseOps: { 'orders.view': false, 'fulfillment.view': true, 'fulfillment.print': true },
-  Manager: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true },
+  Coordinator: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': false },
+  WarehouseOps: { 'orders.view': false, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': false },
+  Manager: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': true },
 };
 
 describe('usePermissions — role matrix §2 (exhaustive)', () => {

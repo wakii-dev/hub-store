@@ -8,6 +8,7 @@ export const shellResources: I18nResources = {
   vi: {
     shell: {
       "header.title": "Hub Store",
+      "nav.dashboard": "Tổng quan",
       "nav.orders": "Đơn hàng",
       "nav.batch": "Phiếu soạn",
       "nav.print": "In phiếu",
@@ -41,6 +42,7 @@ export const shellResources: I18nResources = {
   en: {
     shell: {
       "header.title": "Hub Store",
+      "nav.dashboard": "Dashboard",
       "nav.orders": "Orders",
       "nav.batch": "Picking batches",
       "nav.print": "Print documents",

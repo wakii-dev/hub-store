@@ -286,7 +286,7 @@ SVG bar chart hand-built (KHÔNG lib): nhận `data: {date,count}[]`, render `<s
 - Modify: `apps/shell/src/i18n.ts` — vi `"nav.dashboard": "Tổng quan"`, en `"nav.dashboard": "Dashboard"` (cả 2 khối ngôn ngữ).
 - Modify: `apps/shell/src/App.tsx` — lazy `const DashboardPage = lazy(() => import("orders/DashboardPage"));` + Route `/hub-store-order/dashboard` RequirePermission `dashboard.view` + RemoteBoundary (đặt TRƯỚC route order).
 
-- [ ] **Step 1: Áp diffs trên** (đọc từng file trước khi sửa).
+- [x] **Step 1: Áp diffs trên** (đọc từng file trước khi sửa).
 - [ ] **Step 2: Verify** — shell tsc build pass; chạy e2e existing 02-role-matrix (KHÔNG sửa spec) — Coordinator/WarehouseOps asserts vẫn xanh vì perm mới chỉ Manager.
 - [ ] **Step 3: Commit** — `feat(fi245-sf9): Manager default route /dashboard — perm dashboard.view + nav entry`.
 

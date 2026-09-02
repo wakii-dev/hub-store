@@ -13,21 +13,25 @@ export interface NavRoute {
 }
 
 export const NAV_ROUTES: NavRoute[] = [
+  { path: '/hub-store-order/dashboard', labelKey: 'nav.dashboard', permission: 'dashboard.view' },
   { path: '/hub-store-order/order', labelKey: 'nav.orders', permission: 'orders.view' },
   { path: '/hub-store-order/batch', labelKey: 'nav.batch', permission: 'fulfillment.view' },
   { path: '/hub-store-order/batch/print', labelKey: 'nav.print', permission: 'fulfillment.print' },
 ];
+
+// Fallback theo permission (KHÔNG hard-code index — mảng có thể thêm entry đầu).
+const FALLBACK_ROUTE = NAV_ROUTES.find((item) => item.permission === 'fulfillment.print') ?? NAV_ROUTES[0];
 
 /** Path đầu tiên mà role này được phép xem (dùng sau login). */
 export function firstPathForRole(role: Role): string {
   const perms = PERMISSION_MATRIX[role] as readonly Permission[];
   const first = NAV_ROUTES.find((item) => perms.includes(item.permission));
   // Mọi role đều có fulfillment.print → không bao giờ rơi vào đây.
-  return first?.path ?? NAV_ROUTES[2].path;
+  return first?.path ?? FALLBACK_ROUTE.path;
 }
 
 /** Path đầu tiên mà predicate can() cho qua (dùng khi role switch). */
 export function firstPermittedPath(can: (p: Permission) => boolean): string {
   const first = NAV_ROUTES.find((item) => can(item.permission));
-  return first?.path ?? NAV_ROUTES[2].path;
+  return first?.path ?? FALLBACK_ROUTE.path;
 }
