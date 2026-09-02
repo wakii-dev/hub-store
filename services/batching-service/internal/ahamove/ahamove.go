@@ -91,6 +91,9 @@ type Client interface {
 	// "FAILED", contract có chủ đích cho e2e/SF-16); real bỏ qua (timeline
 	// do provider lưu).
 	Detail(ctx context.Context, carrierBookingID string, bookedAt time.Time, cancelled bool, stopAddresses []string) (status string, events []TrackEvent, err error)
+	// IsMock — true khi adapter chạy mock mode (ResponseMeta.mock của mọi
+	// RPC DeliveryBatchService, spec §3.6).
+	IsMock() bool
 }
 
 // NewFromEnv — chọn adapter lúc boot: AHAMOVE_MODE=real + đủ 2 key → real;

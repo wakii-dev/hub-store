@@ -197,3 +197,6 @@ func hasFailedMarker(stopAddresses []string) bool {
 	}
 	return false
 }
+
+// IsMock — luôn true (meta.mock=true cho mọi response, spec §3.6).
+func (m *MockClient) IsMock() bool { return true }

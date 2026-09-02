@@ -199,3 +199,6 @@ func (c *RealClient) do(ctx context.Context, method, path string, body any, out 
 	}
 	return nil
 }
+
+// IsMock — luôn false (real mode → meta.mock=false, spec §3.6).
+func (c *RealClient) IsMock() bool { return false }

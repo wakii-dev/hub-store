@@ -29,6 +29,7 @@ import (
 	"hubstore/batching-service/internal/store"
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
@@ -81,12 +82,24 @@ func main() {
 	}
 
 	// NVC adapter (SF-15, dual-mode) — mock mặc định / real khi AHAMOVE_MODE=real
-	// + đủ key. Boot chỉ chọn + log mode; DeliveryBatchService (task T4) sẽ
-	// consume adapter này khi register lên gRPC server.
-	_ = ahamove.NewFromEnv()
+	// + đủ key. Boot chọn + log mode; mọi response mock mang meta.mock=true.
+	nvc := ahamove.NewFromEnv()
+
+	// Pool riêng cho DeliveryBatch V2 schema (plannings/bookings/...) —
+	// PostgresStore đóng pool của nó khi Close; pool thứ 2 cùng DSN là cách
+	// sạch nhất mà không đụng logic store cũ (SF-3).
+	nvcPool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		log.Fatalf("batching-service: delivery-batch DB pool: %v", err)
+	}
+	defer nvcPool.Close()
+	if err := nvcPool.Ping(ctx); err != nil {
+		log.Fatalf("batching-service: delivery-batch DB ping: %v", err)
+	}
 
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(server.RoleUnaryInterceptor))
 	batchingv1.RegisterBatchingServiceServer(grpcServer, server.New(st, fc))
+	batchingv1.RegisterDeliveryBatchServiceServer(grpcServer, server.NewDeliveryBatch(nvcPool, nvc))
 	reflection.Register(grpcServer)
 
 	log.Printf("batching-service: listening on :%s", port)
