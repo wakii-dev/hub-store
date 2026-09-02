@@ -57,8 +57,8 @@ fi
 
 # 5. addon ingress (cần ở SF-4 — báo trước, không fail)
 if command -v minikube >/dev/null 2>&1 && echo "$PROFILES" | grep -q minikube; then
-  ADDONS="$(minikube addons list 2>/dev/null || true)"
-  if echo "$ADDONS" | grep -E '^\| *ingress' | grep -q enabled; then
+  ADDONS="$(minikube addons list 2>/dev/null | sed $'s/\x1b\\[[0-9;]*m//g' || true)"
+  if echo "$ADDONS" | grep '│ *ingress *│' | grep -q enabled; then
     ok "addon ingress: enabled"
   else
     echo "⚠ addon ingress chưa bật (SF-4 cần): minikube addons enable ingress"
