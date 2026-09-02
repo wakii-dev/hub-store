@@ -30,7 +30,7 @@
 
 **CONTRACT (P0):** base kustomization pre-include TẤT CẢ dirs; SF-3/SF-4 chỉ thay NỘI DUNG dir của mình, KHÔNG BAO GIỜ sửa base kustomization.
 
-- [ ] **Step 1: Viết base kustomization**
+- [x] **Step 1: Viết base kustomization**
 
 `k8s/base/kustomization.yaml`:
 ```yaml
@@ -64,7 +64,7 @@ generatorOptions:
   disableNameSuffixHash: true
 ```
 
-- [ ] **Step 2: Tạo 6 placeholder kustomization.yaml**
+- [x] **Step 2: Tạo 6 placeholder kustomization.yaml**
 
 Mỗi file dưới đây — chỉ đổi comment đầu (ai sẽ thay):
 `k8s/base/keycloak/kustomization.yaml` (SF-3 thay), `k8s/base/apps/{fulfillment,batching,print,bff,web}/kustomization.yaml` (SF-4 thay):
@@ -79,7 +79,7 @@ namespace: hub-store
 resources: []
 ```
 
-- [ ] **Step 3: Copy seed file vào k8s/base/seed/**
+- [x] **Step 3: Copy seed file vào k8s/base/seed/**
 
 ```bash
 mkdir -p k8s/base/seed
@@ -87,7 +87,7 @@ cp api/seed/canonical-seed.json k8s/base/seed/canonical-seed.json
 ```
 Đầu file copy thêm dòng chú thích? JSON không cho comment — ghi chú provenance trong kustomization đã làm ở Step 1. Đủ.
 
-- [ ] **Step 4: Overlay minikube skeleton**
+- [x] **Step 4: Overlay minikube skeleton**
 
 `k8s/overlays/minikube/kustomization.yaml`:
 ```yaml
@@ -99,11 +99,11 @@ resources:
   - ../../base
 ```
 
-- [ ] **Step 5: Verify build sạch (chưa có postgres/kafka dir — tạm comment hoặc làm Task 2 trước khi build)**
+- [x] **Step 5: Verify build sạch (chưa có postgres/kafka dir — tạm comment hoặc làm Task 2 trước khi build)**
 
 Lưu ý: build chỉ sạch sau khi có dir `postgres/` + `kafka/` (Task 4+). Nếu làm task này một mình, verify bằng `kubectl kustomize k8s/overlays/minikube` SAU Task 5. Commit trước, verify build ở Task 5 Step 4.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add k8s/
@@ -118,7 +118,7 @@ git commit -m "feat(sf1): kustomize base skeleton + placeholder dirs + overlay m
 - Create: `k8s/base/secrets.yaml`
 - Modify: `k8s/base/kustomization.yaml` (thêm `- ./secrets.yaml` vào resources)
 
-- [ ] **Step 1: Viết secrets**
+- [x] **Step 1: Viết secrets**
 
 `k8s/base/secrets.yaml`:
 ```yaml
@@ -154,9 +154,9 @@ stringData:
   KEYCLOAK_ADMIN_PASSWORD: "admin-dev-only"
 ```
 
-- [ ] **Step 2: Thêm `- ./secrets.yaml` vào resources của base kustomization** (trước ./postgres).
+- [x] **Step 2: Thêm `- ./secrets.yaml` vào resources của base kustomization** (trước ./postgres).
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add k8s/base/secrets.yaml k8s/base/kustomization.yaml
@@ -171,7 +171,7 @@ git commit -m "feat(sf1): dev-only secrets (postgres-credentials, jwt-dev-secret
 - Create: `scripts/k8s-preflight.sh`
 - Modify: `README.md` (chỉ thêm section "K8s / minikube deploy — requirements + preflight")
 
-- [ ] **Step 1: Viết preflight script**
+- [x] **Step 1: Viết preflight script**
 
 `scripts/k8s-preflight.sh`:
 ```bash
@@ -245,14 +245,14 @@ fi
 echo "=== PREFLIGHT OK ==="
 ```
 
-- [ ] **Step 2: chmod +x + shellcheck nếu có**
+- [x] **Step 2: chmod +x + shellcheck nếu có**
 
 ```bash
 chmod +x scripts/k8s-preflight.sh
 command -v shellcheck >/dev/null && shellcheck scripts/k8s-preflight.sh
 ```
 
-- [ ] **Step 3: README section**
+- [x] **Step 3: README section**
 
 Thêm vào README.md (đặt sau section Quick start / local dev hiện có — KHÔNG đụng phần khác):
 ```markdown
@@ -278,14 +278,14 @@ Script báo driver + resource + addon ingress; thoát non-zero khi thiếu gì �
 Lưu ý: toàn bộ secrets trong `k8s/` là DEV-ONLY (giá trị giả lập) — không dùng ở môi trường thật.
 ```
 
-- [ ] **Step 4: Test fail-loud path (stub PATH)**
+- [x] **Step 4: Test fail-loud path (stub PATH)**
 
 ```bash
 PATH=/usr/bin:/bin /usr/bin/env -i HOME=$HOME bash -c 'PATH=/nonexistent bash scripts/k8s-preflight.sh'; echo "exit=$?"
 ```
 Expected: thông báo "minikube chưa cài..." + exit=1. (Nếu env -i làm break phần khác, test thay thế: mock `command -v minikube` fail bằng PATH rỗng.)
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add scripts/k8s-preflight.sh README.md
@@ -302,7 +302,7 @@ git commit -m "feat(sf1): k8s preflight script + README requirements section"
 - Create: `k8s/base/postgres/service.yaml`
 - Create: `k8s/base/postgres/initdb-configmap.yaml`
 
-- [ ] **Step 1: initdb ConfigMap (3 DB, idempotent)**
+- [x] **Step 1: initdb ConfigMap (3 DB, idempotent)**
 
 `k8s/base/postgres/initdb-configmap.yaml`:
 ```yaml
@@ -327,7 +327,7 @@ data:
     EOSQL
 ```
 
-- [ ] **Step 2: StatefulSet (PVC qua volumeClaimTemplates, pg_isready probes)**
+- [x] **Step 2: StatefulSet (PVC qua volumeClaimTemplates, pg_isready probes)**
 
 `k8s/base/postgres/statefulset.yaml`:
 ```yaml
@@ -395,7 +395,7 @@ spec:
             storage: 5Gi
 ```
 
-- [ ] **Step 3: Service**
+- [x] **Step 3: Service**
 
 `k8s/base/postgres/service.yaml`:
 ```yaml
@@ -413,7 +413,7 @@ spec:
       name: pg
 ```
 
-- [ ] **Step 4: kustomization + build verify**
+- [x] **Step 4: kustomization + build verify**
 
 `k8s/base/postgres/kustomization.yaml`:
 ```yaml
@@ -434,7 +434,7 @@ kubectl kustomize k8s/base/postgres
 ```
 Expected: yaml render, namespace hub-store, không lỗi.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add k8s/base/postgres/
@@ -451,7 +451,7 @@ git commit -m "feat(sf1): postgres StatefulSet 16 (PVC 5Gi, initdb 3 DB fulfillm
 - Create: `k8s/base/kafka/services.yaml`
 - Create: `k8s/base/kafka/topic-bootstrap.yaml`
 
-- [ ] **Step 1: StatefulSet KRaft combined mode**
+- [x] **Step 1: StatefulSet KRaft combined mode**
 
 `k8s/base/kafka/statefulset.yaml`:
 ```yaml
@@ -553,7 +553,7 @@ spec:
             storage: 5Gi
 ```
 
-- [ ] **Step 2: Services (client + headless)**
+- [x] **Step 2: Services (client + headless)**
 
 `k8s/base/kafka/services.yaml`:
 ```yaml
@@ -586,7 +586,7 @@ spec:
       name: controller
 ```
 
-- [ ] **Step 3: Topic bootstrap Job (CONTRACT orders.events)**
+- [x] **Step 3: Topic bootstrap Job (CONTRACT orders.events)**
 
 `k8s/base/kafka/topic-bootstrap.yaml`:
 ```yaml
@@ -621,7 +621,7 @@ spec:
             - "1"
 ```
 
-- [ ] **Step 4: kustomization**
+- [x] **Step 4: kustomization**
 
 `k8s/base/kafka/kustomization.yaml`:
 ```yaml
@@ -636,14 +636,14 @@ resources:
   - topic-bootstrap.yaml
 ```
 
-- [ ] **Step 5: BUILD VERIFY — composition contract end-to-end (dry run)**
+- [x] **Step 5: BUILD VERIFY — composition contract end-to-end (dry run)**
 
 ```bash
 kubectl kustomize k8s/overlays/minikube
 ```
 Expected: render sạch TẤT CẢ (secrets, postgres, kafka, placeholders 0-resource, ConfigMap canonical-seed KHÔNG hash suffix), namespace hub-store mọi resource, không lỗi.
 
-- [ ] **Step 6: Commit**
+- [x] **Step 6: Commit**
 
 ```bash
 git add k8s/base/kafka/
@@ -656,7 +656,7 @@ git commit -m "feat(sf1): kafka KRaft single-broker StatefulSet (apache/kafka:3.
 
 **Máy này chưa có minikube — install qua brew (đã nêu Phase 0).**
 
-- [ ] **Step 1: Install + start**
+- [x] **Step 1: Install + start**
 
 ```bash
 brew install minikube kubernetes-cli
@@ -664,7 +664,7 @@ minikube start --memory=6g --cpus=4 --driver=docker
 kubectl config current-context   # expected: minikube
 ```
 
-- [ ] **Step 2: Apply + đợi postgres healthy**
+- [x] **Step 2: Apply + đợi postgres healthy**
 
 ```bash
 kubectl apply -k k8s/overlays/minikube
@@ -673,14 +673,14 @@ kubectl -n hub-store get pods
 ```
 Expected: postgres-0 Running 1/1 Ready.
 
-- [ ] **Step 3: Bằng chứng 3 DB (psql thật)**
+- [x] **Step 3: Bằng chứng 3 DB (psql thật)**
 
 ```bash
 kubectl -n hub-store exec postgres-0 -- psql -U hubstore -l
 ```
 Expected: danh sách chứa `fulfillment`, `batching`, `keycloak`.
 
-- [ ] **Step 4: Bằng chứng PVC mount survive restart**
+- [x] **Step 4: Bằng chứng PVC mount survive restart**
 
 ```bash
 kubectl -n hub-store rollout restart statefulset/postgres
@@ -689,13 +689,13 @@ kubectl -n hub-store exec postgres-0 -- psql -U hubstore -l | grep -c -E 'fulfil
 ```
 Expected: 3 (data + 3 DB sống qua restart — PVC mount hoạt động).
 
-- [ ] **Step 5: Không commit (verify-only task)** — nếu có fix manifest phát sinh, commit fix riêng `fix(sf1): ...`.
+- [x] **Step 5: Không commit (verify-only task)** — nếu có fix manifest phát sinh, commit fix riêng `fix(sf1): ...`.
 
 ---
 
 ### Task 7: KAFKA VERIFY (broker healthy + advertised listener + topic)
 
-- [ ] **Step 1: kafka-0 healthy**
+- [x] **Step 1: kafka-0 healthy**
 
 ```bash
 kubectl -n hub-store rollout status statefulset/kafka --timeout=300s
@@ -703,7 +703,7 @@ kubectl -n hub-store get pods -l app=kafka
 ```
 Expected: kafka-0 Running Ready.
 
-- [ ] **Step 2: Topic orders.events tồn tại (kafka-topics qua kubectl run)**
+- [x] **Step 2: Topic orders.events tồn tại (kafka-topics qua kubectl run)**
 
 ```bash
 kubectl -n hub-store run kcheck --rm -i --restart=Never --image apache/kafka:3.9.0 -- \
@@ -711,7 +711,7 @@ kubectl -n hub-store run kcheck --rm -i --restart=Never --image apache/kafka:3.9
 ```
 Expected: stdout chứa `orders.events`. (KHÔNG qua pod DNS — qua Service DNS `kafka:9092`.)
 
-- [ ] **Step 3: Advertised listener contract — metadata trả `kafka:9092`**
+- [x] **Step 3: Advertised listener contract — metadata trả `kafka:9092`**
 
 ```bash
 kubectl -n hub-store run kmeta --rm -i --restart=Never --image apache/kafka:3.9.0 -- \
@@ -719,7 +719,7 @@ kubectl -n hub-store run kmeta --rm -i --restart=Never --image apache/kafka:3.9.
 ```
 Expected: dòng broker `kafka:9092 (id: 1 ...)` — KHÔNG phải pod DNS (`kafka-0.kafka-headless...`). Sai → sửa KAFKA_ADVERTISED_LISTENERS rồi re-verify (đây là lỗi kinh điển single-broker-on-k8s).
 
-- [ ] **Step 4: Không commit (verify-only)**
+- [x] **Step 4: Không commit (verify-only)**
 
 ---
 
@@ -728,7 +728,7 @@ Expected: dòng broker `kafka:9092 (id: 1 ...)` — KHÔNG phải pod DNS (`kafk
 **Files:**
 - Create: `scripts/k8s-build-images.sh`
 
-- [ ] **Step 1: Script**
+- [x] **Step 1: Script**
 
 `scripts/k8s-build-images.sh`:
 ```bash
@@ -759,21 +759,21 @@ echo "==> images in minikube (tag ${IMAGE_TAG}):"
 minikube image ls | grep "hub-store/" || { echo "✗ images chưa thấy trong minikube"; exit 1; }
 ```
 
-- [ ] **Step 2: chmod +x**
+- [x] **Step 2: chmod +x**
 
 ```bash
 chmod +x scripts/k8s-build-images.sh
 command -v shellcheck >/dev/null && shellcheck scripts/k8s-build-images.sh
 ```
 
-- [ ] **Step 3: CHẠY THẬT (dài — 5 image build trong minikube)**
+- [x] **Step 3: CHẠY THẬT (dài — 5 image build trong minikube)**
 
 ```bash
 bash scripts/k8s-build-images.sh
 ```
 Expected: 5 dòng `hub-store/*:dev` từ `minikube image ls`.
 
-- [ ] **Step 4: Commit**
+- [x] **Step 4: Commit**
 
 ```bash
 git add scripts/k8s-build-images.sh
@@ -784,7 +784,7 @@ git commit -m "feat(sf1): k8s-build-images.sh — single entry point, minikube i
 
 ### Task 9: Acceptance sweep + audit evidence
 
-- [ ] **Step 1: Chạy lại từng dòng ACCEPTANCE của context pack, lưu output vào `/tmp/story/fi272/sf1-verify.md`**
+- [x] **Step 1: Chạy lại từng dòng ACCEPTANCE của context pack, lưu output vào `/tmp/story/fi272/sf1-verify.md`**
 
 - preflight exit 0 + output driver/resource/addon
 - `minikube image ls | grep hub-store/` → 5 images
@@ -792,9 +792,9 @@ git commit -m "feat(sf1): k8s-build-images.sh — single entry point, minikube i
 - postgres pod + 3 DB + survive restart
 - kafka-0 + orders.events + advertised `kafka:9092`
 
-- [ ] **Step 2: Chạy lại preflight fail-loud path (stub PATH) — bằng chứng non-zero**
+- [x] **Step 2: Chạy lại preflight fail-loud path (stub PATH) — bằng chứng non-zero**
 
-- [ ] **Step 3: Không commit — evidence phục vụ verify Phase 5 + code review**
+- [x] **Step 3: Không commit — evidence phục vụ verify Phase 5 + code review**
 
 ---
 
