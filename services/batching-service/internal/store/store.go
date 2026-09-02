@@ -402,7 +402,14 @@ func tsOrNow(s string) time.Time {
 
 // ParseTime parses an ISO-8601 datetime from the contract; zero time on
 // failure (callers decide whether that is fatal).
+// Convergence fix SF-5: Java OffsetDateTime.toString() bỏ giây khi =0
+// ("2026-09-03T01:00Z") — không khớp layout RFC3339 (yêu cầu giây) →
+// hydration batch_items mất delivery_time (NULL → D2 render NaN).
+// Thử thêm layout không-giây trước khi bỏ.
 func ParseTime(s string) time.Time {
-	t, _ := time.Parse(time.RFC3339, s)
+	if t, err := time.Parse(time.RFC3339, s); err == nil {
+		return t
+	}
+	t, _ := time.Parse("2006-01-02T15:04Z07:00", s)
 	return t
 }
