@@ -63,7 +63,7 @@ kafka-ui:                    # dev convenience only
   depends_on: { kafka: { condition: service_healthy } }
 ```
 
-`docker/kafka/init-topics.sh`: loop retry `kafka-topics.sh --create --if-not-exists --topic <t> --partitions 1 --replication-factor 1 --bootstrap-server kafka:29092` cho `order-events`, `batch-events`, `notification-events`; exit 0 khi cả 3 thấy.
+`docker/kafka/init-topics.sh`: loop retry `/opt/kafka/bin/kafka-topics.sh --create --if-not-exists --topic <t> --partitions 1 --replication-factor 1 --bootstrap-server kafka:29092` (đường dẫn TUYỆT ĐỐI — image không đưa bin vào PATH) cho `order-events`, `batch-events`, `notification-events`; exit 0 khi cả 3 thấy.
 
 **Dual-listener rationale:** app chạy TRONG compose (bff/java/go) → `kafka:29092` (advertised `kafka:29092`); app chạy HOST dev (boot-all.sh) → `localhost:9092` (advertised `localhost:9092`). Compose wire `KAFKA_BOOTSTRAP_SERVERS: kafka:29092` cho bff/fulfillment/batching (vô hại khi flag off); host default `.env` = `localhost:9092`.
 
@@ -101,18 +101,19 @@ Chung: publish SAU khi mutation thành công (post-persist); lỗi publish → `
 
 - `pom.xml`: thêm `spring-kafka` (version quản bởi Boot 3.5.5 parent).
 - `application.yml`: `kafka.enabled: ${KAFKA_ENABLED:false}`; `kafka.bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}`.
-- Interface `OrderEventPublisher { void publish(String type, String key, Map<String,Object> payload); }` + 2 bean qua `@ConditionalOnProperty(name="kafka.enabled", havingValue="true")`:
-  - `KafkaEventPublisher` — wrap `KafkaTemplate<String,String>` (JSON string), try/catch log.warn.
-  - `NoopEventPublisher` (`matchIfMissing=true` đường default) — no-op.
-  → flag off: KHÔNG bean kafka nào tạo, Spring context không connect (an toàn dev/E2E cũ).
-- Hook duy nhất tồn tại hôm nay: `FulfillmentServiceImpl.assignShopHub` sau `repo.assignShopHub` thành công → `publish("order.assigned", fulfillCode, {fulfillCode, targetShop:{code,name,address}})`.
-- Các type `order.*` còn lại (cancelled/completed/failed/redelivered/created): contract sẵn — hook thêm khi mutation order-level tương ứng ra đời (SF-13/SF-26/SF-28 sở hữu). Đã ghi design decision lên FI-273 (Phase 0 comment).
+- Interface `OrderEventPublisher { void publish(String type, String key, Map<String,Object> payload); }` + 2 bean:
+  - `KafkaEventPublisher` — `@ConditionalOnProperty(name="kafka.enabled", havingValue="true")` — wrap `KafkaTemplate<String,String>` (JSON string). Producer props BẮT BUỘC (chống block response khi kafka chết/boot mới): `max.block.ms: 2000`, `request.timeout.ms: 2000`, `delivery.timeout.ms: 5000`; send ASYNC (không `.get()`), try/catch log.warn.
+  - `NoopEventPublisher` — `@ConditionalOnProperty(name="kafka.enabled", havingValue="false", matchIfMissing=true)` — no-op. (havingValue="false" + matchIfMissing: phủ CẢ explicit false lẫn unset — else Spring context fail thiếu bean khi .env set false tường minh.)
+- Hooks (post-success):
+  - `assignShopHub` sau `repo.assignShopHub` thành công → `publish("order.assigned", fulfillCode, {fulfillCode, targetShop:{code,name,address}})`.
+  - `mutateOrderStatus` sau khi `repo.mutateBatchStatus` trả kết quả — publish per-order cho MỖI code update thành công, map theo `targetBatchStatus`: target 0 (reset khi hủy batch) → `order.cancelled` `{fulfillCode, reason}`; target 2 (hoàn tất soạn) → `order.completed` `{fulfillCode}`; target 1 (đang soạn, part of create-batch flow) → KHÔNG publish (đủ bởi `batch.created`). Reason lấy từ `request.getReason()` (truyền sẵn từ Go CancelBatch).
+- Các type `order.*` còn lại (failed/redelivered/created): contract sẵn — hook thêm khi mutation order-level tương ứng ra đời (SF-13/SF-26/SF-28 sở hữu).
 
 ### 4b. Go (batching) — `batch-events`
 
 - `go.mod`: `github.com/segmentio/kafka-go v0.4.47` (**verify go.mod của pin này hỗ trợ go 1.19** trước khi add; nếu không — lùi v0.4.46/45).
 - `internal/kafka/publisher.go`: interface `BatchEventPublisher { BatchCreated(ctx, batchCode, itemCount); BatchTransitioned(ctx, batchCode, from, to, reason) }`:
-  - `KafkaPublisher` — `kafka.Writer` (brokers từ env, balancer hash key để per-batchCode ordering), marshal Envelope, try/catch log warn, `WriteMessages` với context timeout 2s (không treo response).
+  - `KafkaPublisher` — `kafka.Writer` SINGLETON (tạo 1 lần trong main.go, không per-publish), brokers từ env, balancer hash key để per-batchCode ordering, marshal Envelope, try/catch log warn, `WriteMessages` với context timeout 2s (không treo response).
   - `NoopPublisher` — khi `KAFKA_ENABLED` không phải `1`/`true`.
   - Tạo trong `cmd/server/main.go` theo pattern `env()` hiện có (`KAFKA_ENABLED`, `KAFKA_BOOTSTRAP_SERVERS` default `localhost:9092`), inject `BatchingServer` qua field mới (mock-able cho test — pattern như `fulfill.Client`).
 - Hooks trong `internal/server/batching_server.go` (post-success):
@@ -140,25 +141,32 @@ Compose: fulfillment/batching/bff thêm `KAFKA_ENABLED: ${KAFKA_ENABLED:-false}`
 
 ## 7. E2E + unit tests
 
-- `e2e/tests/05-kafka.spec.ts` (mới): `test.skip(!process.env.KAFKA_ENABLED, ...)` — khi bật: (1) kafka-ui REST `/api/clusters/local/topics` thấy đủ 3 topics; (2) assign shop-hub qua BFF API → `order-events` có message `type=order.assigned` với key=fulfillCode; (3) create batch → `batch-events` có `batch.created`. Poll với timeout (consumer lag/async).
+- **Runbook enabled-mode** (E2E/spec kafka chỉ chạy khi bật thật):
+  1. `docker compose --profile kafka up -d kafka kafka-init kafka-ui` (topics do kafka-init tạo; kafka-ui chỉ depends kafka → topic có thể xuất hiện muộn hơn ui — test poll).
+  2. Boot stack như thường: `scripts/boot-all.sh` (keycloak docker + services host-run). `KAFKA_ENABLED=true KAFKA_BOOTSTRAP_SERVERS=localhost:9092` phải set TRÊN SHELL gọi boot-all → export xuống các process con (`fulfillment-service/run.sh` KHÔNG tự source root .env — env truyền qua process env từ boot-all; Go run.sh có source .env nhưng nhận từ shell cũng ok).
+  3. `KAFKA_ENABLED=true pnpm --filter e2e test` — cùng shell env → Playwright config/spec thấy flag.
+- `e2e/tests/05-kafka.spec.ts` (mới): `test.skip(!(process.env.KAFKA_ENABLED === '1' || process.env.KAFKA_ENABLED === 'true'), ...)` (rule truthy thống nhất `1|true` như BFF/Go) — khi bật: (1) kafka-ui REST `GET /api/clusters/local/topics` thấy đủ 3 topics; (2) assign shop-hub qua BFF API → `order-events` có message `type=order.assigned` key=fulfillCode; hủy batch → `order.cancelled`; (3) create batch → `batch-events` có `batch.created`. Đọc messages: `GET /api/clusters/local/topics/{topic}/messages?limit=N` (kafka-ui v0.7.2 REST). Poll timeout ~15s (async publish + ui indexing).
 - Unit tests:
-  - Java: envelope serialize khớp shape; flag off → context tạo NoopPublisher (không KafkaTemplate); `assignShopHub` gọi publisher 1 lần với đúng type/key (mock).
-  - Go: envelope JSON golden-test khớp canonical; default env → Noop; hook publish đúng tham số (mock publisher — pattern `fulfill.Client` mock sẵn có); compensation không publish.
+  - Java: envelope serialize khớp shape; flag off → context tạo NoopPublisher (không KafkaTemplate); hooks gọi publisher đúng type/key/lần (mock — assign 1 event; mutate target-0 N events `order.cancelled` kèm reason, target-2 `order.completed`, target-1 không publish).
+  - Go: envelope JSON golden-test khớp canonical (fixture JSON DÙNG CHUNG với Java test shape — chống triple-copy drift); default env → Noop; hook publish đúng tham số (mock publisher — pattern `fulfill.Client` mock sẵn có); compensation không publish.
   - BFF (vitest): config parse flag; consumer handler parse envelope + emit `kafka:event`; message lỗi parse không crash.
 
 ## 8. ACCEPTANCE ↔ design mapping
 
 | ACCEPTANCE (context pack) | Cách đạt |
 |---|---|
-| enabled + compose up → kafka-ui thấy topics; assign → `order-events`; tạo/đổi batch → `batch-events` | profile `kafka` + kafka-init 3 topics; hooks §4a/§4b |
+| enabled + compose up → kafka-ui thấy topics; assign/hủy/hoàn-tất đơn trên D1 → event `order-events`; tạo/đổi batch → `batch-events` | profile `kafka` + kafka-init 3 topics; hooks §4a (assign→`order.assigned`, hủy batch→`order.cancelled` per-order, hoàn-tất→`order.completed` per-order) + §4b (batch.created/transitioned) |
 | disabled (mặc định) → app trọn vẹn, không lỗi, không cần kafka container | Noop beans/publishers, consumer không start, services profile-gated |
-| Stop kafka giữa chừng khi enabled → mutation VẼN thành công, log warn, không crash | try/catch best-effort post-persist; Go timeout 2s; kafkajs reconnect |
-| E2E cũ + spec kafka mới (skip-mode) xanh | `05-kafka.spec.ts` skip khi `KAFKA_ENABLED!=1`; không đụng spec cũ |
+| Stop kafka giữa chừng khi enabled → mutation VẼN thành công, log warn, không crash | try/catch best-effort post-persist; Java async send + `max.block.ms=2000`/`delivery.timeout.ms=5000` (không `.get()`); Go ctx timeout 2s; kafkajs reconnect |
+| E2E cũ + spec kafka mới (skip-mode) xanh | `05-kafka.spec.ts` skip khi flag ≠ `1`/`true`; runbook §7; không đụng spec cũ |
 
 ## 9. Design decisions (autonomous, đã self-review)
 
-1. **Go publish `batch.*` (không phải order.*) cho hủy/hoàn-tất-đơn** — Go biết business context (cancel vs complete vs create); Java `mutateOrderStatus` không phân biệt được. Acceptance "hủy/hoàn tất đơn" thỏa qua `batch.transitioned` kèm reason. `order.cancelled/completed` chờ mutation order-level thật (SF-13+).
+1. **Java publish `order.cancelled`/`order.completed` tại `mutateOrderStatus`** — hook tin cậy duy nhất mọi "hủy/hoàn-tất-đơn" đi qua (Go gọi với target 0/2 + reason); map theo targetBatchStatus (0→cancelled kèm reason, 2→completed, 1→skip vì `batch.created` đã phủ). Go đồng thời publish `batch.*` — 2 topic cùng thấy event của cùng nghiệp vụ, đúng semantic mỗi domain.
 2. **Dual-listener thay vì advertised localhost đơn** — host dev + app-in-compose cùng chạy được; nếu chỉ advertised `localhost:9092` thì consumer trong bff-in-compose metadata sai broker và chết.
 3. **kafka-init one-shot thay vì KAFKA_CREATE_TOPICS env** — apache/kafka chính chủ không hỗ trợ env đó (chỉ bitnami/wurstmeister); pattern one-shot khớp migrate services sẵn có.
 4. **Profile `kafka` thay vì always-on** — acceptance bắt buộc dev không cần kafka container.
 5. **EventEmitter nội bộ thay vì SSE ngay** — SF-10 sở hữu SSE; SF-27 chỉ cần giao diện emit sạch (context pack mục 5).
+6. **App services KHÔNG `depends_on` kafka** (context pack mục 4 nói "depends_on + healthcheck" — deviation có chủ đích): host-run apps (boot-all.sh E2E flow) không thể được phủ bởi compose depends_on; kafka chết/không boot phải không bao giờ chặn app (acceptance dòng 3). Healthcheck vẫn có (kafka-init/kafka-ui gate + thao tác debug).
+7. **kafka-go `v0.4.47`** — go.mod khai báo `go 1.15` → tương thích go 1.19 (đã verify raw go.mod, không cần re-check ở P3).
+8. **`KAFKA_CLUSTER_ID` fixed + volume `kafka-data`** sống qua `reset-db.sh` (chỉ xóa pgdata/keycloak) — topics/messages cũ còn sau reset DB; chấp nhận dev-only, reset Kafka thủ công khi cần: `docker compose --profile kafka down -v`.
