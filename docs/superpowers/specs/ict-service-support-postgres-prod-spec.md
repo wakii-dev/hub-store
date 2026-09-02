@@ -113,12 +113,12 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Màn đối soát theo shop: tổng COD theo kỳ (ngày), so khớp đơn hoàn tất-COD vs đã-thu vs chênh lệch; export CSV đối soát (pattern SF-7).
 - Bảng/fields lưu settlement trong DB `fulfillment` (Flyway V3+); không đụng batching DB.
 
-### 3.15 NVC backend — Ahamove THẬT (SF-15, deps SF-3) — KHÔNG MOCK
-- **Tích hợp API Ahamove thật** (api.ahamove.com — partner token qua env `AHAMOVE_*`): quotes/book/cancel/tracking gọi thẳng Ahamove; KHÔNG mock server, KHÔNG provider giả. E2E test NVC chỉ chạy khi có credential (skip-if-no-env); credential do USER cấp — thiếu → REQUIREMENT-GAP trên epic.
+### 3.15 NVC backend — Ahamove adapter dual-mode (SF-15, deps SF-3)
+- **Adapter dual-mode**: `AHAMOVE_MODE=mock` (mặc định — CHƯA có credential) | `real` (khi env có `AHAMOVE_API_KEY` + `AHAMOVE_PARTNER_TOKEN` — tự nhận). Mock mode trả response THỰC TẾ shape Ahamove (quotes 6 tải trọng, booking gán tài xế + timeline trạng thái tự chạy theo thời gian) và ghi tag `[MOCK]` trong log + response meta. Real mode gọi api.ahamove.com thật. Điền key = đổi thật, KHÔNG sửa code.
 - Endpoints: quotes (theo tải trọng xe, phí, distance, isExceedFeeLimit), planning/confirm, booking (batchCode + shipmentPlannings COD/totalBill/stopOrder), cancel per-đơn/cả batch, searchbookingdetail (timeline).
 - Storage batching DB (migration V2): plannings, bookings, shipment statuses, tracking events, addon catalog, **fee limits per-SP**.
 - Fee-limit rules BE-authoritative: baseFee > limit → disable; total > limit → block (FE chỉ render).
-- KHÔNG có §3.27 Ahamove-adapter-riêng — SF-15 là integration thật duy nhất (SF-27 đã gộp vào đây).
+- KHÔNG có §3.27 riêng — mock+real gộp trong SF-15 adapter.
 
 ### 3.16 NVC FE — carrier section + replan/rebook/tracking (SF-16, deps SF-15+SF-6)
 - D1b modal: 3 nhóm carrier (Tự giao / xe tải quotes / FPT_DELIVERY), quotes display + recalculate, addon services (ROUTE/LOADING radio, DOCUMENT checkbox, ROUND-TRIP), hạn mức phí gates.
@@ -127,7 +127,7 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 
 ### 3.17 Khu vực hoạt động NV (SF-17, deps SF-2) — KHÔNG MOCK
 - BE (Flyway V4 fulfillment): service_employees + regions/wards + payment account; CRUD + active toggle.
-- Verify payment account: **Zalopay API thật** nếu user cấp credential (`ZALOPAY_*` env); KHÔNG có credential → bỏ bước verify online, nhập tay + ghi trạng thái "chưa xác minh" (KHÔNG giả lập kết quả verify).
+- Verify payment account dual-mode: có `ZALOPAY_*` env → Zalopay API thật; KHÔNG có (mặc định) → **mock verify** (trả valid khi đúng format, tag `[MOCK]`) — UI hiển thị nguồn kết quả thật/mock rõ ràng.
 - FE: list + lọc (chức danh/NV/vùng) + expand wards; define/edit form (vùng multi → chức danh → NV → payment account → khu vực tỉnh/phường); chỉ Admin viết, roles khác xem.
 
 ### 3.18 D2C/Dropship module (SF-18, deps SF-2)
@@ -150,9 +150,9 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 
 ### 3.23 PWA + Push OneSignal + GA (SF-23, deps SF-10)
 - PWA: manifest + service worker (cache shell, offline fallback trang tĩnh), installable.
-- OneSignal push THẬT: app ID + REST API key do USER cấp qua env; push event quan trọng (đơn mới, batch hoàn tất, vận đơn giao) — subscribe khi user login.
-- GA THẬT: measurement ID do USER cấp qua env — pageview + sự kiện nghiệp vụ chính; env trống → feature off (đây là cấu hình, không phải mock).
-- Thiếu credential → REQUIREMENT-GAP trên epic; KHÔNG giả lập response push/analytics trong runtime; test chỉ assert wiring, skip khi thiếu env.
+- OneSignal dual-mode: có `ONESIGNAL_APP_ID` + `ONESIGNAL_REST_API_KEY` → push thật; KHÔNG có (mặc định) → **mock mode** — event push ghi log + lưu bảng `notification_log` (FE không phân biệt, nhận qua cùng channel khi có push). Tag `[MOCK]` trong log.
+- GA dual-mode: có `GA_MEASUREMENT_ID` → GA thật; KHÔNG có → events ghi vào log nội bộ (không gửi ngoài).
+- Cả hai tự chọn mode theo env; điền key sau = chuyển thật không sửa code.
 
 ### 3.24 Map view (SF-24, deps SF-16+SF-20)
 - Bản đồ Leaflet + OpenStreetMap (KHÔNG cần API key): pins đơn theo lat/long (tech service), route stops của batch (theo thứ tự stop), warehouse marker; mở từ tracking modal + tech service screens.
