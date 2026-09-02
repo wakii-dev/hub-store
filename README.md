@@ -11,7 +11,7 @@ Browser ──REST──> BFF gateway (:8080, Node/Fastify)
 Browser ──Module Federation──> shell (:3000 host) + orders (:3001) + fulfillment (:3002 remotes)
 ```
 
-Mutation chain: `CreateBatch` → Go gọi Java `MutateOrderStatus` (batchStatus 0→1); `CancelBatch` → revert 0; `CompletePicking` → 2. Dữ liệu in-memory, seed từ `api/seed/canonical-seed.json` (nguồn duy nhất).
+Mutation chain: `CreateBatch` → Go gọi Java `MutateOrderStatus` (batchStatus 0→1); `CancelBatch` → revert 0; `CompletePicking` → 2. Dữ liệu seed từ `api/seed/canonical-seed.json` (nguồn duy nhất) nạp vào Postgres qua seed pipeline (xem "Postgres infra + seed" dưới).
 
 ## Dev port map
 
@@ -43,7 +43,21 @@ docker compose up --build
 # mở http://localhost:3000
 ```
 
-Compose là cấu hình **mẫu chạy local** (KHÔNG prod deploy): 4 service images + nginx phục vụ shell/2 remotes static (publicPath theo SPIKE 1) và proxy `/api` → BFF.
+Compose là cấu hình **mẫu chạy local** (KHÔNG prod deploy): postgres (2 DB: `fulfillment` + `batching`) → migrate one-shot (Flyway `orders-migrate`, golang-migrate `batches-migrate`) → `db-seed` → app services + keycloak + nginx phục vụ shell/2 remotes static (publicPath theo SPIKE 1) và proxy `/api` → BFF.
+
+### Postgres infra + seed (FI-245 SF-1)
+
+```bash
+cp .env.example .env   # điền POSTGRES_PASSWORD + KEYCLOAK_ADMIN_PASSWORD
+docker compose up -d postgres   # 2 DB tự tạo qua docker/postgres/initdb/
+bash scripts/wait-db.sh         # chờ healthy (run.sh SF-2/SF-3 + boot-all SF-5 dùng chung)
+bash scripts/seed-db.sh         # nạp canonical-seed.json cả 2 DB — emptiness-gate, KHÔNG upsert
+bash scripts/reset-db.sh        # E2E reset: TRUNCATE cả 2 DB + xóa keycloak volume + reseed
+```
+
+- **Emptiness-gate**: DB có data → seed bỏ qua. Seed file (`api/seed/canonical-seed.json`) đổi sau này → reset thủ công bằng `reset-db.sh`.
+- **Credentials local-only**: `POSTGRES_PASSWORD` / `KEYCLOAK_ADMIN_PASSWORD` tự điền trong `.env` local, KHÔNG commit (compose fail-loud nếu thiếu).
+- Bảng + sequence `batches_code_seq` do migration tạo (SF-2 Flyway `services/fulfillment-service/src/main/resources/db/migration`, SF-3 golang-migrate `services/batching-service/migrations`) — column contract ghi ở header `scripts/seed-db.sh`.
 
 ## Commands
 
