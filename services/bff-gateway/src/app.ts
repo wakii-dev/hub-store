@@ -19,6 +19,8 @@ import { registerFulfillmentRoutes } from './routes/fulfillment.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerUsersRoutes } from './routes/users.js';
+import { KcAdminClient } from './kc-admin.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -66,6 +68,9 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerFulfillmentRoutes(app, { fulfillment, batching });
   registerBatchRoutes(app, batching);
   registerPrintRoutes(app, { batching, print });
+  // SF-8 — users management (Manager-only) qua KC Admin REST.
+  const kcAdmin = new KcAdminClient(config.oidc);
+  registerUsersRoutes(app, { kcAdmin });
   // DEV-ONLY — fail-safe: chỉ mount khi ENABLE_DEV_RESET_PASSWORD=1 tường minh
   // (prod/K8s không set flag → endpoint không tồn tại thay vì dựa vào doc).
   if (config.devResetPassword) {

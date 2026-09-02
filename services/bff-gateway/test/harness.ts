@@ -148,11 +148,93 @@ export interface Harness {
   print: MockUpstream;
   app: FastifyInstance;
   identity: TestIdentity;
+  kc: MockKcAdmin;
   closeAll(): Promise<void>;
 }
 
 /** Module-level — signTestToken cần keypair của identity đang chạy. */
 let currentIdentity: TestIdentity | null = null;
+
+// --- SF-8 — mock Keycloak Admin API (KC Admin REST) ---
+
+export interface MockKcAdmin {
+  url: string;
+  /** Bơm users list trả về cho GET /admin/realms/hubstore/users. */
+  setUsers(users: Array<Record<string, unknown>>): void;
+  /** GET /roles/{name}/users trả usernames này. */
+  setRoleUsers(role: string, usernames: string[]): void;
+  /** role name → id (GET /roles/{name}). */
+  setRoleIds(ids: Record<string, string>): void;
+  /** toggle grant 401 invalid_client (self-heal path). */
+  setGrantStatus(status: number): void;
+  requests: Array<{ method: string; url: string; body?: unknown }>;
+  close(): Promise<void>;
+}
+
+async function startMockKcAdmin(): Promise<MockKcAdmin> {
+  const state = {
+    users: [] as Array<Record<string, unknown>>,
+    roleUsers: {} as Record<string, string[]>,
+    roleIds: {} as Record<string, string>,
+    grantStatus: 200,
+    requests: [] as Array<{ method: string; url: string; body?: unknown }>,
+  };
+  const server = createServer((req, res) => {
+    const url = req.url ?? '';
+    const chunks: Buffer[] = [];
+    req.on('data', (c: Buffer) => chunks.push(c));
+    req.on('end', () => {
+      const raw = Buffer.concat(chunks).toString('utf8');
+      let body: unknown;
+      try { body = raw ? JSON.parse(raw) : undefined; } catch { body = raw; }
+      state.requests.push({ method: req.method ?? '', url, body });
+      const send = (status: number, payload: unknown, headers?: Record<string, string>): void => {
+        res.writeHead(status, { 'content-type': 'application/json', ...headers });
+        res.end(JSON.stringify(payload));
+      };
+      if (url.includes('/protocol/openid-connect/token')) {
+        if (state.grantStatus !== 200) return send(state.grantStatus, { error: 'invalid_client' });
+        return send(200, { access_token: 'kc-tok', expires_in: 60 });
+      }
+      if (url.startsWith('/admin/realms/hubstore/roles/')) {
+        // URL segment có thể là role NAME (GET /roles/{name}) hoặc role ID
+        // (GET /roles/{id}/users — findRoleId trả id rồi usernamesWithRole dùng id).
+        // Chuẩn hóa về NAME qua inverse của roleIds rồi lookup roleUsers.
+        const seg = decodeURIComponent(url.split('/roles/')[1]?.split('/')[0] ?? '');
+        const idToName = Object.fromEntries(Object.entries(state.roleIds).map(([n, i]) => [i, n]));
+        const name = state.roleIds[seg] !== undefined ? seg : (idToName[seg] ?? seg);
+        if (url.includes('/users')) return send(200, (state.roleUsers[name] ?? []).map((u) => ({ id: `uid-${u}`, username: u })));
+        const id = state.roleIds[name];
+        return id ? send(200, { id, name }) : send(404, { error: 'not found' });
+      }
+      if (url.split('?')[0] === '/admin/realms/hubstore/users' && req.method === 'POST') {
+        // createUser đọc location header để lấy id — mock PHẢI trả header này.
+        return send(201, {}, { location: `${url}/u-new-1` });
+      }
+      if (url.split('?')[0] === '/admin/realms/hubstore/users' && req.method === 'GET') return send(200, state.users);
+      if (url.startsWith('/admin/realms/hubstore/users/')) {
+        const id = decodeURIComponent(url.split('/users/')[1]?.split('/')[0] ?? '');
+        const user = state.users.find((u) => u.id === id);
+        if (req.method === 'GET') return user ? send(200, user) : send(404, { error: 'not found' });
+        return send(200, {});
+      }
+      send(200, {});
+    });
+  });
+  await new Promise<void>((resolve) => server.listen(0, '127.0.0.1', resolve));
+  const address = server.address();
+  if (address === null || typeof address === 'string') throw new Error('mock kc bind failed');
+  const url = `http://127.0.0.1:${address.port}`;
+  return {
+    url,
+    setUsers: (u) => { state.users = u; },
+    setRoleUsers: (r, us) => { state.roleUsers[r] = us; },
+    setRoleIds: (ids) => { state.roleIds = ids; },
+    setGrantStatus: (s) => { state.grantStatus = s; },
+    requests: state.requests,
+    close: () => new Promise<void>((res) => server.close(() => res())),
+  };
+}
 
 const fulfillmentDefaults: Record<string, UnaryHandler> = {
   filterOrders: (_c, cb) => cb(null, fulfillmentResponses.filterOrders),
@@ -209,6 +291,7 @@ export interface HarnessOptions {
 export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> {
   const identity = await startTestIdentity();
   currentIdentity = identity;
+  const kc = await startMockKcAdmin();
   const fulfillment = await startMockServer(FulfillmentServiceService, {
     ...fulfillmentDefaults,
     ...opts.fulfillmentHandlers,
@@ -237,11 +320,11 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       issuer: TEST_ISSUER,
       audience: TEST_AUDIENCE,
       jwksUrl: identity.jwksUrl,
-      adminBaseUrl: 'https://keycloak.test/realms/hubstore',
-      adminTokenUrl: 'https://keycloak.test/realms/master/protocol/openid-connect/token',
+      adminBaseUrl: `${kc.url}/admin/realms/hubstore`,
+      adminTokenUrl: `${kc.url}/realms/master/protocol/openid-connect/token`,
       adminUsername: 'admin',
       adminPassword: 'admin',
-      kcAdminTokenUrl: 'https://keycloak.test/realms/hubstore/protocol/openid-connect/token',
+      kcAdminTokenUrl: `${kc.url}/realms/hubstore/protocol/openid-connect/token`,
       kcAdminClientId: 'hubstore-admin',
       kcAdminClientSecret: 'test-secret',
     },
@@ -262,6 +345,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     print,
     app,
     identity,
+    kc,
     closeAll: async () => {
       currentIdentity = null;
       await app.close();
@@ -269,6 +353,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       await batching.close();
       await print.close();
       await identity.close();
+      await kc.close();
     },
   };
 }
