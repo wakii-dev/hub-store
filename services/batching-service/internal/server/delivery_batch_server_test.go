@@ -7,7 +7,9 @@ package server
 
 import (
 	"context"
+	"strconv"
 	"testing"
+	"time"
 
 	"hubstore/batching-service/internal/ahamove"
 	"hubstore/batching-service/internal/testdb"
@@ -328,4 +330,412 @@ func findQuote(resp *batchingv1.GetQuotesResponse, serviceID string) *batchingv1
 		}
 	}
 	return nil
+}
+
+// ---------------------------------------------------------------------------
+// T5 — CreateBooking / CancelDeliveryOrder / CancelDeliveryBatch
+// ---------------------------------------------------------------------------
+
+// bookReq — CreateBooking request cho 1 planning (cod/bill từ request).
+func bookReq(batchCode, planningID string, cod, totalBill int64, stop int32) *batchingv1.CreateBookingRequest {
+	return &batchingv1.CreateBookingRequest{
+		BatchCode: batchCode,
+		ShipmentPlannings: []*batchingv1.ShipmentPlanningBookingInput{{
+			PlanningId: planningID,
+			CodAmount:  cod,
+			TotalBill:  totalBill,
+			StopOrder:  stop,
+		}},
+	}
+}
+
+// confirmAndBook — path chuẩn: confirm (SGCN @10km → fee 40000 ≤ limit) + book.
+func confirmAndBook(t *testing.T, srv *DeliveryBatchServer, ctx context.Context, batch, order string) string {
+	t.Helper()
+	conf, err := srv.ConfirmPlanning(ctx, confirmReq(batch, order, "SGCN", "SGCN", 1))
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	pid := conf.GetPlannings()[0].GetPlanningId()
+	if _, err := srv.CreateBooking(ctx, bookReq(batch, pid, 500000, 1200000, 1)); err != nil {
+		t.Fatalf("book: %v", err)
+	}
+	return pid
+}
+
+func TestCreateBooking_PersistsBookingTimelineAndBooked(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT5-BOOK", "30201", "HD-101", 1, 10, 500000)
+	conf, err := srv.ConfirmPlanning(ctx, confirmReq("BT5-BOOK", "HD-101", "SGCN", "SGCN", 1))
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	p := conf.GetPlannings()[0]
+
+	resp, err := srv.CreateBooking(ctx, bookReq("BT5-BOOK", p.GetPlanningId(), 500000, 1200000, 1))
+	if err != nil {
+		t.Fatalf("CreateBooking: %v", err)
+	}
+	if !resp.GetMeta().GetMock() {
+		t.Fatal("meta.mock = false, want true")
+	}
+	if got := len(resp.GetBookings()); got != 1 {
+		t.Fatalf("bookings = %d, want 1", got)
+	}
+	br := resp.GetBookings()[0]
+	if br.GetPlanningId() != p.GetPlanningId() {
+		t.Fatalf("planning_id = %s, want %s", br.GetPlanningId(), p.GetPlanningId())
+	}
+	if len(br.GetCarrierBookingId()) < 5 || br.GetCarrierBookingId()[:5] != "MOCK-" {
+		t.Fatalf("carrier_booking_id = %s, want MOCK-* prefix", br.GetCarrierBookingId())
+	}
+	if br.GetDriverName() == "" || br.GetDriverPhone() == "" || br.GetLicensePlate() == "" {
+		t.Fatalf("driver snapshot thiếu: %+v", br)
+	}
+	if br.GetStatus() != "DRIVER_FOUND" {
+		t.Fatalf("status = %s, want DRIVER_FOUND (mock gán driver ngay)", br.GetStatus())
+	}
+
+	// bookings row — driver snapshot + planning_id FK + is_mock.
+	var (
+		bStatus, bDriver, bPlate string
+		bPlanning                int64
+		bMock                    bool
+		cancelledAt              *time.Time
+	)
+	if err := pool.QueryRow(ctx, `SELECT planning_id, status, driver_name,
+		license_plate, is_mock, cancelled_at FROM bookings
+		WHERE carrier_booking_id = $1`, br.GetCarrierBookingId()).
+		Scan(&bPlanning, &bStatus, &bDriver, &bPlate, &bMock, &cancelledAt); err != nil {
+		t.Fatalf("load booking: %v", err)
+	}
+	if bPlanning != p.GetId() || bStatus != "DRIVER_FOUND" || !bMock || cancelledAt != nil {
+		t.Fatalf("booking row: planning=%d status=%s mock=%v cancelled_at=%v, want %d/DRIVER_FOUND/true/nil",
+			bPlanning, bStatus, bMock, cancelledAt, p.GetId())
+	}
+
+	// planning → BOOKED + cod/total_bill từ request.
+	var status string
+	var cod, bill int64
+	if err := pool.QueryRow(ctx, `SELECT status, cod_amount, total_bill
+		FROM shipment_plannings WHERE id = $1`, p.GetId()).Scan(&status, &cod, &bill); err != nil {
+		t.Fatal(err)
+	}
+	if status != "BOOKED" || cod != 500000 || bill != 1200000 {
+		t.Fatalf("planning: status=%s cod=%d bill=%d, want BOOKED/500000/1200000", status, cod, bill)
+	}
+
+	// Timeline đầu: 2 events — ORDER_CREATED (BE) + DRIVER_FOUND (PARTNER).
+	type evRow struct {
+		status, source string
+	}
+	var evs []evRow
+	rows, err := pool.Query(ctx, `SELECT status, source FROM shipment_tracking_events
+		WHERE booking_id = (SELECT id FROM bookings WHERE carrier_booking_id = $1)
+		ORDER BY id`, br.GetCarrierBookingId())
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	for rows.Next() {
+		var e evRow
+		if err := rows.Scan(&e.status, &e.source); err != nil {
+			t.Fatal(err)
+		}
+		evs = append(evs, e)
+	}
+	if len(evs) != 2 || evs[0].status != "ORDER_CREATED" || evs[0].source != "BE" ||
+		evs[1].status != "DRIVER_FOUND" || evs[1].source != "PARTNER" {
+		t.Fatalf("events = %+v, want [ORDER_CREATED/BE DRIVER_FOUND/PARTNER]", evs)
+	}
+}
+
+func TestCreateBooking_WrongStatusFailedPrecondition(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+
+	// DRAFT — chưa confirm.
+	insertBatch(t, ctx, pool, "BT5-DRAFT", "30201", "HD-102", 1, 10, 0)
+	var draftID int64
+	if err := pool.QueryRow(ctx, `INSERT INTO shipment_plannings
+		(batch_code, stop_order, order_code, vehicle_type, carrier_service_id, status)
+		VALUES ('BT5-DRAFT', 1, 'HD-102', 'SGCN', 'SGCN', 'DRAFT') RETURNING id`).Scan(&draftID); err != nil {
+		t.Fatal(err)
+	}
+	_, err := srv.CreateBooking(ctx, bookReq("BT5-DRAFT", strconv.FormatInt(draftID, 10), 0, 0, 1))
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("DRAFT: code = %v, want FailedPrecondition", status.Code(err))
+	}
+
+	// BOOKED — book lần 2 trên cùng planning.
+	insertBatch(t, ctx, pool, "BT5-TWICE", "30201", "HD-103", 1, 10, 0)
+	pid := confirmAndBook(t, srv, ctx, "BT5-TWICE", "HD-103")
+	_, err = srv.CreateBooking(ctx, bookReq("BT5-TWICE", pid, 0, 0, 1))
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("BOOKED: code = %v, want FailedPrecondition", status.Code(err))
+	}
+}
+
+func TestCreateBooking_FeeLimitRecheckBlocked(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT5-LIMIT", "30201", "HD-104", 1, 10, 0)
+	conf, err := srv.ConfirmPlanning(ctx, confirmReq("BT5-LIMIT", "HD-104", "SGCN", "SGCN", 1))
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	pid := conf.GetPlannings()[0].GetPlanningId()
+
+	// Fee trôi sau confirm (persisted fee = server truth) vượt limit 150000.
+	if _, err := pool.Exec(ctx,
+		`UPDATE shipment_plannings SET fee = 250000 WHERE id = $1`, conf.GetPlannings()[0].GetId()); err != nil {
+		t.Fatal(err)
+	}
+
+	_, err = srv.CreateBooking(ctx, bookReq("BT5-LIMIT", pid, 0, 0, 1))
+	if status.Code(err) != codes.FailedPrecondition {
+		t.Fatalf("code = %v, want FailedPrecondition (fee-limit re-check)", status.Code(err))
+	}
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM bookings`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("bookings = %d, want 0 (blocked booking không persist)", n)
+	}
+	var st string
+	if err := pool.QueryRow(ctx, `SELECT status FROM shipment_plannings WHERE id = $1`,
+		conf.GetPlannings()[0].GetId()).Scan(&st); err != nil {
+		t.Fatal(err)
+	}
+	if st != "CONFIRMED" {
+		t.Fatalf("planning status = %s, want CONFIRMED (không đổi khi bị chặn)", st)
+	}
+}
+
+func TestCancelDeliveryOrder_CancelsBookingPlanningAndTimeline(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT5-CANCEL", "30201", "HD-105", 1, 10, 0)
+	pid := confirmAndBook(t, srv, ctx, "BT5-CANCEL", "HD-105")
+
+	resp, err := srv.CancelDeliveryOrder(ctx, &batchingv1.CancelDeliveryOrderRequest{
+		PlanningId: pid, Reason: "khách hủy đơn",
+	})
+	if err != nil {
+		t.Fatalf("CancelDeliveryOrder: %v", err)
+	}
+	if resp.GetStatus() != "CANCELLED" || !resp.GetMeta().GetMock() {
+		t.Fatalf("status=%s mock=%v, want CANCELLED/true", resp.GetStatus(), resp.GetMeta().GetMock())
+	}
+
+	// Booking → CANCELLED + cancelled_at/reason.
+	var (
+		bStatus, bReason string
+		cancelledAt      *time.Time
+	)
+	if err := pool.QueryRow(ctx, `SELECT status, cancelled_at, cancel_reason
+		FROM bookings WHERE planning_id = (SELECT id FROM shipment_plannings WHERE batch_code = 'BT5-CANCEL')`).
+		Scan(&bStatus, &cancelledAt, &bReason); err != nil {
+		t.Fatal(err)
+	}
+	if bStatus != "CANCELLED" || cancelledAt == nil || bReason != "khách hủy đơn" {
+		t.Fatalf("booking: status=%s cancelled_at=%v reason=%s", bStatus, cancelledAt, bReason)
+	}
+	// Planning → CANCELLED.
+	var pStatus string
+	if err := pool.QueryRow(ctx, `SELECT status FROM shipment_plannings
+		WHERE batch_code = 'BT5-CANCEL'`).Scan(&pStatus); err != nil {
+		t.Fatal(err)
+	}
+	if pStatus != "CANCELLED" {
+		t.Fatalf("planning status = %s, want CANCELLED", pStatus)
+	}
+	// Timeline: 2 events đầu + CANCELLED (BE) = 3.
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM shipment_tracking_events
+		WHERE status = 'CANCELLED' AND source = 'BE'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("CANCELLED events = %d, want 1", n)
+	}
+
+	// Hủy lần 2 — no-op trả hiện trạng, không thêm event/row.
+	resp2, err := srv.CancelDeliveryOrder(ctx, &batchingv1.CancelDeliveryOrderRequest{
+		PlanningId: pid, Reason: "lần 2",
+	})
+	if err != nil {
+		t.Fatalf("cancel lần 2: %v", err)
+	}
+	if resp2.GetStatus() != "CANCELLED" {
+		t.Fatalf("lần 2 status = %s, want CANCELLED (no-op)", resp2.GetStatus())
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM shipment_tracking_events`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 3 {
+		t.Fatalf("events = %d, want 3 (no-op không thêm)", n)
+	}
+	var nb int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM bookings`).Scan(&nb); err != nil {
+		t.Fatal(err)
+	}
+	if nb != 1 {
+		t.Fatalf("bookings = %d, want 1", nb)
+	}
+}
+
+func TestCancelDeliveryOrder_RebookTwoStepsCreatesNewBookingRow(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT5-REBOOK", "30201", "HD-106", 1, 10, 0)
+	pid := confirmAndBook(t, srv, ctx, "BT5-REBOOK", "HD-106")
+
+	if _, err := srv.CancelDeliveryOrder(ctx, &batchingv1.CancelDeliveryOrderRequest{
+		PlanningId: pid, Reason: "đổi xe",
+	}); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+
+	// Rebook 2 BƯỚC: confirm lại (CANCELLED → CONFIRMED, fee re-persist) rồi book.
+	if _, err := srv.ConfirmPlanning(ctx, confirmReq("BT5-REBOOK", "HD-106", "SGCN", "SGCN", 1)); err != nil {
+		t.Fatalf("rebook confirm: %v", err)
+	}
+	resp, err := srv.CreateBooking(ctx, bookReq("BT5-REBOOK", pid, 100000, 200000, 1))
+	if err != nil {
+		t.Fatalf("rebook booking: %v", err)
+	}
+
+	// 2 bookings rows cho planning; current = id DESC chưa CANCELLED.
+	rows, err := pool.Query(ctx, `SELECT carrier_booking_id, status FROM bookings
+		WHERE planning_id = (SELECT id FROM shipment_plannings WHERE batch_code = 'BT5-REBOOK')
+		ORDER BY id`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	type bRow struct {
+		id     string
+		status string
+	}
+	var bs []bRow
+	for rows.Next() {
+		var b bRow
+		if err := rows.Scan(&b.id, &b.status); err != nil {
+			t.Fatal(err)
+		}
+		bs = append(bs, b)
+	}
+	rows.Close()
+	if len(bs) != 2 {
+		t.Fatalf("bookings = %d, want 2 (rebook = row mới)", len(bs))
+	}
+	if bs[0].status != "CANCELLED" {
+		t.Fatalf("booking cũ status = %s, want CANCELLED", bs[0].status)
+	}
+	if bs[1].status != "DRIVER_FOUND" || bs[1].id != resp.GetBookings()[0].GetCarrierBookingId() {
+		t.Fatalf("booking mới (%s/%s) không khớp response (%s/DRIVER_FOUND)",
+			bs[1].id, bs[1].status, resp.GetBookings()[0].GetCarrierBookingId())
+	}
+	// Current booking = row mới nhất (id DESC).
+	var currentID string
+	if err := pool.QueryRow(ctx, `SELECT carrier_booking_id FROM bookings
+		WHERE planning_id = (SELECT id FROM shipment_plannings WHERE batch_code = 'BT5-REBOOK')
+		AND status <> 'CANCELLED' ORDER BY id DESC LIMIT 1`).Scan(&currentID); err != nil {
+		t.Fatal(err)
+	}
+	if currentID != bs[1].id {
+		t.Fatalf("current = %s, want %s (id DESC)", currentID, bs[1].id)
+	}
+	var pStatus string
+	if err := pool.QueryRow(ctx, `SELECT status FROM shipment_plannings
+		WHERE batch_code = 'BT5-REBOOK'`).Scan(&pStatus); err != nil {
+		t.Fatal(err)
+	}
+	if pStatus != "BOOKED" {
+		t.Fatalf("planning status = %s, want BOOKED", pStatus)
+	}
+}
+
+func TestCancelDeliveryBatch_ResultsAndIdempotent(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	// 2 stops: stop 1 book, stop 2 chỉ confirm.
+	insertBatch(t, ctx, pool, "BT5-BATCH", "30201", "HD-107", 1, 10, 0)
+	if _, err := pool.Exec(ctx, `INSERT INTO batch_items
+		(batch_code, stop_order, order_code, customer_address, distance,
+		 order_status, order_type, items, total_quantity, cod_amount)
+		VALUES ('BT5-BATCH', 2, 'HD-108', '45 Nguyễn Trãi, Q1', 15, 0, 1, '[]'::jsonb, 0, 0)`); err != nil {
+		t.Fatalf("seed stop 2: %v", err)
+	}
+	conf, err := srv.ConfirmPlanning(ctx, &batchingv1.ConfirmPlanningRequest{
+		BatchCode: "BT5-BATCH",
+		Plannings: []*batchingv1.PlanningInput{
+			{StopOrder: 1, OrderCode: "HD-107", VehicleType: "SGCN", ServiceId: "SGCN"},
+			{StopOrder: 2, OrderCode: "HD-108", VehicleType: "SGCN", ServiceId: "SGCN"},
+		},
+	})
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	byStop := map[int32]string{}
+	for _, p := range conf.GetPlannings() {
+		byStop[p.GetStopOrder()] = p.GetPlanningId()
+	}
+	if _, err := srv.CreateBooking(ctx, bookReq("BT5-BATCH", byStop[1], 0, 0, 1)); err != nil {
+		t.Fatalf("book stop 1: %v", err)
+	}
+
+	resp, err := srv.CancelDeliveryBatch(ctx, &batchingv1.CancelDeliveryBatchRequest{
+		BatchCode: "BT5-BATCH", Reason: "hủy cả batch",
+	})
+	if err != nil {
+		t.Fatalf("CancelDeliveryBatch: %v", err)
+	}
+	if got := len(resp.GetResults()); got != 2 {
+		t.Fatalf("results = %d, want 2", got)
+	}
+	statusByPlanning := map[string]string{}
+	for _, r := range resp.GetResults() {
+		statusByPlanning[r.GetPlanningId()] = r.GetStatus()
+	}
+	if statusByPlanning[byStop[1]] != "CANCELLED" || statusByPlanning[byStop[2]] != "DRAFT" {
+		t.Fatalf("statuses = %v, want stop1 CANCELLED + stop2 DRAFT", statusByPlanning)
+	}
+	if resp.GetCancelledCount() != 1 {
+		t.Fatalf("cancelled_count = %d, want 1 (1 booking bị hủy)", resp.GetCancelledCount())
+	}
+	// DB: booking stop 1 CANCELLED.
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM bookings WHERE status = 'CANCELLED'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("cancelled bookings = %d, want 1", n)
+	}
+
+	// Chạy lần 2 — idempotent no-op: cùng statuses, cancelled_count 0.
+	resp2, err := srv.CancelDeliveryBatch(ctx, &batchingv1.CancelDeliveryBatchRequest{
+		BatchCode: "BT5-BATCH", Reason: "lần 2",
+	})
+	if err != nil {
+		t.Fatalf("cancel lần 2: %v", err)
+	}
+	for _, r := range resp2.GetResults() {
+		if statusByPlanning[r.GetPlanningId()] != r.GetStatus() {
+			t.Fatalf("lần 2 planning %s: %s, want %s (no-op)",
+				r.GetPlanningId(), r.GetStatus(), statusByPlanning[r.GetPlanningId()])
+		}
+	}
+	if resp2.GetCancelledCount() != 0 {
+		t.Fatalf("lần 2 cancelled_count = %d, want 0 (idempotent)", resp2.GetCancelledCount())
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM shipment_tracking_events
+		WHERE status = 'CANCELLED'`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 1 {
+		t.Fatalf("CANCELLED events = %d, want 1 (lần 2 không thêm)", n)
+	}
 }

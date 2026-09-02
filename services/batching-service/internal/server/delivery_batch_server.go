@@ -17,6 +17,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"log"
 	"strconv"
 	"time"
 
@@ -35,6 +36,18 @@ const (
 	planningConfirmed = "CONFIRMED"
 	planningBooked    = "BOOKED"
 	planningCancelled = "CANCELLED"
+)
+
+// Trạng thái bookings/timeline (canonical strings trong DB + adapter).
+const (
+	bookingCancelled  = "CANCELLED"
+	bookingCompleted  = "COMPLETED"
+	bookingFailed     = "FAILED"
+	eventOrderCreated = "ORDER_CREATED"
+	eventDriverFound  = "DRIVER_FOUND"
+	eventCancelled    = "CANCELLED"
+	sourceBE          = "BE"
+	sourcePartner     = "PARTNER"
 )
 
 // DeliveryBatchServer implements hubstore.batching.v1.DeliveryBatchService.
@@ -259,17 +272,17 @@ func (s *DeliveryBatchServer) confirmOne(
 		return nil, status.Errorf(grpccodes.Internal, "persist planning stop %d: %v", p.GetStopOrder(), err)
 	}
 	return &batchingv1.ShipmentPlanning{
-		Id:        id,
-		PlanningId: planningID(id),
-		BatchCode: batchCode,
-		StopOrder: p.GetStopOrder(),
-		OrderCode: p.GetOrderCode(),
+		Id:          id,
+		PlanningId:  planningID(id),
+		BatchCode:   batchCode,
+		StopOrder:   p.GetStopOrder(),
+		OrderCode:   p.GetOrderCode(),
 		VehicleType: p.GetVehicleType(),
-		ServiceId: p.GetServiceId(),
-		Addons:    p.GetAddons(),
-		Status:    planningConfirmed,
-		CodAmount: codAmount,
-		Fee:       fee,
+		ServiceId:   p.GetServiceId(),
+		Addons:      p.GetAddons(),
+		Status:      planningConfirmed,
+		CodAmount:   codAmount,
+		Fee:         fee,
 	}, nil
 }
 
@@ -316,10 +329,376 @@ func (s *DeliveryBatchServer) ListAddonServices(ctx context.Context, req *batchi
 }
 
 // ---------------------------------------------------------------------------
+// CreateBooking — book loạt planning (spec §3.1/§3.4): CONFIRMED → BOOKED +
+// bookings row + timeline đầu, tất cả trong 1 tx. planning_id = chuỗi id DB.
+// ---------------------------------------------------------------------------
+
+func (s *DeliveryBatchServer) CreateBooking(ctx context.Context, req *batchingv1.CreateBookingRequest) (*batchingv1.CreateBookingResponse, error) {
+	if req.GetBatchCode() == "" {
+		return nil, status.Error(grpccodes.InvalidArgument, "batch_code is required")
+	}
+	if len(req.GetShipmentPlannings()) == 0 {
+		return nil, status.Error(grpccodes.InvalidArgument, "shipment_plannings is required")
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var shopCode string
+	err = tx.QueryRow(ctx, `SELECT shop_code FROM batches WHERE batch_code = $1`, req.GetBatchCode()).Scan(&shopCode)
+	if err == pgx.ErrNoRows {
+		return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
+	}
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "get batch: %v", err)
+	}
+
+	out := make([]*batchingv1.BookingResult, 0, len(req.GetShipmentPlannings()))
+	for _, in := range req.GetShipmentPlannings() {
+		br, err := s.bookOne(ctx, tx, req.GetBatchCode(), shopCode, in)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, br)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "commit booking: %v", err)
+	}
+	return &batchingv1.CreateBookingResponse{Bookings: out, Meta: meta(s.nvc)}, nil
+}
+
+// bookOne — 1 planning trong tx: trạng thái CONFIRMED + fee-limit re-check
+// (§3.2 — persisted fee là truth) → adapter.Book → INSERT bookings (row mới —
+// rebook = row mới, §3.4) + UPDATE planning BOOKED + 2 tracking events đầu.
+func (s *DeliveryBatchServer) bookOne(
+	ctx context.Context,
+	tx pgx.Tx,
+	batchCode, shopCode string,
+	in *batchingv1.ShipmentPlanningBookingInput,
+) (*batchingv1.BookingResult, error) {
+	pid, err := parsePlanningID(in.GetPlanningId())
+	if err != nil {
+		return nil, status.Errorf(grpccodes.InvalidArgument, "planning_id %q: %v", in.GetPlanningId(), err)
+	}
+
+	// Load planning — phải thuộc batch này + đang CONFIRMED (§3.4: Book trên
+	// planning không ở CONFIRMED → FailedPrecondition).
+	p, err := scanPlanningRow(tx.QueryRow(ctx, `SELECT id, batch_code, stop_order,
+		order_code, vehicle_type, carrier_service_id, addon_services, status,
+		cod_amount, total_bill, fee FROM shipment_plannings
+		WHERE id = $1 AND batch_code = $2`, pid, batchCode))
+	if err == pgx.ErrNoRows {
+		return nil, status.Errorf(grpccodes.NotFound,
+			"planning %s not found in batch %s", in.GetPlanningId(), batchCode)
+	}
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "load planning %s: %v", in.GetPlanningId(), err)
+	}
+	if p.GetStatus() != planningConfirmed {
+		return nil, status.Errorf(grpccodes.FailedPrecondition,
+			"planning %s status %s, want CONFIRMED", in.GetPlanningId(), p.GetStatus())
+	}
+
+	// Fee-limit re-check (§3.2) — chốt chặn cuối BE-authoritative, strict >.
+	limit, hasLimit, err := s.feeLimit(ctx, shopCode)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "fee limit lookup: %v", err)
+	}
+	if hasLimit && p.GetFee() > limit {
+		return nil, status.Errorf(grpccodes.FailedPrecondition,
+			"fee limit exceeded for shop %s: fee %d > limit %d (planning %s)",
+			shopCode, p.GetFee(), limit, in.GetPlanningId())
+	}
+
+	// Hydrate stop info từ batch_items (V1 truth — address + distance).
+	var address string
+	var distanceKm float64
+	err = tx.QueryRow(ctx, `SELECT customer_address, distance FROM batch_items
+		WHERE batch_code = $1 AND stop_order = $2`, batchCode, p.GetStopOrder()).
+		Scan(&address, &distanceKm)
+	if err == pgx.ErrNoRows {
+		return nil, status.Errorf(grpccodes.InvalidArgument,
+			"stop %d not found in batch %s", p.GetStopOrder(), batchCode)
+	}
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "hydrate stop %d: %v", p.GetStopOrder(), err)
+	}
+
+	bookings, err := s.nvc.Book(ctx, ahamove.BookingRequest{
+		ShopCode: shopCode,
+		Items: []ahamove.BookingItem{{
+			StopOrder:  p.GetStopOrder(),
+			Address:    address,
+			DistanceKm: distanceKm,
+			CodAmount:  in.GetCodAmount(),
+		}},
+	})
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Unavailable, "carrier book: %v", err)
+	}
+	if len(bookings) != 1 {
+		return nil, status.Errorf(grpccodes.Internal,
+			"carrier book: got %d bookings for 1 stop, want 1", len(bookings))
+	}
+	b := bookings[0]
+
+	bookedAt := s.now()
+	var bookingID int64
+	err = tx.QueryRow(ctx, `INSERT INTO bookings
+		(planning_id, batch_code, carrier_booking_id, driver_name, driver_phone,
+		 license_plate, status, booked_at, is_mock)
+		VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+		p.GetId(), batchCode, b.CarrierBookingID, b.DriverName, b.DriverPhone,
+		b.LicensePlate, b.Status, bookedAt, s.nvc.IsMock()).Scan(&bookingID)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "persist booking %s: %v", b.CarrierBookingID, err)
+	}
+
+	// COD/bill từ request (display values do shop nhập lúc book).
+	if _, err := tx.Exec(ctx, `UPDATE shipment_plannings SET
+		status = $1, cod_amount = $2, total_bill = $3, updated_at = now()
+		WHERE id = $4`, planningBooked, in.GetCodAmount(), in.GetTotalBill(), p.GetId()); err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "update planning %s: %v", in.GetPlanningId(), err)
+	}
+
+	// Timeline đầu (§3.4): ORDER_CREATED (BE) + DRIVER_FOUND (PARTNER — mock
+	// gán driver ngay; real chỉ khi provider xác nhận ngay lúc đặt).
+	events := []struct {
+		status, source string
+	}{
+		{eventOrderCreated, sourceBE},
+	}
+	if b.Status == eventDriverFound {
+		events = append(events, struct{ status, source string }{eventDriverFound, sourcePartner})
+	}
+	for _, ev := range events {
+		if _, err := tx.Exec(ctx, `INSERT INTO shipment_tracking_events
+			(booking_id, status, source, occurred_at) VALUES ($1,$2,$3,$4)`,
+			bookingID, ev.status, ev.source, bookedAt); err != nil {
+			return nil, status.Errorf(grpccodes.Internal, "tracking event %s: %v", ev.status, err)
+		}
+	}
+
+	return &batchingv1.BookingResult{
+		PlanningId:       in.GetPlanningId(),
+		CarrierBookingId: b.CarrierBookingID,
+		DriverName:       b.DriverName,
+		DriverPhone:      b.DriverPhone,
+		LicensePlate:     b.LicensePlate,
+		Status:           b.Status,
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// CancelDeliveryOrder — hủy 1 đơn (spec §3.6): current booking CANCELLED +
+// planning → CANCELLED; planning chưa book → cũng CANCELLED; đã CANCELLED →
+// no-op trả hiện trạng.
+// ---------------------------------------------------------------------------
+
+func (s *DeliveryBatchServer) CancelDeliveryOrder(ctx context.Context, req *batchingv1.CancelDeliveryOrderRequest) (*batchingv1.CancelDeliveryOrderResponse, error) {
+	pid, err := parsePlanningID(req.GetPlanningId())
+	if err != nil {
+		return nil, status.Errorf(grpccodes.InvalidArgument, "planning_id %q: %v", req.GetPlanningId(), err)
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	p, err := scanPlanningRow(tx.QueryRow(ctx, `SELECT id, batch_code, stop_order,
+		order_code, vehicle_type, carrier_service_id, addon_services, status,
+		cod_amount, total_bill, fee FROM shipment_plannings WHERE id = $1`, pid))
+	if err == pgx.ErrNoRows {
+		return nil, status.Errorf(grpccodes.NotFound, "planning %s not found", req.GetPlanningId())
+	}
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "load planning %s: %v", req.GetPlanningId(), err)
+	}
+
+	if p.GetStatus() != planningCancelled {
+		// Current booking = row mới nhất chưa CANCELLED (§3.4 — id DESC).
+		bookingID, carrierID, found, err := currentBooking(ctx, tx, pid, false)
+		if err != nil {
+			return nil, err
+		}
+		if found {
+			if err := s.cancelBookingRow(ctx, tx, bookingID, carrierID, req.GetReason()); err != nil {
+				return nil, err
+			}
+		}
+		// Planning chưa book → cũng CANCELLED (§3.6).
+		if _, err := tx.Exec(ctx, `UPDATE shipment_plannings SET
+			status = $1, updated_at = now() WHERE id = $2`, planningCancelled, pid); err != nil {
+			return nil, status.Errorf(grpccodes.Internal, "cancel planning %s: %v", req.GetPlanningId(), err)
+		}
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "commit cancel order: %v", err)
+	}
+	return &batchingv1.CancelDeliveryOrderResponse{
+		PlanningId: req.GetPlanningId(),
+		Status:     planningCancelled,
+		Meta:       meta(s.nvc),
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// CancelDeliveryBatch — hủy cả batch (spec §3.6): cancel mọi booking ACTIVE
+// (planning BOOKED → CANCELLED) + planning CONFIRMED chưa book → DRAFT.
+// Idempotent: lần 2 mọi planning đã ở trạng thái đích → no-op.
+// ---------------------------------------------------------------------------
+
+func (s *DeliveryBatchServer) CancelDeliveryBatch(ctx context.Context, req *batchingv1.CancelDeliveryBatchRequest) (*batchingv1.CancelDeliveryBatchResponse, error) {
+	if req.GetBatchCode() == "" {
+		return nil, status.Error(grpccodes.InvalidArgument, "batch_code is required")
+	}
+
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	var exists bool
+	err = tx.QueryRow(ctx, `SELECT EXISTS(SELECT 1 FROM batches WHERE batch_code = $1)`, req.GetBatchCode()).Scan(&exists)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "get batch: %v", err)
+	}
+	if !exists {
+		return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
+	}
+
+	rows, err := tx.Query(ctx, `SELECT id, batch_code, stop_order, order_code,
+		vehicle_type, carrier_service_id, addon_services, status, cod_amount,
+		total_bill, fee FROM shipment_plannings WHERE batch_code = $1
+		ORDER BY stop_order`, req.GetBatchCode())
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "load plannings: %v", err)
+	}
+	var plannings []*batchingv1.ShipmentPlanning
+	for rows.Next() {
+		p, err := scanPlanningRow(rows)
+		if err != nil {
+			rows.Close()
+			return nil, status.Errorf(grpccodes.Internal, "scan planning: %v", err)
+		}
+		plannings = append(plannings, p)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "scan plannings: %v", err)
+	}
+	rows.Close()
+
+	var cancelled int
+	results := make([]*batchingv1.CancelDeliveryBatchResult, 0, len(plannings))
+	for _, p := range plannings {
+		final := p.GetStatus()
+		switch p.GetStatus() {
+		case planningBooked:
+			// Booking ACTIVE (chưa CANCELLED/COMPLETED/FAILED) → hủy.
+			bookingID, carrierID, found, err := currentBooking(ctx, tx, p.GetId(), true)
+			if err != nil {
+				return nil, err
+			}
+			if found {
+				if err := s.cancelBookingRow(ctx, tx, bookingID, carrierID, req.GetReason()); err != nil {
+					return nil, err
+				}
+			}
+			if _, err := tx.Exec(ctx, `UPDATE shipment_plannings SET
+				status = $1, updated_at = now() WHERE id = $2`, planningCancelled, p.GetId()); err != nil {
+				return nil, status.Errorf(grpccodes.Internal, "cancel planning %d: %v", p.GetId(), err)
+			}
+			final = planningCancelled
+			cancelled++
+		case planningConfirmed:
+			// Chưa book → về DRAFT (chờ cấu hình lại).
+			if _, err := tx.Exec(ctx, `UPDATE shipment_plannings SET
+				status = $1, updated_at = now() WHERE id = $2`, planningDraft, p.GetId()); err != nil {
+				return nil, status.Errorf(grpccodes.Internal, "unconfirm planning %d: %v", p.GetId(), err)
+			}
+			final = planningDraft
+		}
+		results = append(results, &batchingv1.CancelDeliveryBatchResult{
+			PlanningId: planningID(p.GetId()),
+			Status:     final,
+		})
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "commit cancel batch: %v", err)
+	}
+	return &batchingv1.CancelDeliveryBatchResponse{
+		Results:        results,
+		CancelledCount: int32(cancelled),
+		Meta:           meta(s.nvc),
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// booking/cancel helpers
+// ---------------------------------------------------------------------------
+
+// parsePlanningID — planning_id proto = chuỗi id DB (decimal).
+func parsePlanningID(s string) (int64, error) {
+	return strconv.ParseInt(s, 10, 64)
+}
+
+// currentBooking — booking mới nhất của planning (id DESC — §3.4 tie-break
+// deterministic). activeOnly=true (cancel-batch): bỏ cả COMPLETED/FAILED;
+// false (cancel order): chỉ bỏ CANCELLED.
+func currentBooking(ctx context.Context, tx pgx.Tx, planningID int64, activeOnly bool) (id int64, carrierID string, found bool, err error) {
+	var r pgx.Row
+	if activeOnly {
+		r = tx.QueryRow(ctx, `SELECT id, carrier_booking_id FROM bookings
+			WHERE planning_id = $1 AND status NOT IN ($2, $3, $4)`,
+			planningID, bookingCancelled, bookingCompleted, bookingFailed)
+	} else {
+		r = tx.QueryRow(ctx, `SELECT id, carrier_booking_id FROM bookings
+			WHERE planning_id = $1 AND status <> $2`, planningID, bookingCancelled)
+	}
+	err = r.Scan(&id, &carrierID)
+	if err == pgx.ErrNoRows {
+		return 0, "", false, nil
+	}
+	if err != nil {
+		return 0, "", false, status.Errorf(grpccodes.Internal, "current booking: %v", err)
+	}
+	return id, carrierID, true, nil
+}
+
+// cancelBookingRow — 1 booking → CANCELLED + tracking event (BE); gọi
+// adapter.Cancel best-effort (lỗi provider log, không fail — server owns
+// persistence, spec §3.1).
+func (s *DeliveryBatchServer) cancelBookingRow(ctx context.Context, tx pgx.Tx, bookingID int64, carrierBookingID, reason string) error {
+	now := s.now()
+	if _, err := tx.Exec(ctx, `UPDATE bookings SET
+		status = $1, cancelled_at = $2, cancel_reason = $3 WHERE id = $4`,
+		bookingCancelled, now, reason, bookingID); err != nil {
+		return status.Errorf(grpccodes.Internal, "cancel booking %d: %v", bookingID, err)
+	}
+	if _, err := tx.Exec(ctx, `INSERT INTO shipment_tracking_events
+		(booking_id, status, source, occurred_at, note) VALUES ($1,$2,$3,$4,$5)`,
+		bookingID, eventCancelled, sourceBE, now, reason); err != nil {
+		return status.Errorf(grpccodes.Internal, "tracking event cancel booking %d: %v", bookingID, err)
+	}
+	if err := s.nvc.Cancel(ctx, carrierBookingID, reason); err != nil {
+		log.Printf("[AHAMOVE] cancel %s best-effort failed (bỏ qua): %v", carrierBookingID, err)
+	}
+	return nil
+}
+
+// ---------------------------------------------------------------------------
 // helpers
 // ---------------------------------------------------------------------------
 
-func meta(nvc ahamove.Client) *batchingv1.ResponseMeta { return &batchingv1.ResponseMeta{Mock: nvc.IsMock()} }
+func meta(nvc ahamove.Client) *batchingv1.ResponseMeta {
+	return &batchingv1.ResponseMeta{Mock: nvc.IsMock()}
+}
 
 // feeLimit — limit_amount của shop; row thiếu → (0, false) = không giới hạn.
 func (s *DeliveryBatchServer) feeLimit(ctx context.Context, shopCode string) (int64, bool, error) {
