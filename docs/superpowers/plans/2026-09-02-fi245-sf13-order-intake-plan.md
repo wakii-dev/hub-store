@@ -207,11 +207,11 @@ CREATE TABLE activity_log (
 );
 CREATE INDEX idx_activity_log_target ON activity_log (target);
 ```
-- [ ] Verify compile/migrate: boot local nếu DB đang chạy (`cd services/fulfillment-service && ./run.sh` → log Flyway V2 applied, exit sau khi thấy "Migrating schema") HOặT IT test ở Task 4 sẽ cover. Sanity SQL check cột: `psql ... -c '\d orders'` thấy 7 cột mới.
+- [ ] Verify migrate: `docker compose up -d postgres` rồi `cd services/fulfillment-service && ./run.sh` (boot thật — Flyway V2 applied trong log) hoặc tối thiểu psql sanity BẮT BUỘC: `docker compose exec postgres psql -U hubstore -d fulfillment -c '\d orders'` thấy 7 cột mới + `\d activity_log` đủ 6 cột. IT ở Task 4 cover thêm.
 - [ ] Commit: `feat(fi245-sf13): Flyway V2 intake schema + activity_log (SF-7 contract, canonical)`
 
 ### Task 3 — Java: SeedModels mở rộng + OrderRepository mở rộng + InMemory impl + unit tests
-**Depends:** Task 1 (proto enums không cần trực tiếp nhưng gen java cần cho Task 5; Task 3 thuần repo nên chỉ cần Task 2 schema)
+**Depends:** Task 2 (thuần repo layer — proto gen của T1 không cần đến T5 mới dùng)
 **Files:**
 - Modify: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/seed/SeedModels.java`
 - Modify: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/store/OrderRepository.java`
@@ -338,12 +338,12 @@ public final class IntakeValidator {
 }
 ```
 - [ ] `IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase` (`@GrpcService`) — inject OrderRepository. Mỗi RPC đọc actor từ metadata `Context.current().getCallCredentials()`? — KHÔNG: pattern hiện có là BFF gửi metadata; đọc trong interceptor: dùng `io.grpc.Context` key đăng ký qua `ServerInterceptor` hoặc đơn giản: đọc `Metadata` từ `Context.current().call(...)`. Cách đúng theo codebase hiện có: kiểm tra `GrpcErrors`/interceptor hiện có (tìm `x-user-role` trong fulfillment-service — nếu đã có interceptor đọc metadata, làm y hệt với `x-user-name`; nếu KHÔNG có, tạo `ActorInterceptor implements ServerInterceptor` đặt `Context.key("x-user-name")`).
-  - `validateImportOrders`: map proto IntakeOrder→OrderSeed tạm (fulfillCode="") → validate → errors[]; rỗng = valid.
-  - `confirmImportOrders`: validate lại; còn lỗi → `Status.FAILED_PRECONDITION.withDescription(...)` + metadata x-error-details (pattern GrpcErrors). Pass → `repo.nextFulfillCodes(n)` → dựng orders đầy đủ (statusCode=0, orderStatus=1, batchStatus=0, batchCode=null, times=null, shopAssignment từ shopHint lookup distinctShops — shopHint rỗng → shopAssignment null, createdTime=now) → `insertOrders` → appendAudit actor "order.imported" target=code đầu..cuối (1 entry target = join "," codes, detail {"count":n}) → trả codes theo thứ tự.
+  - `validateImportOrders`: map proto IntakeOrder→OrderSeed tạm (fulfillCode="") → validate → errors[] TRONG RESPONSE BODY (không dùng metadata — BFF đọc resp.errors); rỗng = valid.
+  - `confirmImportOrders`: validate lại; còn lỗi → `GrpcErrors.invalidArgument` (INVALID_ARGUMENT → BFF map 422 sẵn, KHÔNG dùng FAILED_PRECONDITION — grpc-error.ts không map status 9) description = "Import có N dòng lỗi". Pass → `repo.nextFulfillCodes(n)` → dựng orders đầy đủ (statusCode=0, orderStatus=1, batchStatus=0, batchCode=null, times=null, shopAssignment từ shopHint lookup distinctShops — shopHint rỗng → shopAssignment null, createdTime=now) → `insertOrders` → **appendAudit 1 entry PER ORDER** (actor, action "order.imported", target=code, detail {"importedAt":...}) → trả codes theo thứ tự. (Per-order target để GET /orders/:code/audit thấy được từng đơn — join-target sẽ trả 0 entries.)
   - `createManualOrder`: validate 1 đơn → nextFulfillCodes(1) → insert → audit order.created → trả code.
-  - `markOrderFailed`: order tồn tại (NOT_FOUND) + chưa FAILED (FAILED_PRECONDITION "Đơn đã FAILED") → `markFailed` → audit order.failed (detail {"reason","note"}) → EMPTY response.
-  - `redeliverOrder`: gốc tồn tại + `failReason != null` + `!hasRetry(code)` (FAILED_PRECONDITION "Đơn đã được giao lại") → nextFulfillCodes(1) → đơn MỚI copy (customerName/Phone/Address, items, codAmount, totalQuantity, shopAssignment) + oldFulfillCode=code + note="Giao lại từ "+code + oldFulfillCode → insert → audit order.redelivered target=code mới detail {"oldFulfillCode":code} → trả new code.
-  - `getOrderAudit`: trả entries (detail JSONB text giữ nguyên chuỗi).
+  - `markOrderFailed`: order tồn tại (NOT_FOUND) + chưa FAILED (INVALID_ARGUMENT "Đơn đã FAILED") → `markFailed` → audit order.failed (detail {"reason","note"} — reason là **enum name string** `KHACH_VANG|SAI_DIA_CHI|KHACH_TU_CHOI|KHAC`, khớp cột fail_reason + FE tag render) → EMPTY response.
+  - `redeliverOrder`: gốc tồn tại + `failReason != null` + `!hasRetry(code)` (INVALID_ARGUMENT "Đơn đã được giao lại") → nextFulfillCodes(1) → đơn MỚI copy (customerName/Phone/Address, items, codAmount, totalQuantity, shopAssignment) + oldFulfillCode=code + note="Giao lại từ "+code → insert → audit order.redelivered target=code mới detail {"oldFulfillCode":code} → trả new code.
+  - `getOrderAudit`: code lạ → `GrpcErrors.notFound` (404); trả entries (detail JSONB text giữ nguyên chuỗi).
 - [ ] Unit test validator: các rule (phone sai định dạng, quantity lệch, items rỗng, shopHint lạ, hàng lỗi đúng cột).
 - [ ] `mvn -q test` xanh toàn bộ.
 - [ ] Commit: `feat(fi245-sf13): IntakeService gRPC — validate/confirm/manual/fail/redeliver/audit`
@@ -377,8 +377,8 @@ export function parseOrdersFile(filename: string, buffer: Buffer): { rows: RawRo
 ```
 - [ ] Routes `routes/intake.ts` (đăng ký trong app.ts sau fulfillment):
   - `GET /orders/import/template` — role: Coordinator; `reply.type('text/csv').header('Content-Disposition','attachment; filename="order-import-template.csv"').send(templateCsv())`.
-  - `POST /orders/import/preview` — Coordinator; `request.file()` (multipart) → parseOrdersFile → gRPC validateImportOrders(orders) → gRPC errors + parse errors gộp → `{ valid, errors }` (ImportPreviewResponse).
-  - `POST /orders/import/confirm` — Coordinator; body `{orders: IntakeOrderDto[]}` → gRPC confirmImportOrders → `{ fulfillCodes }`; catch FAILED_PRECONDITION → 422 envelope (pattern sendGrpcError — kiểm tra lib/grpc-error.ts map sẵn status 9).
+  - `POST /orders/import/preview` — Coordinator; `request.file()` (multipart) → parseOrdersFile → gRPC validateImportOrders(orders) → errors = resp.errors (response body) + parse errors gộp → `{ valid, errors }` (ImportPreviewResponse). **Row indexing: row parse-fail vẫn giữ vị trí bằng cách gửi IntakeOrder placeholder rỗng vào request — giữ 1-based indexing ổn định giữa parse errors và validation errors.**
+  - `POST /orders/import/confirm` — Coordinator; body `{orders: IntakeOrderDto[]}` → gRPC confirmImportOrders → `{ fulfillCodes }`; service trả INVALID_ARGUMENT khi re-validate fail → sendGrpcError tự map 422 (đã có sẵn, không đổi grpc-error.ts).
   - `POST /orders` — Coordinator; body IntakeOrderDto → createManualOrder → `{ fulfillCode }` 201.
   - `POST /orders/:code/fail` — WarehouseOps (check `user.role !== 'WarehouseOps'` → 403 envelope); body `{reason: number, note?: string}` → markOrderFailed → 204/`{}`.
   - `POST /orders/:code/redeliver` — WarehouseOps → redeliverOrder → `{ fulfillCode }` 201.
@@ -395,7 +395,8 @@ export function parseOrdersFile(filename: string, buffer: Buffer): { rows: RawRo
 - Create: `apps/orders/src/features/ImportOrdersModal.tsx` (+ `.test.tsx`)
 - Modify: `apps/orders/src/pages/D1Page.tsx` (2 nút mới trên FilterBar/bulk area — KHÔNG đụng testid/DOM cột cũ)
 - Modify: `apps/orders/src/features/OrdersExpandContent.tsx` (expand: khách/SĐT + oldFulfillCode link nếu có)
-- Modify: `packages/api-client/src/slices/intake.ts` (MỚI — injectEndpoints: previewImport mutation POST /orders/import/preview (FormData — kiểm tra axiosBaseQuery hỗ trợ data FormData; nếu không, dùng axios instance trực tiếp `getAxiosInstance()` trong component), confirmImport, createManualOrder, failOrder? (fail/redeliver thuộc D2 — đặt ở đây vẫn được, shared singleton), getAudit) + `tags.ts` thêm tag nếu cần + invalidate `Fulfillment LIST` sau mutation thành công.
+- Modify: `packages/api-client/src/slices/intake.ts` (MỚI — injectEndpoints: `previewImport` POST /orders/import/preview (FormData qua axios instance trực tiếp nếu axiosBaseQuery không hỗ trợ), `confirmImport` POST /orders/import/confirm, `createManualOrder` POST /orders — **CHỈ 3 endpoints này; fail/redeliver thuộc T8 (deconflict RTKQ singleton tránh duplicate endpoint khi merge)**) + invalidate `Fulfillment LIST` sau mutation.
+- Modify: `packages/api-client/src/index.ts` (side-effect import `'./slices/intake'` — BẮT BUỘC, endpoints không được inject nếu thiếu; pattern imports hiện có trong file)
 - Modify: `apps/orders/src/i18n.ts` (registerOrdersResources — keys orders.intake.*)
 
 Steps:
@@ -412,19 +413,19 @@ Steps:
 **Depends:** Task 6
 **Files:**
 - Create: `apps/fulfillment/src/features/MarkFailModal.tsx` (+ test)
-- Modify: `apps/fulfillment/src/api/batchesApi.ts` (inject mutations failOrder/redeliverOrder/getAudit — app này dùng axios trực tiếp qua batchesApi pattern hiện có, KHÔNG qua packages/api-client — kiểm tra pattern rồi theo đúng pattern file đó)
-- Modify: `apps/fulfillment/src/pages/BatchListPage.tsx` (expanded row: với items có orderStatus/batch DONE — thêm 2 nút per-item: "Mark thất bại" + khi `failReason` có → tag lý do + nút "Giao lại")
+- Modify: `apps/fulfillment/src/api/batchesApi.ts` (inject mutations `failOrder` POST /orders/:code/fail + `redeliverOrder` POST /orders/:code/redeliver — file này đã inject vào RTKQ singleton `api` từ '@hub-store/api-client' (đã verify — KHÔNG phải axios trực tiếp); **chỉ 2 endpoints này, getAudit không có FE — chỉ E2E gọi REST**)
+- Modify: `apps/fulfillment/src/pages/BatchListPage.tsx` (expanded row: thêm 2 nút per-item "Mark thất bại" + khi FAILED → tag lý do + nút "Giao lại")
 - Modify: `apps/fulfillment/src/i18n.ts` (keys fulfillment.exception.*)
 
-**Vấn đề dữ liệu:** BatchingItem (D2 rows) KHÔNG có fulfillCode/failReason — D2 item dùng `orderCode` (RSA). Cần thêm: BFF route GET batch detail trả items đã hydration? → đơn giản nhất: `GET /fulfillment/:code` detail RPC có sẵn (GetOrderDetail dual-match ORD/RSA). Per-row khi bấm mark-fail: resolve order theo orderCode (dual-match hoạt động với RSA) → nhưng hiển thị nút điều kiện theo failReason cần dữ liệu per-row → chốt: Task 8 thêm route BFF MỚI `GET /batching/:batchCode/orders` trả các `HubStoreOrderFilterItem` của batch (Java đã có GetOrdersByCodes — BFF gọi với codes từ batch detail rồi map; tất cả additive). FE fetch sau khi expand + refetch sau mutation.
-- Modify: `services/bff-gateway/src/routes/intake.ts` hoặc `routes/batches.ts` (thêm route GET /batching/:batchCode/orders — gọi batching getBatchDetail + fulfillment getOrdersByCodes, gộp theo orderCode)
+**Vấn đề dữ liệu:** BatchingItem (D2 rows) KHÔNG có fulfillCode/failReason — D2 item chỉ có `orderCode` (RSA). Chốt: thêm route BFF MỚI **`GET /orders/by-batch/:batchCode`** trả `HubStoreOrderFilterItem[]` của batch (BFF owns aggregation: gọi batching getBatchDetail → codes → fulfillment getOrdersByCodes; additive). FE fetch khi expand + refetch sau mutation. (Prefix `/orders*` thống nhất cho cả intake surface theo context pack touch map `/orders/import, /orders, /orders/{id}/fail, /redeliver` — có lệch với convention `/fulfillment/*` hiện có, đây là chủ đích theo context pack; ghi 1 câu vào spec errata.)
+- Modify: `services/bff-gateway/src/routes/intake.ts` (thêm route GET /orders/by-batch/:batchCode + contract test trong cùng test file T6)
 Steps:
 - [ ] Route BFF gộp (as BFF owns aggregation — spec §3.3 pattern).
 - [ ] `MarkFailModal`: Select lý do (DELIVERY_FAIL_REASON labels) + TextArea note + submit → failOrder → message + invalidate. data-testid: `mark-fail-button-{orderCode}`, `mark-fail-modal`, `fail-reason-select`, `fail-note`, `fail-submit`, `redeliver-button-{orderCode}`.
 - [ ] BatchListPage expanded row: fetch batch orders → mỗi item render failReason tag (nếu có, data-testid `fail-tag-{code}`) + nút Mark thất bại (ẩn khi đã FAILED) + nút Giao lại (chỉ khi FAILED && chưa có retry — server gate là chốt cuối, FE chỉ ẩn: check có `oldFulfillCode`-order trong list? — đơn giản: luôn hiện nút Giao lại trên đơn FAILED; double-redeliver server chặn FAILED_PRECONDITION → message lỗi).
 - [ ] Sau redeliver thành công: message "Đã tạo đơn giao lại ORD-xxxx" + invalidate.
 - [ ] Unit test MarkFailModal (chọn lý do + submit gọi mutation).
-- [ ] `pnpm --filter <fulfillment> test && build` xanh.
+- [ ] `pnpm --filter @hub-store/fulfillment test && pnpm --filter @hub-store/fulfillment build` xanh.
 - [ ] Commit: `feat(fi245-sf13): D2 mark-fail lý do + giao lại + batch orders hydration route`
 
 ### Task 9 — E2E specs 05/06 + toàn bộ specs xanh
@@ -459,6 +460,7 @@ test 4 — double-redeliver chặn: bấm Giao lại lần nữa trên cùng đ�
 ### Task 10 — Final verify + review + merge + close
 **Depends:** Task 9
 Steps:
+- [ ] Verify improvements-log đã có 2 entries (R1 merge-rule V2 canonical + R6 field-numbers 16-20) — đã ghi ở spec round-2 (commit f99e1af); nếu thiếu do merge conflict → bổ sung trước khi review.
 - [ ] Verify từng dòng ACCEPTANCE context pack (4 dòng) — ghi evidence từng dòng vào comment Linear.
 - [ ] Dispatch code-reviewer ĐỘC LẬP trên toàn diff SF (`git diff <merge-base>..HEAD`), verdict → `/tmp/story/fi245/reviewer-sf13.md`; CHANGES-REQUESTED → fix → re-review đến APPROVED.
 - [ ] MERGE (guard đúng thứ tự):
