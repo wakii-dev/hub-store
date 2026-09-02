@@ -14,6 +14,7 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.OffsetDateTime;
 import java.util.Comparator;
 import java.util.List;
 import java.util.Map;
@@ -62,6 +63,9 @@ class PostgresOrderRepositoryIT {
     private static String savedShopAddress;
     private static long savedMaxHistoryId;
     private static int savedHistoryCount;
+    private static OffsetDateTime savedDeliveryFrom;
+    private static OffsetDateTime savedDeliveryTo;
+    private static String savedNote;
 
     @BeforeAll
     static void connectOrSkip() {
@@ -119,9 +123,15 @@ class PostgresOrderRepositoryIT {
 
     private static void snapshotSeedState() {
         Map<String, Object> row = jdbc.queryForMap(
-                "SELECT batch_status, batch_code FROM orders WHERE fulfill_code = ?", MUTATE_CODE);
+                "SELECT batch_status, batch_code, note FROM orders WHERE fulfill_code = ?", MUTATE_CODE);
         savedBatchStatus = ((Number) row.get("batch_status")).intValue();
         savedBatchCode = (String) row.get("batch_code");
+        savedNote = (String) row.get("note");
+        // timestamptz phải đọc tường minh OffsetDateTime (queryForMap → java.sql.Timestamp).
+        savedDeliveryFrom = jdbc.queryForObject(
+                "SELECT delivery_time_from FROM orders WHERE fulfill_code = ?", OffsetDateTime.class, MUTATE_CODE);
+        savedDeliveryTo = jdbc.queryForObject(
+                "SELECT delivery_time_to FROM orders WHERE fulfill_code = ?", OffsetDateTime.class, MUTATE_CODE);
         Map<String, Object> shop = jdbc.queryForMap(
                 "SELECT shop_code, shop_name, shop_address FROM orders WHERE fulfill_code = ?", ASSIGN_CODE);
         savedShopCode = (String) shop.get("shop_code");
@@ -148,6 +158,9 @@ class PostgresOrderRepositoryIT {
         }
         jdbc.update("UPDATE orders SET batch_status = ?, batch_code = ? WHERE fulfill_code = ?",
                 savedBatchStatus, savedBatchCode, MUTATE_CODE);
+        jdbc.update("UPDATE orders SET delivery_time_from = ?, delivery_time_to = ?, note = ? "
+                        + "WHERE fulfill_code = ?",
+                savedDeliveryFrom, savedDeliveryTo, savedNote, MUTATE_CODE);
         jdbc.update("UPDATE orders SET shop_code = ?, shop_name = ?, shop_address = ? WHERE fulfill_code = ?",
                 savedShopCode, savedShopName, savedShopAddress, ASSIGN_CODE);
         jdbc.update("DELETE FROM shop_assignment_history WHERE fulfill_code = ? AND id > ?",
@@ -224,8 +237,20 @@ class PostgresOrderRepositoryIT {
         assertThat(page1.items()).hasSize(10);
         assertThat(page2.items()).hasSize(10);
         assertThat(codes(page1.items())).doesNotContainAnyElementsOf(codes(page2.items()));
-        // Total đồng nhất giữa 2 page (COUNT(*) OVER() — window count, không phải count trang).
+        // Total đồng nhất giữa 2 page (scalar-subquery count, không phải count trang).
         assertThat(page1.total()).isEqualTo(page2.total());
+    }
+
+    @Test
+    void filterTotalSurvivesPageBeyondLastPage() {
+        // Page vượt last page → items rỗng NHƯNG total vẫn = tổng matched
+        // (khớp in-memory: total = matched.size() kể cả items rỗng).
+        var f = filter(null, Set.of(), Set.of(), Set.of(), 99, 10);
+        var p = pg.filter(f);
+        var m = mem.filter(f);
+        assertThat(p.items()).isEmpty();
+        assertThat(m.items()).isEmpty();
+        assertThat(p.total()).isEqualTo(m.total()).isEqualTo(seed.orders().size());
     }
 
     @Test
@@ -327,5 +352,109 @@ class PostgresOrderRepositoryIT {
         assertThat(hist.get(hist.size() - 1).getChangedBy()).isEqualTo("it-test-2");
         // FK canonical code — ORD- (assign với ORD-code).
         assertThat(hist.get(hist.size() - 1).getFulfillCode()).isEqualTo(ASSIGN_CODE);
+    }
+
+    @Test
+    void updateDeliveryTimeAndNotePersistThenRestore() {
+        var newRange = new SeedModels.TimeRangeSeed("2026-09-10T08:00:00+07:00", "2026-09-10T12:00:00+07:00");
+        pg.updateDeliveryTime(MUTATE_CODE, newRange);
+        pg.updateNote(MUTATE_CODE, "it-note-check");
+
+        // Repo read-back — instants khớp (format ISO-UTC khác +07:00 seed là chấp nhận).
+        SeedModels.OrderSeed reread = pg.findByFulfillCode(MUTATE_CODE).orElseThrow();
+        assertThat(OffsetDateTime.parse(reread.deliveryTime().from()).toInstant())
+                .isEqualTo(OffsetDateTime.parse("2026-09-10T08:00:00+07:00").toInstant());
+        assertThat(OffsetDateTime.parse(reread.deliveryTime().to()).toInstant())
+                .isEqualTo(OffsetDateTime.parse("2026-09-10T12:00:00+07:00").toInstant());
+        assertThat(reread.note()).isEqualTo("it-note-check");
+
+        // DB state thật đã đổi.
+        OffsetDateTime dbFrom = jdbc.queryForObject(
+                "SELECT delivery_time_from FROM orders WHERE fulfill_code = ?",
+                OffsetDateTime.class, MUTATE_CODE);
+        assertThat(dbFrom.toInstant())
+                .isEqualTo(OffsetDateTime.parse("2026-09-10T08:00:00+07:00").toInstant());
+        assertThat(jdbc.queryForObject(
+                "SELECT note FROM orders WHERE fulfill_code = ?", String.class, MUTATE_CODE))
+                .isEqualTo("it-note-check");
+        // Restore deliveryTime + note qua @AfterEach.
+    }
+
+    @Test
+    void getHistoryWithRsaCodeReturnsEmptyLikeInMemory() {
+        // In-memory: historyByCode key là fulfillCode — RSA-code → miss → empty.
+        String rsa = seed.orders().get(0).orderCode();
+        assertThat(pg.getHistory(rsa)).isEmpty();
+        assertThat(mem.getHistory(rsa)).isEmpty();
+        // Positive control: ORD-code — pg/mem cùng số entry seed.
+        String ord = seed.orders().get(0).fulfillCode();
+        assertThat(pg.getHistory(ord)).hasSameSizeAs(mem.getHistory(ord));
+    }
+
+    @Test
+    void regionsAndDeliveryStaffMatchInMemoryInsertionOrder() {
+        // Region test (ZZTEST-ESC, INSERT @BeforeAll) chưa bị xóa lúc test chạy —
+        // loại khỏi parity (in-memory seed không có nó).
+        assertThat(pg.regions().stream()
+                        .filter(r -> !ESCAPE_REGION_CODE.equals(r.code())).toList())
+                .extracting(SeedModels.RegionSeed::code)
+                .containsExactlyElementsOf(
+                        mem.regions().stream().map(SeedModels.RegionSeed::code).toList());
+        assertThat(pg.deliveryStaff()).extracting(SeedModels.DeliveryStaffSeed::staffId)
+                .containsExactlyElementsOf(
+                        mem.deliveryStaff().stream().map(SeedModels.DeliveryStaffSeed::staffId).toList());
+    }
+
+    @Test
+    void excludeFulfillCodesFilterParityWithInMemory() {
+        String excluded = seed.orders().get(0).fulfillCode();
+        var f = new OrderFilter(null, Set.of(), null, Set.of(), Set.of(), Set.of(), null, null,
+                Set.of(excluded), 1, 100);
+        var p = pg.filter(f);
+        var m = mem.filter(f);
+        assertThat(p.total()).isEqualTo(m.total()).isEqualTo(seed.orders().size() - 1);
+        assertThat(codes(p.items())).containsExactlyElementsOf(codes(m.items()));
+        assertThat(codes(p.items())).noneMatch(c -> c.equals(excluded));
+    }
+
+    @Test
+    void pageAndPageSizeNormalizationParityWithInMemory() {
+        // page<1 → 1, pageSize<=0 → 10 — cả 2 impl cùng normalize.
+        var f = new OrderFilter(null, Set.of(), null, Set.of(), Set.of(), Set.of(), null, null,
+                Set.of(), 0, 0);
+        var p = pg.filter(f);
+        var m = mem.filter(f);
+        assertThat(p.total()).isEqualTo(m.total()).isEqualTo(seed.orders().size());
+        assertThat(codes(p.items())).containsExactlyElementsOf(codes(m.items()));
+        assertThat(p.items()).hasSize(10);
+    }
+
+    @Test
+    void mutateBatchStatusNonZeroKeepsBatchCode() {
+        List<SeedModels.OrderSeed> updated = pg.mutateBatchStatus(List.of(MUTATE_CODE), 2);
+        assertThat(updated).hasSize(1);
+        assertThat(updated.get(0).batchCode()).isEqualTo("BATCH-0001");
+
+        // DB state thật: batch_status=2, batch_code GIỮ NGUYÊN (chỉ target=0 clear).
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT batch_status, batch_code FROM orders WHERE fulfill_code = ?", MUTATE_CODE);
+        assertThat(((Number) row.get("batch_status")).intValue()).isEqualTo(2);
+        assertThat(row.get("batch_code")).isEqualTo("BATCH-0001");
+        assertThat(pg.findByFulfillCode(MUTATE_CODE).orElseThrow().batchCode()).isEqualTo("BATCH-0001");
+        // Restore batch_status/batch_code qua @AfterEach.
+    }
+
+    @Test
+    void deliveryTimeOverlapFilterParityWithInMemory() {
+        // Khoảng bao trùm 1 phần seed (to=09-04T12 ≥ fFrom; from=09-03T08 ≤ fTo),
+        // loại các đơn giao 09-03 sáng / 09-01 / 08-31.
+        var range = new SeedModels.TimeRangeSeed("2026-09-03T14:00:00+07:00", "2026-09-04T09:00:00+07:00");
+        var f = new OrderFilter(null, Set.of(), range, Set.of(), Set.of(), Set.of(), null, null,
+                Set.of(), 1, 100);
+        var p = pg.filter(f);
+        var m = mem.filter(f);
+        assertThat(p.total()).isEqualTo(m.total());
+        assertThat(p.total()).isGreaterThan(0);
+        assertThat(codes(p.items())).containsExactlyElementsOf(codes(m.items()));
     }
 }

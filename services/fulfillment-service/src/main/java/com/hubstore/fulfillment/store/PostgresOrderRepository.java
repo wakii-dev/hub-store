@@ -49,8 +49,11 @@ public class PostgresOrderRepository implements OrderRepository {
     // ---------------- reads ----------------
 
     /**
-     * INVARIANT: 1 query duy nhất — total từ COUNT(*) OVER() của row đầu
-     * (2 statement trong READ COMMITTED vẫn race khi có mutation xen giữa).
+     * INVARIANT: 1 query duy nhất — total từ scalar subquery COUNT(*) với CÙNG
+     * WHERE động (build 1 lần, tái dùng) — 1 statement = 1 snapshot, không race.
+     * Total anchor qua LEFT JOIN LATERAL: subquery count luôn có ≥1 row, nên
+     * page vượt last page (items rỗng) VẪN trả total đúng (in-memory: total =
+     * matched.size() kể cả items rỗng — window count cũ mất total khi 0 row).
      */
     @Override
     public FilterResult filter(OrderFilter f) {
@@ -98,22 +101,28 @@ public class PostgresOrderRepository implements OrderRepository {
         int page = Math.max(f.page(), 1);
         int pageSize = f.pageSize() <= 0 ? 10 : f.pageSize();
 
-        String sql = "SELECT " + ORDER_COLS + ", COUNT(*) OVER() AS total_cnt FROM orders" + where
-                + " ORDER BY id ASC, fulfill_code ASC OFFSET ? LIMIT ?";
-        params.add((long) (page - 1) * pageSize);
-        params.add(pageSize);
+        // 1 statement: count subquery (cùng WHERE) anchor row + lateral page rows.
+        // Anchor row (0 items) → fulfill_code NULL → chỉ đọc total, không map order.
+        String whereSql = where.toString();
+        String sql = "SELECT c.total_all, o.* FROM (SELECT count(*) AS total_all FROM orders" + whereSql + ") c "
+                + "LEFT JOIN LATERAL (SELECT " + ORDER_COLS + " FROM orders" + whereSql
+                + " ORDER BY id ASC, fulfill_code ASC OFFSET ? LIMIT ?) o ON TRUE";
+        List<Object> args = new ArrayList<>(params);
+        args.addAll(params);
+        args.add((long) (page - 1) * pageSize);
+        args.add(pageSize);
 
         FilterResult result = jdbc.query(sql, rs -> {
             List<SeedModels.OrderSeed> items = new ArrayList<>();
             long total = 0;
             while (rs.next()) {
-                if (total == 0) {
-                    total = rs.getLong("total_cnt");
+                total = rs.getLong("total_all");
+                if (rs.getString("fulfill_code") != null) {
+                    items.add(mapOrder(rs));
                 }
-                items.add(mapOrder(rs));
             }
-            return new FilterResult(items, total); // query rỗng → total 0
-        }, params.toArray());
+            return new FilterResult(items, total);
+        }, args.toArray());
         return result;
     }
 
