@@ -40,7 +40,7 @@ BE thiếu toàn bộ data model + APIs cho đơn dịch vụ kỹ thuật; SF-2
 ## 3. Touch map
 - Create: `api/proto/hubstore/fulfillment/v1/tech_service.proto` + regen `api/proto/gen/{java,go,ts,python}/**`
 - Create: `services/fulfillment-service/src/main/resources/db/migration/V6__tech_service_schema.sql`
-- Create: `store/TechModels.java`, `store/TechOrderRepository.java`, `store/InMemoryTechOrderRepository.java`, `store/PostgresTechOrderRepository.java`, `service/TechServiceImpl.java`, `config/TechRepositoryConfig.java`
+- Create: `store/TechModels.java`, `store/TechOrderRepository.java`, `store/InMemoryTechOrderRepository.java`, `store/PostgresTechOrderRepository.java`, `service/TechServiceImpl.java`, `config/TechRepositoryConfig.java`, `seed/TechSeedLoader.java`
 - Modify: `config/OrderRepositoryConfig.java` (KHÔNG — giữ nguyên; tech beans file riêng `TechRepositoryConfig`)
 - Create: `api/seed/tech-sample.json`; Modify additive: `scripts/seed-db.sh`, `scripts/reset-db.sh`
 - Create: `services/bff-gateway/src/clients/tech.ts`, `src/routes/tech.ts`, `src/mappers/tech.ts`; Modify: `src/clients/index.ts`, `src/app.ts` (register routes), `src/config.ts` (không cần — dùng grpc.fulfillment addr), `test/harness.ts` + contract test mới
@@ -49,6 +49,7 @@ BE thiếu toàn bộ data model + APIs cho đơn dịch vụ kỹ thuật; SF-2
 ## 4. Design
 - **Approach:** proto file mới additive cùng package `hubstore.fulfillment.v1`, service `TechService` — dismiss extend fulfillment.proto (pin SF-2) và BFF-talk-DB trực tiếp (phá layering).
 - **10 mã trạng thái** (assumption, REQUIREMENT-GAP đã post FI-245): NEW=0, CONFIRMED=1, PROCESSING=2, SHIPPING=3, DELIVERED=4, FAILED=5, REDELIVERY=6, RESCHEDULED=7, CANCELLED=8, RETURNED=9.
+- **Enum naming (buf STANDARD ENUM_VALUE_PREFIX — plan-critic P0):** proto enum values dùng prefix `DELIVERY_STATUS_*` (NEW→`DELIVERY_STATUS_NEW`, ...) khớp convention repo (BATCH_STATUS_*, ORDER_STATUS_*). DB/seed/BFF trả string THÔNG THƯỜNG ("NEW") — Java map ở biên proto: `name().substring("DELIVERY_STATUS_".length())` và ngược lại `DeliveryStatus.valueOf("DELIVERY_STATUS_" + s)`.
 - **Today default:** Java-side — date_from+date_to đều absent → `delivery_date = CURRENT_DATE`; timezone `Asia/Ho_Chi_Minh` qua JVM `-Duser.timezone` (compose env `JAVA_TOOL_OPTIONS`). Seed dùng placeholder `TODAY`/`TODAY-1` → seed-db.sh substitute `CURRENT_DATE [± N]`.
 - **Buttons matrix** — xem spec §5. Delivery chỉ trả allowCancel/allowReschedule; assign/reassign/accept chỉ installation. Server ENFORCE assign precondition → FAILED_PRECONDITION.
 - **History:** insert CẢ lần đầu (from NULL) — 1 transaction với update.
@@ -110,16 +111,16 @@ option java_package = "com.hubstore.fulfillment.v1";
 // SF-19 (FI-264) — Đơn dịch vụ kỹ thuật. Additive file — KHÔNG đụng fulfillment.proto.
 // 10 mã trạng thái (REQUIREMENT-GAP FI-245: assumption, xem spec SF-19 §4).
 enum DeliveryStatus {
-  NEW = 0;
-  CONFIRMED = 1;
-  PROCESSING = 2;
-  SHIPPING = 3;
-  DELIVERED = 4;
-  FAILED = 5;
-  REDELIVERY = 6;
-  RESCHEDULED = 7;
-  CANCELLED = 8;
-  RETURNED = 9;
+  DELIVERY_STATUS_NEW = 0;
+  DELIVERY_STATUS_CONFIRMED = 1;
+  DELIVERY_STATUS_PROCESSING = 2;
+  DELIVERY_STATUS_SHIPPING = 3;
+  DELIVERY_STATUS_DELIVERED = 4;
+  DELIVERY_STATUS_FAILED = 5;
+  DELIVERY_STATUS_REDELIVERY = 6;
+  DELIVERY_STATUS_RESCHEDULED = 7;
+  DELIVERY_STATUS_CANCELLED = 8;
+  DELIVERY_STATUS_RETURNED = 9;
 }
 
 message GeoPoint {
@@ -268,7 +269,7 @@ service TechService {
 ```bash
 cd api/proto && npx @bufbuild/buf@1.72.0 lint .
 ```
-Expected: 0 findings (ENUM_ZERO_VALUE_SUFFIX đã except trong buf.yaml).
+Expected: 0 findings (enum values đã prefix DELIVERY_STATUS_* — ENUM_VALUE_PREFIX pass; ENUM_ZERO_VALUE_SUFFIX đã except trong buf.yaml). Optional: `npx @bufbuild/buf@1.72.0 breaking .` — file mới additive nên pass.
 
 - [ ] **Step 3: Regen Go + Java + TS + Python** (chỉ file mới)
 
@@ -416,7 +417,7 @@ git commit -m "feat(fi245-sf19): Flyway V6 tech service schema (4 bảng)"
 - Create: `src/main/java/com/hubstore/fulfillment/store/InMemoryTechOrderRepository.java`
 - Test: `src/test/java/com/hubstore/fulfillment/TechServiceLogicTest.java`
 
-- [ ] **Step 1: TechModels.java** — records + flags matrix + suggest logic (pure, testable)
+- [ ] **Step 1: TechModels.java** — records + flags matrix + suggest logic (pure, testable). Status trong models = string THÔNG THƯỜNG ("NEW"...) — proto enum map ở TechServiceImpl (Task 5).
 
 ```java
 package com.hubstore.fulfillment.store;
@@ -553,7 +554,7 @@ Test cases (AssertJ, pattern FilterAndHydrationTest + CollectingObserver):
 
 **Files:**
 - Create: `src/main/java/com/hubstore/fulfillment/service/TechServiceImpl.java`
-- Test: mở rộng `TechServiceLogicTest` hoặc `TechGrpcValidationTest.java`
+- Test: `src/test/java/com/hubstore/fulfillment/TechGrpcValidationTest.java`
 
 - [ ] **Step 1: TechServiceImpl** — `@GrpcService extends TechServiceGrpc.TechServiceImplBase`, constructor inject TechOrderRepository + ObjectMapper. Mapping proto ↔ models:
   - `filterDeliveryOrders`: request → DeliveryFilter (statuses enum→name, dates parse LocalDate hoặc null, defaults page/pageSize như FulfillmentServiceImpl); today-default áp REPO-side khi date_from+date_to null (repo nhận null/null → CURRENT_DATE); response items map + `TechModels.deliveryButtons`
@@ -574,7 +575,7 @@ Test cases (AssertJ, pattern FilterAndHydrationTest + CollectingObserver):
   - `technicians`: 6 (KTV-001..004, CTV-001..002; vùng R1×4, R2×2; seq 1..6)
   - `deliveryOrders`: 10 — đủ 10 trạng thái (mỗi mã 1 đơn); code TD-0001..; receiver/sender tên+SĐT+lat/long quanh HCM (10.77/106.69 ±); items 1-2 món có categoryL1/categoryL2 (2 nhóm ngành); deliveryDate: 9 đơn `"TODAY"`, 1 đơn `"TODAY-1"`; coordination `{}` hoặc ghi chú phối hợp lắp
   - `installationOrders`: 8 — SO-0001..; 3 đơn chưa assign (status NEW/CONFIRMED/RESCHEDULED), 5 đã assign theo technician vùng tương ứng; 1 đơn expectedTime null; timeline JSONB mẫu 2-3 entry; serviceFee/feeAdjust số; deliveryOrderCode tham chiếu TD-* có thật
-- [ ] **Step 2: seed-db.sh — thêm block sau block batching (additive):**
+- [ ] **Step 2: seed-db.sh — thêm block CUỐI script, TRƯỚC echo "HOÀN TẤT" cuối cùng (additive, không đụng block cũ; cập nhật luôn message HOÀN TẤT để phản ánh tech):**
 
 ```bash
 SEED_TECH_JSON="${SEED_TECH_JSON:-$ROOT/api/seed/tech-sample.json}"
@@ -671,7 +672,7 @@ SQL
 
 **Files:**
 - Create: `src/clients/tech.ts`, `src/routes/tech.ts`, `src/mappers/tech.ts`
-- Modify: `src/clients/index.ts` (export), `src/app.ts` (register + harness deps), `test/harness.ts` (mock TechServiceService), `test/fixtures.ts`
+- Modify: `src/clients/index.ts` (export), `src/app.ts` (register + harness deps), `src/lib/grpc-error.ts` (thêm case FAILED_PRECONDITION → 409 CONFLICT), `test/harness.ts` (mock TechServiceService), `test/fixtures.ts`
 - Test: `test/tech.contract.test.ts`
 
 - [ ] **Step 1: clients/tech.ts** — pattern fulfillment.ts: interface `TechApi { filterDeliveryOrders(req, role); filterInstallationOrders(req, role); assignTechnician(req, role); suggestTechnicians(req, role); close(); }`; factory `createTechClient(addr, deadlineMs)` dùng `callUnary` từ grpc.ts, service def `TechServiceService` từ `../../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service.js`.
@@ -698,7 +699,7 @@ Mọi route: try/catch `sendGrpcError(reply, err, SERVICE_NAMES.fulfillment)`. R
 **Files:** không có code mới (chỉ verify + fix nếu bắt lỗi).
 
 - [ ] **Step 1: Boot chain** — `docker compose up -d postgres keycloak && bash scripts/wait-db.sh && docker compose run --rm orders-migrate && bash scripts/seed-db.sh` → psql: `SELECT count(*) FROM delivery_orders` = 10; `technicians` = 6; `installation_orders` = 8.
-- [ ] **Step 2: Boot fulfillment-service + BFF** — `cd services/fulfillment-service && ./run.sh run &` (Flyway on-boot idempotent), `cd services/bff-gateway && npm run dev &`. Health: grpc smoke qua `./run.sh smoke` nếu có.
+- [ ] **Step 2: Boot fulfillment-service + BFF** — `cd services/fulfillment-service && ./run.sh run &` (Flyway on-boot idempotent), `cd services/bff-gateway && npm run dev &`. Health signal = curl thành công ở Step 3 (không dùng smoke).
 - [ ] **Step 3: ACCEPTANCE 1 — list delivery filter:** POST /delivery-orders/filter `{}` (token Coordinator) → 10 items (today default), envelope có total/page/pageSize; `{"statuses":["SHIPPING"]}` → đúng đơn seed SHIPPING; so sánh từng field với seed JSON + psql row.
 - [ ] **Step 4: ACCEPTANCE 2 — assign + re-assign + history:** POST /service-orders/SO-0003/assign `{technicianCode:"KTV-001"}` → 200, psql: installation_orders.technician_code đổi + history 1 row from NULL; assign lại KTV-002 → history 2 rows (from KTV-001 → KTV-002); assign trên đơn DELIVERED → 409.
 - [ ] **Step 5: ACCEPTANCE 3 — suggest + flags:** GET /technicians/suggest?regionCode=R1 → candidates vùng R1 sort workload asc (activeCount đúng theo psql query đối chiếu); buttons flags: đơn NEW chưa assign → allowAssign=true; đơn đã assign CONFIRMED → allowReassign+allowAccept=true, allowAssign=false; delivery đơn PROCESSING → allowCancel=true, allowAssign=false.
