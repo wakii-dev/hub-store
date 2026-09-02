@@ -8,8 +8,40 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# SF-2 (FI-245): chờ Postgres sẵn sàng (TCP) TRƯỚC khi boot — Flyway/Hikari
+# fail-loud nếu DB chưa lên, đợi ở đây cho trải nghiệm compose-up mượt hơn.
+# Ưu tiên pg_isready nếu có trong PATH; fallback bash /dev/tcp (macOS/Linux).
+# Timeout ~60s → exit 1 với message rõ.
+wait_for_db() {
+  local host="${FULFILLMENT_DB_HOST:-localhost}"
+  local port="${FULFILLMENT_DB_PORT:-5432}"
+  local timeout=60
+  local waited=0
+  if command -v pg_isready >/dev/null 2>&1; then
+    until pg_isready -h "$host" -p "$port" -t 2 >/dev/null 2>&1; do
+      waited=$((waited + 2))
+      if [ "$waited" -ge "$timeout" ]; then
+        echo "!! Timeout ${timeout}s — Postgres ${host}:${port} không sẵn sàng. Kiểm tra: docker compose up -d postgres" >&2
+        exit 1
+      fi
+      sleep 2
+    done
+  else
+    until (exec 3<>"/dev/tcp/${host}/${port}") 2>/dev/null; do
+      waited=$((waited + 2))
+      if [ "$waited" -ge "$timeout" ]; then
+        echo "!! Timeout ${timeout}s — Postgres ${host}:${port} không sẵn sàng. Kiểm tra: docker compose up -d postgres" >&2
+        exit 1
+      fi
+      sleep 2
+    done
+  fi
+  echo ">> Postgres ${host}:${port} sẵn sàng (đợi ${waited}s)."
+}
+
 case "${1:-run}" in
   run)
+    wait_for_db
     echo ">> Booting fulfillment-service :${GRPC_FULFILLMENT:-50051} (Ctrl-C để dừng)"
     mvn -q spring-boot:run
     ;;

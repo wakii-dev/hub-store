@@ -5,7 +5,6 @@ import com.hubstore.fulfillment.seed.SeedModels;
 import com.hubstore.fulfillment.v1.ShopAssignment;
 import com.hubstore.fulfillment.v1.ShopAssignmentHistoryEntry;
 import org.springframework.beans.factory.annotation.Value;
-import org.springframework.stereotype.Component;
 
 import java.time.Instant;
 import java.time.OffsetDateTime;
@@ -23,8 +22,11 @@ import java.util.Set;
  * In-memory store — load canonical-seed.json lúc boot, validate fail-fast
  * (SeedLoader → SeedValidator). Deliverable là in-memory (context pack §Boundary):
  * không DB thật, OrderRepository interface sẵn cho DB sau.
+ *
+ * SF-2 (FI-245): KHÔNG còn stereotype — bean do OrderRepositoryConfig lo
+ * (@ConditionalOnProperty fulfillment.store=inmemory, test-only). 3 file unit
+ * test construct trực tiếp qua constructor (SeedFile) — giữ public.
  */
-@Component
 public class InMemoryOrderRepository implements OrderRepository {
 
     private final List<SeedModels.OrderSeed> orders;
