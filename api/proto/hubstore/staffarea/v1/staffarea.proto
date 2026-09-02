@@ -1,0 +1,104 @@
+syntax = "proto3";
+
+package hubstore.staffarea.v1;
+
+option go_package = "hubstore/gen/go/hubstore/staffarea/v1;staffareav1";
+option java_multiple_files = true;
+option java_package = "com.hubstore.staffarea.v1";
+
+// ============================================================================
+// StaffAreaService (SF-17, FI-262) — quản lý định nghĩa "NV phụ trách khu vực":
+// NV + chức danh + TK nhận tiền (verify dual-mode) + vùng tỉnh/phường.
+//
+// Envelope convention (giữ khớp fulfillment.proto, buf STANDARD):
+// - Mỗi RPC sở hữu cặp <Rpc>Request/<Rpc>Response riêng
+//   (RPC_REQUEST_RESPONSE_UNIQUE / RPC_RESPONSE_STANDARD_NAME).
+// - Datetime = ISO-8601 string (mirror packages/shared TimeRange).
+// - List LUÔN trả cả inactive (FE dim client-side — acceptance "toggle off →
+//   row mờ" yêu cầu row vẫn thấy). KHÔNG có filter include_inactive.
+// - Additive-only: file MỚI, không sửa proto cũ → breaking: FILE safe.
+// ============================================================================
+
+service StaffAreaService {
+  rpc ListServiceEmployees (ListServiceEmployeesRequest) returns (ListServiceEmployeesResponse);
+  rpc GetServiceEmployee (GetServiceEmployeeRequest) returns (GetServiceEmployeeResponse);
+  rpc CreateServiceEmployee (CreateServiceEmployeeRequest) returns (CreateServiceEmployeeResponse);
+  rpc UpdateServiceEmployee (UpdateServiceEmployeeRequest) returns (UpdateServiceEmployeeResponse);
+  rpc SetServiceEmployeeActive (SetServiceEmployeeActiveRequest) returns (SetServiceEmployeeActiveResponse);
+  rpc VerifyPaymentAccount (VerifyPaymentAccountRequest) returns (VerifyPaymentAccountResponse);
+}
+
+// ServiceEmployee — 1 định nghĩa NV phụ trách khu vực.
+message ServiceEmployee {
+  string employee_code = 1;    // ^[A-Z0-9_-]{3,32}$ (immutable sau create)
+  string full_name = 2;
+  string title_code = 3;       // list tĩnh FE: SHIPPER/WAREHOUSE/CSKH/KTV
+  string payment_account = 4;  // số TK nhận tiền ^\d{9,16}$
+  bool is_active = 5;
+  // Flat region codes: node tỉnh CHỌN TOÀN TỈNH hoặc node phường lẻ.
+  repeated string region_codes = 6;
+  string created_at = 7;       // ISO-8601
+  string updated_at = 8;       // ISO-8601
+}
+
+// --- List + filters (list ALWAYS includes inactive) ---
+message ListServiceEmployeesRequest {
+  string title_code = 1;  // filter exact (blank = bỏ)
+  string query = 2;       // employee_code/full_name contains (blank = bỏ)
+  string region_code = 3; // NV phụ trách region này (tỉnh hoặc ward; blank = bỏ)
+}
+
+message ListServiceEmployeesResponse {
+  repeated ServiceEmployee items = 1;
+  int32 total = 2;
+}
+
+// --- Get ---
+message GetServiceEmployeeRequest {
+  string employee_code = 1;
+}
+
+message GetServiceEmployeeResponse {
+  ServiceEmployee employee = 1;
+}
+
+// --- Create ---
+message CreateServiceEmployeeRequest {
+  ServiceEmployee employee = 1;
+}
+
+message CreateServiceEmployeeResponse {
+  ServiceEmployee employee = 1;
+}
+
+// --- Update (full replace: mọi field trừ employee_code — immutable;
+//     regions delete-all + insert lại trong 1 transaction) ---
+message UpdateServiceEmployeeRequest {
+  string employee_code = 1;
+  ServiceEmployee employee = 2;
+}
+
+message UpdateServiceEmployeeResponse {
+  ServiceEmployee employee = 1;
+}
+
+// --- Set active (off-switch thay delete) ---
+message SetServiceEmployeeActiveRequest {
+  string employee_code = 1;
+  bool is_active = 2;
+}
+
+message SetServiceEmployeeActiveResponse {
+  ServiceEmployee employee = 1;
+}
+
+// --- Verify TK nhận tiền (dual-mode: MOCK default / ZALOPAY qua env) ---
+message VerifyPaymentAccountRequest {
+  string payment_account = 1;
+}
+
+message VerifyPaymentAccountResponse {
+  bool valid = 1;
+  string source = 2;  // "MOCK" | "ZALOPAY"
+  string message = 3; // mock: tag [MOCK] + mô tả; real: ánh xạ error_code/is_verified
+}
