@@ -27,6 +27,11 @@ export interface BffGrpcConfig {
   fulfillment: string;
   /** Host:port của batching-service (Go, mặc định localhost:50052). */
   batching: string;
+  /**
+   * Host:port của DeliveryBatchService (SF-15) — cùng process batching-service
+   * nên mặc định đọc cùng GRPC_BATCHING; tách field để test inject mock độc lập.
+   */
+  deliverybatch: string;
   /** Host:port của print-service (Python, mặc định localhost:50053). */
   print: string;
   /** Deadline mỗi gRPC upstream call — spec §3.1 resilience (mặc định 5000ms). */
@@ -63,6 +68,14 @@ export interface BffConfig {
    * không set flag thì endpoint KHÔNG tồn tại (404), không phụ thuộc README.
    */
   devResetPassword: boolean;
+  /** SF-27 — Kafka side-channel consumer. */
+  kafka: BffKafkaConfig;
+}
+
+export interface BffKafkaConfig {
+  /** false → consumer KHÔNG start (mặc định — side-channel opt-in). */
+  enabled: boolean;
+  bootstrapServers: string;
 }
 
 function stripSlash(url: string): string {
@@ -120,9 +133,14 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
     grpc: {
       fulfillment: grpcAddr(env.GRPC_FULFILLMENT, '50051'),
       batching: grpcAddr(env.GRPC_BATCHING, '50052'),
+      deliverybatch: grpcAddr(env.GRPC_BATCHING, '50052'),
       print: grpcAddr(env.GRPC_PRINT, '50053'),
       deadlineMs: Number(env.BFF_GRPC_DEADLINE_MS ?? 5000),
     },
     devResetPassword: env.ENABLE_DEV_RESET_PASSWORD === '1',
+    kafka: {
+      enabled: env.KAFKA_ENABLED === 'true', // 'true' duy nhất — thống nhất Go/Java/e2e (review SF-27)
+      bootstrapServers: env.KAFKA_BOOTSTRAP_SERVERS ?? 'localhost:9092',
+    },
   };
 }

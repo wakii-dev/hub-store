@@ -16,6 +16,7 @@ import (
 	"time"
 
 	"hubstore/batching-service/internal/fulfillment"
+	"hubstore/batching-service/internal/kafka"
 	"hubstore/batching-service/internal/store"
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
 	fulfillmentv1 "hubstore/gen/go/hubstore/fulfillment/v1"
@@ -39,15 +40,19 @@ type BatchingServer struct {
 	store   store.BatchStore
 	fulfill fulfillment.Client
 	now     func() time.Time // injectable for tests
+	events  kafka.BatchEventPublisher // SF-27 side-channel; mặc định Noop
 }
 
 // New constructs the server over the batches store + Java client.
 func New(s store.BatchStore, f fulfillment.Client) *BatchingServer {
-	return &BatchingServer{store: s, fulfill: f, now: time.Now}
+	return &BatchingServer{store: s, fulfill: f, now: time.Now, events: kafka.NoopPublisher{}}
 }
 
 // SetClock overrides time source (tests).
 func (s *BatchingServer) SetClock(now func() time.Time) { s.now = now }
+
+// SetEventPublisher replaces the event publisher (SF-27; main.go wiring + tests).
+func (s *BatchingServer) SetEventPublisher(p kafka.BatchEventPublisher) { s.events = p }
 
 // ---------------------------------------------------------------------------
 // Create — rule 1 server-side (hydration) + mutate PREPARING
@@ -106,6 +111,8 @@ func (s *BatchingServer) CreateBatch(ctx context.Context, req *batchingv1.Create
 		}
 		return nil, status.Errorf(grpccodes.Unavailable, "order mutation failed: %v", err)
 	}
+	// SF-27 side-channel — best-effort, không chặn path nghiệp vụ.
+	s.events.BatchCreated(ctx, batch.GetBatchCode(), len(orderCodes))
 	return &batchingv1.CreateBatchResponse{Batch: batch}, nil
 }
 
@@ -336,6 +343,8 @@ func (s *BatchingServer) CancelBatch(ctx context.Context, req *batchingv1.Cancel
 		}
 		return nil, status.Errorf(grpccodes.Unavailable, "order revert failed: %v", err)
 	}
+	// SF-27 side-channel — chỉ success path (compensation KHÔNG publish).
+	s.events.BatchTransitioned(ctx, req.GetBatchCode(), "active", "cancelled", req.GetReason())
 	return &batchingv1.CancelBatchResponse{Batch: b}, nil
 }
 
@@ -370,6 +379,8 @@ func (s *BatchingServer) CompletePicking(ctx context.Context, req *batchingv1.Co
 		}
 		return nil, status.Errorf(grpccodes.Unavailable, "order mutation failed: %v", err)
 	}
+	// SF-27 side-channel — chỉ success path (compensation KHÔNG publish).
+	s.events.BatchTransitioned(ctx, req.GetBatchCode(), "active", "completed", "")
 	return &batchingv1.CompletePickingResponse{Batch: b}, nil
 }
 

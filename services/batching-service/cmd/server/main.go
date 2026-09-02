@@ -14,6 +14,8 @@
 //	BATCHING_DB_USER     default hubstore
 //	BATCHING_DB_PASSWORD required (compose/.env wire)
 //	FULFILLMENT_ADDR     default localhost:50051 (Java; hydration + mutate)
+//	KAFKA_ENABLED        "true" bật publisher SF-27; off (mặc định) = Noop
+//	KAFKA_BOOTSTRAP_SERVERS default localhost:9092 (chỉ đọc khi KAFKA_ENABLED=true)
 package main
 
 import (
@@ -22,12 +24,16 @@ import (
 	"net"
 	"net/url"
 	"os"
+	"strings"
 
+	"hubstore/batching-service/internal/ahamove"
 	"hubstore/batching-service/internal/fulfillment"
+	"hubstore/batching-service/internal/kafka"
 	"hubstore/batching-service/internal/server"
 	"hubstore/batching-service/internal/store"
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
 
+	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
@@ -74,12 +80,40 @@ func main() {
 	fc := fulfillment.NewGRPCClientFromConn(jconn)
 	log.Printf("batching-service: fulfillment-service at %s (lazy — boot không phụ thuộc)", fulfillAddr)
 
+	// SF-27 — Kafka side-channel publisher (best-effort; off mặc định).
+	var events kafka.BatchEventPublisher = kafka.NoopPublisher{}
+	if env("KAFKA_ENABLED", "") == "true" {
+		events = kafka.NewKafkaPublisher(strings.Split(
+			env("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"), ","))
+		log.Printf("batching-service: kafka events enabled → %s", env("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092"))
+	}
+
 	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
 		log.Fatalf("batching-service: listen :%s: %v", port, err)
 	}
+
+	// NVC adapter (SF-15, dual-mode) — mock mặc định / real khi AHAMOVE_MODE=real
+	// + đủ key. Boot chọn + log mode; mọi response mock mang meta.mock=true.
+	nvc := ahamove.NewFromEnv()
+
+	// Pool riêng cho DeliveryBatch V2 schema (plannings/bookings/...) —
+	// PostgresStore đóng pool của nó khi Close; pool thứ 2 cùng DSN là cách
+	// sạch nhất mà không đụng logic store cũ (SF-3).
+	nvcPool, err := pgxpool.New(ctx, dsn)
+	if err != nil {
+		log.Fatalf("batching-service: delivery-batch DB pool: %v", err)
+	}
+	defer nvcPool.Close()
+	if err := nvcPool.Ping(ctx); err != nil {
+		log.Fatalf("batching-service: delivery-batch DB ping: %v", err)
+	}
+
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(server.RoleUnaryInterceptor))
-	batchingv1.RegisterBatchingServiceServer(grpcServer, server.New(st, fc))
+	srv := server.New(st, fc)
+	srv.SetEventPublisher(events)
+	batchingv1.RegisterBatchingServiceServer(grpcServer, srv)
+	batchingv1.RegisterDeliveryBatchServiceServer(grpcServer, server.NewDeliveryBatch(nvcPool, nvc))
 	reflection.Register(grpcServer)
 
 	log.Printf("batching-service: listening on :%s", port)

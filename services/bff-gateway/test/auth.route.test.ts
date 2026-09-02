@@ -71,10 +71,12 @@ function buildTestApp(opts: { devResetPassword?: boolean } = {}): ReturnType<typ
     grpc: {
       fulfillment: '127.0.0.1:1',
       batching: '127.0.0.1:1',
+      deliverybatch: '127.0.0.1:1',
       print: '127.0.0.1:1',
       deadlineMs: 2000,
     },
     devResetPassword: opts.devResetPassword ?? true,
+    kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 — off trong test
   };
   return buildApp(config);
 }

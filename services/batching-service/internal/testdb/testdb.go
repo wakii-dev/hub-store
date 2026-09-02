@@ -108,6 +108,16 @@ func createTestDB(t *testing.T, ctx context.Context) {
 	}
 }
 
+// migrationProbes — bảng mốc của từng migration: baseline (DB test legacy
+// tồn tại từ trước khi có tracking) chỉ được SKIP migration khi bảng mốc
+// CỦA CHÍNH migration đó đã có thật. Không probe → legacy DB V1 (chỉ có
+// batches) bị baseline-mark nuốt 000002 → "relation shipment_plannings
+// does not exist" ở test. Migration mới thêm vào map này khi tạo file.
+var migrationProbes = map[string]string{
+	"000001_batches_init.up.sql": "public.batches",
+	"000002_nvc_init.up.sql":     "public.shipment_plannings",
+}
+
 // applyMigrations đọc services/batching-service/migrations/*.up.sql (sorted)
 // và exec — tests không cần golang-migrate binary/lib. Idempotent giữa các
 // test run: tracking bảng testdb_migrations (DB test persist giữa các run —
@@ -132,14 +142,6 @@ func applyMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	}
 	rows.Close()
 
-	// Baseline: DB test tồn tại từ trước khi có bảng tracking (schema cũ đã
-	// apply) → đánh dấu applied, KHÔNG re-apply (lỗi 42P07 already exists).
-	var schemaPresent bool
-	if err := pool.QueryRow(ctx,
-		`SELECT to_regclass('public.batches') IS NOT NULL`).Scan(&schemaPresent); err != nil {
-		t.Fatal(err)
-	}
-
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -161,13 +163,22 @@ func applyMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 		if applied[up] {
 			continue
 		}
-		if schemaPresent {
-			// legacy DB — schema đã tồn tại, chỉ ghi tracking.
-			if _, err := pool.Exec(ctx,
-				`INSERT INTO testdb_migrations (name) VALUES ($1)`, up); err != nil {
+		// Baseline per-migration (DB legacy): chỉ ghi tracking — KHÔNG exec —
+		// khi bảng mốc của migration này đã tồn tại thật trong DB. Thiếu bảng
+		// mốc → migration CHƯA chạy trên DB cũ → thực thi bình thường.
+		if probe, ok := migrationProbes[up]; ok {
+			var present bool
+			if err := pool.QueryRow(ctx,
+				`SELECT to_regclass($1) IS NOT NULL`, probe).Scan(&present); err != nil {
 				t.Fatal(err)
 			}
-			continue
+			if present {
+				if _, err := pool.Exec(ctx,
+					`INSERT INTO testdb_migrations (name) VALUES ($1)`, up); err != nil {
+					t.Fatal(err)
+				}
+				continue
+			}
 		}
 		sql, err := os.ReadFile(filepath.Join(mdir, up))
 		if err != nil {
@@ -196,9 +207,9 @@ type seedShape struct {
 	Batches []seedBatch `json:"batches"`
 }
 type seedBatch struct {
-	BatchCode    string          `json:"batchCode"`
-	ShopCode     string          `json:"shopCode"`
-	ShipperID    string          `json:"shipperId"`
+	BatchCode    string `json:"batchCode"`
+	ShopCode     string `json:"shopCode"`
+	ShipperID    string `json:"shipperId"`
 	DeliveryTime struct {
 		From string `json:"from"`
 		To   string `json:"to"`
@@ -208,18 +219,18 @@ type seedBatch struct {
 	CreatedAt string          `json:"createdAt"`
 }
 type seedBatchItem struct {
-	BatchCode        string          `json:"batchCode"`
-	StopOrder        int32           `json:"stopOrder"`
-	OrderCode        string          `json:"orderCode"`
-	CustomerAddress  string          `json:"customerAddress"`
-	Distance         float64         `json:"distance"`
-	FromDeliveryTime string          `json:"fromDeliveryTime"`
-	ToDeliveryTime   string          `json:"toDeliveryTime"`
-	OrderStatus      int32           `json:"orderStatus"`
-	OrderType        int32           `json:"orderType"`
-	Items            []seedProduct   `json:"items"`
-	TotalQuantity    int32           `json:"totalQuantity"`
-	CodAmount        int64           `json:"codAmount"`
+	BatchCode        string        `json:"batchCode"`
+	StopOrder        int32         `json:"stopOrder"`
+	OrderCode        string        `json:"orderCode"`
+	CustomerAddress  string        `json:"customerAddress"`
+	Distance         float64       `json:"distance"`
+	FromDeliveryTime string        `json:"fromDeliveryTime"`
+	ToDeliveryTime   string        `json:"toDeliveryTime"`
+	OrderStatus      int32         `json:"orderStatus"`
+	OrderType        int32         `json:"orderType"`
+	Items            []seedProduct `json:"items"`
+	TotalQuantity    int32         `json:"totalQuantity"`
+	CodAmount        int64         `json:"codAmount"`
 }
 type seedProduct struct {
 	ProductCode string `json:"productCode"`

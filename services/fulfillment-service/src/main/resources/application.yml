@@ -4,6 +4,17 @@ spring:
     name: fulfillment-service
   main:
     web-application-type: none
+  kafka:
+    # SF-27 (FI-273) — side-channel best-effort; flag off = KHÔNG connect.
+    # Timeouts ngắn: kafka chết → send fail nhanh, KHÔNG block 60s default.
+    bootstrap-servers: ${KAFKA_BOOTSTRAP_SERVERS:localhost:9092}
+    producer:
+      key-serializer: org.apache.kafka.common.serialization.StringSerializer
+      value-serializer: org.apache.kafka.common.serialization.StringSerializer
+      properties:
+        max.block.ms: 2000
+        request.timeout.ms: 2000
+        delivery.timeout.ms: 5000
   datasource:
     # SF-2 (FI-245): Postgres qua env (compose/dev override FULFILLMENT_DB_*).
     url: jdbc:postgresql://${FULFILLMENT_DB_HOST:localhost}:${FULFILLMENT_DB_PORT:5432}/${FULFILLMENT_DB_NAME:fulfillment}
@@ -26,3 +37,7 @@ fulfillment:
   # Nguồn dữ liệu duy nhất: api/seed/canonical-seed.json (SF-2 authored).
   # Rỗng = auto-resolve (README): SEED_PATH > ../../api/seed > ../api/seed > api/seed.
   seed-path: ${SEED_PATH:}
+
+kafka:
+  # SF-27 — event bus flag (env KAFKA_ENABLED; false → NoopEventPublisher).
+  enabled: ${KAFKA_ENABLED:false}

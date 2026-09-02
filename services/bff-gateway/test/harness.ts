@@ -24,11 +24,13 @@ import {
   fulfillmentResponses,
   batchingResponses,
   printResponses,
+  deliveryBatchResponses,
   techResponses,
 } from './fixtures.js';
 import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import { TechServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
 import { BatchingServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/batching';
+import { DeliveryBatchServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/delivery_batch';
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
 
 export const TEST_ISSUER = 'https://keycloak.test/realms/hubstore';
@@ -161,6 +163,7 @@ export interface Harness {
   /** SF-19 — cùng server/addr với fulfillment (override qua chung current). */
   tech: MockUpstream;
   batching: MockUpstream;
+  deliverybatch: MockUpstream;
   print: MockUpstream;
   app: FastifyInstance;
   identity: TestIdentity;
@@ -206,6 +209,16 @@ const printDefaults: Record<string, UnaryHandler> = {
   print: (_c, cb) => cb(null, printResponses.print),
 };
 
+const deliveryBatchDefaults: Record<string, UnaryHandler> = {
+  getQuotes: (_c, cb) => cb(null, deliveryBatchResponses.getQuotes),
+  confirmPlanning: (_c, cb) => cb(null, deliveryBatchResponses.confirmPlanning),
+  createBooking: (_c, cb) => cb(null, deliveryBatchResponses.createBooking),
+  cancelDeliveryOrder: (_c, cb) => cb(null, deliveryBatchResponses.cancelDeliveryOrder),
+  cancelDeliveryBatch: (_c, cb) => cb(null, deliveryBatchResponses.cancelDeliveryBatch),
+  searchBookingDetail: (_c, cb) => cb(null, deliveryBatchResponses.searchBookingDetail),
+  listAddonServices: (_c, cb) => cb(null, deliveryBatchResponses.listAddonServices),
+};
+
 /** Port "chắc chắn chết": bind rồi đóng — dùng cho test 503 conn-refused. */
 async function grabDeadPort(): Promise<number> {
   const s = new Server();
@@ -222,11 +235,12 @@ export interface HarnessOptions {
   /** Deadline ngắn để test thật đường DEADLINE_EXCEEDED mà không chậm. */
   deadlineMs?: number;
   /** Trỏ 1 upstream tới port chết — test 503 UPSTREAM_UNAVAILABLE. */
-  deadUpstream?: 'fulfillment' | 'batching' | 'print';
+  deadUpstream?: 'fulfillment' | 'batching' | 'deliverybatch' | 'print';
   /** Override handler mặc định lúc boot. */
   fulfillmentHandlers?: Record<string, UnaryHandler>;
   techHandlers?: Record<string, UnaryHandler>;
   batchingHandlers?: Record<string, UnaryHandler>;
+  deliverybatchHandlers?: Record<string, UnaryHandler>;
   printHandlers?: Record<string, UnaryHandler>;
 }
 
@@ -258,6 +272,10 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     ...batchingDefaults,
     ...opts.batchingHandlers,
   });
+  const deliverybatch = await startMockServer(DeliveryBatchServiceService, {
+    ...deliveryBatchDefaults,
+    ...opts.deliverybatchHandlers,
+  });
   const print = await startMockServer(PrintServiceService, {
     ...printDefaults,
     ...opts.printHandlers,
@@ -266,6 +284,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
   const addrs: Record<string, string> = {
     fulfillment: fulfillment.addr,
     batching: batching.addr,
+    deliverybatch: deliverybatch.addr,
     print: print.addr,
   };
   if (opts.deadUpstream) {
@@ -287,10 +306,12 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     grpc: {
       fulfillment: addrs.fulfillment,
       batching: addrs.batching,
+      deliverybatch: addrs.deliverybatch,
       print: addrs.print,
       deadlineMs: opts.deadlineMs ?? 2000,
     },
     devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
+    kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 side-channel — off trong test
   };
   const app = buildApp(config);
 
@@ -298,6 +319,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     fulfillment,
     tech,
     batching,
+    deliverybatch,
     print,
     app,
     identity,
@@ -306,6 +328,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       await app.close();
       await fulfillment.close();
       await batching.close();
+      await deliverybatch.close();
       await print.close();
       await identity.close();
     },

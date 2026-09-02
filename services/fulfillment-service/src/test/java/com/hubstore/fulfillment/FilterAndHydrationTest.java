@@ -41,12 +41,14 @@ class FilterAndHydrationTest {
     private SeedModels.SeedFile seed;
     private FulfillmentServiceImpl service;
     private InMemoryOrderRepository repo;
+    private RecordingEventPublisher publisher;
 
     @BeforeEach
     void setUp() {
         seed = SeedLoader.load(Path.of("../../api/seed/canonical-seed.json"));
         repo = new InMemoryOrderRepository(seed);
-        service = new FulfillmentServiceImpl(repo);
+        publisher = new RecordingEventPublisher();
+        service = new FulfillmentServiceImpl(repo, publisher);
     }
 
     private FilterOrdersResponse filter(FilterOrdersRequest.Builder req) {

@@ -3,3 +3,4 @@ export * from './fulfillment.js';
 export * from './tech.js';
 export * from './batching.js';
 export * from './print.js';
+export * from './deliverybatch.js';
