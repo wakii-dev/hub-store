@@ -508,4 +508,32 @@ class PostgresOrderRepositoryIT {
         assertThat(p.totalToday()).isEqualTo(m.totalToday())
                 .isEqualTo(seedByDay.getOrDefault(today.toString(), 0));
     }
+
+    /**
+     * Regression review SF-9 P0: totalToday phải dùng bounds HÔM NAY, không phải
+     * window 30 ngày. Seed cũ che bug (mọi đơn cùng 1 ngày) — test này chèn 1 đơn
+     * hôm nay + 1 đơn 5 ngày trước và khẳng định totalToday chỉ đếm hôm nay.
+     */
+    @Test
+    void dashboardStatsTotalTodayUsesTodayBoundsNotWindow() {
+        ZoneId zone = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.now(zone);
+        String codeToday = "ORD-IT-SF9-TODAY";
+        String codeOld = "ORD-IT-SF9-OLD";
+        try {
+            jdbc.update("INSERT INTO orders (fulfill_code, original_time_from) VALUES (?, ?)",
+                    codeToday, OffsetDateTime.now(zone));
+            jdbc.update("INSERT INTO orders (fulfill_code, original_time_from) VALUES (?, ?)",
+                    codeOld, OffsetDateTime.now(zone).minusDays(5));
+            var s = pg.dashboardStats(today, zone);
+            // Bug cũ (bounds window 30 ngày): totalToday = 2. Đúng: chỉ đơn hôm nay.
+            assertThat(s.totalToday()).isEqualTo(1);
+            // Ô cuối (hôm nay) = 1, ô 5 ngày trước = 1.
+            assertThat(s.ordersPerDay().get(29).date()).isEqualTo(today.toString());
+            assertThat(s.ordersPerDay().get(29).count()).isEqualTo(1);
+            assertThat(s.ordersPerDay().get(24).count()).isEqualTo(1);
+        } finally {
+            jdbc.update("DELETE FROM orders WHERE fulfill_code IN (?, ?)", codeToday, codeOld);
+        }
+    }
 }

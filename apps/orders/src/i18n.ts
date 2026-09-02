@@ -87,6 +87,7 @@ export const ordersResources: I18nResources = {
       "dashboard.chart.title": "Đơn theo ngày (30 ngày)",
       "dashboard.workload.title": "Khối lượng shipper",
       "dashboard.refresh": "Làm mới",
+      "dashboard.error.title": "Không tải được số liệu tổng quan — thử lại.",
     },
   },
   en: {
@@ -170,6 +171,7 @@ export const ordersResources: I18nResources = {
       "dashboard.chart.title": "Orders per day (30 days)",
       "dashboard.workload.title": "Shipper workload",
       "dashboard.refresh": "Refresh",
+      "dashboard.error.title": "Failed to load dashboard stats — try again.",
     },
   },
 };

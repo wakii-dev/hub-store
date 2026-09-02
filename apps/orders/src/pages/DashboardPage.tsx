@@ -7,7 +7,7 @@
  * Chart là SVG hand-built — KHÔNG chart lib (antd4 + MF singleton constraint,
  * spec §2). Dữ liệu: GET /fulfillment/dashboard-stats (BFF owns aggregation).
  */
-import { Button, Card, Col, List, Progress, Row, Statistic, Typography } from "antd";
+import { Alert, Button, Card, Col, List, Progress, Row, Statistic, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import { Provider } from "react-redux";
 import type { DashboardStats } from "@hub-store/shared";
@@ -84,7 +84,7 @@ function OrdersPerDayChart({ data }: { data: DayCount[] }) {
 
 function DashboardContent() {
   const { t } = useTranslation("orders");
-  const { data, isLoading, isFetching, refetch } = useGetDashboardStatsQuery();
+  const { data, isLoading, isFetching, isError, refetch } = useGetDashboardStatsQuery();
 
   const stats: DashboardStats | undefined = data;
 
@@ -99,6 +99,24 @@ function DashboardContent() {
         </Button>
       </Row>
 
+      {/* Review P1: query fail → Alert + retry, KHÔNG render số 0 gây hiểu nhầm. */}
+      {isError && (
+        <Alert
+          type="error"
+          showIcon
+          message={t("dashboard.error.title")}
+          style={{ marginTop: 16 }}
+          data-testid="dashboard-error"
+          action={
+            <Button size="small" danger onClick={() => refetch()}>
+              {t("dashboard.refresh")}
+            </Button>
+          }
+        />
+      )}
+
+      {!isError && (
+        <>
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col span={6}>
           <Card data-testid="stat-today" loading={isLoading}>
@@ -153,6 +171,8 @@ function DashboardContent() {
           )}
         />
       </Card>
+        </>
+      )}
     </div>
   );
 }

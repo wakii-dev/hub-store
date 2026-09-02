@@ -301,9 +301,13 @@ public class PostgresOrderRepository implements OrderRepository {
         for (java.time.LocalDate d = start; !d.isAfter(today); d = d.plusDays(1)) {
             days.add(new DashboardStatsData.DayCount(d.toString(), byDay.getOrDefault(d.toString(), 0)));
         }
+        // SF-9 review P0 fix: bounds RIÊNG cho hôm nay (không dùng window 30 ngày —
+        // bug nguồn gốc: copy bounds per-day làm totalToday đếm cả 30 ngày).
+        Instant todayFrom = today.atStartOfDay(zone).toInstant();
+        Instant todayTo = today.plusDays(1).atStartOfDay(zone).toInstant();
         Integer totalToday = jdbc.queryForObject(
             "SELECT COUNT(*) FROM orders WHERE original_time_from >= ? AND original_time_from < ?",
-            Integer.class, OffsetDateTime.ofInstant(from, zone), OffsetDateTime.ofInstant(to, zone));
+            Integer.class, OffsetDateTime.ofInstant(todayFrom, zone), OffsetDateTime.ofInstant(todayTo, zone));
         Integer pending = jdbc.queryForObject(
             "SELECT COUNT(*) FROM orders WHERE order_status = 0", Integer.class);
         List<DashboardStatsData.BatchCount> perBatch = jdbc.query(
