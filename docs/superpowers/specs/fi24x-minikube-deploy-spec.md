@@ -26,9 +26,32 @@
   (probe Serving sau khi seed loaded); (3) Postgres PVC giữ data qua restart — proof cụ thể: delete
   pod postgres-0 → data còn; (4) Keycloak import realm lấy được token bằng password grant QUA INGRESS
   (route /keycloak); (5) e2e Playwright pass against cluster URL qua E2E_BASE_URL (local e2e giữ
-  nguyên là default).
-- **Out-of-scope** — code chạy Postgres/Keycloak trong app services (việc FI-245), CI pipeline,
-  prod cloud (EKS/GKE), auto-scaling, sealed-secrets/SOPS, monitoring stack, multi-env (chỉ overlay minikube).
+  nguyên là default); (6) Kafka produce/consume round-trip trong cluster (kubectl run client) qua
+  topic đã bootstrap.
+- **Out-of-scope** — code chạy Postgres/Keycloak/Kafka trong app services (việc FI-245 / story sau),
+  CI pipeline, prod cloud (EKS/GKE), auto-scaling, sealed-secrets/SOPS, monitoring stack, multi-env
+  (chỉ overlay minikube).
+
+## Kafka (bổ sung 2026-09-02 — user chốt: infra wiring slot + KRaft manifests)
+
+- **Vai trò:** Kafka deploy vào cluster làm event-backbone WIRING SLOT — như Postgres/Keycloak.
+  App services trên main KHÔNG produce/consume (không đụng thêm code services/**, không tăng
+  conflict FI-245). Khi code event-flow merge sau (story sau), chỉ cần env KAFKA_BOOTSTRAP_SERVERS
+  + topics trong overlay.
+- **Deployment:** KRaft single-broker StatefulSet (KHÔNG ZooKeeper), PVC, health probe, Service
+  `kafka:9092` (+ headless cho StatefulSet). **Image chốt ở Phase 3 plan của SF-1** (mặc định
+  hướng apache/kafka + env convention KAFKA_NODE_ID/KAFKA_CLUSTER_ID — bitnami dùng surface
+  KAFKA_CFG_* khác, nếu chọn phải map lại env); pin tag + ghi lý do (không đòi "ổn định" — chỉ
+  pin + rationale). **Contract listener (P1):** advertised.listeners của client-facing listener
+  PHẢI resolve được tới `kafka:9092` Service DNS từ trong cluster — nếu không, broker healthy
+  nhưng client produce fail ở SF-5. **Heap/resources (P1):** KAFKA_HEAP_OPTS cap + requests/limits
+  bắt buộc (tránh OOM neighbor trên minikube 6GB chia sẻ Java+Keycloak).
+- **Topic contract (P0 — cross-SF value):** topic mặc định `orders.events` là CONTRACT giữa
+  SF-1 (provision) và SF-5 (round-trip proof) — KHÔNG phải ví dụ, SF-1 agent KHÔNG tự đổi tên;
+  đổi tên chỉ bằng quyết định epic-level (sửa spec + cả 2 context packs).
+- **Ownership:** Kafka infra (provision + broker-level smoke) gộp SF-1 → 15 tasks (trong cap 8-15);
+  produce/consume round-trip in-cluster = convergence proof của SF-5 (client pod dùng CÙNG image
+  tag SF-1 pin — không drift). Anti-duplicate giữ nguyên.
 
 ## Kiến trúc đích
 
@@ -36,13 +59,14 @@
 minikube (driver: docker/orbstack — preflight sẽ detect)
 namespace: hub-store
 ├─ postgres-0 (StatefulSet, PVC, initdb: fulfillment+batching+keycloak, pg_isready probes)
+├─ kafka-0 (StatefulSet KRaft single-broker — KHÔNG ZooKeeper, PVC, health, advertised.listeners→kafka:9092, topic orders.events)
 ├─ keycloak (Deployment, DB=postgres/keycloak, --import-realm, startup probe chậm)
 ├─ fulfillment (Deployment :50051, gRPC health, seed từ ConfigMap)
 ├─ batching (Deployment :50052, gRPC health, initContainer wait fulfillment)
 ├─ print (Deployment :50053, gRPC health, seed từ ConfigMap)
 ├─ bff (Deployment :8080, /healthz, env GRPC_*→cluster DNS, JWT Secret; CORS không cần cho cluster path — same-origin qua Ingress, giữ env chỉ cho local dev)
 ├─ web (Deployment nginx :3000, /healthz (do SF-2 thêm vào docker/nginx.conf), shell+2 remotes static)
-├─ Services ClusterIP ×7
+├─ Services ClusterIP ×8 (postgres, kafka client + kafka headless, keycloak, 5 apps)
 └─ Ingress (SF-4 sở hữu): / → web, /api → bff (strip prefix), /keycloak → keycloak service
     (SF-3 đặt KC_HTTP_RELATIVE_PATH=/keycloak trên deployment để path-prefix hoạt động)
 ConfigMap: canonical-seed (configMapGenerator từ api/seed/canonical-seed.json)
@@ -51,17 +75,21 @@ Secrets: postgres-credentials, jwt-dev-secret, keycloak-admin (dev values, .giti
 
 ## SF split (rubric)
 
-**SF-1 (Tier 0) K8s platform foundation + Postgres** — owns k8s/ skeleton + **kustomize composition
+**SF-1 (Tier 0) K8s platform foundation + Postgres + Kafka** — owns k8s/ skeleton + **kustomize composition
 contract**: `k8s/base/kustomization.yaml` (viết MỘT LẦN bởi SF-1) pre-include TẤT CẢ component dirs
 (postgres, keycloak, app services — mỗi dir có placeholder kustomization.yaml namespace-only do SF-1
 tạo); SF-3/SF-4 CHỈ thay nội dung dir của mình, KHÔNG BAO GIỜ sửa base kustomization → tier-1 chạy
 song song không same-file conflict; overlay minikube inherit toàn bộ base; secrets, seed ConfigMap
 (configMapGenerator + comment cảnh báo ~800KB limit), Postgres StatefulSet 3-DB
-(fulfillment/batching/keycloak, pg_isready probes), image-build script `scripts/k8s-build-images.sh`
+(fulfillment/batching/keycloak, pg_isready probes), **Kafka KRaft single-broker StatefulSet**
+(image pin chốt ở plan-level — mặc định apache/kafka convention; KHÔNG ZooKeeper, PVC, health
+probe, Service `kafka:9092` + headless, advertised.listeners client → kafka:9092 resolvable,
+KAFKA_HEAP_OPTS + requests/limits, bootstrap topic CONTRACT `orders.events` — không tự đổi tên),
+image-build script `scripts/k8s-build-images.sh`
 (minikube image build ×5 — ENTRY POINT DUY NHẤT cho build; SF-4 deploy script CALL script này;
 SF-2 KHÔNG có build script riêng — smoke bằng docker build ad hoc/local run), preflight script
 (driver detect + resource check + khuyến nghị `minikube start --memory=6g --cpus=4` cho stack
-Java+Keycloak) + README section preflight/requirements (SF-1 KHÔNG đụng phần khác của README). 11 tasks.
+Java+Keycloak) + README section preflight/requirements (SF-1 KHÔNG đụng phần khác của README). 15 tasks.
 
 **SF-2 (Tier 0) gRPC health + probes code** — owns TOÀN BỘ probe-code changes: Java/Go/Python
 grpc.health.v1 (Serving sau seed-load, chỉ THÊM file mới + registration tối thiểu — không refactor,
@@ -92,26 +120,33 @@ webServer boot-all như cũ; set E2E_BASE_URL → dùng URL đó + SKIP webServe
 change này; **regression criterion bắt buộc: bare `npx playwright test` (không env) vẫn pass như
 trước**; gRPC integration check trong cluster (kubectl run job), keycloak token smoke QUA INGRESS
 (route /keycloak từ SF-4), Postgres persistence proof (delete pod postgres-0 → data survives),
-seed-update workflow doc (rebuild configmap + rollout restart), README deploy guide (+ NodePort
-fallback doc), FI-245 wiring doc (bật env nào khi code merge), security notes (dev-only secrets ghi
-rõ), final audit. 11 tasks.
+**Kafka produce/consume round-trip trong cluster (kubectl run kafka client — convergence proof
+SC-6)**, seed-update workflow doc (rebuild configmap + rollout restart), README deploy guide (+ NodePort
+fallback doc), FI-245 wiring doc (bật env nào khi code merge — kể cả KAFKA_BOOTSTRAP_SERVERS +
+topics), security notes (dev-only secrets ghi
+rõ), final audit. 12 tasks.
 
 **Anti-duplicate audit** (liệt kê pattern trước khi chốt): health *code* chỉ ở SF-2; probe *manifest
 wiring* chỉ ở SF-4 (dùng endpoint SF-2 — yaml khác code, không trùng); realm JSON chỉ SF-3; scripts
-tách: build (SF-1) / deploy (SF-4) / e2e-smoke (SF-5) — escalation không lặp; ConfigMap seed chỉ SF-1.
-Không SF nào ≥50% tasks cùng loại với SF khác. Mọi SF 8-13 tasks. ✓
+tách: build (SF-1) / deploy (SF-4) / e2e-smoke (SF-5) — escalation không lặp; ConfigMap seed chỉ SF-1;
+Kafka *provision* chỉ SF-1 (broker healthy + topic tồn tại), Kafka *round-trip proof* chỉ SF-5.
+Không SF nào ≥50% tasks cùng loại với SF khác. Mọi SF 8-15 tasks. ✓
 
-**Tier-gate rule** — SF-1 gate: postgres pod healthy + pg_isready 3 DB (KHÔNG test app); SF-2 gate:
+**Tier-gate rule** — SF-1 gate: postgres pod healthy + pg_isready 3 DB + kafka broker healthy +
+topic `orders.events` tồn tại (KHÔNG test app, KHÔNG produce/consume); SF-2 gate:
 grpcurl health serving per-service standalone (KHÔNG test k8s); SF-3 gate: token lấy được (KHÔNG test
 app OIDC — app chưa dùng); SF-4 gate: app full flow qua ingress với fake-JWT (KHÔNG test Postgres
-persistence — app chưa dùng DB); cross-SF behaviors (e2e, persistence, keycloak-app wiring slot) dồn
-SF-5.
+persistence — app chưa dùng DB); cross-SF behaviors (e2e, persistence, kafka round-trip,
+keycloak-app wiring slot) dồn SF-5.
 
 ## Rủi ro chính (từ P0) + mitigation trong spec
 
 1. Batching hard dial boot (WithBlock 5s → Fatal) → initContainer wait-fulfillment trong SF-4; KHÔNG đổi Go dial code (giảm conflict FI-245).
 2. gRPC health code đụng 3 services → conflict với FI-245 branches đang mở → SF-2 chỉ THÊM file mới + registration dòng tối thiểu, không refactor.
 3. Minikube driver macOS chưa verify → SF-1 preflight script detect (docker/orbstack/hyperkit), README ghi requirement; nếu chưa cài → FAIL-LOUD với hướng dẫn.
-4. Ingress addon hành vi khác nhau theo driver → SF-4 có fallback NodePort trong overlay (commented) + docs.
+4. Ingress addon hành vi khác nhau theo driver → SF-4 chỉ route ingress chính; fallback NodePort là DOC (SF-5), không dead config trong overlay.
 5. Keycloak realm trùng FI-245 SF-4 → giữ minimal + flag trong context pack SF-3; convergence SF-5 ghi hướng thay realm khi FI-245 merge.
 6. Seed ConfigMap stale → SF-5 docs quy trình update (rebuild configmap + rollout restart).
+7. Kafka KRaft single-broker: KHÔNG HA (chấp nhận cho minikube dev — ghi rõ docs); KRaft configs
+   (cluster id, listener INTER-BROKER) phải đúng cho image pin — SF-1 verify broker healthy trước
+   khi qua task khác.

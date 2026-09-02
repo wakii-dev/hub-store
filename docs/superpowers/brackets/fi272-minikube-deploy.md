@@ -2,16 +2,16 @@
 
 Destination: story/fi272-minikube-deploy
 
-Spec: docs/superpowers/specs/fi24x-minikube-deploy-spec.md (spec-critic + plan-critic APPROVED).
+Spec: docs/superpowers/specs/fi24x-minikube-deploy-spec.md (spec-critic + plan-critic APPROVED; + Kafka bổ sung 2026-09-02).
 Context packs: docs/superpowers/contexts/fi272-sf-1..5.md (SF agents ĐỌC FILE NÀY THAY tự tổng hợp).
-Quyết định chốt: k8s gồm Postgres+Keycloak (independent FI-245) / kustomize / minikube image build / gRPC health code OK.
+Quyết định chốt: k8s gồm Postgres+Keycloak+Kafka (independent FI-245) / kustomize / minikube image build / gRPC health code OK / Kafka = KRaft wiring slot (app không dùng).
 
-## SF-1 K8s platform foundation + Postgres
+## SF-1 K8s platform foundation + Postgres + Kafka
 Tier: 0
 linear:
-What: kustomize base skeleton k8s/base + composition contract (base kustomization pre-include TẤT CẢ component dirs với placeholder kustomization.yaml — SF-3/SF-4 chỉ thay dir mình, không sửa base) + overlay minikube skeleton; namespace hub-store; secrets (postgres-credentials, jwt-dev-secret, keycloak-admin — dev values, ghi rõ dev-only); seed ConfigMap (configMapGenerator từ api/seed/canonical-seed.json + comment ~800KB limit); Postgres StatefulSet postgres:16 (PVC, initdb 3 DB fulfillment/batching/keycloak, pg_isready probes) + Service; scripts/k8s-build-images.sh (minikube image build ×5 — ENTRY POINT DUY NHẤT cho build); preflight script (driver detect + resource check + khuyến nghị --memory=6g --cpus=4) + README preflight section (chỉ phần đó)
+What: kustomize base skeleton k8s/base + composition contract (base kustomization pre-include TẤT CẢ component dirs với placeholder kustomization.yaml — SF-3/SF-4 chỉ thay dir mình, không sửa base) + overlay minikube skeleton; namespace hub-store; secrets (postgres-credentials, jwt-dev-secret, keycloak-admin — dev values, ghi rõ dev-only); seed ConfigMap (configMapGenerator từ api/seed/canonical-seed.json + comment ~800KB limit); Postgres StatefulSet postgres:16 (PVC, initdb 3 DB fulfillment/batching/keycloak, pg_isready probes) + Service; Kafka KRaft single-broker StatefulSet (image pin chốt ở plan — mặc định apache/kafka convention, KHÔNG ZooKeeper, PVC, health probe, Service kafka:9092 + headless, advertised.listeners client phải resolve được kafka:9092 trong cluster, KAFKA_HEAP_OPTS + requests/limits, bootstrap topic CONTRACT orders.events — KHÔNG tự đổi tên — WIRING SLOT, app không dùng); scripts/k8s-build-images.sh (minikube image build ×5 — ENTRY POINT DUY NHẤT cho build); preflight script (driver detect + resource check + khuyến nghị --memory=6g --cpus=4) + README preflight section (chỉ phần đó)
 Depends on: —
-Tasks: kustomize-skeleton-placeholder-dirs / base-kustomization-preinclude-all / namespace / secrets-dev-values / postgres-statefulset / postgres-initdb-3db / postgres-pvc / postgres-probes-service / seed-configmap-generator / build-images-script / preflight-script-readme
+Tasks: kustomize-skeleton-placeholder-dirs / base-kustomization-preinclude-all / namespace / secrets-dev-values / postgres-statefulset / postgres-initdb-3db / postgres-pvc / postgres-probes-service / kafka-kraft-statefulset / kafka-service-health / kafka-topic-bootstrap / seed-configmap-generator / build-images-script / preflight-script-readme
 
 ## SF-2 gRPC health + probes code
 Tier: 0
@@ -37,6 +37,6 @@ Tasks: deployment-fulfillment / deployment-batching / deployment-print / deploym
 ## SF-5 Convergence — cluster E2E + docs
 Tier: 2
 linear:
-What: e2e/playwright.config.ts env-driven (E2E_BASE_URL: default giữ localhost:3000 + boot-all webServer; set → dùng URL đó + skip webServer — SF-5 sở hữu config change; REGRESSION: bare npx playwright test không env vẫn pass); cluster E2E pass qua E2E_BASE_URL; gRPC integration check trong cluster (kubectl run job); keycloak token smoke QUA INGRESS (route /keycloak SF-4); Postgres persistence proof (delete pod postgres-0 → data survives); seed-update workflow doc (rebuild configmap + rollout restart); README deploy guide + NodePort fallback doc; FI-245 wiring doc (bật env nào khi code merge + thay realm); security notes (dev-only secrets); final audit comment lên epic
+What: e2e/playwright.config.ts env-driven (E2E_BASE_URL: default giữ localhost:3000 + boot-all webServer; set → dùng URL đó + skip webServer — SF-5 sở hữu config change; REGRESSION: bare npx playwright test không env vẫn pass); cluster E2E pass qua E2E_BASE_URL; gRPC integration check trong cluster (kubectl run job); keycloak token smoke QUA INGRESS (route /keycloak SF-4); Postgres persistence proof (delete pod postgres-0 → data survives); Kafka produce/consume round-trip trong cluster (kubectl run client qua topic orders.events — convergence proof SC-6); seed-update workflow doc (rebuild configmap + rollout restart); README deploy guide + NodePort fallback doc; FI-245 wiring doc (bật env nào khi code merge + thay realm + KAFKA_BOOTSTRAP_SERVERS/topics); security notes (dev-only secrets); final audit comment lên epic
 Depends on: SF-3, SF-4
-Tasks: playwright-config-env-baseurl / e2e-cluster-pass / e2e-local-regression / grpc-integration-cluster-job / keycloak-token-ingress-smoke / postgres-persistence-proof / seed-update-workflow-doc / readme-deploy-guide-nodeport / fi245-wiring-doc / security-notes / audit-comment
+Tasks: playwright-config-env-baseurl / e2e-cluster-pass / e2e-local-regression / grpc-integration-cluster-job / keycloak-token-ingress-smoke / postgres-persistence-proof / kafka-roundtrip-proof / seed-update-workflow-doc / readme-deploy-guide-nodeport / fi245-wiring-doc / security-notes / audit-comment
