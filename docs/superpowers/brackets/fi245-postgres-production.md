@@ -81,10 +81,10 @@ Depends on: SF-6, SF-7, SF-8, SF-9, SF-10, SF-13
 Tasks: audit-viewer-screen / export-ui / mobile-responsive / design-harmonize-screens / skeletons-new-screens / e2e-new-features-green
 
 ## SF-12 Production hardening
-Tier: 5
+Tier: 6
 linear: FI-257
 What: M-3 resolved (token passthrough HOẶC mTLS s2s — chọn 1 + rationale); .env ra khỏi git + rotate credentials + compose env-file local; healthcheck endpoints mọi service + logs structured; CI GitHub Actions (lint + unit + E2E E2E=1 + docker build mỗi PR); backup cron pg_dump 2 DB + restore doc
-Depends on: SF-5, SF-11, SF-14, SF-16, SF-20, SF-21
+Depends on: SF-5, SF-11, SF-14, SF-16, SF-20, SF-21, SF-22, SF-22, SF-23, SF-24, SF-25, SF-26
 Tasks: s2s-token-passthrough-or-mtls / secrets-out-of-git / rotate-credentials / healthchecks-all / structured-logs / ci-pipeline / e2e-in-ci / backup-cron / restore-doc / security-final-audit
 
 ## SF-13 Order intake + delivery exceptions
@@ -104,9 +104,9 @@ Tasks: cod-confirm-flow / settlement-table / settlement-aggregate-api / fe-settl
 ## SF-15 NVC backend + mock carrier provider
 Tier: 3
 linear: FI-260
-What: carrier adapter interface + MockAhamove provider (compose service — quotes/booking/tracking, contract Ahamove, swap thật sau bằng adapter+env); endpoints quotes/planning-confirm/booking/cancel/searchbookingdetail; batching DB V2 (plannings/bookings/statuses/tracking events/addon catalog/fee limits per-SP); fee-limit rules BE-authoritative
+What: tích hợp API Ahamove THẬT (api.ahamove.com — partner token env AHAMOVE_*, KHÔNG mock/provider giả; E2E NVC skip-if-no-credential); endpoints quotes/planning-confirm/booking/cancel/searchbookingdetail; batching DB V2 (plannings/bookings/statuses/tracking events/addon catalog/fee limits per-SP); fee-limit rules BE-authoritative
 Depends on: SF-3
-Tasks: carrier-adapter-interface / mock-ahamove-service / quotes-endpoint / planning-confirm-endpoint / booking-endpoint / cancel-shipment-endpoints / tracking-detail-endpoint / addon-catalog / fee-limits-rules / batching-db-v2 / e2e-nvc-api-spec
+Tasks: ahamove-client-auth / quotes-endpoint / planning-confirm-endpoint / booking-endpoint / cancel-shipment-endpoints / tracking-detail-endpoint / addon-catalog / fee-limits-rules / batching-db-v2 / e2e-nvc-api-skip-if-no-env
 
 ## SF-16 NVC FE — carrier section + replan/rebook/tracking
 Tier: 4
@@ -118,9 +118,9 @@ Tasks: carrier-section-d1b / quotes-display-recalc / addon-selector / fee-limit-
 ## SF-17 Khu vực hoạt động NV
 Tier: 3
 linear: FI-262
-What: BE Flyway V4 (service_employees + regions/wards + payment account verify mock) CRUD + active toggle; FE list + lọc chức danh/NV/vùng + expand wards; define/edit form (vùng multi → chức danh → NV → payment → khu vực tỉnh/phường); Admin viết, role khác xem; design system SF-6
+What: BE Flyway V4 (service_employees + regions/wards + payment account — verify Zalopay thật (env ZALOPAY_*) hoặc nhập tay nếu chưa có credential — KHÔNG giả lập) CRUD + active toggle; FE list + lọc chức danh/NV/vùng + expand wards; define/edit form (vùng multi → chức danh → NV → payment → khu vực tỉnh/phường); Admin viết, role khác xem; design system SF-6
 Depends on: SF-2
-Tasks: area-staff-schema / area-staff-crud-api / payment-verify-mock / fe-area-list / fe-area-form / active-toggle / role-guard / e2e-area-spec
+Tasks: area-staff-schema / area-staff-crud-api / payment-verify-real / fe-area-list / fe-area-form / active-toggle / role-guard / e2e-area-spec
 
 ## SF-18 D2C/Dropship module
 Tier: 3
@@ -149,3 +149,39 @@ linear: FI-266
 What: in 5 loại chứng từ (bill/delivery/handover_receipt/goods_handover/installation_acceptance); printer management (bảng printers + chọn theo shop, bill vs A4); print errors per-đơn; preview; "in tất cả"; hotkeys F4/F6/F8; empty-states dùng chung
 Depends on: SF-15, SF-6
 Tasks: print-types-5 / printer-management / print-errors / preview-improve / print-all / hotkeys / empty-states-shared / e2e-print-expansion
+
+## SF-22 i18n vi/en toàn app
+Tier: 4
+linear: FI-267
+What: i18n framework nhẹ + namespace theo module; VI đầy đủ (default) + EN toàn screens; switcher trong shell + localStorage persist; chuẩn KHÔNG hardcode string mới cho code về sau
+Depends on: SF-6
+Tasks: i18n-framework-setup / namespaces-modules / vi-full / en-full / language-switcher / no-hardcode-convention / e2e-i18n
+
+## SF-23 PWA + Push OneSignal + GA
+Tier: 4
+linear: FI-268
+What: PWA manifest + service worker (installable, offline fallback tĩnh); OneSignal THẬT qua env (app ID + REST key do user cấp) — push đơn mới/batch hoàn tất/vận đơn giao, subscribe khi login; GA thật qua env GA_MEASUREMENT_ID — pageview + sự kiện chính, off khi env trống; KHÔNG giả lập response
+Depends on: SF-10
+Tasks: pwa-manifest-sw / offline-fallback / onesignal-init-real / push-events / subscribe-login / ga-hook / env-wiring / e2e-wiring-skip-if-no-env
+
+## SF-24 Map view
+Tier: 5
+linear: FI-269
+What: Leaflet + OpenStreetMap (không API key): pins đơn lat/long (tech service), route stops theo thứ tự (batch), warehouse marker; mở từ tracking modal + tech screens
+Depends on: SF-16, SF-20
+Tasks: map-component / batch-route-view / tech-pins-view / integrate-tracking-modal / e2e-map
+
+## SF-25 KTV/CTV mobile web app
+Tier: 5
+linear: FI-270
+What: mobile web installable PWA cho KTV/CTV: my-orders hôm nay, accept/complete/reschedule theo buttons flags, timeline + địa chỉ + deep-link map, gọi KH; auth OIDC cùng realm (thêm role KTV nếu thiếu)
+Depends on: SF-20, SF-23
+Tasks: mobile-shell-pwa / my-orders-today / accept-complete-reschedule / timeline-address-map / phone-call / ktv-role-realm / e2e-ktv-mobile
+
+## SF-26 Webhook nhận đơn từ sàn
+Tier: 4
+linear: FI-271
+What: POST /webhooks/orders (HMAC header qua env): validate + idempotency dedupe externalId + map vào orders (fulfillCode tự sinh) + audit; retry semantics chuẩn; config mapping qua env
+Depends on: SF-13
+Tasks: webhook-endpoint / hmac-auth / idempotency-store / order-mapping / retry-semantics / audit-integration / e2e-webhook
+

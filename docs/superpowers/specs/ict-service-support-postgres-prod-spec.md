@@ -113,19 +113,21 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Màn đối soát theo shop: tổng COD theo kỳ (ngày), so khớp đơn hoàn tất-COD vs đã-thu vs chênh lệch; export CSV đối soát (pattern SF-7).
 - Bảng/fields lưu settlement trong DB `fulfillment` (Flyway V3+); không đụng batching DB.
 
-### 3.15 NVC backend + mock carrier provider (SF-15, deps SF-3)
-- Carrier adapter interface + **MockAhamove provider** (compose service mô phỏng quotes/booking/tracking, contract khớp Ahamove — swap provider thật sau chỉ cần adapter impl + env).
+### 3.15 NVC backend — Ahamove THẬT (SF-15, deps SF-3) — KHÔNG MOCK
+- **Tích hợp API Ahamove thật** (api.ahamove.com — partner token qua env `AHAMOVE_*`): quotes/book/cancel/tracking gọi thẳng Ahamove; KHÔNG mock server, KHÔNG provider giả. E2E test NVC chỉ chạy khi có credential (skip-if-no-env); credential do USER cấp — thiếu → REQUIREMENT-GAP trên epic.
 - Endpoints: quotes (theo tải trọng xe, phí, distance, isExceedFeeLimit), planning/confirm, booking (batchCode + shipmentPlannings COD/totalBill/stopOrder), cancel per-đơn/cả batch, searchbookingdetail (timeline).
 - Storage batching DB (migration V2): plannings, bookings, shipment statuses, tracking events, addon catalog, **fee limits per-SP**.
 - Fee-limit rules BE-authoritative: baseFee > limit → disable; total > limit → block (FE chỉ render).
+- KHÔNG có §3.27 Ahamove-adapter-riêng — SF-15 là integration thật duy nhất (SF-27 đã gộp vào đây).
 
 ### 3.16 NVC FE — carrier section + replan/rebook/tracking (SF-16, deps SF-15+SF-6)
 - D1b modal: 3 nhóm carrier (Tự giao / xe tải quotes / FPT_DELIVERY), quotes display + recalculate, addon services (ROUTE/LOADING radio, DOCUMENT checkbox, ROUND-TRIP), hạn mức phí gates.
 - D2: replan / rebook (gate theo trạng thái), hủy vận đơn per-đơn/cả batch + note.
 - Tracking modal: timeline 2 cột (BE + partner), link tracking; 15 mã trạng thái vận đơn master mapping.
 
-### 3.17 Khu vực hoạt động NV (SF-17, deps SF-2)
-- BE (Flyway V4 fulfillment): service_employees + regions/wards + payment account (verify mock); CRUD + active toggle.
+### 3.17 Khu vực hoạt động NV (SF-17, deps SF-2) — KHÔNG MOCK
+- BE (Flyway V4 fulfillment): service_employees + regions/wards + payment account; CRUD + active toggle.
+- Verify payment account: **Zalopay API thật** nếu user cấp credential (`ZALOPAY_*` env); KHÔNG có credential → bỏ bước verify online, nhập tay + ghi trạng thái "chưa xác minh" (KHÔNG giả lập kết quả verify).
 - FE: list + lọc (chức danh/NV/vùng) + expand wards; define/edit form (vùng multi → chức danh → NV → payment account → khu vực tỉnh/phường); chỉ Admin viết, roles khác xem.
 
 ### 3.18 D2C/Dropship module (SF-18, deps SF-2)
@@ -142,7 +144,27 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - In mở rộng 5 loại chứng từ (bill, vận đơn, handover_receipt, goods_handover, installation_acceptance); printer management (bảng printers + chọn theo shop, bill vs A4); print errors per-đơn; preview; "in tất cả".
 - Platform: hotkeys (F4 save/F6 create/F8 cancel), empty-states dùng chung.
 
-### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14+SF-16+SF-20+SF-21 — CUỐI, Tier 5)
+### 3.22 i18n vi/en toàn app (SF-22, deps SF-6)
+- Khung i18next (hoặc tương đương nhẹ) + namespace theo module; bản VI đầy đủ (mặc định) + EN cho toàn bộ screens; language switcher trong shell; persist localStorage.
+- Chuẩn: KHÔNG hardcode string mới ở mọi SF từ điểm này — i18n keys là pattern bắt buộc cho code mới.
+
+### 3.23 PWA + Push OneSignal + GA (SF-23, deps SF-10)
+- PWA: manifest + service worker (cache shell, offline fallback trang tĩnh), installable.
+- OneSignal push THẬT: app ID + REST API key do USER cấp qua env; push event quan trọng (đơn mới, batch hoàn tất, vận đơn giao) — subscribe khi user login.
+- GA THẬT: measurement ID do USER cấp qua env — pageview + sự kiện nghiệp vụ chính; env trống → feature off (đây là cấu hình, không phải mock).
+- Thiếu credential → REQUIREMENT-GAP trên epic; KHÔNG giả lập response push/analytics trong runtime; test chỉ assert wiring, skip khi thiếu env.
+
+### 3.24 Map view (SF-24, deps SF-16+SF-20)
+- Bản đồ Leaflet + OpenStreetMap (KHÔNG cần API key): pins đơn theo lat/long (tech service), route stops của batch (theo thứ tự stop), warehouse marker; mở từ tracking modal + tech service screens.
+
+### 3.25 KTV/CTV mobile web app (SF-25, deps SF-20+SF-23)
+- Mobile web (installable PWA, breakpoint điện thoại) cho KTV/CTV: my-orders hôm nay, accept/complete/reschedule theo buttons flags, xem timeline + địa chỉ (deep-link map), gọi KH.
+- Auth cùng OIDC; role KTV tương đương (thêm role vào realm nếu thiếu).
+
+### 3.26 Webhook nhận đơn từ sàn (SF-26, deps SF-13)
+- Endpoint `POST /webhooks/orders` (HMAC signature header qua env) nhận đơn từ hệ thống bán hàng/sàn: validate + idempotency (dedupe theo externalId) + map vào orders (fulfillCode tự sinh) + audit; retry response 2xx/4xx/5xx chuẩn; config mapping qua env.
+
+### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14+SF-16+SF-20+SF-21+SF-22..26 — CUỐI, Tier 6)
 - **M-3 resolved**: s2s auth — token passthrough (BFF forward access token, services verify JWKS) HOẶC mTLS nội mạng compose — SF-12 chọn 1, ghi rationale.
 - Secrets: `.env` ra khỏi git (gitignore + rotate credentials), compose đọc từ env file local.
 - Monitoring: healthcheck endpoints mọi service + uptime checks compose; logs structured.
@@ -166,6 +188,12 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 14. NVC: tạo phiếu có báo giá xe tải + addon + chặn vượt hạn mức phí; book/replan/rebook/hủy vận đơn; tracking timeline; (provider mock local — swap Ahamove thật sau).
 15. Đủ 4 module của app gốc: khu vực NV, hub-store-order, D2C, đơn dịch vụ kỹ thuật (3 tab + KTV-CTV) — hoạt động trên DB/auth/design mới.
 16. In đủ 5 loại chứng từ + chọn máy in theo shop + theo dõi lỗi in.
+17. Đổi ngôn ngữ VI/EN toàn app; lưu lựa chọn.
+18. App cài được như PWA; nhận push khi có đơn mới/batch hoàn tất; GA đo sự kiện chính.
+19. Thấy bản đồ pins/route từ tracking + tech service (OpenStreetMap).
+20. KTV dùng mobile web: nhận việc, hoàn tất, đổi lịch — trên điện thoại.
+21. Hệ thống bán hàng đẩy đơn qua webhook → đơn vào D1 xử lý (idempotent).
+22. Đổi env sang Ahamove thật → quotes/booking chạy thật (khi có credential).
 
 ## 5. Boundary (KHÔNG làm)
 - KHÔNG TLS/HA; KHÔNG k8s/helm; KHÔNG horizontal scaling. (Backup automation + monitoring giờ IN scope — SF-12.)
