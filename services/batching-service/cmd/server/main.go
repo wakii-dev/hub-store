@@ -23,6 +23,7 @@ import (
 	"net/url"
 	"os"
 
+	"hubstore/batching-service/internal/ahamove"
 	"hubstore/batching-service/internal/fulfillment"
 	"hubstore/batching-service/internal/server"
 	"hubstore/batching-service/internal/store"
@@ -78,6 +79,12 @@ func main() {
 	if err != nil {
 		log.Fatalf("batching-service: listen :%s: %v", port, err)
 	}
+
+	// NVC adapter (SF-15, dual-mode) — mock mặc định / real khi AHAMOVE_MODE=real
+	// + đủ key. Boot chỉ chọn + log mode; DeliveryBatchService (task T4) sẽ
+	// consume adapter này khi register lên gRPC server.
+	_ = ahamove.NewFromEnv()
+
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(server.RoleUnaryInterceptor))
 	batchingv1.RegisterBatchingServiceServer(grpcServer, server.New(st, fc))
 	reflection.Register(grpcServer)
