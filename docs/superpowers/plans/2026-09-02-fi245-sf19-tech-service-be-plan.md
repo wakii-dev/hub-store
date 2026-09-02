@@ -97,7 +97,7 @@ Testing strategy: unit `mvn test` (InMemory + flags matrix + validation); IT `mv
 - Create: `api/proto/hubstore/fulfillment/v1/tech_service.proto`
 - Regen (commit output): `api/proto/gen/{java,go,ts,python}/hubstore/fulfillment/v1/tech_service*`
 
-- [ ] **Step 1: Viết proto file**
+- [x] **Step 1: Viết proto file**
 
 ```proto
 syntax = "proto3";
@@ -264,14 +264,14 @@ service TechService {
 }
 ```
 
-- [ ] **Step 2: buf lint**
+- [x] **Step 2: buf lint**
 
 ```bash
 cd api/proto && npx @bufbuild/buf@1.72.0 lint .
 ```
 Expected: 0 findings (enum values đã prefix DELIVERY_STATUS_* — ENUM_VALUE_PREFIX pass; ENUM_ZERO_VALUE_SUFFIX đã except trong buf.yaml). Optional: `npx @bufbuild/buf@1.72.0 breaking .` — file mới additive nên pass.
 
-- [ ] **Step 3: Regen Go + Java + TS + Python** (chỉ file mới)
+- [x] **Step 3: Regen Go + Java + TS + Python** (chỉ file mới)
 
 ```bash
 cd api/proto
@@ -294,7 +294,7 @@ protoc -I . --plugin=protoc-gen-ts_proto=<path>/protoc-gen-ts_proto \
   --python_out=gen/python --grpc_python_out=gen/python hubstore/fulfillment/v1/tech_service.proto
 ```
 
-- [ ] **Step 4: Compile checks**
+- [x] **Step 4: Compile checks**
 
 ```bash
 cd api/proto/gen/go && go build ./...
@@ -305,7 +305,7 @@ find api/proto/gen/python -name 'tech_service*' -exec python3 -m py_compile {} +
 ```
 Expected: all PASS.
 
-- [ ] **Step 5: Commit**
+- [x] **Step 5: Commit**
 
 ```bash
 git add api/proto/hubstore/fulfillment/v1/tech_service.proto api/proto/gen/
