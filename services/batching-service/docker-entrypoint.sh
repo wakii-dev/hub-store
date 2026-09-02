@@ -14,15 +14,24 @@ set -eu
 escape_url() {
   printf '%s' "$1" | sed \
     -e 's/%/%25/g' -e 's/@/%40/g' -e 's/:/%3A/g' -e 's#/#%2F#g' \
-    -e 's/?/%3F/g' -e 's/#/%23/g' -e 's/&/%26/g' -e 's/=/=%3D/g' \
-    -e 's/+/%2B/g' -e 's/ /%20/g'
+    -e 's/?/%3F/g' -e 's/#/%23/g' -e 's/&/%26/g' -e 's/=/%3D/g' \
+    -e 's/+/%2B/g' -e 's/ /%20/g' -e 's/\[/%5B/g' -e 's/\]/%5D/g'
 }
 DB_URL="postgres://$(escape_url "$BATCHING_DB_USER"):$(escape_url "$BATCHING_DB_PASSWORD")@${BATCHING_DB_HOST}:${BATCHING_DB_PORT}/${BATCHING_DB_NAME}?sslmode=disable"
 
-# 1. wait-for-db — pg_isready không có sẵn trong alpine → poll TCP bằng migrate
-#    connect retry (migrate -connectRetries=10, backoff ~10s tổng).
+# 1. wait-for-db — retry migrate until DB accepts connections (60 x 1s;
+#    alpine không có pg_isready/pg client).
 echo "batching-service: migrating DB ${BATCHING_DB_NAME} at ${BATCHING_DB_HOST}:${BATCHING_DB_PORT}..."
-/app/migrate -path /app/migrations -database "$DB_URL" -connectRetries=10 up
+i=0
+until /usr/local/bin/migrate -path /app/migrations -database "$DB_URL" up; do
+  i=$((i + 1))
+  if [ "$i" -ge 60 ]; then
+    echo "batching-service: migrate TIMEOUT sau 60s — DB chưa sẵn sàng?" >&2
+    exit 1
+  fi
+  echo "batching-service: DB chưa ready (lần $i/60) — retry sau 1s..."
+  sleep 1
+done
 echo "batching-service: migrations up — OK"
 
 # 2. serve (boot lazy-dial Java — không cần Java đang chạy).
