@@ -41,15 +41,12 @@ message DashboardStatsResponse {
   repeated DayCount orders_per_day = 1;                // đủ 30 ô (ngày thiếu = 0), cũ→mới, date "YYYY-MM-DD" (TZ Asia/Ho_Chi_Minh)
   int32 total_today = 2;                               // đơn original_time_from trong hôm nay
   int32 pending_approval = 3;                          // order_status = 0 (Chờ duyệt)
-  int32 delivering = 4;                                // batch_status = 1 (Đang giao)
-  int32 completed = 5;                                 // batch_status = 2
-  int32 cancelled = 6;                                 // batch_status = 3
-  repeated BatchOrderCount orders_per_batch = 7;       // batch_code → count (GROUP BY, chỉ batch_code != '')
+  repeated BatchOrderCount orders_per_batch = 4;       // batch_code → count (GROUP BY, chỉ batch_code != '')
 }
 message DayCount { string date = 1; int32 count = 2; }
 message BatchOrderCount { string batch_code = 1; int32 count = 2; }
 ```
-Tỷ lệ hoàn thành/hủy = completed/(completed+delivering+pending-batch+cancelled) tính ở FE từ counts (tránh trùng logic).
+LƯU Ý domain: order-level `BatchStatus` là trạng thái SOẠN HÀNG (0-3, không phải giao). "Hoàn thành/Hủy" ở đây là trạng thái PHIẾU (`BatchEntityStatus`: 0=Đang soạn/1=Hoàn tất/2=Đã hủy) — data nằm ở batching DB, fulfillment KHÔNG nhóm theo nó. Do đó: completion/cancel + "đang giao" (đơn thuộc phiếu ACTIVE) tính ở BFF từ `FilterBatches` (đã merge); fulfillment RPC chỉ trả aggregate thuần của fulfillment DB (orders_per_day, total_today, pending_approval, orders_per_batch).
 
 ### 4.2 BFF REST
 `GET /fulfillment/dashboard-stats` — requireUser → `Promise.all([fulfillment.getDashboardStats(role), batching.filterBatches(pageSize đủ lớn, role)])` → merge workload:
