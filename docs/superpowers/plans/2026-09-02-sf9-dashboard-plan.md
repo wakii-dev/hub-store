@@ -58,7 +58,7 @@ Tasks (ordered): T1 gRPC aggregate → T2 BFF endpoint → T3 DashboardPage+char
 - Modify: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/service/FulfillmentServiceImpl.java`
 - Test: `FilterAndHydrationTest.java` (thêm unit case InMemory) + `PostgresOrderRepositoryIT.java` (parity case)
 
-- [ ] **Step 1: Proto additive** — cuối fulfillment.proto thêm:
+- [x] **Step 1: Proto additive** — cuối fulfillment.proto thêm:
 
 ```proto
 // --- Dashboard (SF-9, FI-245) — aggregate thuần fulfillment DB. TZ cố định
@@ -94,9 +94,9 @@ Và trong `service FulfillmentService` thêm:
   rpc GetDashboardStats(DashboardStatsRequest) returns (DashboardStatsResponse);
 ```
 
-- [ ] **Step 2: Regen 4 ngôn ngữ** — theo docs/superpowers/spikes/grpc-codegen-multilang.md §Regenerate (protoc 29.3; ts_proto plugin binary `protoc-gen-ts_proto`, opt `outputServices=grpc-js,forceLong=number,esModuleInterop=true`; go plugin pins v1.28.1/v1.2.0; java plugin 1.64.0 osx-aarch_64; python grpc_tools 1.83.1). Chỉ regen fulfillment.proto. Verify: `npx tsc --noEmit` trong services/bff-gateway; `mvn -q compile` trong services/fulfillment-service.
+- [x] **Step 2: Regen 4 ngôn ngữ** — theo docs/superpowers/spikes/grpc-codegen-multilang.md §Regenerate (protoc 29.3; ts_proto plugin binary `protoc-gen-ts_proto`, opt `outputServices=grpc-js,forceLong=number,esModuleInterop=true`; go plugin pins v1.28.1/v1.2.0; java plugin 1.64.0 osx-aarch_64; python grpc_tools 1.83.1). Chỉ regen fulfillment.proto. Verify: `npx tsc --noEmit` trong services/bff-gateway; `mvn -q compile` trong services/fulfillment-service.
 
-- [ ] **Step 3: Java record + repo** — `DashboardStatsData.java`:
+- [x] **Step 3: Java record + repo** — `DashboardStatsData.java`:
 ```java
 public record DashboardStatsData(List<DayCount> ordersPerDay, int totalToday,
         int pendingApproval, List<BatchCount> ordersPerBatch) {
@@ -138,7 +138,7 @@ public DashboardStatsData dashboardStats(LocalDate today, ZoneId zone) {
 ```
 `InMemoryOrderRepository` cùng semantics: parse `originalTimeFrom` ISO → `atZoneSameInstant(zone)` → group/fill 30 ô; pending = status_code==0; perBatch group theo batchCode non-blank. (Nếu OrderSeed.originalTimeFrom là String — parse `OffsetDateTime.parse`, fallback `Instant.parse`.)
 
-- [ ] **Step 4: ServiceImpl** — pattern try/catch như listRegions:
+- [x] **Step 4: ServiceImpl** — pattern try/catch như listRegions:
 ```java
 @Override
 public void getDashboardStats(DashboardStatsRequest request,
@@ -164,9 +164,9 @@ public void getDashboardStats(DashboardStatsRequest request,
 ```
 (Khớp đúng catch-pattern hiện có của class — đọc method lân cận trước khi paste.)
 
-- [ ] **Step 5: Tests** — unit: InMemory dashboardStats với orders giả (2 ngày, thiếu ngày giữa → fill 0; pending đúng; perBatch bỏ batchCode rỗng). IT: sau seed canonical — ordersPerDay có ô "2026-09-03"=27, tổng 30 ô, pendingApproval=5, ordersPerBatch tổng = 11 (27 − 16 đơn batch_status=0 chưa vào phiếu), totalToday theo ngày chạy (0 trừ khi insert). Chạy: `mvn test` (unit) + IT theo pattern hiện có (skip-when-no-DB).
+- [x] **Step 5: Tests** — unit: InMemory dashboardStats với orders giả (2 ngày, thiếu ngày giữa → fill 0; pending đúng; perBatch bỏ batchCode rỗng). IT: sau seed canonical — ordersPerDay có ô "2026-09-03"=27, tổng 30 ô, pendingApproval=5, ordersPerBatch tổng = 11 (27 − 16 đơn batch_status=0 chưa vào phiếu), totalToday theo ngày chạy (0 trừ khi insert). Chạy: `mvn test` (unit) + IT theo pattern hiện có (skip-when-no-DB).
 
-- [ ] **Step 6: Commit** — `feat(fi245-sf9): GetDashboardStats RPC — SQL aggregate 30 ngày + per-batch (proto additive + Java)`.
+- [x] **Step 6: Commit** — `feat(fi245-sf9): GetDashboardStats RPC — SQL aggregate 30 ngày + per-batch (proto additive + Java)`.
 
 ### Task 2: BFF GET /fulfillment/dashboard-stats
 
