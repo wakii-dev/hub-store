@@ -22,3 +22,7 @@
 - **Resolution:** V2 viết lại IDEMPOTENT 2 chiều (CREATE TABLE IF NOT EXISTS + ALTER ADD COLUMN IF NOT EXISTS `target` + index tên riêng `idx_activity_log_target_code` tránh trùng tên index V5). Cả 2 thứ tự apply (V2-first / V5-first) cho shape coexist. SF-13 chỉ ghi/đọc cột `target` — deprecated ở tầng converge (đúng comment phối hợp trong V5 của SF-7).
 - **Bài học cross-SF:** merge rule dạng "A canonical, B phải drop" dễ vỡ khi 2 SF merge-before song song. Migration bảng chia sẻ giữa 2 SF nên idempotent từ đầu (IF NOT EXISTS + ADD COLUMN IF NOT EXISTS + index namespaced).
 - **Ghi đè entry cũ:** "V2 canonical, SF-7 drop V2__activity_log.sql + renumber" — KHÔNG còn đúng; giữ làm audit trail.
+
+## 2026-09-02 — FI-258 (SF-13) — flyway out-of-order tradeoff
+- **What:** bật `spring.flyway.out-of-order: true` (application.yml) để V2__intake_schema không bị Flyway skip im lặng trên DB đã áp V5 watermark cao hơn (round-2 review P1).
+- **Tradeoff ghi nhận:** migration mới trong tương lai có version thấp hơn watermark sẽ áp out-of-order im lặng thay vì fail — chấp nhận được ở service này (repo không có down-migration; version mới luôn tăng). SF khác thêm migration nhớ đặt version > max watermark.
