@@ -6,6 +6,7 @@
  *   - 'orders.view'       → D1 Danh sách đơn hàng (/hub-store-order/order)
  *   - 'fulfillment.view'  → D2 Danh sách phiếu soạn (/hub-store-order/batch)
  *   - 'fulfillment.print' → D3 Print Shipment (/hub-store-order/batch/print)
+ *   - 'users.manage'      → SF-8 Users (/users) — chỉ Manager.
  *
  * Role source: module-level store (setRole) HOẶC RoleProvider (context
  * — context wins nếu có). SF-6 role switcher drive bằng 1 trong 2 cách.
@@ -22,14 +23,14 @@ import {
 export const ROLES = ['Coordinator', 'WarehouseOps', 'Manager'] as const;
 export type Role = (typeof ROLES)[number];
 
-export const PERMISSIONS = ['orders.view', 'fulfillment.view', 'fulfillment.print'] as const;
+export const PERMISSIONS = ['orders.view', 'fulfillment.view', 'fulfillment.print', 'users.manage'] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 /** §2: Coordinator → D1+D2+Print; WarehouseOps → D2+Print (KHÔNG D1); Manager → all. */
 export const PERMISSION_MATRIX = {
   Coordinator: ['orders.view', 'fulfillment.view', 'fulfillment.print'],
   WarehouseOps: ['fulfillment.view', 'fulfillment.print'],
-  Manager: ['orders.view', 'fulfillment.view', 'fulfillment.print'],
+  Manager: ['orders.view', 'fulfillment.view', 'fulfillment.print', 'users.manage'],
 } as const satisfies Record<Role, readonly Permission[]>;
 
 // --- module-level role store (lite, không cần Redux) ---
