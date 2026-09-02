@@ -48,7 +48,7 @@ BE thiếu toàn bộ data model + APIs cho đơn dịch vụ kỹ thuật: list
 | coordination | JSONB NOT NULL DEFAULT '{}' | ghi chú phối hợp giao+lắp |
 | delivery_date | DATE NOT NULL | mặc định filter "hôm nay" theo cột này |
 | created_at | TIMESTAMPTZ NOT NULL DEFAULT now() | |
-Indexes: status, delivery_date, region_code, province, driver_name.
+Indexes: status, delivery_date, region_code, province. (driver_name filter dùng ILIKE substring theo convention SF-2 → không index.)
 
 ### 3.2 installation_orders
 | column | type | notes |
@@ -62,13 +62,13 @@ Indexes: status, delivery_date, region_code, province, driver_name.
 | timeline | JSONB NOT NULL DEFAULT '[]' | `[{at, status, note, actor}]` — READ-only ở SF-19 |
 | service_fee | DOUBLE PRECISION NOT NULL DEFAULT 0 | payout KTV |
 | fee_adjust | DOUBLE PRECISION NOT NULL DEFAULT 0 | điều chỉnh |
-| items | JSONB NOT NULL DEFAULT '[]' | ngành hàng L1/L2 để filter |
+| items | JSONB NOT NULL DEFAULT '[]' | shape giống §3.1, keys camelCase (`categoryL1`/`categoryL2`) |
 | region_code, province | VARCHAR | |
 | created_at | TIMESTAMPTZ NOT NULL DEFAULT now() | |
 Indexes: status, technician_code, service_order_code (unique), delivery_order_code, region_code, province.
 
 ### 3.3 installation_assignment_history
-id BIGSERIAL PK · service_order_code VARCHAR NOT NULL · from_technician_code VARCHAR · to_technician_code VARCHAR NOT NULL · changed_by VARCHAR NOT NULL · changed_at TIMESTAMPTZ NOT NULL · index (service_order_code).
+id BIGSERIAL PK · service_order_code VARCHAR NOT NULL · from_technician_code VARCHAR · to_technician_code VARCHAR NOT NULL · changed_by VARCHAR NOT NULL · changed_at TIMESTAMPTZ NOT NULL · index (service_order_code). (Deviation khỏi V1: không FK ON DELETE CASCADE về installation_orders — không có delete path; ghi chú rõ.)
 
 ### 3.4 technicians
 id BIGSERIAL PK · seq BIGSERIAL (giữ thứ tự seed, pattern V1 regions/delivery_staff) · code VARCHAR UNIQUE NOT NULL · name VARCHAR NOT NULL · type VARCHAR NOT NULL CHECK in ('KTV','CTV') · region_code VARCHAR NOT NULL.
@@ -81,24 +81,25 @@ Proto enum `DeliveryStatus` (zero value = NEW, buf lint ENUM_ZERO_VALUE_SUFFIX �
 
 ## 5. Buttons flags BE-authoritative (computed trong service layer, trả kèm mỗi record)
 
-| Flag | Điều kiện |
-|---|---|
-| allowCancel | status ∈ {NEW, CONFIRMED, PROCESSING, REDELIVERY, RESCHEDULED} |
-| allowAssign | technician_code IS NULL (installation) / driver chưa có (delivery) AND status ∈ {NEW, CONFIRMED, REDELIVERY, RESCHEDULED} |
-| allowReassign | technician_code IS NOT NULL AND status ∈ {CONFIRMED, PROCESSING, REDELIVERY, RESCHEDULED} |
-| allowAccept | technician_code IS NOT NULL AND status = CONFIRMED (KTV nhận việc) |
-| allowReschedule | status ∈ {NEW, CONFIRMED, REDELIVERY, RESCHEDULED} |
+| Flag | Điều kiện (installation_orders) | delivery_orders |
+|---|---|---|
+| allowCancel | status ∈ {NEW, CONFIRMED, PROCESSING, REDELIVERY, RESCHEDULED} | same |
+| allowAssign | technician_code IS NULL AND status ∈ {NEW, CONFIRMED, REDELIVERY, RESCHEDULED} | KHÔNG trả (false) — SF-19 không có API gán driver, FE ẩn nút |
+| allowReassign | technician_code IS NOT NULL AND status ∈ {CONFIRMED, PROCESSING, REDELIVERY, RESCHEDULED} | KHÔNG trả (false) |
+| allowAccept | technician_code IS NOT NULL AND status = CONFIRMED (KTV nhận việc) | KHÔNG trả (false) |
+| allowReschedule | status ∈ {NEW, CONFIRMED, REDELIVERY, RESCHEDULED} | same |
 
+Assign/reassign/accept flags chỉ áp dụng installation; delivery chỉ trả allowCancel/allowReschedule (các flag còn lại = false tường minh trong response — SF-20 render theo flag, không tự suy).
 KHÔNG mutate status từ SF-19 (accept/complete flow là SF-25; SF-19 chỉ đọc + assign). Flags = boolean struct trả trong response.
 
 ## 6. APIs
 
 ### 6.1 gRPC — file mới `api/proto/hubstore/fulfillment/v1/tech_service.proto` (package giữ nguyên, service `TechService`)
-- `FilterDeliveryOrders(FilterDeliveryOrdersRequest) → (items, total, page, page_size)` — filter: repeated statuses, driver_name (NV), repeated categoryL1/L2 (JSONB EXISTS), region_code, province, date_from/date_to (delivery_date), page/page_size. Item: mọi cột + buttons flags.
-- `FilterInstallationOrders(...)` — filter: repeated statuses, technician_code, repeated categoryL1/L2, region_code, province, date_from/date_to (expected_time::date), page/page_size. Item: mọi cột + timeline + buttons.
-- `AssignTechnician(AssignTechnicianRequest{service_order_code, technician_code}) → InstallationOrder` — insert history (from→to khi re-assign), update technician_code; validation: SO không tồn tại → NOT_FOUND; KTV không tồn tại → INVALID_ARGUMENT.
-- `SuggestTechnicians(SuggestTechniciansRequest{region_code}) → repeated candidates {code, name, type, activeCount}` — technicians theo region, activeCount = count installation_orders có technician_code + status NOT IN (DELIVERED, CANCELLED, RETURNED), ORDER BY activeCount ASC, seq ASC.
-- Pagination inline `{items, total, page, page_size}` (pattern SF-2/SF-7, map 1:1 `{items,total,page,pageSize}`).
+- `FilterDeliveryOrders(FilterDeliveryOrdersRequest) → (items, total, page, page_size)` — filter: repeated statuses, driver_name (ILIKE substring, convention SF-2), repeated categoryL1/L2 (JSONB EXISTS), region_code, province, date_from/date_to (delivery_date), page/page_size. **Today default**: khi date_from VÀ date_to đều absent → Java repo tự áp `delivery_date = CURRENT_DATE` (timezone app `Asia/Ho_Chi_Minh` qua JDBC connection init SQL hoặc `-Duser.timezone`); khi có ít nhất 1 trong 2 → filter theo đúng giá trị truyền. Item: mọi cột + buttons flags.
+- `FilterInstallationOrders(...)` — filter: repeated statuses, technician_code, repeated categoryL1/L2, region_code, province, date_from/date_to (expected_time::date), page/page_size. **KHÔNG có today default** (acceptance chỉ yêu cầu default cho delivery). Khi date filter có mặt: row có `expected_time` NULL bị exclude tường minh; không filter → trả tất. Item: mọi cột + timeline + buttons.
+- `AssignTechnician(AssignTechnicianRequest{service_order_code, technician_code}) → InstallationOrder (item đủ flags re-computed)` — validation: SO không tồn tại → NOT_FOUND; KTV không tồn tại → INVALID_ARGUMENT (BFF map 422 theo mapping hiện có); status KHÔNG thỏa điều kiện allowAssign (mục 5) → **FAILED_PRECONDITION** (enforce server-side, không chỉ advisory). Lần gán đầu CŨNG insert history row (`from_technician_code` NULL); re-assign insert row from→to. Update `technician_code` + insert history trong 1 transaction.
+- `SuggestTechnicians(SuggestTechniciansRequest{region_code}) → repeated candidates {code, name, type, activeCount}` — technicians theo region, activeCount = count installation_orders có technician_code + status NOT IN (DELIVERED, CANCELLED, RETURNED) — rationale: FAILED/REDELIVERY/RESCHEDULED vẫn cần KTV xử lý tiếp nên tính là workload; ORDER BY activeCount ASC, seq ASC.
+- Pagination inline `{items, total, page, page_size}` (pattern SF-2/SF-7, map 1:1 `{items,total,page,pageSize}`; defaults page<1→1, pageSize≤0→10 copy nguyên PostgresOrderRepository).
 
 ### 6.2 BFF REST (routes/tech.ts + clients/tech.ts + mappers/tech.ts)
 - `POST /delivery-orders/filter` → paginated envelope
@@ -110,8 +111,9 @@ Auth: `requireUser` + `sendGrpcError` như routes hiện có; role forward `x-us
 ## 7. Seed + pipeline
 
 - `api/seed/tech-sample.json` — arrays: `technicians` (6: 4 KTV + 2 CTV, 2 vùng), `deliveryOrders` (10 đủ các trạng thái, lat/long quanh HCM), `installationOrders` (8, có/không technician, timeline mẫu). KHÔNG đụng canonical-seed.json.
-- `scripts/seed-db.sh`: thêm block đọc `SEED_TECH_JSON` (default `api/seed/tech-sample.json`), insert 3 bảng nếu rỗng (giữ emptiness-gate + fail-loud khi thiếu bảng). CHỈ edit additive.
-- `scripts/reset-db.sh`: thêm 3 bảng vào truncate list.
+- **Ngày seed tương đối**: `deliveryOrders[].delivery_date` ghi placeholder `"TODAY"` — `seed-db.sh` substitute `CURRENT_DATE` lúc insert (seed tĩnh không tự hủy acceptance "hôm nay default").
+- `scripts/seed-db.sh`: thêm block đọc `SEED_TECH_JSON` (default `api/seed/tech-sample.json`), **per-table emptiness gate** (`EXISTS (SELECT 1 FROM <table>)` riêng cho technicians / delivery_orders / installation_orders — DB có thể đã có canonical data mà tech tables rỗng) + fail-loud `to_regclass` riêng từng bảng tech khi thiếu. CHỈ edit additive.
+- `scripts/reset-db.sh`: thêm **4 bảng** vào truncate list: `delivery_orders, installation_orders, installation_assignment_history, technicians` (history phải truncate cùng — tránh mồ côi + seq reuse).
 - validate.py KHÔNG đổi (chỉ validate canonical).
 
 ## 8. Java service
@@ -130,10 +132,12 @@ Regen 4 languages theo pins `docs/superpowers/spikes/grpc-codegen-multilang.md`:
 
 | ACCEPTANCE (context pack) | Verify |
 |---|---|
-| List delivery orders theo filter (trạng thái + hôm nay default) → đúng seed | BFF contract test + curl thật + psql cross-check |
-| Assign KTV → ghi nhận; re-assign → đổi + history | unit + IT + curl → psql thấy history row |
+| List delivery orders theo filter (trạng thái + hôm nay default) → đúng seed | BFF contract test (default today theo seed CURRENT_DATE) + curl thật + psql cross-check |
+| Assign KTV → ghi nhận (history row from NULL); re-assign → đổi + history row from→to | unit + IT + curl → psql thấy history rows |
 | Suggest trả ứng viên theo vùng; buttons flags đúng theo trạng thái | unit test matrix flags + curl |
 | psql thấy data; tests xanh | `docker compose exec postgres psql` + `mvn test` + `vitest run` |
+
+Assumptions đã ghi nhận: technicians 1 KTV thuộc đúng 1 vùng (suggest đơn giản — đa vùng là mở rộng sau); 10 mã trạng thái là assumption (REQUIREMENT-GAP đã post).
 
 ## 11. Risks
 
