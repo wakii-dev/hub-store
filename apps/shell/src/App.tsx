@@ -18,6 +18,7 @@ import { firstPathForRole } from "./nav";
 import AppLayout from "./features/layout/AppLayout";
 import LoginPage from "./features/login/LoginPage";
 import ForgotPasswordPage from "./features/login/ForgotPasswordPage";
+import UsersPage from "./features/users/UsersPage";
 import RemoteBoundary from "./RemoteBoundary";
 
 // Federation lazy imports — exposes contract ĐÃ PIN (spec §2.7)
@@ -196,6 +197,14 @@ export default function App() {
                       <RemoteBoundary>
                         <PrintPage />
                       </RemoteBoundary>
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/users"
+                  element={
+                    <RequirePermission permission="users.manage">
+                      <UsersPage currentUsername={session.sub} />
                     </RequirePermission>
                   }
                 />
