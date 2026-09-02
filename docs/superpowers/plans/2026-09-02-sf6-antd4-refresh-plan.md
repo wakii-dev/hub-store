@@ -31,10 +31,11 @@
 - Create: `packages/shared/src/theme/sf6-antd-overrides.css`
 - Verify: 3 vite configs đã dây `antdLessModifyVars` (không đổi nếu đã đúng)
 
-- [ ] **Step 1:** Ghi `DESIGN_TOKENS` mới — colors §1.1 (thêm `primaryHover/Active/Bg/Border/primaryGradient/textFaint/dividerSoft/bgSoftWhite/bgHeaderSticky/sidebar/statAccent`; status 5 tone × {text,bg,line} + purple + neutral), `shadow` §1.3 (6 key), `typography` §1.5 (h1 21/700 -0.02em, h2 17, h3 14, body 14, bodySm 13, caption 12.5, overline 11/600), `radius` §1.2 `{sm:5, control:8, md:10, lg:12, xl:14, card:16, pill:999, modal:20}` (xóa `popup`, grep consumer đổi sang `modal`), `layout: {sidebarWidth: 64, headerHeight: 60}`
+- [ ] **Step 1:** Ghi `DESIGN_TOKENS` mới — colors §1.1 (thêm `primaryHover/Active/Bg/Border/primaryGradient/textFaint/dividerSoft/bgSoftWhite/bgHeaderSticky/sidebar/statAccent`; status 5 tone × {text,bg,line} + purple + neutral), `shadow` §1.3 (6 key), `typography` §1.5 (h1 21/700 -0.02em, h2 17, h3 14, body 14, bodySm 13, caption 12.5, overline 11/600), `radius` §1.2 `{sm:5, control:8, md:10, lg:12, xl:14, card:16, pill:999, modal:20}` + **GIỮ `popup: 20` làm deprecated alias của `modal`** (plan-critic P0 — tránh vỡ build foundation; gỡ alias ở T7 sau khi repo-wide grep sạch), `layout: {sidebarWidth: 64, headerHeight: 60}`
 - [ ] **Step 2:** `antdLessModifyVars` theo block LESS hand-off §1.1/§1.2 + thêm `@table-padding-vertical: 13px`, `@table-padding-horizontal: 14px`, `@font-size-base: 14px`. `sharedCssVariables` thêm `--primary-hover/--primary-active/--primary-bg/--primary-border/--primary-gradient/--text-faint/--bg-soft-white/--bg-header-sticky/--sidebar-bg/--shadow-xs…--shadow-focus/--stat-accent`; `--radius-control: 8px`, `--radius-modal: 20px` (grep `--radius-popup` consumer — nếu còn thì alias = 20px)
 - [ ] **Step 3:** Tạo `sf6-antd-overrides.css` (import SAU `antd/dist/antd.less` trong cả 3 `main.tsx`): primary gradient button (`.ant-btn-primary` bg gradient, border none, shadow.primary, hover brightness(1.05), active translateY(1px)); ghost/default button §2.5; focus ring input/select/textarea (border #EB6E09 + `0 0 0 4px rgba(235,110,9,.12)`); button focus outline `2px solid #F68A2E` offset 2; `.sf6-modal-animation .ant-modal-content` open animation (fade + translateY(8px)→0 scale .98→1 150ms ease-out); pager button 30×30 radius 8 current gradient; `.sf6-shimmer` keyframes §2.2
-- [ ] **Step 4:** Update `shared-theme.test.ts`: fontSize 14, radius control 8 / modal 20, status hex mới, layout 64/60, typography scale mới, CSS vars mới. Grep toàn repo consumer token cũ (`radius.popup`, `typography.h1`, hardcoded hex cũ trong TSX) — liệt kê cho Task 3-6, KHÔNG sửa ở task này ngoài shared
+- [ ] **Step 4:** Update `shared-theme.test.ts`: fontSize 14, radius control 8 / modal 20, status hex mới, layout 64/60, typography scale mới, CSS vars mới. Grep toàn repo consumer token cũ (`radius.popup`, `typography.h1`, hardcoded hex cũ trong TSX) → **XUẤT danh sách file vào comment commit + phân bổ: hex/token trong file scope T3 → T3 sửa, T4 → T4, T5 → T5, T6 → T6, còn lại (shared components khác, OrdersExpandContent…) → T7 sweep cuối** (plan-critic P0-2 — không để mồ côi)
+- [ ] **Step 5:** Run `pnpm --filter @hubstore/shared test` (tên package grep từ package.json) + `pnpm build` — PASS rồi commit:
 - [ ] **Step 5:** Run `pnpm --filter @hubstore/shared test` (tên package grep từ package.json) + `pnpm build` — PASS rồi commit:
 ```bash
 git add packages/shared/src/theme/ apps/*/src/main.tsx
@@ -53,7 +54,8 @@ git commit -m "feat(fi251): SF-6 theme tokens — direction B Modern SaaS Airy (
 - [ ] **Step 1:** Đọc StatusTag tokens.ts hiện tại → đổi giá trị tone theo status mới; giữ nguyên tên tone + mapping kind→value
 - [ ] **Step 2:** Reskin StatusTag visual (pill + dot) — `StatusTag.test.tsx` assert `toHaveStyle({backgroundColor})` vẫn pass vì derives từ tokens
 - [ ] **Step 3:** Skeleton + EmptyState components (inline styles + DESIGN_TOKENS, convention codebase)
-- [ ] **Step 4:** Commit:
+- [ ] **Step 4:** Verify: `pnpm --filter <shared-pkg> test` (StatusTag.test phải xanh KHÔNG sửa) + `pnpm build` — PASS
+- [ ] **Step 5:** Commit:
 ```bash
 git add packages/shared/src/components/
 git commit -m "feat(fi251): StatusTag pastel pill + shared Skeleton/EmptyState components"
@@ -87,7 +89,8 @@ git commit -m "feat(fi251): shell refresh — header 60 rail 64 gradient nav + l
 - [ ] **Step 2:** D1Page page-head + StatStrip mount + table card reskin
 - [ ] **Step 3:** FilterBar controls reskin
 - [ ] **Step 4:** Skeleton/empty wiring (isLoading → TableSkeleton; empty → EmptyState "Không có đơn hàng nào" + nút "Xóa bộ lọc" gọi clear filter hiện có)
-- [ ] **Step 5:** Commit:
+- [ ] **Step 5:** Verify: `pnpm build` + grep xác nhận testid `bulk-bar`/`bulk-create-batch`/`bulk-transfer`/`filter-bar` nguyên vị trí + logic selection/DnD không diff — PASS
+- [ ] **Step 6:** Commit:
 ```bash
 git add apps/orders/src/pages/ packages/shared/src/components/FilterBar/
 git commit -m "feat(fi251): D1 refresh — stat-strip + table card + filter reskin"
@@ -103,7 +106,8 @@ git commit -m "feat(fi251): D1 refresh — stat-strip + table card + filter resk
 - [ ] **Step 2:** Stepper header + section wrapper (state `activeSection` — set on scroll/click, KHÔNG ẩn content)
 - [ ] **Step 3:** Reskin từng section + footer
 - [ ] **Step 4:** batching-modal.css theo §2.3 (hex cứng cho phép ở file này — token-derived khi được)
-- [ ] **Step 5:** Commit:
+- [ ] **Step 5:** Verify: `pnpm build` + grep xác nhận toàn bộ testid `batch-*` nguyên vị trí + handler DnD/canSubmit không diff (chỉ wrapper/style thay đổi) — PASS
+- [ ] **Step 6:** Commit:
 ```bash
 git add apps/orders/src/batching/
 git commit -m "feat(fi251): D1b wizard — sectioned stepper + reskin (E2E-safe single-pane)"
@@ -117,7 +121,8 @@ git commit -m "feat(fi251): D1b wizard — sectioned stepper + reskin (E2E-safe 
 
 - [ ] **Step 1:** BatchListPage reskin (page-head + card + empty)
 - [ ] **Step 2:** PrintPage page-head + tabs
-- [ ] **Step 3:** Commit:
+- [ ] **Step 3:** Verify: `pnpm build` — PASS
+- [ ] **Step 4:** Commit:
 ```bash
 git add apps/fulfillment/src/
 git commit -m "feat(fi251): D2/D3 tokens-derived reskin"
@@ -128,6 +133,7 @@ git commit -m "feat(fi251): D2/D3 tokens-derived reskin"
 **Files:** chỉ sửa nếu verify phát hiện lỗi (fix → re-verify)
 
 - [ ] **Step 1:** `pnpm build` + `pnpm test` toàn workspace — PASS
+- [ ] **Step 1b:** Hex/token sweep cuối: grep danh sách mồ côi từ T1 Step 4 + repo-wide `radius.popup` consumer — sửa nốt (có thể gỡ alias `popup` nếu grep sạch)
 - [ ] **Step 2:** E2E: `pnpm --filter e2e test` (hoặc command thực tế trong e2e/package.json) — toàn bộ specs xanh KHÔNG sửa assertion
 - [ ] **Step 3:** Rule 0 tầng 1 (DOM eval): header 60px, rail 64px, page bg rgb(247,248,250), button radius 8, body font 14, primary #EB6E09
 - [ ] **Step 4:** Rule 0 tầng 2 (screenshot): login → D1 → wizard → D2, so prototype B side-by-side, liệt kê gap
