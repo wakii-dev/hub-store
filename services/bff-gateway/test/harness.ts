@@ -159,6 +159,7 @@ const fulfillmentDefaults: Record<string, UnaryHandler> = {
   getOrderDetail: (_c, cb) => cb(null, fulfillmentResponses.getOrderDetail),
   assignShopHub: (_c, cb) => cb(null, { order: fulfillmentResponses.getOrderDetail.order }),
   getAssignHistory: (_c, cb) => cb(null, fulfillmentResponses.getAssignHistory),
+  getDashboardStats: (_c, cb) => cb(null, fulfillmentResponses.getDashboardStats),
   updateDeliveryTime: (_c, cb) => cb(null, fulfillmentResponses.getOrderDetail),
   updateNote: (_c, cb) => cb(null, fulfillmentResponses.getOrderDetail),
   listRegions: (_c, cb) => cb(null, fulfillmentResponses.listRegions),

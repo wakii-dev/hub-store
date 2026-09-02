@@ -6,6 +6,7 @@
 import type {
   FilterOrdersResponse,
   GetAssignHistoryResponse,
+  GetDashboardStatsResponse,
   GetOrderDetailResponse,
   GetTimeDeliveryResponse,
   HubStoreOrderFilterItem,
@@ -109,6 +110,17 @@ export const fulfillmentResponses = {
   getTimeDelivery: {
     suggestedTime: { from: '2026-09-03T08:00:00+07:00', to: '2026-09-03T12:00:00+07:00' },
   } as GetTimeDeliveryResponse,
+  // SF-9 — BAT-1001 (S-01) 2 đơn; khớp batchingResponses.filterBatches mặc định
+  // (BAT-1001 status 0) → delivering=2, rates=0 khi không override.
+  getDashboardStats: {
+    ordersPerDay: [
+      { date: '2026-09-01', count: 3 },
+      { date: '2026-09-02', count: 2 },
+    ],
+    totalToday: 4,
+    pendingApproval: 5,
+    ordersPerBatch: [{ batchCode: 'BAT-1001', count: 2 }],
+  } as GetDashboardStatsResponse,
 };
 
 export const batchingResponses = {

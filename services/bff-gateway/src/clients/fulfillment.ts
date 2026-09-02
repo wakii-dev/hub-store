@@ -11,6 +11,8 @@ import type {
   FilterOrdersResponse,
   GetAssignHistoryRequest,
   GetAssignHistoryResponse,
+  GetDashboardStatsRequest,
+  GetDashboardStatsResponse,
   GetOrderDetailRequest,
   GetOrderDetailResponse,
   GetTimeDeliveryRequest,
@@ -33,6 +35,7 @@ export interface FulfillmentApi {
   getOrderDetail(req: GetOrderDetailRequest, role: string): Promise<GetOrderDetailResponse>;
   assignShopHub(req: AssignShopHubRequest, role: string): Promise<AssignShopHubResponse>;
   getAssignHistory(req: GetAssignHistoryRequest, role: string): Promise<GetAssignHistoryResponse>;
+  getDashboardStats(req: GetDashboardStatsRequest, role: string): Promise<GetDashboardStatsResponse>;
   updateDeliveryTime(req: UpdateDeliveryTimeRequest, role: string): Promise<UpdateDeliveryTimeResponse>;
   updateNote(req: UpdateNoteRequest, role: string): Promise<UpdateNoteResponse>;
   listRegions(req: ListRegionsRequest, role: string): Promise<ListRegionsResponse>;
@@ -49,6 +52,7 @@ export function createFulfillmentClient(addr: string, deadlineMs: number): Fulfi
     getOrderDetail: (req, role) => callUnary(c.getOrderDetail.bind(c), req, role, deadlineMs),
     assignShopHub: (req, role) => callUnary(c.assignShopHub.bind(c), req, role, deadlineMs),
     getAssignHistory: (req, role) => callUnary(c.getAssignHistory.bind(c), req, role, deadlineMs),
+    getDashboardStats: (req, role) => callUnary(c.getDashboardStats.bind(c), req, role, deadlineMs),
     updateDeliveryTime: (req, role) => callUnary(c.updateDeliveryTime.bind(c), req, role, deadlineMs),
     updateNote: (req, role) => callUnary(c.updateNote.bind(c), req, role, deadlineMs),
     listRegions: (req, role) => callUnary(c.listRegions.bind(c), req, role, deadlineMs),

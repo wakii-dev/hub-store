@@ -128,3 +128,33 @@ export interface TimeDeliveryResponse {
 export interface UpdateDeliveryTimeRequest {
   deliveryTime: TimeRange;
 }
+
+// ---------------------------------------------------------------------------
+// GET /fulfillment/dashboard-stats — SF-9 dashboard (BFF owns aggregation:
+// GetDashboardStats + FilterBatches + ListDeliveryStaff)
+// ---------------------------------------------------------------------------
+
+/**
+ * Dashboard Manager — đơn/ngày 30 ô (fulfillment DB, TZ +07, nhóm theo
+ * original_time_from) + trạng thái giao đếm theo PHIẾU (BatchEntityStatus
+ * 0=ACTIVE/1=COMPLETED/2=CANCELLED) + workload shipper.
+ */
+export interface DashboardStats {
+  /** Đủ 30 ô cũ→mới (ngày thiếu = 0). */
+  ordersPerDay: { date: string; count: number }[];
+  totalToday: number;
+  pendingApproval: number;
+  /** Đơn thuộc phiếu ACTIVE. */
+  delivering: number;
+  /** Đơn thuộc phiếu COMPLETED. */
+  completed: number;
+  /** Đơn thuộc phiếu CANCELLED. */
+  cancelled: number;
+  /** round(completed / (completed+cancelled) * 100) — 0 khi decided=0. */
+  completionRate: number;
+  /** round(cancelled / (completed+cancelled) * 100) — 0 khi decided=0. */
+  cancelRate: number;
+  totalBatches: number;
+  /** Shipper không khớp delivery_staff / rỗng → bucket staffId='' name='Chưa gán'. */
+  workload: { staffId: string; name: string; orderCount: number }[];
+}

@@ -351,3 +351,102 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     expect(after.statusCode).toBe(200);
   });
 });
+
+describe('SF-9 — GET /fulfillment/dashboard-stats (BFF owns aggregation)', () => {
+  it('merge 3 upstream — delivering/completed/cancelled theo batch status + workload map shipper (staff 0 đơn, bucket Chưa gán)', async () => {
+    // BAT-1001 S-01 ACTIVE(0) 2 đơn; BAT-1002 S-02 COMPLETED(1) 1 đơn;
+    // BAT-1003 shipper lạ CANCELLED(2) 2 đơn — S-02 có mặt trong staff, 0 đơn.
+    h.fulfillment.override({
+      getDashboardStats: (_c, cb) =>
+        cb(null, {
+          ordersPerDay: [{ date: '2026-09-01', count: 3 }],
+          totalToday: 4,
+          pendingApproval: 5,
+          ordersPerBatch: [
+            { batchCode: 'BAT-1001', count: 2 },
+            { batchCode: 'BAT-1002', count: 1 },
+            { batchCode: 'BAT-1003', count: 2 },
+          ],
+        }),
+      listDeliveryStaff: (_c, cb) =>
+        cb(null, {
+          items: [
+            { id: 'S-01', name: 'Nguyễn Ship', shopCode: '30201' },
+            { id: 'S-02', name: 'Trần Một', shopCode: '30201' },
+            { id: 'S-03', name: 'Trần Zero', shopCode: '30201' },
+          ],
+        }),
+    });
+    h.batching.override({
+      filterBatches: (_c, cb) =>
+        cb(null, {
+          items: [
+            { batchCode: 'BAT-1001', shipperId: 'S-01', status: 0, items: [], createdAt: '' },
+            { batchCode: 'BAT-1002', shipperId: 'S-02', status: 1, items: [], createdAt: '' },
+            { batchCode: 'BAT-1003', shipperId: 'S-GHOST', status: 2, items: [], createdAt: '' },
+          ],
+          total: 3,
+          page: 1,
+          pageSize: 100,
+        }),
+    });
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/fulfillment/dashboard-stats',
+      headers: { authorization: `Bearer ${await signTestToken()}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.ordersPerDay).toEqual([{ date: '2026-09-01', count: 3 }]);
+    expect(body.totalToday).toBe(4);
+    expect(body.pendingApproval).toBe(5);
+    expect(body.delivering).toBe(2);
+    expect(body.completed).toBe(1);
+    expect(body.cancelled).toBe(2);
+    // rates: decided=3 → round(1/3*100)=33, round(2/3*100)=67.
+    expect(body.completionRate).toBe(33);
+    expect(body.cancelRate).toBe(67);
+    expect(body.totalBatches).toBe(3);
+    // workload: staff map theo shipper (đếm mọi phiếu kể cả COMPLETED),
+    // staff không có phiếu nào → orderCount 0, shipper lạ → bucket "Chưa gán".
+    expect(body.workload).toEqual([
+      { staffId: 'S-01', name: 'Nguyễn Ship', orderCount: 2 },
+      { staffId: 'S-02', name: 'Trần Một', orderCount: 1 },
+      { staffId: 'S-03', name: 'Trần Zero', orderCount: 0 },
+      { staffId: '', name: 'Chưa gán', orderCount: 2 },
+    ]);
+  });
+
+  it('decided=0 → rates 0; mọi đơn vào staff đã biết → KHÔNG bucket Chưa gán', async () => {
+    // Fixture mặc định: BAT-1001 (S-01, status 0) 2 đơn — hết staff đã biết.
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/fulfillment/dashboard-stats',
+      headers: { authorization: `Bearer ${await signTestToken()}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(body.delivering).toBe(2);
+    expect(body.completed).toBe(0);
+    expect(body.cancelled).toBe(0);
+    expect(body.completionRate).toBe(0);
+    expect(body.cancelRate).toBe(0);
+    expect(body.totalBatches).toBe(5);
+    expect(body.workload).toEqual([{ staffId: 'S-01', name: 'Nguyễn Ship', orderCount: 2 }]);
+  });
+
+  it('stats upstream UNAVAILABLE → 503 UPSTREAM_UNAVAILABLE + tên fulfillment-service', async () => {
+    h.fulfillment.override({
+      getDashboardStats: (_c, cb) => cb(mockGrpcError(14, 'connection refused')),
+    });
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/fulfillment/dashboard-stats',
+      headers: { authorization: `Bearer ${await signTestToken()}` },
+    });
+    expect(res.statusCode).toBe(503);
+    const body = res.json();
+    expect(body.code).toBe('UPSTREAM_UNAVAILABLE');
+    expect(body.message).toContain('fulfillment-service');
+  });
+});

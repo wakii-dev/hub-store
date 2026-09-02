@@ -19,6 +19,7 @@ import type {
   TimeDeliveryResponse,
   AssignHistoryResponse,
   OrderDetail,
+  DashboardStats,
 } from '@hub-store/shared';
 import type { FulfillmentApi, BatchingApi } from '../clients/index.js';
 import { SERVICE_NAMES } from '../config.js';
@@ -101,6 +102,68 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
       }
     },
   );
+
+  // Dashboard SF-9 — BFF owns aggregation (pattern GetOrderDetail): stats
+  // (fulfillment) + FilterBatches (status/shipper per phiếu — batching
+  // READ-ONLY, chỉ GỌI) + ListDeliveryStaff (id→name). pageSize 100: dataset
+  // dashboard nhỏ, phiếu > 100 ngoài scope SF-9 (ghi nhận, không paginate-loop).
+  app.get('/fulfillment/dashboard-stats', async (request, reply) => {
+    const { role } = requireUser(request);
+    try {
+      const [stats, batches, staff] = await Promise.all([
+        f.getDashboardStats({}, role),
+        deps.batching.filterBatches(
+          { search: '', statuses: [], createdTime: undefined, page: 1, pageSize: 100 },
+          role,
+        ),
+        f.listDeliveryStaff({}, role),
+      ]);
+      const countByBatch = new Map((stats.ordersPerBatch ?? []).map((b) => [b.batchCode, b.count]));
+      let delivering = 0;
+      let completed = 0;
+      let cancelled = 0;
+      const loadByStaff = new Map<string, number>();
+      const statusByBatch = new Map((batches.items ?? []).map((b) => [b.batchCode, Number(b.status)]));
+      const shipperByBatch = new Map((batches.items ?? []).map((b) => [b.batchCode, b.shipperId]));
+      for (const [code, count] of countByBatch) {
+        const st = statusByBatch.get(code);
+        if (st === 0) delivering += count;
+        else if (st === 1) completed += count;
+        else if (st === 2) cancelled += count;
+        const shipper = shipperByBatch.get(code) ?? '';
+        loadByStaff.set(shipper, (loadByStaff.get(shipper) ?? 0) + count);
+      }
+      const workload = (staff.items ?? []).map((s) => ({
+        staffId: s.id,
+        name: s.name,
+        orderCount: loadByStaff.get(s.id) ?? 0,
+      }));
+      // Đơn phiếu không khớp shipper trong delivery_staff (shipper lạ/rỗng) — gộp bucket "Chưa gán".
+      const knownIds = new Set(workload.map((w) => w.staffId));
+      let unassigned = 0;
+      for (const [shipper, count] of loadByStaff) if (!knownIds.has(shipper)) unassigned += count;
+      const totalBatches = Number(batches.total);
+      const decided = completed + cancelled;
+      const body: DashboardStats = {
+        ordersPerDay: (stats.ordersPerDay ?? []).map((d) => ({ date: d.date, count: d.count })),
+        totalToday: stats.totalToday,
+        pendingApproval: stats.pendingApproval,
+        delivering,
+        completed,
+        cancelled,
+        completionRate: decided > 0 ? Math.round((completed / decided) * 100) : 0,
+        cancelRate: decided > 0 ? Math.round((cancelled / decided) * 100) : 0,
+        totalBatches,
+        workload: [
+          ...workload,
+          ...(unassigned > 0 ? [{ staffId: '', name: 'Chưa gán', orderCount: unassigned }] : []),
+        ],
+      };
+      return await reply.send(body);
+    } catch (err) {
+      return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
+    }
+  });
 
   // Chuyển kho D1c — đúng 1 đơn/lần (§9); server-side validation rule 2 §3.6.
   app.post<{ Params: { code: string }; Body: AssignShopHubRequest }>(
