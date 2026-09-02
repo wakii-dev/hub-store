@@ -20,6 +20,9 @@ export const SERVICE_NAMES = {
   fulfillment: 'fulfillment-service',
   batching: 'batching-service',
   print: 'print-service',
+  // SF-13: IntakeService chạy TRONG fulfillment-service (Java) — tên riêng cho
+  // error envelope 503 để phân biệt nhóm RPC intake khi degrade.
+  intake: 'intake-service',
 } as const;
 
 export interface BffGrpcConfig {
@@ -29,6 +32,11 @@ export interface BffGrpcConfig {
   batching: string;
   /** Host:port của print-service (Python, mặc định localhost:50053). */
   print: string;
+  /**
+   * Host:port của IntakeService (SF-13) — cùng process fulfillment-service
+   * Java nên mặc định CÙNG :50051 (GRPC_INTAKE override được).
+   */
+  intake: string;
   /** Deadline mỗi gRPC upstream call — spec §3.1 resilience (mặc định 5000ms). */
   deadlineMs: number;
 }
@@ -121,6 +129,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       fulfillment: grpcAddr(env.GRPC_FULFILLMENT, '50051'),
       batching: grpcAddr(env.GRPC_BATCHING, '50052'),
       print: grpcAddr(env.GRPC_PRINT, '50053'),
+      intake: grpcAddr(env.GRPC_INTAKE, '50051'),
       deadlineMs: Number(env.BFF_GRPC_DEADLINE_MS ?? 5000),
     },
     devResetPassword: env.ENABLE_DEV_RESET_PASSWORD === '1',

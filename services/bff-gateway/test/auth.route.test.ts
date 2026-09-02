@@ -72,6 +72,7 @@ function buildTestApp(opts: { devResetPassword?: boolean } = {}): ReturnType<typ
       fulfillment: '127.0.0.1:1',
       batching: '127.0.0.1:1',
       print: '127.0.0.1:1',
+      intake: '127.0.0.1:1',
       deadlineMs: 2000,
     },
     devResetPassword: opts.devResetPassword ?? true,

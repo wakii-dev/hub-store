@@ -5,6 +5,7 @@
  */
 import Fastify from 'fastify';
 import cors from '@fastify/cors';
+import multipart from '@fastify/multipart';
 import type { FastifyError, FastifyInstance } from 'fastify';
 import type { ErrorEnvelope } from '@hub-store/shared';
 import type { BffConfig } from './config.js';
@@ -14,8 +15,10 @@ import {
   createFulfillmentClient,
   createBatchingClient,
   createPrintClient,
+  createIntakeClient,
 } from './clients/index.js';
 import { registerFulfillmentRoutes } from './routes/fulfillment.js';
+import { registerIntakeRoutes } from './routes/intake.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
 import { registerAuthRoutes } from './routes/auth.js';
@@ -25,6 +28,9 @@ export function buildApp(config: BffConfig): FastifyInstance {
 
   // CORS whitelist :3000-3002 (shell + orders + fulfillment remotes).
   void app.register(cors, { origin: config.corsOrigins });
+
+  // multipart cho POST /orders/import/preview (SF-13) — request.file() stream.
+  void app.register(multipart);
 
   // OIDC guard (SF-4) — mọi route trừ /healthz + /auth/reset-password (public).
   registerJwtGuard(app, { oidc: config.oidc });
@@ -57,13 +63,17 @@ export function buildApp(config: BffConfig): FastifyInstance {
   const fulfillment = createFulfillmentClient(config.grpc.fulfillment, config.grpc.deadlineMs);
   const batching = createBatchingClient(config.grpc.batching, config.grpc.deadlineMs);
   const print = createPrintClient(config.grpc.print, config.grpc.deadlineMs);
+  const intake = createIntakeClient(config.grpc.intake, config.grpc.deadlineMs);
   app.addHook('onClose', async () => {
     fulfillment.close();
     batching.close();
     print.close();
+    intake.close();
   });
 
   registerFulfillmentRoutes(app, { fulfillment, batching });
+  // SF-13 intake routes — đăng ký SAU fulfillment (plan T6).
+  registerIntakeRoutes(app, { intake, fulfillment, batching });
   registerBatchRoutes(app, batching);
   registerPrintRoutes(app, { batching, print });
   // DEV-ONLY — fail-safe: chỉ mount khi ENABLE_DEV_RESET_PASSWORD=1 tường minh
