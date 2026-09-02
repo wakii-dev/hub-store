@@ -12,7 +12,8 @@ export function StaffDetailModal(props: {
   row: StaffRow | null;
   onClose: () => void;
 }) {
-  const { t } = useTranslation('tech');
+  const { t, i18n } = useTranslation('tech');
+  const locale = (i18n.language ?? 'vi').startsWith('vi') ? 'vi' : 'en';
   const row = props.row;
   return (
     <Modal
@@ -66,7 +67,7 @@ export function StaffDetailModal(props: {
                   <span style={{ fontWeight: 600, fontVariantNumeric: 'tabular-nums', color: DESIGN_TOKENS.color.textStrong }}>
                     {order.serviceOrderCode}
                   </span>
-                  <TechStatusTag status={order.status} />
+                  <TechStatusTag status={order.status} locale={locale} />
                 </span>
                 <span style={{ color: DESIGN_TOKENS.color.textMuted, fontSize: 12.5, fontVariantNumeric: 'tabular-nums' }}>
                   {t('installation.relatedDelivery')}: {order.deliveryOrderCode || '—'}

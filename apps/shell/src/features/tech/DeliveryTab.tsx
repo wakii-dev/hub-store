@@ -28,15 +28,16 @@ export function DeliveryTab(props: {
     () => filterDeliveryOrders({ ...props.filter, page, pageSize: PAGE_SIZE }),
     [JSON.stringify(props.filter), page],
   );
-  if (error) {
-    return <EmptyState title={t('error.load')} sub={error} actionLabel={t('filter.reset')} onAction={refetch} />;
-  }
   const rows = data?.items ?? [];
   const total = data?.total ?? 0;
+  // useEffect PHẢI trước mọi early return (Rules of Hooks — reviewer P0).
   useEffect(() => {
     props.onTotal?.(total);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [total]);
+  if (error) {
+    return <EmptyState title={t('error.load')} sub={error} actionLabel={t('common.refetch')} onAction={refetch} />;
+  }
 
   return (
     <div style={{ opacity: isFetching && !isLoading ? 0.6 : 1, transition: 'opacity .15s ease' }} data-testid="tech-delivery-list">
