@@ -1,6 +1,38 @@
-# Overlay minikube — SF-1 tạo skeleton; SF-4 thêm glue (replicas/images), SF-5 thêm tune.
+# Overlay minikube — glue SF-4: tag images dev (khớp scripts/k8s-build-images.sh) +
+# replica=1 mỗi service. SF-1 tạo skeleton; SF-5 thêm tune.
+# KHÔNG dead-config: NodePort fallback là DOC ở SF-5, không config ở đây.
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 resources:
   - ../../base
+
+images:
+  - name: hub-store/fulfillment-service
+    newTag: dev
+  - name: hub-store/batching-service
+    newTag: dev
+  - name: hub-store/print-service
+    newTag: dev
+  - name: hub-store/bff-gateway
+    newTag: dev
+  - name: hub-store/web
+    newTag: dev
+
+replicas:
+  - name: fulfillment
+    count: 1
+  - name: batching
+    count: 1
+  - name: print
+    count: 1
+  - name: bff
+    count: 1
+  - name: web
+    count: 1
+
+labels:
+  - pairs:
+      app.kubernetes.io/part-of: hub-store
+    includeSelectors: false
+    includeTemplates: true
