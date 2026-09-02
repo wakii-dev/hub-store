@@ -144,6 +144,7 @@ services:
       OIDC_ISSUER: http://localhost:8081 # claim iss + browser redirect (public)
       OIDC_AUDIENCE: hubstore-api
       OIDC_JWKS_URL: http://keycloak:8081 # JWKS fetch trong network compose — URL riêng (gotcha Keycloak-in-Docker)
+      ENABLE_DEV_RESET_PASSWORD: "1" # DEV-ONLY — bật /auth/reset-password (prod không set → 404)
     depends_on:
       - fulfillment-service
       - batching-service

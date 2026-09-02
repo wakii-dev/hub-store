@@ -66,7 +66,11 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerFulfillmentRoutes(app, { fulfillment, batching });
   registerBatchRoutes(app, batching);
   registerPrintRoutes(app, { batching, print });
-  registerAuthRoutes(app, { oidc: config.oidc });
+  // DEV-ONLY — fail-safe: chỉ mount khi ENABLE_DEV_RESET_PASSWORD=1 tường minh
+  // (prod/K8s không set flag → endpoint không tồn tại thay vì dựa vào doc).
+  if (config.devResetPassword) {
+    registerAuthRoutes(app, { oidc: config.oidc });
+  }
 
   return app;
 }

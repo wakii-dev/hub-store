@@ -249,6 +249,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       print: addrs.print,
       deadlineMs: opts.deadlineMs ?? 2000,
     },
+    devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
   };
   const app = buildApp(config);
 

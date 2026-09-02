@@ -55,7 +55,7 @@ async function startMockKeycloak(): Promise<void> {
   kcPort = address.port;
 }
 
-function buildTestApp(): ReturnType<typeof buildApp> {
+function buildTestApp(opts: { devResetPassword?: boolean } = {}): ReturnType<typeof buildApp> {
   const config: BffConfig = {
     port: 0,
     oidc: {
@@ -74,6 +74,7 @@ function buildTestApp(): ReturnType<typeof buildApp> {
       print: '127.0.0.1:1',
       deadlineMs: 2000,
     },
+    devResetPassword: opts.devResetPassword ?? true,
   };
   return buildApp(config);
 }
@@ -154,5 +155,19 @@ describe('POST /auth/reset-password (dev-only forgot-password)', () => {
       value: 'NewPass123',
       temporary: false,
     });
+  });
+
+  it('FAIL-SAFE: flag ENABLE_DEV_RESET_PASSWORD thiếu → route không tồn tại (404)', async () => {
+    const gated = buildTestApp({ devResetPassword: false });
+    try {
+      const res = await gated.inject({
+        method: 'POST',
+        url: '/auth/reset-password',
+        payload: { username: 'coordinator', newPassword: 'NewPass123' },
+      });
+      expect(res.statusCode).toBe(404); // không mount — không dựa vào doc/README
+    } finally {
+      await gated.close();
+    }
   });
 });

@@ -57,6 +57,12 @@ export interface BffConfig {
   oidc: BffOidcConfig;
   corsOrigins: string[];
   grpc: BffGrpcConfig;
+  /**
+   * DEV-ONLY — enable route /auth/reset-password (không xác minh danh tính).
+   * Fail-safe: CHỈ bật khi ENABLE_DEV_RESET_PASSWORD=1 tường minh — build/prod
+   * không set flag thì endpoint KHÔNG tồn tại (404), không phụ thuộc README.
+   */
+  devResetPassword: boolean;
 }
 
 function stripSlash(url: string): string {
@@ -101,7 +107,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       issuer: withRealm(issuerBase),
       audience: env.OIDC_AUDIENCE ?? 'hubstore-api',
       jwksUrl: `${withRealm(internalBase)}/protocol/openid-connect/certs`,
-      adminBaseUrl: withRealm(internalBase),
+      // Keycloak 26 admin API nằm dưới /admin — /realms/hubstore/users (không
+      // /admin) trả 404 (mock test không bắt được — đã verify Keycloak thật).
+      adminBaseUrl: `${stripSlash(internalBase)}/admin${KC_REALM_PATH}`,
       adminTokenUrl: `${stripSlash(internalBase)}/realms/master/protocol/openid-connect/token`,
       adminUsername: env.KEYCLOAK_ADMIN ?? 'admin',
       adminPassword: env.KEYCLOAK_ADMIN_PASSWORD ?? 'admin',
@@ -115,5 +123,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       print: grpcAddr(env.GRPC_PRINT, '50053'),
       deadlineMs: Number(env.BFF_GRPC_DEADLINE_MS ?? 5000),
     },
+    devResetPassword: env.ENABLE_DEV_RESET_PASSWORD === '1',
   };
 }

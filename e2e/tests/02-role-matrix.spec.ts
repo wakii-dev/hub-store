@@ -63,3 +63,30 @@ test.describe("Manager", () => {
     }
   });
 });
+
+test.describe("Landing thật (login flow — KHÔNG storageState)", () => {
+  test.use({ storageState: { cookies: [], origins: [] } });
+
+  /** Login thật qua Keycloak hosted UI (như auth.setup nhưng trong test). */
+  async function realLogin(page: import("@playwright/test").Page, username: string) {
+    await page.goto("/hub-store-order/order");
+    await page.getByTestId("login-submit").click();
+    await page.waitForURL("**/protocol/openid-connect/auth**");
+    await page.locator("#username").fill(username);
+    await page.locator("#password").fill("Password123!");
+    await page.locator("#kc-login").click();
+    await page.waitForURL("**/hub-store-order/**");
+  }
+
+  test("Coordinator: login thật → landing D1 /order (firstPathForRole)", async ({ page }) => {
+    await realLogin(page, "coordinator");
+    await expect(page).toHaveURL(/\/hub-store-order\/order$/);
+    await expect(page.getByTestId("nav-orders")).toBeVisible();
+  });
+
+  test("WarehouseOps: login thật → landing D2 /batch (KHÔNG rơi 403 D1)", async ({ page }) => {
+    await realLogin(page, "warehouse");
+    await expect(page).toHaveURL(/\/hub-store-order\/batch$/);
+    await expect(page.getByTestId("nav-orders")).toHaveCount(0);
+  });
+});
