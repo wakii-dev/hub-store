@@ -119,6 +119,10 @@ DEV-ONLY), client `hub-store-app` public + password grant (smoke). Realm endpoin
 
 > **FLAG FI-245:** khi FI-245 SF-4 merge, realm JSON này có thể THAY bằng artifact realm đầy đủ
 > của FI-245 (bản minimal chỉ để smoke token). SF-5 ghi hướng thay chính thức trong wiring doc.
+>
+> ⚠️ LƯU Ý: import chỉ chạy lúc boot — sau khi sửa `realm-hub-store.json` + `kubectl apply`,
+> PHẢI `kubectl -n hub-store rollout restart deployment/keycloak` (Secret được update nhưng
+> Keycloak KHÔNG tự re-import, không có rollout → realm cũ còn nguyên âm thầm).
 
 Smoke nhanh:
 ```bash
