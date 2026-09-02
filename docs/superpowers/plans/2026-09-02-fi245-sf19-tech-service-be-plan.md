@@ -571,11 +571,11 @@ Test cases (AssertJ, pattern FilterAndHydrationTest + CollectingObserver):
 - Create: `api/seed/tech-sample.json`
 - Modify: `scripts/seed-db.sh` (thêm block cuối, KHÔNG đụng block cũ), `scripts/reset-db.sh` (thêm DO block 4 bảng)
 
-- [ ] **Step 1: tech-sample.json** — 3 arrays:
+- [x] **Step 1: tech-sample.json** — 3 arrays:
   - `technicians`: 6 (KTV-001..004, CTV-001..002; vùng R1×4, R2×2; seq 1..6)
   - `deliveryOrders`: 10 — đủ 10 trạng thái (mỗi mã 1 đơn); code TD-0001..; receiver/sender tên+SĐT+lat/long quanh HCM (10.77/106.69 ±); items 1-2 món có categoryL1/categoryL2 (2 nhóm ngành); deliveryDate: 9 đơn `"TODAY"`, 1 đơn `"TODAY-1"`; coordination `{}` hoặc ghi chú phối hợp lắp
   - `installationOrders`: 8 — SO-0001..; 3 đơn chưa assign (status NEW/CONFIRMED/RESCHEDULED), 5 đã assign theo technician vùng tương ứng; 1 đơn expectedTime null; timeline JSONB mẫu 2-3 entry; serviceFee/feeAdjust số; deliveryOrderCode tham chiếu TD-* có thật
-- [ ] **Step 2: seed-db.sh — thêm block CUỐI script, TRƯỚC echo "HOÀN TẤT" cuối cùng (additive, không đụng block cũ; cập nhật luôn message HOÀN TẤT để phản ánh tech):**
+- [x] **Step 2: seed-db.sh — thêm block CUỐI script, TRƯỚC echo "HOÀN TẤT" cuối cùng (additive, không đụng block cũ; cập nhật luôn message HOÀN TẤT để phản ánh tech):**
 
 ```bash
 SEED_TECH_JSON="${SEED_TECH_JSON:-$ROOT/api/seed/tech-sample.json}"
@@ -645,7 +645,7 @@ fi
 ```
 Per-table emptiness gate + fail-loud to_regclass riêng (spec §7). KHÔNG sửa block cũ.
 
-- [ ] **Step 3: reset-db.sh — thêm DO block trước keycloak section:**
+- [x] **Step 3: reset-db.sh — thêm DO block trước keycloak section:**
 
 ```bash
 echo "reset-db: TRUNCATE DB fulfillment (tech) ..."
@@ -665,8 +665,8 @@ $reset$;
 SQL
 ```
 
-- [ ] **Step 4: Verify** — `bash scripts/reset-db.sh` → psql count: technicians=6, delivery_orders=10, installation_orders=8, history=0; `SELECT DISTINCT delivery_date FROM delivery_orders` = [hôm nay, hôm qua].
-- [ ] **Step 5: Commit** `feat(fi245-sf19): seed tech-sample + pipeline additive (seed-db/reset-db)`
+- [x] **Step 4: Verify** — `bash scripts/reset-db.sh` → psql count: technicians=6, delivery_orders=10, installation_orders=8, history=0; `SELECT DISTINCT delivery_date FROM delivery_orders` = [hôm nay, hôm qua].
+- [x] **Step 5: Commit** `feat(fi245-sf19): seed tech-sample + pipeline additive (seed-db/reset-db)`
 
 ### Task 7: BFF client + routes + mappers + contract tests
 
