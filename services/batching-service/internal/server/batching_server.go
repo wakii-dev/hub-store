@@ -10,6 +10,7 @@ package server
 
 import (
 	"context"
+	"log"
 	"sort"
 	"strings"
 	"time"
@@ -35,13 +36,13 @@ const (
 // BatchingServer implements hubstore.batching.v1.BatchingService.
 type BatchingServer struct {
 	batchingv1.UnimplementedBatchingServiceServer
-	store   *store.Store
+	store   store.BatchStore
 	fulfill fulfillment.Client
 	now     func() time.Time // injectable for tests
 }
 
 // New constructs the server over the batches store + Java client.
-func New(s *store.Store, f fulfillment.Client) *BatchingServer {
+func New(s store.BatchStore, f fulfillment.Client) *BatchingServer {
 	return &BatchingServer{store: s, fulfill: f, now: time.Now}
 }
 
@@ -71,7 +72,7 @@ func (s *BatchingServer) CreateBatch(ctx context.Context, req *batchingv1.Create
 		return nil, err
 	}
 
-	batch, ok := s.store.CreateWithNextCode(func(code string) *batchingv1.Batch {
+	batch, ok, err := s.store.CreateWithNextCode(ctx, func(_ context.Context, code string) *batchingv1.Batch {
 		// shopCode trống từ BFF → derive từ orders truth (spec §3.3).
 		return &batchingv1.Batch{
 			BatchCode: code,
@@ -86,13 +87,18 @@ func (s *BatchingServer) CreateBatch(ctx context.Context, req *batchingv1.Create
 			CreatedAt: s.now().Format(time.RFC3339),
 		}
 	})
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "create batch: %v", err)
+	}
 	if !ok {
 		return nil, status.Error(grpccodes.Internal, "batchCode collision")
 	}
 
 	// Mutate chain: đơn batchStatus NOT_PREPARED → PREPARING qua Java.
 	if err := s.fulfill.MutateOrderStatus(ctx, orderCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARING, ""); err != nil {
-		s.store.Delete(batch.GetBatchCode()) // compensation
+		if delErr := s.store.Delete(ctx, batch.GetBatchCode()); delErr != nil { // compensation
+			log.Printf("batching-service: compensation delete %s failed: %v", batch.GetBatchCode(), delErr)
+		}
 		return nil, status.Errorf(grpccodes.Unavailable, "order mutation failed: %v", err)
 	}
 	return &batchingv1.CreateBatchResponse{Batch: batch}, nil
@@ -174,7 +180,10 @@ func buildItems(batchCode string, wantCodes []string, byCode map[string]*fulfill
 // ---------------------------------------------------------------------------
 
 func (s *BatchingServer) FilterBatches(ctx context.Context, req *batchingv1.FilterBatchesRequest) (*batchingv1.FilterBatchesResponse, error) {
-	all := s.store.List()
+	all, err := s.store.List(ctx)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "list batches: %v", err)
+	}
 
 	search := strings.ToLower(strings.TrimSpace(req.GetSearch()))
 	statuses := map[batchingv1.BatchEntityStatus]bool{}
@@ -252,7 +261,10 @@ func withinRange(createdAt string, from, to time.Time) bool {
 }
 
 func (s *BatchingServer) GetBatchDetail(ctx context.Context, req *batchingv1.GetBatchDetailRequest) (*batchingv1.GetBatchDetailResponse, error) {
-	b := s.store.Get(req.GetBatchCode())
+	b, err := s.store.Get(ctx, req.GetBatchCode())
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "get batch: %v", err)
+	}
 	if b == nil {
 		return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
 	}
@@ -266,11 +278,17 @@ func (s *BatchingServer) GetBatchDetail(ctx context.Context, req *batchingv1.Get
 func (s *BatchingServer) CancelBatch(ctx context.Context, req *batchingv1.CancelBatchRequest) (*batchingv1.CancelBatchResponse, error) {
 	// Rule 4 §3.6: chỉ batch ACTIVE được hủy — CAS atomic chặn double-cancel
 	// và cancel-vs-complete race.
-	b := s.store.Transition(req.GetBatchCode(),
+	b, err := s.store.Transition(ctx, req.GetBatchCode(),
 		batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE,
 		batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_CANCELLED)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "cancel transition: %v", err)
+	}
 	if b == nil {
-		cur := s.store.Get(req.GetBatchCode())
+		cur, gerr := s.store.Get(ctx, req.GetBatchCode())
+		if gerr != nil {
+			return nil, status.Errorf(grpccodes.Internal, "get batch: %v", gerr)
+		}
 		if cur == nil {
 			return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
 		}
@@ -282,20 +300,28 @@ func (s *BatchingServer) CancelBatch(ctx context.Context, req *batchingv1.Cancel
 	itemCodes := itemOrderCodes(b)
 	// Revert đơn batchStatus → 0 qua Java; fail → hoàn tác phiếu về ACTIVE.
 	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_NOT_PREPARED, req.GetReason()); err != nil {
-		s.store.Transition(req.GetBatchCode(),
+		if _, trErr := s.store.Transition(ctx, req.GetBatchCode(),
 			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_CANCELLED,
-			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE)
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE); trErr != nil {
+			log.Printf("batching-service: revert transition %s failed: %v", req.GetBatchCode(), trErr)
+		}
 		return nil, status.Errorf(grpccodes.Unavailable, "order revert failed: %v", err)
 	}
 	return &batchingv1.CancelBatchResponse{Batch: b}, nil
 }
 
 func (s *BatchingServer) CompletePicking(ctx context.Context, req *batchingv1.CompletePickingRequest) (*batchingv1.CompletePickingResponse, error) {
-	b := s.store.Transition(req.GetBatchCode(),
+	b, err := s.store.Transition(ctx, req.GetBatchCode(),
 		batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE,
 		batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_COMPLETED)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "complete transition: %v", err)
+	}
 	if b == nil {
-		cur := s.store.Get(req.GetBatchCode())
+		cur, gerr := s.store.Get(ctx, req.GetBatchCode())
+		if gerr != nil {
+			return nil, status.Errorf(grpccodes.Internal, "get batch: %v", gerr)
+		}
 		if cur == nil {
 			return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
 		}
@@ -305,9 +331,11 @@ func (s *BatchingServer) CompletePicking(ctx context.Context, req *batchingv1.Co
 	}
 	itemCodes := itemOrderCodes(b)
 	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARED, ""); err != nil {
-		s.store.Transition(req.GetBatchCode(),
+		if _, trErr := s.store.Transition(ctx, req.GetBatchCode(),
 			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_COMPLETED,
-			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE)
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE); trErr != nil {
+			log.Printf("batching-service: revert transition %s failed: %v", req.GetBatchCode(), trErr)
+		}
 		return nil, status.Errorf(grpccodes.Unavailable, "order mutation failed: %v", err)
 	}
 	return &batchingv1.CompletePickingResponse{Batch: b}, nil

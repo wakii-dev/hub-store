@@ -1,17 +1,24 @@
-// batching-service — Go gRPC server :50052 (spec §3.3, SF-4).
+// batching-service — Go gRPC server :50052 (spec §3.3).
 //
-// Owns the in-memory batches store, seeded from the canonical fixture at
-// boot. Stands alone — KHÔNG thêm vào turbo (context pack rule).
+// Batches store trên Postgres (FI-245 SF-3) — schema do golang-migrate tạo
+// (compose batches-migrate / Dockerfile entrypoint), data do seed pipeline
+// SF-1 nạp. Boot KHÔNG phụ thuộc Java: gRPC client dial lazy (non-blocking,
+// tự reconnect) — hydration chỉ khi serve request, client deadline.
 //
 // Env:
 //
-//	BATCHING_PORT       default 50052
-//	FULFILLMENT_ADDR    default localhost:50051 (Java; hydration + mutate)
-//	CANONICAL_SEED_PATH default ../../api/seed/canonical-seed.json (từ run.sh)
+//	BATCHING_PORT        default 50052
+//	BATCHING_DB_HOST     default localhost
+//	BATCHING_DB_PORT     default 5432
+//	BATCHING_DB_NAME     default batching
+//	BATCHING_DB_USER     default hubstore
+//	BATCHING_DB_PASSWORD required (compose/.env wire)
+//	FULFILLMENT_ADDR     default localhost:50051 (Java; hydration + mutate)
 package main
 
 import (
 	"context"
+	"fmt"
 	"log"
 	"net"
 	"os"
@@ -22,6 +29,7 @@ import (
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
 
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/credentials/insecure"
 	"google.golang.org/grpc/reflection"
 )
 
@@ -35,22 +43,32 @@ func env(key, def string) string {
 func main() {
 	port := env("BATCHING_PORT", "50052")
 	fulfillAddr := env("FULFILLMENT_ADDR", "localhost:50051")
-	seedPath := env("CANONICAL_SEED_PATH", "../../api/seed/canonical-seed.json")
+	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
+		env("BATCHING_DB_USER", "hubstore"), os.Getenv("BATCHING_DB_PASSWORD"),
+		env("BATCHING_DB_HOST", "localhost"), env("BATCHING_DB_PORT", "5432"),
+		env("BATCHING_DB_NAME", "batching"))
 
-	// Batches store — seed từ canonical fixture (một nguồn, KHÔNG seed riêng).
-	st, err := store.LoadSeedFile(seedPath)
+	ctx := context.Background()
+
+	// Batches store — Postgres (schema V1 + seed pipeline SF-1 nạp data).
+	st, err := store.OpenPostgres(ctx, dsn)
 	if err != nil {
-		log.Fatalf("batching-service: seed load failed: %v", err)
+		log.Fatalf("batching-service: batches DB open failed: %v", err)
 	}
-	log.Printf("batching-service: canonical seed loaded from %s", seedPath)
+	defer st.Close()
+	log.Printf("batching-service: batches DB %s:%s/%s ready (sequence bootstrapped)",
+		env("BATCHING_DB_HOST", "localhost"), env("BATCHING_DB_PORT", "5432"), env("BATCHING_DB_NAME", "batching"))
 
-	// Java client — hydration (GetOrdersByCodes) + mutation (MutateOrderStatus).
-	fc, err := fulfillment.NewGRPCClient(context.Background(), fulfillAddr)
+	// Java client — dial LAZY (không WithBlock): boot không cần Java đang chạy;
+	// conn tự reconnect, hydration/mutate chỉ khi serve request (client deadline).
+	jconn, err := grpc.DialContext(ctx, fulfillAddr,
+		grpc.WithTransportCredentials(insecure.NewCredentials()))
 	if err != nil {
 		log.Fatalf("batching-service: %v", err)
 	}
-	defer fc.Close()
-	log.Printf("batching-service: fulfillment-service at %s", fulfillAddr)
+	defer jconn.Close()
+	fc := fulfillment.NewGRPCClientFromConn(jconn)
+	log.Printf("batching-service: fulfillment-service at %s (lazy — boot không phụ thuộc)", fulfillAddr)
 
 	lis, err := net.Listen("tcp", ":"+port)
 	if err != nil {
