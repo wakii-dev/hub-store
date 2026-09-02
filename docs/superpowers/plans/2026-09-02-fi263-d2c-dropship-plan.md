@@ -59,7 +59,7 @@ NV kho cần theo dõi đơn D2C đẩy sang NVC (lọc đa chiều, ghi chú, x
 | 6 | FE D2CPage list+filter+expand+note+export | apps/orders D2CPage, api-client d2c slice, shell nav/route |
 | 7 | E2E 05-d2c + full E2E xanh | e2e/tests/05-d2c.spec.ts |
 
-DAG: T1 → T2 → T3 → T7; T4 → T7; T5 → T7; T6 phụ thuộc T3 (API contract) → T7. T4, T5 chạy song song sau T2.
+DAG: T1 → T2 → T3 → T6 → T7; T2 → T4 → T6; T2 → T5 → T7. T7 deps {T4, T5, T6} (T6b task_c1f2f602ec6a — deps T3+T4, thay task cũ task_3e6a0cce456f đã đánh dấu failed theo plan-critic P0).
 
 ### Task 1: Flyway V5 + proto additive + regen
 
@@ -201,7 +201,7 @@ D2cOrderRecord = Java record 19 fields khớp proto D2cOrder. D2cOrderFilter = r
 
 **Files:**
 - Create: `services/bff-gateway/src/routes/d2c.ts`
-- Modify: `services/bff-gateway/src/clients/fulfillment.ts` (facade methods filterD2cOrders, updateD2cOrderNote), `src/app.ts` (registerD2cRoutes)
+- Modify: `services/bff-gateway/src/clients/fulfillment.ts` (facade methods filterD2cOrders, updateD2cOrderNote), `services/bff-gateway/src/app.ts` (registerD2cRoutes)
 - Test: `services/bff-gateway/test/d2c.route.test.ts`
 
 **Steps:**
@@ -221,7 +221,7 @@ export function exportRangeDays(from: string, to: string): number {
   - `PUT /d2c-orders/:orderCode/note` body `{note}` → updateD2cOrderNote → `{ item }`
   - `GET /d2c-orders/export?from&to` → guard: sai thiếu from/to hoặc `exportRangeDays > 31` → 400 envelope `{ error: { message: 'Khoảng thời gian export tối đa 31 ngày' } }` (from>to cũng 400). OK → loop filterD2cOrders (pageSize 500, page++ đến đủ total) → build CSV string: BOM `\uFEFF` + header tiếng Việt (`Mã đơn,Mã nội bộ,Mã vận đơn,Hãng vận chuyển,Shop,Người xuất,Thời gian xuất,Thời gian đẩy,Người nhận,Điện thoại,Địa chỉ,Loại dịch vụ,Ngành hàng,Loại sản phẩm,Tách nợ,Ghi chú,Trạng thái,Ngày tạo`) + rows (escape giá trị có `,` `"` `\n` bằng bọc `"..."` + `""`), timestamps format `yyyy-MM-dd HH:mm:ss` +07. Reply: header `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="D2C_Order_${from}_${to}.csv"`, `reply.send(csvBuffer)` (Buffer từ BOM+csv utf8).
   - **Role guard per-route:** helper `requireD2cRole(request, reply)` → role ∈ {WarehouseEmployee, WarehouseOps, Manager} else 403 envelope.
-- [ ] **Step 4: Vitest** (pattern test/harness.ts + startTestIdentity): d2c.route.test.ts — mock gRPC upstream (gen code); cases: filter 200 envelope paginated; export 40 ngày → 400 message đúng; export 31 ngày → 200 + body bắt đầu `\uFEFF` + Content-Disposition filename đúng; note 200 gọi upstream với order_code; role Coordinator → 403 cả 3 endpoint.
+- [ ] **Step 4: Vitest** (pattern test/harness.ts + startTestIdentity): d2c.route.test.ts — mock gRPC upstream (gen code); cases: filter 200 envelope paginated; export 40 ngày → 400 message đúng; **export biên 32 ngày → 400 / 31 ngày → 200**; 200 + body bắt đầu `\uFEFF` + Content-Disposition filename đúng; note 200 gọi upstream với order_code; role Coordinator → 403 cả 3 endpoint.
 - [ ] **Step 5: Run** `cd services/bff-gateway && npm test` xanh + `npm run build`/tsc không lỗi.
 - [ ] **Step 6: Commit** `feat(fi245-sf18): BFF /d2c-orders filter+note+export CSV guard 31 ngày`
 
@@ -236,9 +236,9 @@ export function exportRangeDays(from: string, to: string): number {
 - [ ] **Step 2: BFF** — KNOWN_ROLES += 'WarehouseEmployee' (auth.ts:18).
 - [ ] **Step 3: FE** — usePermissions: PERMISSIONS += 'd2c.view'; matrix: WarehouseEmployee {d2c.view}, WarehouseOps += d2c.view, Manager += d2c.view; Coordinator không. KHÔNG cấp orders.view cho WarehouseEmployee.
 - [ ] **Step 4: nav.ts** — NAV_ROUTES thêm `{ path: '/hub-store-order/d2c', labelKey: 'nav.d2c', permission: 'd2c.view' }` (icon AppLayout nếu map theo path — thêm icon matching) + `firstPathForRole`: WarehouseEmployee → '/hub-store-order/d2c'.
-- [ ] **Step 5: i18n** — `apps/shell/src/i18n.ts`: `nav.d2c` vi='D2C / Dropship' en='D2C / Dropship' (+ keys khác của screen ở Task 6 nhưng đăng ký tập trung tại đây).
+- [ ] **Step 5: i18n** — `apps/shell/src/i18n.ts`: chỉ `nav.d2c` vi='D2C / Dropship' en='D2C / Dropship' (screen keys thuộc Task 6).
 - [ ] **Step 6: auth.setup.ts** — thêm user `warehouse-emp` login flow → `.auth/warehouse-emp.json` (pattern users có sẵn; password/env cùng cơ chế).
-- [ ] **Step 7: Unit tests update + run** — sửa assertions bổ sung role mới (không xóa case cũ); `cd packages/shared && npm test`, `cd apps/shell && npm test`, `cd services/bff-gateway && npm test` xanh.
+- [ ] **Step 7: Unit tests update + run** — sửa assertions bổ sung role mới (không xóa case cũ); `cd packages/shared && npm test`, `cd apps/shell && npm test`, `cd services/bff-gateway && npm test` xanh. NOTE: storageState `.auth/warehouse-emp.json` chỉ verify được sau khi Keycloak re-import realm (dồn vào Task 7 Step 2 clean boot) — Task 4 chỉ commit realm JSON + setup code.
 - [ ] **Step 8: Commit** `feat(fi245-sf18): WarehouseEmployee role — realm user + KNOWN_ROLES + FE matrix + e2e storageState`
 
 ### Task 5: Seed d2c-sample.json + seed-db.sh + reset-db.sh
@@ -266,7 +266,7 @@ export function exportRangeDays(from: string, to: string): number {
 - [ ] **Step 3: D2cExpandContent** — Descriptions 2 cột: push info (pushTime, exportEmployee, exportTime), người nhận (name/phone/address), serviceType, isDebtSplitting (Yes/No tag), note hiện tại + nút "Ghi chú" mở modal.
 - [ ] **Step 4: D2cNoteModal** — pattern HubStoreTransferModal (open/order/onClose): TextArea, lưu → mutation → refetch list + message.success; lỗi → message.error từ envelope.
 - [ ] **Step 5: Export UI** — panel/vùng export: DatePicker.RangePicker, validate client-side cùng công thức guard (diff days > 31 → message.error 'Khoảng thời gian export tối đa 31 ngày' KHÔNG gọi API); OK → fetch blob → tạo URL download `D2C_Order_{from}_{to}.csv`; loading state.
-- [ ] **Step 6: Wire MF** — exposes './D2CPage', remotes.config.json, App.tsx lazy route `/hub-store-order/d2c` wrap `<RequirePermission permission="d2c.view"><RemoteBoundary>`, nav entry từ Task 4.
+- [ ] **Step 6: Wire MF** — exposes './D2CPage', remotes.config.json, App.tsx lazy route `/hub-store-order/d2c` wrap `<RequirePermission permission="d2c.view"><RemoteBoundary>`, nav entry từ Task 4. Đăng ký i18n keys của screen (filter labels, expand labels, modal, export, status tags) vào `apps/shell/src/i18n.ts` vi/en.
 - [ ] **Step 7: Verify build + browser thô** — `npm run build` các package liên quan không lỗi; boot stack → login warehouse-emp → landing /hub-store-order/d2c → bảng render 12 rows seed.
 - [ ] **Step 8: Commit** `feat(fi245-sf18): FE D2CPage — list filter expand note modal export UI`
 
@@ -278,7 +278,7 @@ export function exportRangeDays(from: string, to: string): number {
 
 **Steps:**
 - [ ] **Step 1: Spec** — dùng storageState warehouse-emp (test.use({ storageState: '.auth/warehouse-emp.json' })): (a) nav vào /hub-store-order/d2c → thấy bảng + rows; (b) filter carrier=GHN + khung giờ đẩy 08:00-09:00 → rows đúng theo seed (assert count + row content); (c) expand row → thấy push info + người nhận + tách nợ + service type; (d) note modal: nhập ghi chú tiếng Việt → lưu → mở lại thấy ghi chú; (e) export 40 ngày → message chặn hiện; export 31 ngày → download event + filename `D2C_Order_...csv` (đọc buffer assert BOM EF BB BF + header UTF-8); (f) login coordinator → nav không có D2C (role guard FE).
-- [ ] **Step 2: Boot sạch** — reset-db + seed + compose up (keycloak re-import realm để có warehouse-emp) → `cd e2e && npx playwright test` **full suite** cũ + mới xanh.
+- [ ] **Step 2: Boot sạch** — reset-db + seed + compose up (keycloak re-import realm để có warehouse-emp — đây là lúc verify storageState Task 4) → `cd e2e && npx playwright test` **full suite** cũ + mới xanh. Nếu 02-role-matrix.spec.ts vỡ vì role mới (conditional fix nằm trong task này — được phép sửa spec 02 chỉ để bổ sung case WarehouseEmployee, không xóa case cũ).
 - [ ] **Step 3: Browser walkthrough Rule 0** — mở app, đi luồng: login warehouse-emp → landing d2c → filter → expand → note → export; screenshots lưu `.claude/verify-sf18/`.
 - [ ] **Step 4: Commit** `test(fi245-sf18): E2E 05-d2c — filter expand note export guard`
 
