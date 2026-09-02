@@ -17,6 +17,8 @@ import java.util.Locale;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
 
 /**
  * In-memory store — load canonical-seed.json lúc boot, validate fail-fast
@@ -34,6 +36,12 @@ public class InMemoryOrderRepository implements OrderRepository {
     private final List<SeedModels.DeliveryStaffSeed> staff;
     /** Lịch sử chuyển kho theo fulfillCode — khởi tạo từ seed history, append khi assign. */
     private final Map<String, List<ShopAssignmentHistoryEntry>> historyByCode = new LinkedHashMap<>();
+    /** Activity log (SF-13 intake) — append-only, filter theo target khi đọc. */
+    private final List<AuditEntry> auditLog = new ArrayList<>();
+
+    /** fulfillCode sinh dải ORD-\d+ — scan max, tiếp từ base 3000. */
+    private static final Pattern ORD_CODE = Pattern.compile("^ORD-(\\d+)$");
+    private static final int ORD_CODE_BASE = 3000;
 
     @org.springframework.beans.factory.annotation.Autowired
     public InMemoryOrderRepository(@Value("${fulfillment.seed-path:}") String seedPathEnv) {
@@ -182,6 +190,70 @@ public class InMemoryOrderRepository implements OrderRepository {
             }
         }
         return byCode.values().stream().sorted(Comparator.comparing(SeedModels.ShopSeed::code)).toList();
+    }
+
+    // ---------------- SF-13 intake ----------------
+
+    @Override
+    public synchronized List<String> nextFulfillCodes(int n) {
+        int max = ORD_CODE_BASE;
+        for (SeedModels.OrderSeed o : orders) {
+            Matcher m = ORD_CODE.matcher(o.fulfillCode());
+            if (m.matches()) {
+                max = Math.max(max, Integer.parseInt(m.group(1)));
+            }
+        }
+        List<String> codes = new ArrayList<>(n);
+        for (int i = 1; i <= n; i++) {
+            codes.add(String.format(Locale.ROOT, "ORD-%04d", max + i));
+        }
+        return codes;
+    }
+
+    @Override
+    public synchronized List<SeedModels.OrderSeed> insertOrders(List<SeedModels.OrderSeed> newOrders) {
+        orders.addAll(newOrders);
+        for (SeedModels.OrderSeed o : newOrders) {
+            historyByCode.computeIfAbsent(o.fulfillCode(), k -> new ArrayList<>());
+        }
+        return List.copyOf(newOrders);
+    }
+
+    @Override
+    public synchronized SeedModels.OrderSeed markFailed(String fulfillCode, String reason, String note, Instant at) {
+        SeedModels.OrderSeed order = findByExactFulfillCode(fulfillCode)
+                .orElseThrow(() -> new IllegalArgumentException("Order không tồn tại: " + fulfillCode));
+        if (order.failReason() != null) {
+            throw new IllegalArgumentException("Order đã FAILED: " + fulfillCode);
+        }
+        SeedModels.OrderSeed next = order.withFail(reason, note, at);
+        replace(next);
+        return next;
+    }
+
+    @Override
+    public synchronized boolean hasRetry(String fulfillCode) {
+        return orders.stream().anyMatch(o -> fulfillCode.equals(o.oldFulfillCode()));
+    }
+
+    @Override
+    public synchronized Optional<SeedModels.OrderSeed> findByExactFulfillCode(String fulfillCode) {
+        return orders.stream()
+                .filter(o -> o.fulfillCode().equals(fulfillCode))
+                .findFirst();
+    }
+
+    @Override
+    public synchronized void appendAudit(String actor, String action, String target, String detailJson) {
+        auditLog.add(new AuditEntry(actor, action, target, detailJson, Instant.now()));
+    }
+
+    @Override
+    public synchronized List<AuditEntry> getAudit(String fulfillCode) {
+        // READ semantics: trả copy — KHÔNG mutate state.
+        return auditLog.stream()
+                .filter(e -> e.target().equals(fulfillCode))
+                .toList();
     }
 
     // ---------------- helpers ----------------

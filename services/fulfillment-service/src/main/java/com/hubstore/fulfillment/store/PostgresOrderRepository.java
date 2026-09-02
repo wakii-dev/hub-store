@@ -314,7 +314,9 @@ public class PostgresOrderRepository implements OrderRepository {
                 rs.getString("customer_address"),
                 (Double) rs.getObject("distance"),
                 rs.getString("note"),
-                List.of());
+                List.of(),
+                // SF-13 intake columns — wire ở Task 4 (Postgres impl method mới).
+                null, null, null, null, null, null, null);
     }
 
     /** items JSONB → List<ProductSeed>; cả from+to NULL → range null
@@ -416,5 +418,42 @@ public class PostgresOrderRepository implements OrderRepository {
 
     private static String placeholders(int n) {
         return String.join(", ", Collections.nCopies(n, "?"));
+    }
+
+    // ---------------- SF-13 intake — stub, Task 4 wire Postgres thật ----------------
+
+    @Override
+    public List<String> nextFulfillCodes(int n) {
+        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+    }
+
+    @Override
+    public List<SeedModels.OrderSeed> insertOrders(List<SeedModels.OrderSeed> orders) {
+        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+    }
+
+    @Override
+    public SeedModels.OrderSeed markFailed(String fulfillCode, String reason, String note, Instant at) {
+        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+    }
+
+    @Override
+    public boolean hasRetry(String fulfillCode) {
+        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+    }
+
+    @Override
+    public Optional<SeedModels.OrderSeed> findByExactFulfillCode(String fulfillCode) {
+        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+    }
+
+    @Override
+    public void appendAudit(String actor, String action, String target, String detailJson) {
+        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+    }
+
+    @Override
+    public List<AuditEntry> getAudit(String fulfillCode) {
+        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
     }
 }
