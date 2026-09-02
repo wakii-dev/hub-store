@@ -41,16 +41,20 @@ CREATE TABLE shop_assignment_history (
 CREATE INDEX idx_shop_assignment_history_fulfill_code
   ON shop_assignment_history (fulfill_code);
 
--- Vùng hành chính (seed regions).
+-- Vùng hành chính (seed regions). seq BIGSERIAL = surrogate thứ tự insert seed
+-- (regions() phải trả seed order như in-memory — seed-db.sh INSERT nêu tên cột
+-- nên cột thêm này nhận default sequence, không vỡ contract).
 CREATE TABLE regions (
+  seq         BIGSERIAL,
   code        VARCHAR PRIMARY KEY,
   name        VARCHAR,
   type        VARCHAR,
   parent_code VARCHAR
 );
 
--- Shipper (seed deliveryStaff).
+-- Shipper (seed deliveryStaff) — seq giống regions (deliveryStaff() seed order).
 CREATE TABLE delivery_staff (
+  seq       BIGSERIAL,
   staff_id  VARCHAR PRIMARY KEY,
   name      VARCHAR,
   shop_code VARCHAR,
