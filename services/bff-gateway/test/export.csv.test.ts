@@ -145,6 +145,29 @@ describe('GET /fulfillment/orders/export.csv', () => {
     });
   });
 
+  it('review T4 P1: total drift lên giữa chừng → loop VẪN dừng theo total page đầu', async () => {
+    const calls: Array<{ page: number; pageSize: number }> = [];
+    const drifting: FilterOrdersHandler = (call, cb) => {
+      calls.push({ page: call.request.page, pageSize: call.request.pageSize });
+      const page = call.request.page;
+      if (page === 1) {
+        // Page đầu: total 500 → maxPages = 1.
+        cb(null, { items: Array.from({ length: 500 }, (_, i) => mockItem(i + 1)) as never, total: 500, page: 1, pageSize: 500 });
+      } else {
+        // Upstream "nói dối"/drift: total phình 9999 + full page — loop KHÔNG được chạy tiếp.
+        cb(null, { items: Array.from({ length: 500 }, (_, i) => mockItem(501 + i)) as never, total: 9999, page: 2, pageSize: 500 });
+      }
+    };
+    await withHarness({ filterOrders: drifting }, async (h) => {
+      const res = await authedInject(h.app, 'GET', '/fulfillment/orders/export.csv', undefined, 'Coordinator');
+      expect(res.statusCode).toBe(200);
+      const body = res.rawPayload.toString('utf8');
+      const rows = body.slice(1).split('\r\n');
+      expect(rows.length).toBe(502); // header + 500 data + '' cuối — KHÔNG hút page 2
+      expect(calls).toEqual([{ page: 1, pageSize: 500 }]);
+    });
+  });
+
   it('querystring filter → FilterOrdersRequest đúng kiểu (ints, lists, ngày UTC)', async () => {
     let captured: Record<string, unknown> | null = null;
     const handler: FilterOrdersHandler = (call, cb) => {

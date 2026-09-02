@@ -179,7 +179,7 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
       : undefined;
     const PAGE_SIZE = 500;
     const collected: ProtoOrderItem[] = [];
-    let total = 0;
+    let maxPages = 1; // review T4 P1: freeze theo total PAGE ĐẦU — chống unbounded khi total drift/lừa
     let page = 1;
     try {
       for (;;) {
@@ -199,11 +199,13 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
           },
           role,
         );
-        total = Number(resp.total);
+        if (page === 1) {
+          maxPages = Math.max(Math.ceil(Number(resp.total) / PAGE_SIZE), 1);
+        }
         const items = resp.items ?? [];
         if (items.length === 0) break;
         collected.push(...items);
-        if (collected.length >= total) break;
+        if (page >= maxPages) break;
         page += 1;
       }
     } catch (err) {
