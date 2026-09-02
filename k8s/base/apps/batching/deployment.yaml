@@ -1,0 +1,72 @@
+# batching Deployment — Go gRPC :50052 (image SF-1 build script).
+# P0 rủi ro #1 (epic): batching hard-dial fulfillment (WithBlock → Fatal) khi boot →
+# initContainer đợi fulfillment:50051 trước khi container chính start, timeout
+# fail-loud 120s (KHÔNG retry vô hạn). KHÔNG sửa Go dial code (giảm conflict FI-245).
+# Probes: grpc.health.v1 (SF-2 internal/health NOT_SERVING tới khi seed xong).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: batching
+  labels:
+    app: batching
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: batching
+  template:
+    metadata:
+      labels:
+        app: batching
+    spec:
+      initContainers:
+        - name: wait-fulfillment
+          image: busybox:1.36
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              i=0
+              until nc -z -w 2 fulfillment 50051; do
+                i=$((i+1))
+                if [ "$i" -ge 60 ]; then
+                  echo "FATAL: fulfillment:50051 not reachable after 120s" >&2
+                  exit 1
+                fi
+                sleep 2
+              done
+              echo "fulfillment:50051 reachable after ~$((i*2))s"
+      containers:
+        - name: batching
+          image: hub-store/batching-service:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50052
+          env:
+            - name: BATCHING_PORT
+              value: "50052"
+            - name: FULFILLMENT_ADDR
+              value: fulfillment:50051
+            - name: CANONICAL_SEED_PATH
+              value: /seed/canonical-seed.json
+          volumeMounts:
+            - name: seed
+              mountPath: /seed
+              readOnly: true
+          readinessProbe:
+            timeoutSeconds: 5
+            grpc:
+              port: 50052
+            initialDelaySeconds: 5 # Go boot nhanh + initContainer đã đợi fulfillment
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            timeoutSeconds: 5
+            grpc:
+              port: 50052
+            initialDelaySeconds: 20
+            periodSeconds: 10
+      volumes:
+        - name: seed
+          configMap:
+            name: canonical-seed

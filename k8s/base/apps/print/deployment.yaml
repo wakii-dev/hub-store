@@ -1,0 +1,49 @@
+# print Deployment — Python gRPC :50053 (port cứng trong print_service/server.py).
+# Probes: grpc.health.v1 (SF-2 grpc_health.v1 HealthServicer SERVING sau seed).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: print
+  labels:
+    app: print
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: print
+  template:
+    metadata:
+      labels:
+        app: print
+    spec:
+      containers:
+        - name: print
+          image: hub-store/print-service:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: grpc
+              containerPort: 50053
+          env:
+            - name: PRINT_SERVICE_SEED_PATH
+              value: /seed/canonical-seed.json
+          volumeMounts:
+            - name: seed
+              mountPath: /seed
+              readOnly: true
+          readinessProbe:
+            timeoutSeconds: 5
+            grpc:
+              port: 50053
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            timeoutSeconds: 5
+            grpc:
+              port: 50053
+            initialDelaySeconds: 15
+            periodSeconds: 10
+      volumes:
+        - name: seed
+          configMap:
+            name: canonical-seed
