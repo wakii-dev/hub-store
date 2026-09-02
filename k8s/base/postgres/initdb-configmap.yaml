@@ -1,0 +1,19 @@
+# Initdb chạy CHỈ LẦN ĐẦU (datadir trống). PVC persist → đổi script sau này KHÔNG re-run
+# (seed-update workflow là việc SF-5 docs).
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: postgres-initdb
+data:
+  01-create-databases.sh: |
+    #!/bin/bash
+    set -e
+    # \gexec = psql meta-command — tạo DB chỉ khi chưa tồn tại (idempotent).
+    psql -v ON_ERROR_STOP=1 --username "$POSTGRES_USER" <<-EOSQL
+      SELECT 'CREATE DATABASE fulfillment'
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'fulfillment')\gexec
+      SELECT 'CREATE DATABASE batching'
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'batching')\gexec
+      SELECT 'CREATE DATABASE keycloak'
+        WHERE NOT EXISTS (SELECT FROM pg_database WHERE datname = 'keycloak')\gexec
+    EOSQL

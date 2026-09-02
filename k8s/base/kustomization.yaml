@@ -1,0 +1,30 @@
+# COMPOSITION CONTRACT — viết MỘT LẦN bởi SF-1 (FI-274).
+# SF-3 (keycloak) / SF-4 (apps/*) chỉ thay nội dung dir của mình,
+# KHÔNG BAO GIỜ sửa file này. Thêm component mới = quyết định epic-level.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hub-store
+
+resources:
+  - ./namespace.yaml
+  - ./secrets.yaml
+  - ./postgres
+  - ./kafka
+  - ./keycloak
+  - ./apps/fulfillment
+  - ./apps/batching
+  - ./apps/print
+  - ./apps/bff
+  - ./apps/web
+
+# Seed ConfigMap — name ổn định `canonical-seed` (cross-SF contract SF-4/SF-5 mount).
+# File là BẢN COPY của api/seed/canonical-seed.json (kustomize load restrictor chặn
+# path ngoài root — KHÔNG tham chiếu ../../api/). CẢNH BÁO: seed ~48KB hôm nay;
+# nếu phình ~800KB (gần 1MB ConfigMap limit) PHẢI đổi cơ chế (mount file / init container).
+configMapGenerator:
+  - name: canonical-seed
+    files:
+      - seed/canonical-seed.json
+generatorOptions:
+  disableNameSuffixHash: true

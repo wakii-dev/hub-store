@@ -1,0 +1,6 @@
+# Namespace hub-store — transformer trong kustomization.yaml chỉ GHI metadata.namespace,
+# không TẠO namespace → phải có resource này (lỗi thật lần apply đầu: NotFound).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: hub-store

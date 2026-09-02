@@ -1,0 +1,29 @@
+# Bootstrap topic CONTRACT `orders.events` — KHÔNG TỰ ĐỔI TÊN (cross-SF contract với SF-5;
+# đổi chỉ bằng quyết định epic-level). --if-not-exists → re-apply idempotent.
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: kafka-topic-bootstrap
+spec:
+  backoffLimit: 10          # kafka chưa ready → retry (bắt tay chờ broker)
+  template:
+    metadata:
+      labels:
+        app: kafka-topic-bootstrap
+    spec:
+      restartPolicy: OnFailure
+      containers:
+        - name: create-topic
+          image: apache/kafka:3.9.0
+          command:
+            - /opt/kafka/bin/kafka-topics.sh
+            - --bootstrap-server
+            - kafka:9092
+            - --create
+            - --if-not-exists
+            - --topic
+            - orders.events
+            - --partitions
+            - "1"
+            - --replication-factor
+            - "1"

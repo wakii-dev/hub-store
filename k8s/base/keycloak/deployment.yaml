@@ -1,0 +1,103 @@
+# SF-3 (FI-276) Keycloak on k8s — DEV minikube wiring slot.
+# Image quay.io/keycloak/keycloak:26.3.4 — patch cuối dòng minor 26.3 mature; multi-arch
+# amd64+arm64 (verify manifest API 2026-09-02); KC 26 dùng KC_BOOTSTRAP_ADMIN_* (map từ
+# keys legacy KEYCLOAK_ADMIN* của Secret keycloak-admin do SF-1 sở hữu — KHÔNG sửa secret).
+# KC_HTTP_RELATIVE_PATH=/keycloak = CONTRACT với SF-4: ingress route /keycloak trỏ vào đây;
+# không có env này path-prefix sẽ 404. KHÔNG bỏ khi refactor.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: keycloak
+  labels:
+    app: keycloak
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: keycloak
+  template:
+    metadata:
+      labels:
+        app: keycloak
+    spec:
+      containers:
+        - name: keycloak
+          image: quay.io/keycloak/keycloak:26.3.4
+          args: ["start-dev", "--import-realm"]
+          ports:
+            - containerPort: 8080
+              name: http
+            - containerPort: 9000
+              name: management
+          env:
+            - name: KC_HEALTH_ENABLED
+              value: "true"
+            - name: KC_HTTP_RELATIVE_PATH
+              value: /keycloak
+            # KC 26: management path MẶC ĐỊNH kế thừa http-relative-path (health sẽ là
+            # /keycloak/health/*) → set "/" để probe path chuẩn /health/* trên :9000,
+            # tách khỏi contract /keycloak (SF-4 ingress chỉ route main port).
+            - name: KC_HTTP_MANAGEMENT_RELATIVE_PATH
+              value: /
+            - name: KC_DB
+              value: postgres
+            - name: KC_DB_URL
+              value: jdbc:postgresql://postgres:5432/keycloak
+            - name: KC_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_USER
+            - name: KC_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: postgres-credentials
+                  key: POSTGRES_PASSWORD
+            # KC 26 admin bootstrap — giá trị từ keys legacy của secret SF-1 (map tên env).
+            - name: KC_BOOTSTRAP_ADMIN_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: KEYCLOAK_ADMIN
+            - name: KC_BOOTSTRAP_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: keycloak-admin
+                  key: KEYCLOAK_ADMIN_PASSWORD
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
+          # KC 26 health endpoints trên management port 9000 (KC_HTTP_RELATIVE_PATH
+          # chỉ áp port 8080 — probe path là /health/... root). Keycloak boot chậm →
+          # startupProbe failureThreshold rộng (30 × 5s = 150s budget) trước khi
+          # readiness/liveness nhảy vào.
+          startupProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            periodSeconds: 20
+            timeoutSeconds: 5
+          resources:
+            requests:
+              memory: 512Mi
+              cpu: 250m
+            limits:
+              memory: 1536Mi
+              cpu: "1"
+      volumes:
+        - name: realm-import
+          secret:
+            secretName: keycloak-realm-hub-store

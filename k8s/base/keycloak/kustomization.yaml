@@ -1,0 +1,24 @@
+# SF-3 (FI-276) Keycloak manifests.
+# KHÔNG sửa k8s/base/kustomization.yaml (composition contract).
+# FLAG FI-245: realm ở đây là bản MINIMAL dev-only (smoke password grant).
+# Khi FI-245 SF-4 merge, realm JSON có thể thay bằng artifact đầy đủ của FI-245 —
+# SF-5 ghi hướng thay chính thức trong wiring doc (xem README section K8s).
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hub-store
+
+resources:
+  - deployment.yaml
+  - service.yaml
+
+# Realm JSON dev-only → Secret (không ConfigMap — chứa credentials, dù là dev).
+# disableNameSuffixHash: giữ tên ổn định `keycloak-realm-hub-store`.
+# FLAG FI-245: file realm-hub-store.json này sẽ được THAY bằng artifact đầy đủ
+# của FI-245 SF-4 (SF-5 ghi hướng chính thức trong wiring doc).
+secretGenerator:
+  - name: keycloak-realm-hub-store
+    files:
+      - realm-hub-store.json
+    options:
+      disableNameSuffixHash: true

@@ -1,0 +1,12 @@
+# SF-4: web (nginx :3000 shell + 2 remotes + /healthz SF-2) — thay placeholder SF-1.
+# Ingress cũng nằm ở dir này (SF-4 sở hữu; base kustomization KHÔNG đổi — composition contract).
+# KHÔNG sửa k8s/base/kustomization.yaml.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+namespace: hub-store
+
+resources:
+  - deployment.yaml
+  - service.yaml
+  - ingress.yaml

@@ -1,0 +1,55 @@
+# bff Deployment — Node Fastify REST :8080 (config.ts: PORT_BFF ?? 8080).
+# Env: GRPC_* host:port cluster DNS (config.ts nhận full "host:port" — verified).
+# JWT_DEV_SECRET từ Secret jwt-dev-secret (SF-1, dev-only) — config.ts fail-loud nếu thiếu.
+# CORS không cần cho cluster path (same-origin qua Ingress) — BFF_CORS_ORIGINS không set.
+# Probes: /healthz HTTP (endpoint có sẵn từ SF-6, không phải gRPC).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: bff
+  labels:
+    app: bff
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: bff
+  template:
+    metadata:
+      labels:
+        app: bff
+    spec:
+      containers:
+        - name: bff
+          image: hub-store/bff-gateway:dev
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: http
+              containerPort: 8080
+          env:
+            - name: GRPC_FULFILLMENT
+              value: fulfillment:50051
+            - name: GRPC_BATCHING
+              value: batching:50052
+            - name: GRPC_PRINT
+              value: print:50053
+            - name: JWT_DEV_SECRET
+              valueFrom:
+                secretKeyRef:
+                  name: jwt-dev-secret
+                  key: JWT_DEV_SECRET
+          readinessProbe:
+            timeoutSeconds: 5
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 5
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            timeoutSeconds: 5
+            httpGet:
+              path: /healthz
+              port: http
+            initialDelaySeconds: 15
+            periodSeconds: 10
