@@ -122,8 +122,9 @@ describe("PrintPage (D3)", () => {
 
   it("tab active → load PDF preview (bytes thật qua printDocument mock) + zoom", async () => {
     renderPage();
-    // Tab đầu (bill) load ngay khi mount.
-    await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy());
+    // Tab đầu (bill) load ngay khi mount. waitFor timeout default 1s flake khi
+    // máy load cao (worktree chạy song song) — nới lên 5s.
+    await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy(), { timeout: 5000 });
     expect(printDocMock).toHaveBeenCalledWith({
       batchCode: "BATCH-0001",
       printType: "bill",
@@ -133,8 +134,9 @@ describe("PrintPage (D3)", () => {
     // Zoom slider → scale thay đổi (50% = 0.5).
     const slider = document.querySelector(".ant-slider-handle") as HTMLElement;
     fireEvent.keyDown(slider, { key: "ArrowLeft", keyCode: 37 });
-    await waitFor(() =>
-      expect(screen.getByTestId("pdf-preview").getAttribute("data-scale")).toBe("0.9"),
+    await waitFor(
+      () => expect(screen.getByTestId("pdf-preview").getAttribute("data-scale")).toBe("0.9"),
+      { timeout: 5000 },
     );
   });
 
