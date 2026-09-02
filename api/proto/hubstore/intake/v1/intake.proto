@@ -1,0 +1,80 @@
+syntax = "proto3";
+
+package hubstore.intake.v1;
+
+import "hubstore/fulfillment/v1/fulfillment.proto";
+
+option go_package = "hubstore/gen/go/hubstore/intake/v1;intakev1";
+option java_multiple_files = true;
+option java_package = "com.hubstore.intake.v1";
+
+// DeliveryFailReason — enum lý do giao thất bại (SF-13, spec D1/D7).
+enum DeliveryFailReason {
+  DELIVERY_FAIL_REASON_KHACH_VANG = 0;
+  DELIVERY_FAIL_REASON_SAI_DIA_CHI = 1;
+  DELIVERY_FAIL_REASON_KHACH_TU_CHOI = 2;
+  DELIVERY_FAIL_REASON_KHAC = 3;
+}
+
+// IntakeOrder — 1 đơn intake (import row hoặc tạo tay). KHÔNG có fulfillCode
+// (server sinh). items shape tái dùng Product (fulfillment.v1).
+message IntakeOrder {
+  string customer_name = 1;
+  string customer_phone = 2;
+  string customer_address = 3;
+  repeated hubstore.fulfillment.v1.Product items = 4;
+  int32 quantity = 5;            // PHẢI = sum(items[].quantity)
+  int64 cod_amount = 6;
+  string shop_hint = 7;          // shopCode tùy chọn
+}
+
+// ImportError — 1 lỗi validation theo row/column template.
+message ImportError {
+  int32 row = 1;      // 1-based, theo thứ tự file (header không tính)
+  string column = 2;  // tên cột template (customerName/.../shopHint)
+  string message = 3;
+}
+
+message ValidateImportOrdersRequest { repeated IntakeOrder orders = 1; }
+message ValidateImportOrdersResponse { repeated ImportError errors = 1; } // rỗng = valid hết
+
+message ConfirmImportOrdersRequest { repeated IntakeOrder orders = 1; }
+message ConfirmImportOrdersResponse {
+  // Codes theo ĐÚNG THỨ TỰ orders input (atomic — thành công thì đủ).
+  repeated string fulfill_codes = 1;
+}
+
+message CreateManualOrderRequest { IntakeOrder order = 1; }
+message CreateManualOrderResponse { string fulfill_code = 1; }
+
+message MarkOrderFailedRequest {
+  string fulfill_code = 1;
+  DeliveryFailReason reason = 2;
+  string note = 3;   // ghi chú tự do; KHAC nên có note (KHÔNG bắt buộc — server chấp nhận rỗng)
+}
+message MarkOrderFailedResponse {}
+
+message RedeliverOrderRequest { string fulfill_code = 1; } // code = đơn FAILED gốc
+message RedeliverOrderResponse { string new_fulfill_code = 1; }
+
+// AuditEntry — read model activity_log (SF-7 contract fields).
+message AuditEntry {
+  string actor = 1;
+  string action = 2;
+  string target = 3;
+  string detail_json = 4;  // JSONB text
+  string created_at = 5;   // ISO-8601
+}
+
+message GetOrderAuditRequest { string fulfill_code = 1; }
+message GetOrderAuditResponse { repeated AuditEntry entries = 1; }
+
+// IntakeService — SF-13 (Java fulfillment-service :50051, CÙNG DB orders).
+service IntakeService {
+  rpc ValidateImportOrders(ValidateImportOrdersRequest) returns (ValidateImportOrdersResponse);
+  rpc ConfirmImportOrders(ConfirmImportOrdersRequest) returns (ConfirmImportOrdersResponse);
+  rpc CreateManualOrder(CreateManualOrderRequest) returns (CreateManualOrderResponse);
+  rpc MarkOrderFailed(MarkOrderFailedRequest) returns (MarkOrderFailedResponse);
+  rpc RedeliverOrder(RedeliverOrderRequest) returns (RedeliverOrderResponse);
+  rpc GetOrderAudit(GetOrderAuditRequest) returns (GetOrderAuditResponse);
+}

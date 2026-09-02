@@ -61,3 +61,13 @@ export type {
   PrintRequest,
   PrintResponseMeta,
 } from './print';
+
+// SF-13 (FI-258) — order intake + delivery exceptions.
+export type {
+  IntakeOrderDto,
+  ImportErrorDto,
+  ImportPreviewResponse,
+  ImportConfirmRequest,
+  ImportConfirmResponse,
+  AuditEntryDto,
+} from './intake';
