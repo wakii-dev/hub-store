@@ -54,7 +54,7 @@ Testing: unit per-language + e2e skip-mode + enabled runbook (§7 spec) + chaos.
 
 **Files:** Modify `docker-compose.yml`, `.env.example` · Create `docker/kafka/init-topics.sh`
 
-- [ ] **Step 1: Tạo `docker/kafka/init-topics.sh`**
+- [x] **Step 1: Tạo `docker/kafka/init-topics.sh`**
 
 ```bash
 #!/usr/bin/env bash
@@ -84,7 +84,7 @@ echo "kafka-init: topics not ready after retries" >&2
 exit 1
 ```
 
-- [ ] **Step 2: docker-compose.yml — thêm sau service `keycloak`, trước `fulfillment-service`**
+- [x] **Step 2: docker-compose.yml — thêm sau service `keycloak`, trước `fulfillment-service`**
 
 ```yaml
   # --- Kafka event bus (SF-27) — side-channel; profile 'kafka' → mặc định OFF,
@@ -149,7 +149,7 @@ Và `volumes:` thêm `kafka-data:`. Env wiring — service `fulfillment-service`
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092 # internal listener (host view = localhost:9092)
 ```
 
-- [ ] **Step 3: .env.example — thêm section**
+- [x] **Step 3: .env.example — thêm section**
 
 ```
 # --- Kafka event bus (SF-27) — side-channel best-effort; mặc định OFF ---
@@ -160,7 +160,7 @@ KAFKA_ENABLED=false
 KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 ```
 
-- [ ] **Step 4: verify config + commit**
+- [x] **Step 4: verify config + commit**
 
 ```bash
 chmod +x docker/kafka/init-topics.sh
@@ -175,7 +175,7 @@ Expected: `docker compose config` không lỗi; 3 services mới có `profiles: 
 
 **Files:** Create `packages/shared/src/events/envelope.ts`, `packages/shared/src/events/envelope.test.ts`, `packages/shared/src/events/envelope.fixture.json`, `packages/shared/src/events/index.ts`; Modify `packages/shared/src/index.ts` (export nếu có barrel — kiểm tra pattern hiện có)
 
-- [ ] **Step 1: envelope.ts (canonical — mọi copy khác phải khớp)**
+- [x] **Step 1: envelope.ts (canonical — mọi copy khác phải khớp)**
 
 ```ts
 /**
@@ -210,7 +210,7 @@ export function topicFor(type: EventType): string {
 }
 ```
 
-- [ ] **Step 2: fixture (canonical — Go golden test so khớp toàn vẹn; Java test build envelope riêng nhưng cùng shape)**
+- [x] **Step 2: fixture (canonical — Go golden test so khớp toàn vẹn; Java test build envelope riêng nhưng cùng shape)**
 
 `packages/shared/src/events/envelope.fixture.json`:
 ```json
@@ -223,7 +223,7 @@ export function topicFor(type: EventType): string {
 }
 ```
 
-- [ ] **Step 3: test (vitest — pattern như packages/shared hiện có)**
+- [x] **Step 3: test (vitest — pattern như packages/shared hiện có)**
 
 `packages/shared/src/events/envelope.test.ts`:
 ```ts
@@ -248,7 +248,7 @@ describe('event envelope (SF-27)', () => {
 });
 ```
 
-- [ ] **Step 4: run + commit**
+- [x] **Step 4: run + commit**
 
 ```bash
 pnpm --filter @hub-store/shared test
@@ -260,7 +260,7 @@ git commit -m "feat(fi245-sf27): event envelope canonical TS + fixture + tests"
 
 **Files:** Modify `pom.xml`, `src/main/resources/application.yml`, `FulfillmentServiceImpl.java` (+ test có sẵn gọi constructor) · Create `events/OrderEventPublisher.java`, `events/KafkaEventPublisher.java`, `events/NoopEventPublisher.java`, `events/EventEnvelope.java`, `events/KafkaPublisherConfig.java`, test `events/EventEnvelopeTest.java` + `events/PublisherConfigTest.java`
 
-- [ ] **Step 1: pom.xml — thêm dependency (trong `<dependencies>`, sau jackson)**
+- [x] **Step 1: pom.xml — thêm dependency (trong `<dependencies>`, sau jackson)**
 
 ```xml
     <!-- SF-27 (FI-273): Kafka side-channel — version quản bởi Boot parent. -->
@@ -270,7 +270,7 @@ git commit -m "feat(fi245-sf27): event envelope canonical TS + fixture + tests"
     </dependency>
 ```
 
-- [ ] **Step 2: application.yml — thêm (cẩn thận YAML nesting)**
+- [x] **Step 2: application.yml — thêm (cẩn thận YAML nesting)**
 
 ```yaml
 spring:
@@ -291,7 +291,7 @@ kafka:
 ```
 (Lưu ý: key `kafka` root mới, KHÔNG lồng vào `spring`.)
 
-- [ ] **Step 3: envelope + publisher classes**
+- [x] **Step 3: envelope + publisher classes**
 
 `events/EventEnvelope.java`:
 ```java
@@ -419,7 +419,7 @@ public class KafkaPublisherConfig {
 }
 ```
 
-- [ ] **Step 4: hooks trong FulfillmentServiceImpl**
+- [x] **Step 4: hooks trong FulfillmentServiceImpl**
 
 Constructor thêm param (Spring autowire `OrderRepository` + `OrderEventPublisher`):
 ```java
@@ -460,7 +460,7 @@ Empty-result branch (spec-critic carry-in): trong `mutateOrderStatus`, sau vòng
 
 Update mọi test/constructor call `new FulfillmentServiceImpl(repo)` → `new FulfillmentServiceImpl(repo, new NoopEventPublisher())` (grep tìm).
 
-- [ ] **Step 5: tests**
+- [x] **Step 5: tests**
 
 `events/EventEnvelopeTest.java` (junit5, pattern test hiện có):
 ```java
@@ -523,7 +523,7 @@ class PublisherConfigTest {
 
 Hook test: test mutate/assign hiện có (grep `FulfillmentServiceImpl(` trong test) — truyền mock `OrderEventPublisher` (Mockito có trong spring-boot-starter-test), verify `publish("order.cancelled", code, ...)` đúng số lần. Nếu test không có sẵn cho mutate → thêm 1 test: mutate 2 orders target 0 → verify 2 lần publish với reason.
 
-- [ ] **Step 6: build + test + commit**
+- [x] **Step 6: build + test + commit**
 
 ```bash
 cd services/fulfillment-service && mvn -q test
@@ -534,7 +534,7 @@ git add -A services/fulfillment-service && git commit -m "feat(fi245-sf27): Java
 
 **Files:** Modify `go.mod`/`go.sum`, `cmd/server/main.go`, `internal/server/batching_server.go` (+tests gọi `New`) · Create `internal/kafka/kafka.go`, `internal/kafka/kafka_test.go`
 
-- [ ] **Step 1: deps**
+- [x] **Step 1: deps**
 
 ```bash
 cd services/batching-service
@@ -544,7 +544,7 @@ go mod tidy
 ```
 (kafka-go v0.4.47 go.mod khai báo go 1.15 — tương thích go 1.19, đã verify.)
 
-- [ ] **Step 2: internal/kafka/kafka.go**
+- [x] **Step 2: internal/kafka/kafka.go**
 
 ```go
 // Package kafka — SF-27 side-channel publisher (best-effort, không bao giờ error).
@@ -632,7 +632,7 @@ func topicFor(t string) string {
 }
 ```
 
-- [ ] **Step 3: hooks trong batching_server.go**
+- [x] **Step 3: hooks trong batching_server.go**
 
 Field + setter (pattern `SetClock`; New KHÔNG đổi signature — tránh vỡ tests):
 ```go
@@ -660,7 +660,7 @@ Hook 3 — `CompletePicking`: tương tự:
 ```
 (Đọc file tại chỗ: compensation transitions KHÔNG publish — chỉ success path cuối.)
 
-- [ ] **Step 4: main.go wiring**
+- [x] **Step 4: main.go wiring**
 
 Sau `fc := fulfillment.NewGRPCClientFromConn(jconn)`:
 ```go
@@ -673,7 +673,7 @@ Sau `fc := fulfillment.NewGRPCClientFromConn(jconn)`:
 ```
 `server.New(st, fc)` → `srv := server.New(st, fc); srv.SetEventPublisher(events); batchingv1.RegisterBatchingServiceServer(grpcServer, srv)`. Import `hubstore/batching-service/internal/kafka`. Env doc comment đầu file thêm 2 dòng `KAFKA_ENABLED`, `KAFKA_BOOTSTRAP_SERVERS`.
 
-- [ ] **Step 5: tests (internal/kafka/kafka_test.go)**
+- [x] **Step 5: tests (internal/kafka/kafka_test.go)**
 
 ```go
 package kafka
@@ -734,7 +734,7 @@ func TestTopicFor(t *testing.T) {
 
 Server hook test: trong `internal/server/batching_test.go` thêm (dùng `capturePublisher` style mock — pattern mock `fulfill.Client` sẵn có): sau CreateBatch success → `s.SetEventPublisher(cap)` trước, verify `cap.created` có batchCode; CancelBatch success → `transitioned` chứa `"active|cancelled|<reason>"`.
 
-- [ ] **Step 6: run + commit**
+- [x] **Step 6: run + commit**
 
 ```bash
 cd services/batching-service && go build ./... && go test ./internal/...
@@ -745,7 +745,7 @@ git add -A services/batching-service && git commit -m "feat(fi245-sf27): Go prod
 
 **Files:** Modify `package.json`, `src/config.ts`, `src/server.ts` · Create `src/kafka/events.ts`, `src/kafka/consumer.ts` (+ `src/kafka/consumer.test.ts`)
 
-- [ ] **Step 1: dep + config**
+- [x] **Step 1: dep + config**
 
 ```bash
 cd services/bff-gateway && pnpm add kafkajs@^2.2.4
@@ -768,7 +768,7 @@ const KAFKA_ENABLED_RAW = process.env.KAFKA_ENABLED ?? '';
   },
 ```
 
-- [ ] **Step 2: src/kafka/events.ts**
+- [x] **Step 2: src/kafka/events.ts**
 
 ```ts
 import { EventEmitter } from 'node:events';
@@ -785,7 +785,7 @@ export interface KafkaEventMessage {
 }
 ```
 
-- [ ] **Step 3: src/kafka/consumer.ts**
+- [x] **Step 3: src/kafka/consumer.ts**
 
 ```ts
 import { Kafka } from 'kafkajs';
@@ -831,7 +831,7 @@ export async function startKafkaConsumer(
 }
 ```
 
-- [ ] **Step 4: server.ts wiring**
+- [x] **Step 4: server.ts wiring**
 
 Đọc file, tại sau khi app listen sẵn (pattern hiện tại) thêm:
 ```ts
@@ -848,7 +848,7 @@ if (config.kafka.enabled) {
 ```
 (không crash process — startKafkaConsumer tự catch.)
 
-- [ ] **Step 5: test (vitest, pattern hiện có của bff)**
+- [x] **Step 5: test (vitest, pattern hiện có của bff)**
 
 `src/kafka/consumer.test.ts` — test parse/emit logic tách khỏi kafkajs (extract helper `parseMessage(raw: string): unknown` từ consumer.ts để test thuần):
 ```ts
@@ -866,7 +866,7 @@ describe('bffEvents bridge (SF-27)', () => {
 ```
 (và config flag test nếu config.ts có test hiện có — mở rộng.)
 
-- [ ] **Step 6: run + commit**
+- [x] **Step 6: run + commit**
 
 ```bash
 pnpm --filter @hub-store/bff-gateway test && pnpm --filter @hub-store/bff-gateway build
@@ -877,7 +877,7 @@ git add -A services/bff-gateway && git commit -m "feat(fi245-sf27): BFF kafkajs 
 
 **Files:** Create `e2e/tests/05-kafka.spec.ts`
 
-- [ ] **Step 1: spec**
+- [x] **Step 1: spec**
 
 ```ts
 import { expect, test } from '@playwright/test';
@@ -983,7 +983,7 @@ test('create batch → batch-events có batch.created', async () => {
 ```
 LƯU Ý executor: response shapes (`filterBody.data.orders` vs `orders`) + shop object shape — ĐỌC `services/bff-gateway/src/mappers/fulfillment.ts` + `routes/batches.ts` để khớp chính xác; nếu create batch cần thêm fields bắt buộc (deliveryTime) → đọc proto `CreateBatchRequest` và điền. KHÔNG sửa spec cũ.
 
-- [ ] **Step 2: verify skip-mode (không cần kafka)**
+- [x] **Step 2: verify skip-mode (không cần kafka)**
 
 ```bash
 pnpm --filter e2e exec playwright test 05-kafka --list 2>/dev/null || true
@@ -991,7 +991,7 @@ pnpm --filter e2e exec playwright test 05-kafka --list 2>/dev/null || true
 pnpm --filter e2e exec tsc --noEmit -p e2e 2>/dev/null || npx tsc --noEmit e2e/tests/05-kafka.spec.ts --skipLibCheck || true
 ```
 
-- [ ] **Step 3: commit**
+- [x] **Step 3: commit**
 
 ```bash
 git add e2e/tests/05-kafka.spec.ts && git commit -m "test(fi245-sf27): e2e kafka spec — topics + order.assigned + batch.created, skip khi off"
@@ -1001,7 +1001,7 @@ git add e2e/tests/05-kafka.spec.ts && git commit -m "test(fi245-sf27): e2e kafka
 
 **Files:** không code — verification only (tick plan + ghi evidence)
 
-- [ ] **Step 1: disabled mode (mặc định)**
+- [x] **Step 1: disabled mode (mặc định)**
 
 ```bash
 # không kafka container nào chạy; boot-all.sh như cũ
@@ -1010,7 +1010,7 @@ docker ps --format '{{.Names}}' | grep -i kafka || echo "OK: không kafka contai
 ```
 Expected: BFF sống, mutation qua UI/API ok, không kafka container. Console không lỗi connect.
 
-- [ ] **Step 2: enabled mode + kafka-ui evidence (Rule 0 — TỰ nhìn)**
+- [x] **Step 2: enabled mode + kafka-ui evidence (Rule 0 — TỰ nhìn)**
 
 ```bash
 echo 'KAFKA_ENABLED=true' >> .env
@@ -1029,7 +1029,7 @@ KAFKA_ENABLED=true pnpm --filter e2e test 05-kafka
 ```
 Lần chạy đầu của `05-kafka.spec.ts` — nếu kafka-ui REST shape khác (`m.value?.content`) → SỬA parser tại chỗ theo response thật (log `res.json()` sample) rồi chạy lại tới xanh. KHÔNG merge khi spec này chưa từng chạy enabled.
 
-- [ ] **Step 3: chaos — stop kafka giữa chừng**
+- [x] **Step 3: chaos — stop kafka giữa chừng**
 
 ```bash
 docker compose --profile kafka stop kafka
@@ -1038,7 +1038,7 @@ docker compose --profile kafka start kafka   # phục hồi
 ```
 Expected (ACCEPTANCE dòng 3): mutation ok + warn log. Verify log: `grep "best-effort" services/*.log` hoặc log tail.
 
-- [ ] **Step 4: full test suites**
+- [x] **Step 4: full test suites**
 
 ```bash
 cd services/fulfillment-service && mvn -q test
@@ -1047,7 +1047,7 @@ pnpm -r test        # shared + bff vitest
 pnpm --filter e2e test   # E2E cũ xanh + 05-kafka SKIP (flag off trong shell này)
 ```
 
-- [ ] **Step 5: revert .env (không commit .env) + commit plan tick**
+- [x] **Step 5: revert .env (không commit .env) + commit plan tick**
 
 ```bash
 git diff --stat   # .env KHÔNG được appear (gitignored — verify)
