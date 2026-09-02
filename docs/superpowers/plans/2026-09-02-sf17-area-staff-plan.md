@@ -46,14 +46,14 @@ READ-ONLY: `api/proto/hubstore/{fulfillment,batching,print}` cũ, apps/orders, a
 - Non-functional: 403 server-side (không chỉ ẩn nút); i18n vi/en cho label mới; antd4 LESS tokens SF-6 (không hex cứng ngoài tokens).
 
 ## 5. Implementation outline
-### Tasks (8, theo bracket — deps tuần tự 1→2→3→(4,5)→6→7→8):
+### Tasks (8, theo bracket — DAG chuỗi tuyến tính 1→2→3→4→5→6→7→8):
 1. `area-staff-schema` — V4 migration + master regions INSERT + IT test schema
 2. `area-staff-crud-api` — proto staffarea/v1 + regen + repository + gRPC impl + unit tests
 3. `payment-verify-dual` — PaymentAccountVerifier dual-mode + wire vào gRPC impl
-4. `fe-area-list` — shared permissions Admin + nav + list page + expand + filter (toggle ở task 6)
-5. `fe-area-form` — form page (tree single-surface, verify inline, cap 100)
-6. `active-toggle` — Switch toggle trong list (Admin) + PUT active wiring
-7. `role-guard` — BFF Admin gate 403 + KNOWN_ROLES + Keycloak realm admin + e2e auth.setup user admin
+4. `fe-area-list` — shared permissions Admin + nav + list page + expand + filter + **BFF ĐẦY ĐỦ 6 routes (GET + 4 write — write routes pass-through chưa gate, gate ở task 7)**
+5. `fe-area-form` — form page (tree single-surface, verify inline, cap 100) — deps task 4 (cùng file App.tsx/i18n)
+6. `active-toggle` — Switch toggle trong list (Admin UI) + PUT active (route đã có từ task 4, verify thật được)
+7. `role-guard` — Admin gate trên 4 write routes (403) + KNOWN_ROLES + Keycloak realm admin + e2e auth.setup user admin + contract tests
 8. `e2e-area-spec` — `05-area.spec.ts` + all-green
 
 ### File structure
@@ -78,13 +78,13 @@ Java theo package `com.hubstore.fulfillment` hiện có (store/, service/, payme
 Files: `V4__area_staff_schema.sql` (mới), `PostgresServiceEmployeeRepositoryIT.java` (khung IT schema smoke).
 - DDL đúng spec §3 (bigserial, unique employee_code, FK regions, UNIQUE(employee_code, region_code)).
 - Master INSERT ON CONFLICT DO NOTHING: thêm ≥6 tỉnh/≥18 ward ngoài 11 rows seed (vd 25 T.Thiên Huế + wards, 92 Quảng Nam, 31 Gia Lai...; ward type 'ward', parent_code = tỉnh).
-- Verify: `docker compose up -d postgres && docker compose run --rm orders-migrate` (flyway one-shot trỏ dir) → `psql -c '\dt'` thấy 2 bảng mới + regions count tăng. Sau đó `mvn -q test` xanh.
+- Verify: `docker compose up -d postgres && docker compose run --rm orders-migrate` (flyway one-shot trỏ dir) → `docker compose exec postgres psql -U hubstore -d fulfillment -c '\dt'` thấy 2 bảng mới + `SELECT count(*) FROM regions` tăng. Sau đó `mvn -q test` xanh.
 - Commit: `feat(fi245-sf17): area-staff schema V4 + master regions`
 
 ### Task 2: area-staff-crud-api
 Files: proto mới + regen gen/java + gen/ts; `ServiceEmployeeRepository.java` (interface: list/get/create/update/setActive); `PostgresServiceEmployeeRepository.java` (JdbcTemplate + RowMapper; list WHERE động title/query/region, LUÔN gồm inactive; update @Transactional full-replace + regions delete/insert); `StaffAreaServiceImpl.java` (@GrpcService, validate `^[A-Z0-9_-]{3,32}$` code, `^\d{9,16}$` account, title non-blank → gRPC INVALID_ARGUMENT); config bean registration kiểu `OrderRepositoryConfig`.
-- Regen (từ repo root): `protoc -I api/proto --java_out=api/proto/gen/java --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto --ts_proto_out=api/proto/gen/ts api/proto/hubstore/staffarea/v1/staffarea.proto` (soát option ts_proto khớp file gen cũ — xem header `fulfillment.ts` gen: có thể cần `--ts_proto_opt=...` copy từ setup cũ).
-- Verify: `mvn -q test` xanh; boot service + `grpcurl` (hoặc backend-integration pattern) gọi List → rỗng không lỗi.
+- Regen: **prerequisite `pnpm install` ở repo root trước** (ts-proto 2.7.7 khai báo trong `services/bff-gateway/package.json` → bin ở `services/bff-gateway/node_modules/.bin/protoc-gen-ts_proto` — KHÔNG có node_modules root). Lệnh chuẩn: làm theo `docs/superpowers/spikes/grpc-codegen-multilang.md` (§ invocation — gồm `--ts_proto_opt=outputServices=grpc-js,forceLong=number,esModuleInterop=true`), pattern: `protoc -I api/proto --java_out=api/proto/gen/java --plugin=protoc-gen-ts_proto=<path-to-bff-bin> --ts_proto_out=api/proto/gen/ts <opts> api/proto/hubstore/staffarea/v1/staffarea.proto`.
+- Verify: `mvn -q test` xanh; verify runtime qua harness `e2e/backend-integration.ts` pattern (grpcurl cần reflection — tránh).
 - Commit: `feat(fi245-sf17): staffarea gRPC API + Postgres repository`
 
 ### Task 3: payment-verify-dual
@@ -93,23 +93,23 @@ Files: `payment/PaymentAccountVerifier.java` (interface `VerifyResult verify(Str
 - Commit: `feat(fi245-sf17): payment-account verify dual-mode (mock default / zalopay env)`
 
 ### Task 4: fe-area-list
-Files: `packages/shared/src/hooks/usePermissions.tsx` (ROLES+='Admin', PERMISSIONS+='areastaff.view'/'areastaff.manage', MATRIX: Admin→cả hai + giữ cũ, 3 role cũ→view; Admin thừa kế permission cũ — thêm vào matrix không xóa), `apps/shell/src/nav.ts` (+nav item /area-staff permission areastaff.view, icon), i18n vi/en (`nav.areaStaff` + list labels), `apps/shell/src/pages/area-staff/AreaListPage.tsx` (antd Table + FilterBar: Select chức danh [SHIPPER/WAREHOUSE/CSKH/KTV], TextSearch NV, Select tỉnh từ GET /master-data/regions; expand row → wards resolve từ region_codes + master (tỉnh→wards con, phường→chính nó, group tỉnh); inactive row style mờ + Tag "Ngừng hoạt động"; KHÔNG toggle ở task này), `apps/shell/src/api/areaStaffApi.ts` (fetch wrapper gọi BFF REST), **BFF GET-only routes**: `services/bff-gateway/src/routes/serviceEmployees.ts` (GET /service-employees + GET /:code — KHÔNG write routes ở task này) + `src/clients/staffArea.ts` facade (pattern `fulfillment.ts`) + register trong `app.ts`, route + `RequirePermission permission="areastaff.view"` trong `App.tsx`.
-- Verify: `pnpm -w --filter shell build` (hoặc turbo build shell) + boot stack → login admin (tạm dùng manager nếu admin chưa có — task 7 tạo user) thấy nav + list rỗng không lỗi console.
+Files: `packages/shared/src/hooks/usePermissions.tsx` (ROLES+='Admin', PERMISSIONS+='areastaff.view'/'areastaff.manage', MATRIX: Admin→cả hai + giữ cũ, 3 role cũ→view; Admin thừa kế permission cũ — thêm vào matrix không xóa), `apps/shell/src/nav.ts` (+nav item /area-staff permission areastaff.view, icon), i18n vi/en (`nav.areaStaff` + list labels), `apps/shell/src/pages/area-staff/AreaListPage.tsx` (antd Table + FilterBar: Select chức danh [SHIPPER/WAREHOUSE/CSKH/KTV], TextSearch NV, Select tỉnh từ GET /master-data/regions; expand row → wards resolve từ region_codes + master (tỉnh→wards con, phường→chính nó, group tỉnh); inactive row style mờ + Tag "Ngừng hoạt động"; KHÔNG toggle ở task này; testids: `area-list`, `area-create-btn`, `area-row-<code>`, `area-expand-<code>`), `apps/shell/src/api/areaStaffApi.ts` (fetch wrapper gọi BFF REST), **BFF ĐẦY ĐỦ 6 routes pass-through** (GET /service-employees, GET /:code, POST /, PUT /:code, PUT /:code/active, POST /payment-account/verify — write routes CHƯA gate, gate ở task 7): `services/bff-gateway/src/routes/serviceEmployees.ts` + `src/clients/staffArea.ts` facade (pattern `fulfillment.ts`) + register trong `app.ts`, route + `RequirePermission permission="areastaff.view"` trong `App.tsx`. Lưu ý executor: `pages/area-staff/` là THƯ MỤC MỚI chủ đích (không phải convention `features/` hiện có — spec duyệt shell-local pages).
+- Verify: `pnpm --filter shell build` (hoặc `turbo build --filter=shell`) + boot stack → login manager (admin user chưa có đến task 7) thấy nav + list rỗng không lỗi console.
 - Commit: `feat(fi245-sf17): area-staff list page + Admin role shared permissions`
 
 ### Task 5: fe-area-form
 Files: `apps/shell/src/pages/area-staff/AreaFormPage.tsx` (dùng cho /area-staff/new và /area-staff/:code/edit), routes App.tsx (`/area-staff/new` + `/area-staff/:code/edit`, RequirePermission="areastaff.manage"), i18n labels.
 - Form theo spec §8: chức danh Select tĩnh; mã NV (`^[A-Z0-9_-]{3,32}$` rule) + họ tên; TK nhận tiền + nút "Kiểm tra" → POST verify → hiển thị badge nguồn (source MOCK → Tag `[MOCK]`) + valid/invalid màu; TreeSelect DUY NHẤT (treeData tỉnh→phường từ /master-data/regions, parent_code), chọn node tỉnh = whole province (checkable), cap 100 tổng selection — `onSelect`/`onChange` chặn vượt + `message.warning` i18n; submit → POST/PUT → navigate về list.
-- Verify: build xanh; thủ tục tạo draft qua UI (admin token từ task 7 nếu có).
+- Verify: build xanh; thủ tục tạo draft qua UI bằng login manager (write routes pass-through đã có từ task 4 — gate chưa có nhưng dev realm mọi role đều qua được đến task 7).
 - Commit: `feat(fi245-sf17): area-staff define/edit form (tree + inline verify)`
 
 ### Task 6: active-toggle
-Files: `AreaListPage.tsx` (Switch render khi `can('areastaff.manage')`, `data-testid="area-active-toggle-<code>"`, onChange → PUT active → refresh row; off → mờ + tag), i18n.
-- Verify: build + tay toggle → row mờ ngay (không biến mất).
+Files: `AreaListPage.tsx` (Switch render khi `can('areastaff.manage')`, `data-testid="area-active-toggle-<code>"`, onChange → PUT active (route pass-through đã có từ task 4) → refresh row; off → mờ + tag), i18n.
+- Verify: build + tay toggle (login manager) → row mờ ngay (không biến mất) + refresh trang vẫn off.
 - Commit: `feat(fi245-sf17): active toggle on area list`
 
 ### Task 7: role-guard
-Files: `services/bff-gateway/src/plugins/auth.ts` (KNOWN_ROLES+='Admin'), `src/routes/serviceEmployees.ts` THÊM 4 write routes (POST /, PUT /:code, PUT /:code/active, POST /payment-account/verify) mỗi route qua helper `requireRole(request,'Admin')` → 403 envelope code FORBIDDEN (GET routes đã có từ task 4), `docker/keycloak/hubstore-realm.json` (realm role Admin + user `admin` enabled, password `Password123!` literal dev-only, realmRoles ["Admin"]), `e2e/auth.setup.ts` (USERS+='admin'), `apps/shell` form/toggle đã gate theo `areastaff.manage` (task 4-6) — non-admin vào trực tiếp /area-staff/new → RequirePermission 403 Result.
+Files: `services/bff-gateway/src/plugins/auth.ts` (KNOWN_ROLES+='Admin'), `src/routes/serviceEmployees.ts` THÊM Admin gate lên 4 write routes có sẵn từ task 4 (helper `requireRole(request,'Admin')` → 403 envelope code FORBIDDEN), `docker/keycloak/hubstore-realm.json` (realm role Admin + user `admin` enabled, password `Password123!` literal dev-only, realmRoles ["Admin"]), `e2e/auth.setup.ts` (USERS+='admin'), `apps/shell` form/toggle đã gate theo `areastaff.manage` (task 4-6) — non-admin vào trực tiếp /area-staff/new → RequirePermission 403 Result.
 - BFF contract tests: extend `test/bff.contract.test.ts` — 4 write routes: coordinator token → 403 FORBIDDEN envelope; admin token → pass-through metadata x-user-role tới mock gRPC; GET list coordinator → 200.
 - Verify: `cd services/bff-gateway && pnpm test` xanh; realm json valid JSON.
 - Commit: `feat(fi245-sf17): Admin role end-to-end (realm/BFF gate/shared) + 403 writes`
