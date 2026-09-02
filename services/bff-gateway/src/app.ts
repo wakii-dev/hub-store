@@ -19,6 +19,7 @@ import { registerFulfillmentRoutes } from './routes/fulfillment.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
 import { registerAuthRoutes } from './routes/auth.js';
+import { registerD2cRoutes } from './routes/d2c.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -66,6 +67,7 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerFulfillmentRoutes(app, { fulfillment, batching });
   registerBatchRoutes(app, batching);
   registerPrintRoutes(app, { batching, print });
+  registerD2cRoutes(app, { fulfillment });
   // DEV-ONLY — fail-safe: chỉ mount khi ENABLE_DEV_RESET_PASSWORD=1 tường minh
   // (prod/K8s không set flag → endpoint không tồn tại thay vì dựa vào doc).
   if (config.devResetPassword) {

@@ -7,6 +7,8 @@ import { FulfillmentServiceClient } from '../../../../api/proto/gen/ts/hubstore/
 import type {
   AssignShopHubRequest,
   AssignShopHubResponse,
+  FilterD2cOrdersRequest,
+  FilterD2cOrdersResponse,
   FilterOrdersRequest,
   FilterOrdersResponse,
   GetAssignHistoryRequest,
@@ -23,6 +25,7 @@ import type {
   ListRegionsResponse,
   UpdateDeliveryTimeRequest,
   UpdateDeliveryTimeResponse,
+  UpdateD2cOrderNoteResponse,
   UpdateNoteRequest,
   UpdateNoteResponse,
 } from '../../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
@@ -39,6 +42,13 @@ export interface FulfillmentApi {
   listDeliveryStaff(req: ListDeliveryStaffRequest, role: string): Promise<ListDeliveryStaffResponse>;
   listDistinctShops(req: ListDistinctShopsRequest, role: string): Promise<ListDistinctShopsResponse>;
   getTimeDelivery(req: GetTimeDeliveryRequest, role: string): Promise<GetTimeDeliveryResponse>;
+  // SF-18 D2C/Dropship — additive (FI-263).
+  filterD2cOrders(req: FilterD2cOrdersRequest, role: string): Promise<FilterD2cOrdersResponse>;
+  updateD2cOrderNote(
+    orderCode: string,
+    note: string,
+    actorRole: string,
+  ): Promise<UpdateD2cOrderNoteResponse>;
   close(): void;
 }
 
@@ -55,6 +65,9 @@ export function createFulfillmentClient(addr: string, deadlineMs: number): Fulfi
     listDeliveryStaff: (req, role) => callUnary(c.listDeliveryStaff.bind(c), req, role, deadlineMs),
     listDistinctShops: (req, role) => callUnary(c.listDistinctShops.bind(c), req, role, deadlineMs),
     getTimeDelivery: (req, role) => callUnary(c.getTimeDelivery.bind(c), req, role, deadlineMs),
+    filterD2cOrders: (req, role) => callUnary(c.filterD2COrders.bind(c), req, role, deadlineMs),
+    updateD2cOrderNote: (orderCode, note, actorRole) =>
+      callUnary(c.updateD2COrderNote.bind(c), { orderCode, note, actorRole }, actorRole, deadlineMs),
     close: () => c.close(),
   };
 }

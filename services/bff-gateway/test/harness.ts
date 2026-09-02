@@ -20,7 +20,7 @@ import { createServer } from 'node:http';
 type RsaPrivateKey = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 import { buildApp } from '../src/app.js';
 import type { BffConfig } from '../src/config.js';
-import { fulfillmentResponses, batchingResponses, printResponses } from './fixtures.js';
+import { fulfillmentResponses, d2cResponses, batchingResponses, printResponses } from './fixtures.js';
 import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import { BatchingServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/batching';
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
@@ -165,6 +165,10 @@ const fulfillmentDefaults: Record<string, UnaryHandler> = {
   listDeliveryStaff: (_c, cb) => cb(null, fulfillmentResponses.listDeliveryStaff),
   listDistinctShops: (_c, cb) => cb(null, fulfillmentResponses.listDistinctShops),
   getTimeDelivery: (_c, cb) => cb(null, fulfillmentResponses.getTimeDelivery),
+  // SF-18 D2C (FI-263) — defaults cho RPC additive mới (key camelize ts-proto:
+  // "FilterD2cOrders" → filterD2COrders — chữ C hoa).
+  filterD2COrders: (_c, cb) => cb(null, d2cResponses.filterD2cOrders),
+  updateD2COrderNote: (_c, cb) => cb(null, d2cResponses.updateD2cOrderNote),
 };
 
 const batchingDefaults: Record<string, UnaryHandler> = {

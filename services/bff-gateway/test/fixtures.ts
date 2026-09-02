@@ -4,6 +4,8 @@
  * hợp lệ theo seed contract (spec §3.5) nhưng harness tự dựng, không load seed.
  */
 import type {
+  D2cOrder,
+  FilterD2cOrdersResponse,
   FilterOrdersResponse,
   GetAssignHistoryResponse,
   GetOrderDetailResponse,
@@ -12,6 +14,7 @@ import type {
   ListDeliveryStaffResponse,
   ListDistinctShopsResponse,
   ListRegionsResponse,
+  UpdateD2cOrderNoteResponse,
 } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import type {
   Batch,
@@ -109,6 +112,39 @@ export const fulfillmentResponses = {
   getTimeDelivery: {
     suggestedTime: { from: '2026-09-03T08:00:00+07:00', to: '2026-09-03T12:00:00+07:00' },
   } as GetTimeDeliveryResponse,
+};
+
+/** SF-18 (FI-263) — fixture D2C order (proto shape, timestamps = Date). */
+export const fixtureD2cOrder: D2cOrder = {
+  orderCode: 'D2C-1001',
+  orderIdInter: 'INTER-2001',
+  deliveryId: 'VDO-3001',
+  carrier: 'GHN',
+  shop: 'Shop A',
+  exportEmployee: 'Nguyễn Xuất',
+  exportTime: new Date('2026-08-15T08:30:00+07:00'),
+  pushTime: new Date('2026-08-15T14:45:00+07:00'),
+  receiverName: 'Trần Nhận',
+  receiverPhone: '0901234567',
+  receiverAddress: 'Số 5 Phạm Văn Đồng, Cầu Giấy',
+  serviceType: 'Chuyển phát thường',
+  productCategory: 'Điện tử',
+  productType: 'Điện thoại',
+  isDebtSplitting: false,
+  note: 'Giao giờ hành chính, gọi trước khi đến',
+  status: 'PUSHED',
+  createdAt: new Date('2026-08-14T09:00:00+07:00'),
+  id: 1,
+};
+
+export const d2cResponses = {
+  filterD2cOrders: {
+    items: [fixtureD2cOrder],
+    total: 12,
+  } as FilterD2cOrdersResponse,
+  updateD2cOrderNote: {
+    order: { ...fixtureD2cOrder, note: 'Ghi chú mới' },
+  } as UpdateD2cOrderNoteResponse,
 };
 
 export const batchingResponses = {
