@@ -27,7 +27,7 @@ import './slices/masterData';
 
 // Re-export the stub hooks for convenience (remotes can deep-import the slice
 // files directly too).
-export { useListOrdersQuery } from './slices/fulfillment';
+export { useListOrdersQuery, useGetDashboardStatsQuery } from './slices/fulfillment';
 export { useListBatchesQuery } from './slices/batches';
 export {
   useGetRegionsQuery,

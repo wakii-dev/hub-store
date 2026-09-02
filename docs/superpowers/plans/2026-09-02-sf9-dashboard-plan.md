@@ -257,7 +257,7 @@ LƯU Ý: `delivering`/`completed`/`cancelled` ở đây đếm ĐƠN theo trạn
 - Modify: `apps/orders/vite.config.ts` exposes `./DashboardPage`
 - Modify: `apps/orders/src/i18n.ts` (resources dashboard, namespace orders — theo pattern đăng ký hiện có)
 
-- [ ] **Step 1: RTKQ endpoint** — trong slices/fulfillment.ts:
+- [x] **Step 1: RTKQ endpoint** — trong slices/fulfillment.ts:
 ```ts
 getDashboardStats: builder.query<DashboardStats, void>({
   query: () => ({ url: '/fulfillment/dashboard-stats', method: 'GET' }),
@@ -267,15 +267,15 @@ export const { useGetDashboardStatsQuery } = enhanced;
 ```
 (refetchOnMountOrArgChange: true toàn cục sẵn — navigate quay lại là refetch; thêm nút refresh gọi `refetch()`.)
 
-- [ ] **Step 2: DashboardPage** — tự bọc `<Provider store={createAppStore()}>` như D1Page (đọc head D1Page để copy convention i18n/Provider). Layout: `dashboard-root` → Row/Col antd: 4 Statistic cards (`stat-today`, `stat-pending` (Chờ duyệt), `stat-delivering` (Đang vận chuyển — đơn phiếu ACTIVE), `stat-completion-rate` Progress completionRate + text "Hủy x%") + chart card `chart-orders-per-day` + workload card `workload-list` (List antd, row `workload-row-<staffId>` — staffId rỗng dùng key `unassigned`, testid `workload-row-unassigned`).
+- [x] **Step 2: DashboardPage** — tự bọc `<Provider store={createAppStore()}>` như D1Page (đọc head D1Page để copy convention i18n/Provider). Layout: `dashboard-root` → Row/Col antd: 4 Statistic cards (`stat-today`, `stat-pending` (Chờ duyệt), `stat-delivering` (Đang vận chuyển — đơn phiếu ACTIVE), `stat-completion-rate` Progress completionRate + text "Hủy x%") + chart card `chart-orders-per-day` + workload card `workload-list` (List antd, row `workload-row-<staffId>` — staffId rỗng dùng key `unassigned`, testid `workload-row-unassigned`).
 
 SVG bar chart hand-built (KHÔNG lib): nhận `data: {date,count}[]`, render `<svg viewBox="0 0 W H" width="100%">` — W=600,H=180, bar width = W/30−2, height tỉ lệ max(≥1); mỗi bar: `<rect data-testid={`bar-${date}`} x y width height fill="var(--ant-primary-color, #EB6E09)"><title>${date}: ${count}</title></rect>`; trục nhãn: ngày đầu/giữa/cuối + max. Đơn giản, đủ ACCEPTANCE "charts render không màn trắng".
 
-- [ ] **Step 3: i18n + expose** — đăng keys vi/en (dashboard.title, dashboard.stat.*...); vite exposes thêm `"./DashboardPage": "./src/pages/DashboardPage.tsx"`.
+- [x] **Step 3: i18n + expose** — đăng keys vi/en (dashboard.title, dashboard.stat.*...); vite exposes thêm `"./DashboardPage": "./src/pages/DashboardPage.tsx"`.
 
-- [ ] **Step 4: Verify build** — `pnpm --filter @hub-store/orders build` (hoặc tsc) + mở dev server kiểm nhanh (Rule 0 full ở bước riêng).
+- [x] **Step 4: Verify build** — `pnpm --filter @hub-store/orders build` (hoặc tsc) + mở dev server kiểm nhanh (Rule 0 full ở bước riêng).
 
-- [ ] **Step 5: Commit** — `feat(fi245-sf9): DashboardPage — Statistic/Progress + SVG bar 30 ngày + workload list`.
+- [x] **Step 5: Commit** — `feat(fi245-sf9): DashboardPage — Statistic/Progress + SVG bar 30 ngày + workload list`.
 
 ### Task 4: role-based-default-route (shell + perms)
 
