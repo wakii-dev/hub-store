@@ -204,10 +204,12 @@ func (s *DeliveryBatchServer) confirmOne(
 	}
 
 	// Idempotency (§3.4): CONFIRMED/BOOKED → no-op trả trạng thái hiện có.
+	// FOR UPDATE: khoá row trước check status (confirm đồng thời không race —
+	// rebook DRAFT/CANCELLED 2 lần không update/insert đè nhau).
 	existing, err := scanPlanningRow(tx.QueryRow(ctx, `SELECT id, batch_code, stop_order,
 		order_code, vehicle_type, carrier_service_id, addon_services, status,
 		cod_amount, total_bill, fee FROM shipment_plannings
-		WHERE batch_code = $1 AND stop_order = $2`, batchCode, p.GetStopOrder()))
+		WHERE batch_code = $1 AND stop_order = $2 FOR UPDATE`, batchCode, p.GetStopOrder()))
 	if err != nil && err != pgx.ErrNoRows {
 		return nil, status.Errorf(grpccodes.Internal, "load planning stop %d: %v", p.GetStopOrder(), err)
 	}
@@ -386,11 +388,12 @@ func (s *DeliveryBatchServer) bookOne(
 	}
 
 	// Load planning — phải thuộc batch này + đang CONFIRMED (§3.4: Book trên
-	// planning không ở CONFIRMED → FailedPrecondition).
+	// planning không ở CONFIRMED → FailedPrecondition). FOR UPDATE: khoá row
+	// trước check-then-act status (2 book đồng thời không thấy cùng CONFIRMED).
 	p, err := scanPlanningRow(tx.QueryRow(ctx, `SELECT id, batch_code, stop_order,
 		order_code, vehicle_type, carrier_service_id, addon_services, status,
 		cod_amount, total_bill, fee FROM shipment_plannings
-		WHERE id = $1 AND batch_code = $2`, pid, batchCode))
+		WHERE id = $1 AND batch_code = $2 FOR UPDATE`, pid, batchCode))
 	if err == pgx.ErrNoRows {
 		return nil, status.Errorf(grpccodes.NotFound,
 			"planning %s not found in batch %s", in.GetPlanningId(), batchCode)
@@ -511,9 +514,11 @@ func (s *DeliveryBatchServer) CancelDeliveryOrder(ctx context.Context, req *batc
 	}
 	defer tx.Rollback(ctx) //nolint:errcheck
 
+	// FOR UPDATE: khoá planning trước check-then-act status (cancel đồng thời
+	// với book/rebook không đè trạng thái nhau).
 	p, err := scanPlanningRow(tx.QueryRow(ctx, `SELECT id, batch_code, stop_order,
 		order_code, vehicle_type, carrier_service_id, addon_services, status,
-		cod_amount, total_bill, fee FROM shipment_plannings WHERE id = $1`, pid))
+		cod_amount, total_bill, fee FROM shipment_plannings WHERE id = $1 FOR UPDATE`, pid))
 	if err == pgx.ErrNoRows {
 		return nil, status.Errorf(grpccodes.NotFound, "planning %s not found", req.GetPlanningId())
 	}
@@ -574,10 +579,12 @@ func (s *DeliveryBatchServer) CancelDeliveryBatch(ctx context.Context, req *batc
 		return nil, status.Errorf(grpccodes.NotFound, "batch %s not found", req.GetBatchCode())
 	}
 
+	// FOR UPDATE: khoá toàn bộ planning của batch (thứ tự stop_order — lock
+	// order deterministic, tránh deadlock) trước check-then-act status từng row.
 	rows, err := tx.Query(ctx, `SELECT id, batch_code, stop_order, order_code,
 		vehicle_type, carrier_service_id, addon_services, status, cod_amount,
 		total_bill, fee FROM shipment_plannings WHERE batch_code = $1
-		ORDER BY stop_order`, req.GetBatchCode())
+		ORDER BY stop_order FOR UPDATE`, req.GetBatchCode())
 	if err != nil {
 		return nil, status.Errorf(grpccodes.Internal, "load plannings: %v", err)
 	}
@@ -835,11 +842,14 @@ func currentBooking(ctx context.Context, tx pgx.Tx, planningID int64, activeOnly
 	var r pgx.Row
 	if activeOnly {
 		r = tx.QueryRow(ctx, `SELECT id, carrier_booking_id FROM bookings
-			WHERE planning_id = $1 AND status NOT IN ($2, $3, $4)`,
+			WHERE planning_id = $1 AND status NOT IN ($2, $3, $4)
+			ORDER BY id DESC LIMIT 1`,
 			planningID, bookingCancelled, bookingCompleted, bookingFailed)
 	} else {
 		r = tx.QueryRow(ctx, `SELECT id, carrier_booking_id FROM bookings
-			WHERE planning_id = $1 AND status <> $2`, planningID, bookingCancelled)
+			WHERE planning_id = $1 AND status <> $2
+			ORDER BY id DESC LIMIT 1`,
+			planningID, bookingCancelled)
 	}
 	err = r.Scan(&id, &carrierID)
 	if err == pgx.ErrNoRows {

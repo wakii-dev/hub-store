@@ -658,6 +658,133 @@ func TestCancelDeliveryOrder_RebookTwoStepsCreatesNewBookingRow(t *testing.T) {
 	}
 }
 
+func TestCancelDeliveryOrder_UnbookedPlanningCancelled(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT5-UNBOOK", "30201", "HD-109", 1, 10, 0)
+	conf, err := srv.ConfirmPlanning(ctx, confirmReq("BT5-UNBOOK", "HD-109", "SGCN", "SGCN", 1))
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	pid := conf.GetPlannings()[0].GetPlanningId()
+
+	// Hủy planning CHƯA từng book (§3.6): CANCELLED, không crash, không đụng
+	// bookings/timeline (không có row nào để đụng).
+	resp, err := srv.CancelDeliveryOrder(ctx, &batchingv1.CancelDeliveryOrderRequest{
+		PlanningId: pid, Reason: "chưa book",
+	})
+	if err != nil {
+		t.Fatalf("CancelDeliveryOrder (unbooked): %v", err)
+	}
+	if resp.GetStatus() != "CANCELLED" || !resp.GetMeta().GetMock() {
+		t.Fatalf("status=%s mock=%v, want CANCELLED/true", resp.GetStatus(), resp.GetMeta().GetMock())
+	}
+	var pStatus string
+	if err := pool.QueryRow(ctx, `SELECT status FROM shipment_plannings
+		WHERE batch_code = 'BT5-UNBOOK'`).Scan(&pStatus); err != nil {
+		t.Fatal(err)
+	}
+	if pStatus != "CANCELLED" {
+		t.Fatalf("planning status = %s, want CANCELLED", pStatus)
+	}
+	var n int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM bookings`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("bookings = %d, want 0 (chưa book)", n)
+	}
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM shipment_tracking_events`).Scan(&n); err != nil {
+		t.Fatal(err)
+	}
+	if n != 0 {
+		t.Fatalf("events = %d, want 0 (chưa book → không timeline)", n)
+	}
+}
+
+func TestCancelDeliveryOrder_NotFoundAndInvalidPlanningID(t *testing.T) {
+	srv, _ := nvcFixture(t)
+	ctx := context.Background()
+
+	// planning không tồn tại → NotFound.
+	_, err := srv.CancelDeliveryOrder(ctx, &batchingv1.CancelDeliveryOrderRequest{
+		PlanningId: "99999999",
+	})
+	if status.Code(err) != codes.NotFound {
+		t.Fatalf("code = %v, want NotFound (unknown planning)", status.Code(err))
+	}
+	// planning_id không parse được → InvalidArgument.
+	_, err = srv.CancelDeliveryOrder(ctx, &batchingv1.CancelDeliveryOrderRequest{
+		PlanningId: "abc",
+	})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("code = %v, want InvalidArgument (parse fail)", status.Code(err))
+	}
+}
+
+// TestCancelDeliveryOrder_CurrentBookingNewestID — P1 review fix: hai booking
+// đều <> CANCELLED (A COMPLETED qua timeline advance + B active sau rebook 2
+// bước) → CancelDeliveryOrder phải hủy booking MỚI NHẤT (ORDER BY id DESC
+// LIMIT 1), không phải row tùy ý của Postgres.
+func TestCancelDeliveryOrder_CurrentBookingNewestID(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT5-NEWEST", "30201", "HD-110", 1, 10, 0)
+	pid := confirmAndBook(t, srv, ctx, "BT5-NEWEST", "HD-110")
+
+	// Booking A COMPLETED (timeline sync — planning vẫn BOOKED).
+	first := bookingCarrierOfBatch(t, ctx, pool, "BT5-NEWEST")
+	if _, err := pool.Exec(ctx,
+		`UPDATE bookings SET status = 'COMPLETED' WHERE carrier_booking_id = $1`, first); err != nil {
+		t.Fatal(err)
+	}
+	// Trở lại CONFIRMED (rebook path — như sau CancelDeliveryBatch) rồi book B.
+	if _, err := pool.Exec(ctx,
+		`UPDATE shipment_plannings SET status = 'CONFIRMED' WHERE batch_code = 'BT5-NEWEST'`); err != nil {
+		t.Fatal(err)
+	}
+	resp, err := srv.CreateBooking(ctx, bookReq("BT5-NEWEST", pid, 0, 0, 1))
+	if err != nil {
+		t.Fatalf("rebook booking: %v", err)
+	}
+	newest := resp.GetBookings()[0].GetCarrierBookingId()
+
+	// Cancel: A (COMPLETED) + B (active) đều khớp `status <> 'CANCELLED'` →
+	// phải chọn B (id DESC) — B bị hủy, A giữ COMPLETED nguyên vẹn.
+	if _, err := srv.CancelDeliveryOrder(ctx, &batchingv1.CancelDeliveryOrderRequest{
+		PlanningId: pid, Reason: "hủy booking mới nhất",
+	}); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	var aStatus, bStatus string
+	if err := pool.QueryRow(ctx, `SELECT status FROM bookings WHERE carrier_booking_id = $1`, first).
+		Scan(&aStatus); err != nil {
+		t.Fatal(err)
+	}
+	if err := pool.QueryRow(ctx, `SELECT status FROM bookings WHERE carrier_booking_id = $1`, newest).
+		Scan(&bStatus); err != nil {
+		t.Fatal(err)
+	}
+	if aStatus != "COMPLETED" {
+		t.Fatalf("booking A (cũ) status = %s, want COMPLETED (không đụng)", aStatus)
+	}
+	if bStatus != "CANCELLED" {
+		t.Fatalf("booking B (mới nhất) status = %s, want CANCELLED (id DESC)", bStatus)
+	}
+}
+
+// bookingCarrierOfBatch — carrier_booking_id duy nhất của batch 1-stop.
+func bookingCarrierOfBatch(t *testing.T, ctx context.Context, pool *pgxpool.Pool, batch string) string {
+	t.Helper()
+	var carrierID string
+	if err := pool.QueryRow(ctx, `SELECT b.carrier_booking_id FROM bookings b
+		JOIN shipment_plannings p ON p.id = b.planning_id
+		WHERE p.batch_code = $1`, batch).Scan(&carrierID); err != nil {
+		t.Fatalf("load booking của batch %s: %v", batch, err)
+	}
+	return carrierID
+}
+
 func TestCancelDeliveryBatch_ResultsAndIdempotent(t *testing.T) {
 	srv, pool := nvcFixture(t)
 	ctx := context.Background()
