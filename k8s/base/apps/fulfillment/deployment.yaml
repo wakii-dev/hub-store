@@ -1,0 +1,49 @@
+# fulfillment Deployment — Java Spring Boot gRPC :50051 (image SF-1 build script).
+# Seed: ConfigMap canonical-seed (SF-1 contract) mount /seed — env SEED_PATH trỏ file.
+# Probes: grpc.health.v1 (SF-2 devh HealthStatusManager + FulfillmentHealthReadiness
+# NOT_SERVING tới khi seed xong) — wiring manifest duy nhất, không code.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: fulfillment
+  labels:
+    app: fulfillment
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: fulfillment
+  template:
+    metadata:
+      labels:
+        app: fulfillment
+    spec:
+      containers:
+        - name: fulfillment
+          image: hub-store/fulfillment-service:dev
+          imagePullPolicy: IfNotPresent # images build local bằng minikube
+          ports:
+            - name: grpc
+              containerPort: 50051
+          env:
+            - name: SEED_PATH
+              value: /seed/canonical-seed.json
+          volumeMounts:
+            - name: seed
+              mountPath: /seed
+              readOnly: true
+          readinessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 15 # Spring boot + seed load
+            periodSeconds: 5
+            failureThreshold: 12
+          livenessProbe:
+            grpc:
+              port: 50051
+            initialDelaySeconds: 40
+            periodSeconds: 10
+      volumes:
+        - name: seed
+          configMap:
+            name: canonical-seed

@@ -1,8 +1,10 @@
-# PLACEHOLDER — SF-3 thay dir này bằng manifests Keycloak thật (SF-4 cho apps/*).
+# SF-4: fulfillment-service (Java gRPC :50051) — thay placeholder SF-1.
 # KHÔNG sửa k8s/base/kustomization.yaml (composition contract).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 namespace: hub-store
 
-resources: []
+resources:
+  - deployment.yaml
+  - service.yaml
