@@ -92,7 +92,7 @@ public class InMemoryOrderRepository implements OrderRepository {
     @Override
     public synchronized Optional<SeedModels.OrderSeed> findByFulfillCode(String fulfillCode) {
         return orders.stream()
-                .filter(o -> o.fulfillCode().equals(fulfillCode) || o.orderCode().equals(fulfillCode))
+                .filter(o -> o.fulfillCode().equals(fulfillCode) || fulfillCode.equals(o.orderCode()))
                 .findFirst();
     }
 

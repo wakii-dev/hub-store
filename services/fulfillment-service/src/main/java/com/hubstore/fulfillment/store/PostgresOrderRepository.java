@@ -437,14 +437,15 @@ public class PostgresOrderRepository implements OrderRepository {
     /**
      * Codegen atomic: pg_advisory_xact_lock('fulfill_code_gen') chặn 2 tx lấy
      * cùng dải (lock giữ đến hết tx); MAX substring bỏ qua code không ORD-n
-     * (retry code NG-*, test code IT-* không đẩy max). Baseline 3000 ≡ seed.
+     * (retry code NG-*, test code IT-* không đẩy max). GREATEST floor 3000
+     * parity với in-memory (legacy ORD-2xxx không kéo dải xuống).
      */
     @Override
     @Transactional
     public List<String> nextFulfillCodes(int n) {
         jdbc.execute("SELECT pg_advisory_xact_lock(hashtext('fulfill_code_gen'))");
         Integer max = jdbc.queryForObject(
-                "SELECT COALESCE(MAX((substring(fulfill_code FROM 5))::INT), 3000) "
+                "SELECT GREATEST(3000, COALESCE(MAX((substring(fulfill_code FROM 5))::INT), 3000)) "
                         + "FROM orders WHERE fulfill_code ~ '^ORD-[0-9]+$'", Integer.class);
         List<String> codes = new ArrayList<>(n);
         for (int i = 1; i <= n; i++) {

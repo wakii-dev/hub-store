@@ -75,7 +75,7 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
     public void confirmImportOrders(ConfirmImportOrdersRequest request,
                                     StreamObserver<ConfirmImportOrdersResponse> responseObserver) {
         try {
-            List<String> codes = createOrders(stage(request.getOrdersList()));
+            List<String> codes = createOrders(stage(request.getOrdersList()), "order.imported");
             responseObserver.onNext(ConfirmImportOrdersResponse.newBuilder()
                     .addAllFulfillCodes(codes)
                     .build());
@@ -91,7 +91,7 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
     public void createManualOrder(CreateManualOrderRequest request,
                                   StreamObserver<CreateManualOrderResponse> responseObserver) {
         try {
-            List<String> codes = createOrders(List.of(stageRow(request.getOrder())));
+            List<String> codes = createOrders(List.of(stageRow(request.getOrder())), "order.created");
             responseObserver.onNext(CreateManualOrderResponse.newBuilder()
                     .setFulfillCode(codes.get(0))
                     .build());
@@ -106,9 +106,10 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
     /**
      * Validate lại → còn lỗi throw INVALID_ARGUMENT (BFF map 422 sẵn; KHÔNG dùng
      * FAILED_PRECONDITION — grpc-error.ts không map status 9) → 1 tx:
-     * nextFulfillCodes(n) → insertOrders → appendAudit 1 entry PER ORDER.
+     * nextFulfillCodes(n) → insertOrders → appendAudit 1 entry PER ORDER
+     * (action "order.imported" cho import, "order.created" cho tạo tay — spec §4).
      */
-    private List<String> createOrders(List<IntakeValidator.IntakeRow> rows) {
+    private List<String> createOrders(List<IntakeValidator.IntakeRow> rows, String auditAction) {
         List<IntakeValidator.IntakeError> errors = IntakeValidator.validate(rows, shopCodes());
         if (!errors.isEmpty()) {
             throw invalidArgumentRows("Import có " + errors.size() + " dòng lỗi.", errors);
@@ -123,9 +124,9 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
                 orders.add(buildOrder(codes.get(i), rows.get(i), shops, now, null));
             }
             repo.insertOrders(orders);
-            String detail = json("{\"importedAt\":\"" + now + "\"}");
+            String detail = importDetail(now, codes);
             for (String code : codes) {
-                repo.appendAudit(actor, "order.imported", code, detail);
+                repo.appendAudit(actor, auditAction, code, detail);
             }
             return codes;
         });
@@ -137,18 +138,28 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
     public void markOrderFailed(MarkOrderFailedRequest request,
                                 StreamObserver<MarkOrderFailedResponse> responseObserver) {
         try {
-            SeedModels.OrderSeed order = repo.findByFulfillCode(request.getFulfillCode())
-                    .orElseThrow(() -> GrpcErrors.notFound("fulfillCode", request.getFulfillCode()));
-            if (order.failReason() != null) {
-                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
-                        "fulfillCode", "Đơn đã FAILED.")));
-            }
             String reason = reasonName(request.getReason());
             String note = request.getNote().isBlank() ? null : request.getNote();
-            Instant now = Instant.now();
-            repo.markFailed(order.fulfillCode(), reason, note, now);
-            repo.appendAudit(ActorInterceptor.currentActor(), "order.failed", order.fulfillCode(),
-                    json("{\"reason\":\"" + reason + "\",\"note\":" + jsonOrNull(note) + "}"));
+            // 1 tx: read-gate + markFailed + appendAudit — crash giữa markFailed và
+            // audit không mất entry; double-fail race → repo guard (IllegalArgumentException
+            // khi FOR UPDATE thấy fail_reason đã set) → map 422 thay vì 500.
+            tx.execute(status -> {
+                SeedModels.OrderSeed order = repo.findByFulfillCode(request.getFulfillCode())
+                        .orElseThrow(() -> GrpcErrors.notFound("fulfillCode", request.getFulfillCode()));
+                if (order.failReason() != null) {
+                    throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                            "fulfillCode", "Đơn đã FAILED.")));
+                }
+                try {
+                    repo.markFailed(order.fulfillCode(), reason, note, Instant.now());
+                } catch (IllegalArgumentException e) {
+                    throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                            "fulfillCode", "Đơn đã FAILED.")));
+                }
+                repo.appendAudit(ActorInterceptor.currentActor(), "order.failed", order.fulfillCode(),
+                        json("{\"reason\":\"" + reason + "\",\"note\":" + jsonOrNull(note) + "}"));
+                return null;
+            });
             responseObserver.onNext(MarkOrderFailedResponse.newBuilder().build());
             responseObserver.onCompleted();
         } catch (StatusRuntimeException e) {
@@ -177,6 +188,13 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
             String actor = ActorInterceptor.currentActor();
             String newCode = tx.execute(status -> {
                 String code = repo.nextFulfillCodes(1).get(0);
+                // Re-check AFTER nextFulfillCodes: advisory xact lock giữ đến commit
+                // serialize 2 redeliver đồng thời — tx thua block đến khi tx thắng
+                // commit rồi ĐỌC THẤY insert đã commit → chặn double-redeliver (D6).
+                if (repo.hasRetry(orig.fulfillCode())) {
+                    throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                            "fulfillCode", "Đơn đã được giao lại.")));
+                }
                 Instant now = Instant.now();
                 // Copy customer fields/items/codAmount/totalQuantity/shopAssignment;
                 // oldFulfillCode=code gốc; fail fields + times null (đơn mới).
@@ -317,6 +335,19 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
                     "reason", "reason không hợp lệ.")));
         }
         return reason.name().replace("DELIVERY_FAIL_REASON_", "");
+    }
+
+    /** Audit detail import — spec §4: "detail: count, codes" (kèm importedAt). */
+    private static String importDetail(Instant now, List<String> codes) {
+        try {
+            java.util.Map<String, Object> detail = new java.util.LinkedHashMap<>();
+            detail.put("importedAt", now.toString());
+            detail.put("count", codes.size());
+            detail.put("codes", codes);
+            return JSON.writeValueAsString(detail);
+        } catch (Exception e) {
+            return "{\"importedAt\":\"" + now + "\"}";
+        }
     }
 
     private static String json(String raw) {

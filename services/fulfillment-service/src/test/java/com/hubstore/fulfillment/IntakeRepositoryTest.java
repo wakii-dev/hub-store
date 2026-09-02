@@ -35,10 +35,10 @@ class IntakeRepositoryTest {
 
     // ---------------- helpers ----------------
 
-    /** Đơn intake mới — 7 field SF-13: oldFulfillCode truyền vào, còn lại null. */
+    /** Đơn intake mới — orderCode=null (như service insert thật) + 7 field SF-13. */
     private SeedModels.OrderSeed intakeOrder(String fulfillCode, String oldFulfillCode) {
         return new SeedModels.OrderSeed(
-                fulfillCode, "RSA-INTAKE-1", 0, 0, null, null, null, null, 0,
+                fulfillCode, null, 0, 0, null, null, null, null, 0,
                 List.of(), 0, 0, false, null, null, null, List.of(),
                 "Nguyễn Văn A", "0901234567", oldFulfillCode,
                 null, null, null, null);
