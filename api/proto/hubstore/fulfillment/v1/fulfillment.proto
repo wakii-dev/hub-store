@@ -177,6 +177,8 @@ service FulfillmentService {
   rpc ListDistinctShops(ListDistinctShopsRequest) returns (ListDistinctShopsResponse);
   // GET /order-promising/time-delivery — hint TG giao cạnh DatePicker (D4, D1b).
   rpc GetTimeDelivery(GetTimeDeliveryRequest) returns (GetTimeDeliveryResponse);
+  // GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay.
+  rpc GetDashboardStats(GetDashboardStatsRequest) returns (GetDashboardStatsResponse);
 }
 
 // --- Filter ---
@@ -327,4 +329,31 @@ message GetTimeDeliveryRequest {
 
 message GetTimeDeliveryResponse {
   TimeRange suggested_time = 1;
+}
+
+// --- Dashboard (SF-9, FI-245) — aggregate thuần fulfillment DB. TZ cố định
+// Asia/Ho_Chi_Minh cho date grouping; window 30 ngày cố định, không param.
+message GetDashboardStatsRequest {
+}
+
+message DayCount {
+  // YYYY-MM-DD (TZ Asia/Ho_Chi_Minh)
+  string date = 1;
+  int32 count = 2;
+}
+
+message BatchOrderCount {
+  string batch_code = 1;
+  int32 count = 2;
+}
+
+message GetDashboardStatsResponse {
+  // Đủ 30 ô cũ→mới (ngày thiếu = 0), nhóm theo original_time_from.
+  repeated DayCount orders_per_day = 1;
+  // Đơn original_time_from trong hôm nay (TZ Asia/Ho_Chi_Minh).
+  int32 total_today = 2;
+  // order_status = ORDER_STATUS_PENDING_APPROVAL.
+  int32 pending_approval = 3;
+  // Đơn ĐÃ vào phiếu: GROUP BY batch_code (batch_code ≠ '').
+  repeated BatchOrderCount orders_per_batch = 4;
 }

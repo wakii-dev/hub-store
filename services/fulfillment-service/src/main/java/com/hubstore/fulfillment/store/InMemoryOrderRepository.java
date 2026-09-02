@@ -184,6 +184,50 @@ public class InMemoryOrderRepository implements OrderRepository {
         return byCode.values().stream().sorted(Comparator.comparing(SeedModels.ShopSeed::code)).toList();
     }
 
+    /**
+     * Dashboard aggregate (SF-9) — cùng semantics PostgresOrderRepository:
+     * nhóm theo originalTime.from (parse ISO → atZoneSameInstant(zone)), fill
+     * đủ 30 ô cũ→mới ngày thiếu = 0; parse lỗi/NULL → đơn rơi khỏi window count;
+     * pending = order_status 0; per-batch bỏ batchCode rỗng, sort theo code.
+     */
+    @Override
+    public synchronized DashboardStatsData dashboardStats(java.time.LocalDate today, java.time.ZoneId zone) {
+        java.time.LocalDate start = today.minusDays(29);
+        Map<String, Integer> byDay = new LinkedHashMap<>();
+        int totalToday = 0;
+        int pending = 0;
+        Map<String, Integer> perBatchMap = new java.util.TreeMap<>();
+        for (SeedModels.OrderSeed o : orders) {
+            if (o.orderStatus() == 0) {
+                pending++;
+            }
+            if (o.batchCode() != null && !o.batchCode().isBlank()) {
+                perBatchMap.merge(o.batchCode(), 1, Integer::sum);
+            }
+            if (o.originalTime() == null || o.originalTime().from() == null) {
+                continue;
+            }
+            String date;
+            try {
+                date = OffsetDateTime.parse(o.originalTime().from())
+                        .atZoneSameInstant(zone).toLocalDate().toString();
+            } catch (DateTimeParseException e) {
+                continue; // parse lỗi — như DB original_time_from NULL: rơi khỏi window
+            }
+            if (date.equals(today.toString())) {
+                totalToday++;
+            }
+            byDay.merge(date, 1, Integer::sum);
+        }
+        List<DashboardStatsData.DayCount> days = new ArrayList<>();
+        for (java.time.LocalDate d = start; !d.isAfter(today); d = d.plusDays(1)) {
+            days.add(new DashboardStatsData.DayCount(d.toString(), byDay.getOrDefault(d.toString(), 0)));
+        }
+        List<DashboardStatsData.BatchCount> perBatch = new ArrayList<>();
+        perBatchMap.forEach((code, count) -> perBatch.add(new DashboardStatsData.BatchCount(code, count)));
+        return new DashboardStatsData(days, totalToday, pending, perBatch);
+    }
+
     // ---------------- helpers ----------------
 
     private void replace(SeedModels.OrderSeed next) {

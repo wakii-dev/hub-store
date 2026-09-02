@@ -2,6 +2,7 @@ package com.hubstore.fulfillment;
 
 import com.hubstore.fulfillment.seed.SeedLoader;
 import com.hubstore.fulfillment.seed.SeedModels;
+import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.store.OrderFilter;
 import com.hubstore.fulfillment.store.PostgresOrderRepository;
@@ -14,8 +15,11 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -456,5 +460,86 @@ class PostgresOrderRepositoryIT {
         assertThat(p.total()).isEqualTo(m.total());
         assertThat(p.total()).isGreaterThan(0);
         assertThat(codes(p.items())).containsExactlyElementsOf(codes(m.items()));
+    }
+
+    // ---------------- dashboard (SF-9) ----------------
+
+    @Test
+    void dashboardStatsParityWithInMemoryAndSeedDerived() {
+        ZoneId zone = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.now(zone);
+        var p = pg.dashboardStats(today, zone);
+        var m = mem.dashboardStats(today, zone);
+
+        // Cấu trúc: đủ 30 ô cũ→mới, parity từng ô với in-memory.
+        assertThat(p.ordersPerDay()).hasSize(30);
+        assertThat(p.ordersPerDay()).containsExactlyElementsOf(m.ordersPerDay());
+
+        // Seed-derived per cell (originalTime.from → +07 date) — khớp bất kể ngày chạy.
+        Map<String, Integer> seedByDay = new HashMap<>();
+        for (SeedModels.OrderSeed o : seed.orders()) {
+            if (o.originalTime() == null || o.originalTime().from() == null) {
+                continue;
+            }
+            String date = OffsetDateTime.parse(o.originalTime().from())
+                    .atZoneSameInstant(zone).toLocalDate().toString();
+            seedByDay.merge(date, 1, Integer::sum);
+        }
+        for (DashboardStatsData.DayCount d : p.ordersPerDay()) {
+            assertThat(d.count()).isEqualTo(seedByDay.getOrDefault(d.date(), 0));
+        }
+
+        // Pending = đơn order_status 0 (seed canonical: 5).
+        assertThat(p.pendingApproval()).isEqualTo(m.pendingApproval());
+        assertThat(p.pendingApproval())
+                .isEqualTo((int) seed.orders().stream().filter(o -> o.orderStatus() == 0).count())
+                .isEqualTo(5);
+
+        // Per-batch: tổng = số đơn seed CÓ batch_code (canonical: 9), sort theo code.
+        assertThat(p.ordersPerBatch()).containsExactlyElementsOf(m.ordersPerBatch());
+        assertThat(p.ordersPerBatch().stream().mapToInt(DashboardStatsData.BatchCount::count).sum())
+                .isEqualTo((int) seed.orders().stream()
+                        .filter(o -> o.batchCode() != null && !o.batchCode().isBlank()).count())
+                .isEqualTo(9);
+        assertThat(p.ordersPerBatch()).extracting(DashboardStatsData.BatchCount::batchCode)
+                .isSorted();
+
+        // totalToday parity (seed tất cả đơn 2026-09-03 → 0 trừ khi chạy đúng hôm đó).
+        assertThat(p.totalToday()).isEqualTo(m.totalToday())
+                .isEqualTo(seedByDay.getOrDefault(today.toString(), 0));
+    }
+
+    /**
+     * Regression review SF-9 P0: totalToday phải dùng bounds HÔM NAY, không phải
+     * window 30 ngày. Seed cũ che bug (mọi đơn cùng 1 ngày) — test này chèn 1 đơn
+     * hôm nay + 1 đơn 5 ngày trước và khẳng định totalToday chỉ đếm hôm nay.
+     */
+    @Test
+    void dashboardStatsTotalTodayUsesTodayBoundsNotWindow() {
+        ZoneId zone = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.now(zone);
+        String codeToday = "ORD-IT-SF9-TODAY";
+        String codeOld = "ORD-IT-SF9-OLD";
+        // Baseline trước insert — assert TƯƠNG ĐỐI để deterministic mọi ngày chạy
+        // (seed có thể đã rơi vào cùng bucket với ngày hôm nay).
+        var before = pg.dashboardStats(today, zone);
+        int beforeToday = before.totalToday();
+        int beforeLastBucket = before.ordersPerDay().get(29).count();
+        int beforeMinus5Bucket = before.ordersPerDay().get(24).count();
+        try {
+            jdbc.update("INSERT INTO orders (fulfill_code, original_time_from) VALUES (?, ?)",
+                    codeToday, OffsetDateTime.now(zone));
+            jdbc.update("INSERT INTO orders (fulfill_code, original_time_from) VALUES (?, ?)",
+                    codeOld, OffsetDateTime.now(zone).minusDays(5));
+            var s = pg.dashboardStats(today, zone);
+            // Bug cũ (bounds window 30 ngày): totalToday tăng +2 (cả đơn 5 ngày trước).
+            assertThat(s.totalToday()).isEqualTo(beforeToday + 1);
+            // Ô cuối (hôm nay) +1, ô 5 ngày trước +1.
+            assertThat(s.ordersPerDay().get(29).date()).isEqualTo(today.toString());
+            assertThat(s.ordersPerDay().get(29).count()).isEqualTo(beforeLastBucket + 1);
+            assertThat(s.ordersPerDay().get(24).count()).isEqualTo(beforeMinus5Bucket + 1);
+        } finally {
+            jdbc.update("DELETE FROM orders WHERE fulfill_code IN (?, ?)", codeToday, codeOld);
+        }
     }
 }

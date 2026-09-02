@@ -3,11 +3,14 @@ package com.hubstore.fulfillment;
 import com.hubstore.fulfillment.seed.SeedLoader;
 import com.hubstore.fulfillment.seed.SeedModels;
 import com.hubstore.fulfillment.service.FulfillmentServiceImpl;
+import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.v1.BatchStatus;
 import com.hubstore.fulfillment.v1.FilterOrdersRequest;
 import com.hubstore.fulfillment.v1.FilterOrdersResponse;
 import com.hubstore.fulfillment.v1.FulfillmentServiceGrpc;
+import com.hubstore.fulfillment.v1.GetDashboardStatsRequest;
+import com.hubstore.fulfillment.v1.GetDashboardStatsResponse;
 import com.hubstore.fulfillment.v1.GetOrdersByCodesRequest;
 import com.hubstore.fulfillment.v1.GetOrdersByCodesResponse;
 import com.hubstore.fulfillment.v1.GetTimeDeliveryRequest;
@@ -25,10 +28,14 @@ import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
 import java.nio.file.Path;
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.time.ZoneOffset;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
+import java.util.stream.Collectors;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
@@ -215,5 +222,91 @@ class FilterAndHydrationTest {
         assertThat(obs.error).isInstanceOf(StatusRuntimeException.class);
         assertThat(((StatusRuntimeException) obs.error).getStatus().getCode())
                 .isEqualTo(Status.Code.NOT_FOUND);
+    }
+
+    // ---------------- Dashboard (SF-9) ----------------
+
+    private static SeedModels.OrderSeed order(String fulfillCode, String originalTimeFrom,
+                                              int orderStatus, String batchCode) {
+        return new SeedModels.OrderSeed(fulfillCode, "RSA-" + fulfillCode, 0, 0, batchCode,
+                null,
+                new SeedModels.TimeRangeSeed(originalTimeFrom, originalTimeFrom),
+                null, orderStatus, List.of(), 0, 1, false, "addr", null, null, List.of());
+    }
+
+    @Test
+    void dashboardStatsFillsMissingDaysAndSkipsBlankBatch() {
+        ZoneId zone = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.of(2026, 9, 10);
+        SeedModels.SeedFile fake = new SeedModels.SeedFile(
+                List.of(
+                        order("ORD-D1", "2026-09-10T08:00:00+07:00", 0, "BATCH-0001"),
+                        order("ORD-D2", "2026-09-08T10:00:00+07:00", 1, ""), // batchCode rỗng — bỏ
+                        order("ORD-D3", "2026-09-08T23:30:00+07:00", 0, "BATCH-0002"),
+                        order("ORD-D4", null, 0, "BATCH-0003")), // không originalTime — ngoài perDay
+                List.of(), List.of(), List.of(), List.of());
+        InMemoryOrderRepository fakeRepo = new InMemoryOrderRepository(fake);
+
+        DashboardStatsData s = fakeRepo.dashboardStats(today, zone);
+
+        // Đủ 30 ô cũ→mới (2026-08-12 .. 2026-09-10), ngày thiếu = 0.
+        assertThat(s.ordersPerDay()).hasSize(30);
+        assertThat(s.ordersPerDay().get(0).date()).isEqualTo("2026-08-12");
+        assertThat(s.ordersPerDay().get(29).date()).isEqualTo("2026-09-10");
+        Map<String, Integer> counts = s.ordersPerDay().stream()
+                .collect(Collectors.toMap(DashboardStatsData.DayCount::date,
+                        DashboardStatsData.DayCount::count));
+        assertThat(counts.get("2026-09-08")).isEqualTo(2); // 2 ngày có đơn (thiếu ngày giữa → fill 0)
+        assertThat(counts.get("2026-09-10")).isEqualTo(1);
+        assertThat(counts.get("2026-09-09")).isEqualTo(0);
+        assertThat(counts.get("2026-08-12")).isEqualTo(0);
+        // totalToday chỉ đếm đơn originalTime hôm nay; pending đếm CẢ đơn không có originalTime.
+        assertThat(s.totalToday()).isEqualTo(1);
+        assertThat(s.pendingApproval()).isEqualTo(3);
+        // per-batch: bỏ batchCode rỗng; ORD-D4 vẫn vào batch đếm.
+        assertThat(s.ordersPerBatch()).containsExactly(
+                new DashboardStatsData.BatchCount("BATCH-0001", 1),
+                new DashboardStatsData.BatchCount("BATCH-0002", 1),
+                new DashboardStatsData.BatchCount("BATCH-0003", 1));
+    }
+
+    @Test
+    void getDashboardStatsRpcMatchesCanonicalSeed() {
+        CollectingObserver<GetDashboardStatsResponse> obs = new CollectingObserver<>();
+        service.getDashboardStats(GetDashboardStatsRequest.newBuilder().build(), obs);
+        assertThat(obs.error).isNull();
+        assertThat(obs.completed).isTrue();
+        GetDashboardStatsResponse resp = obs.values.get(0);
+        ZoneId zone = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.now(zone);
+        // Seed canonical: 27 đơn, tất cả originalTime 2026-09-03 → chỉ vào window khi
+        // hôm nay (ngày chạy) trong [2026-08-05 .. 2026-09-03] — đếm từ seed, không hardcode.
+        long seedOn2026_09_03 = seed.orders().stream()
+                .filter(o -> o.originalTime() != null && o.originalTime().from() != null
+                        && o.originalTime().from().startsWith("2026-09-03"))
+                .count();
+        LocalDate cellDate = LocalDate.parse("2026-09-03");
+        boolean cellInWindow = !cellDate.isBefore(today.minusDays(29)) && !cellDate.isAfter(today);
+        assertThat(resp.getOrdersPerDayCount()).isEqualTo(30);
+        assertThat(resp.getOrdersPerDayList()).allSatisfy(d ->
+                assertThat(d.getDate()).matches("\\d{4}-\\d{2}-\\d{2}"));
+        // Ô 2026-09-03 chỉ tồn tại khi ngày chạy đưa nó vào window 30 ngày.
+        var cell = resp.getOrdersPerDayList().stream()
+                .filter(d -> d.getDate().equals("2026-09-03")).toList();
+        assertThat(cell).hasSize(cellInWindow ? 1 : 0);
+        if (cellInWindow) {
+            assertThat(cell.get(0).getCount()).isEqualTo((int) seedOn2026_09_03);
+        }
+        long seedPending = seed.orders().stream().filter(o -> o.orderStatus() == 0).count();
+        assertThat(resp.getPendingApproval()).isEqualTo((int) seedPending);
+        long seedBatchSum = seed.orders().stream()
+                .filter(o -> o.batchCode() != null && !o.batchCode().isBlank()).count();
+        assertThat(resp.getOrdersPerBatchList().stream()
+                .mapToInt(b -> b.getCount()).sum()).isEqualTo((int) seedBatchSum);
+        long seedToday = seed.orders().stream()
+                .filter(o -> o.originalTime() != null && o.originalTime().from() != null
+                        && o.originalTime().from().startsWith(today.toString()))
+                .count();
+        assertThat(resp.getTotalToday()).isEqualTo((int) seedToday);
     }
 }

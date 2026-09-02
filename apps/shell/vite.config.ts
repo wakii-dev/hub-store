@@ -82,6 +82,7 @@ export default defineConfig({
     // Bare federation specifiers không resolve được trong vitest (import-analysis
     // chạy trước MF transform) → alias vào stub ném lỗi = mô phỏng remote chết.
     alias: {
+      "orders/DashboardPage": resolve(configDir, "src/testing/unavailableRemote.ts"),
       "orders/D1Page": resolve(configDir, "src/testing/unavailableRemote.ts"),
       "fulfillment/BatchListPage": resolve(configDir, "src/testing/unavailableRemote.ts"),
       "fulfillment/PrintPage": resolve(configDir, "src/testing/unavailableRemote.ts"),

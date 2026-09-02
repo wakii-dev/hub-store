@@ -47,6 +47,8 @@ type FulfillmentServiceClient interface {
 	ListDistinctShops(ctx context.Context, in *ListDistinctShopsRequest, opts ...grpc.CallOption) (*ListDistinctShopsResponse, error)
 	// GET /order-promising/time-delivery — hint TG giao cạnh DatePicker (D4, D1b).
 	GetTimeDelivery(ctx context.Context, in *GetTimeDeliveryRequest, opts ...grpc.CallOption) (*GetTimeDeliveryResponse, error)
+	// GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay.
+	GetDashboardStats(ctx context.Context, in *GetDashboardStatsRequest, opts ...grpc.CallOption) (*GetDashboardStatsResponse, error)
 }
 
 type fulfillmentServiceClient struct {
@@ -165,6 +167,15 @@ func (c *fulfillmentServiceClient) GetTimeDelivery(ctx context.Context, in *GetT
 	return out, nil
 }
 
+func (c *fulfillmentServiceClient) GetDashboardStats(ctx context.Context, in *GetDashboardStatsRequest, opts ...grpc.CallOption) (*GetDashboardStatsResponse, error) {
+	out := new(GetDashboardStatsResponse)
+	err := c.cc.Invoke(ctx, "/hubstore.fulfillment.v1.FulfillmentService/GetDashboardStats", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FulfillmentServiceServer is the server API for FulfillmentService service.
 // All implementations must embed UnimplementedFulfillmentServiceServer
 // for forward compatibility
@@ -194,6 +205,8 @@ type FulfillmentServiceServer interface {
 	ListDistinctShops(context.Context, *ListDistinctShopsRequest) (*ListDistinctShopsResponse, error)
 	// GET /order-promising/time-delivery — hint TG giao cạnh DatePicker (D4, D1b).
 	GetTimeDelivery(context.Context, *GetTimeDeliveryRequest) (*GetTimeDeliveryResponse, error)
+	// GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay.
+	GetDashboardStats(context.Context, *GetDashboardStatsRequest) (*GetDashboardStatsResponse, error)
 	mustEmbedUnimplementedFulfillmentServiceServer()
 }
 
@@ -236,6 +249,9 @@ func (UnimplementedFulfillmentServiceServer) ListDistinctShops(context.Context, 
 }
 func (UnimplementedFulfillmentServiceServer) GetTimeDelivery(context.Context, *GetTimeDeliveryRequest) (*GetTimeDeliveryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTimeDelivery not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) GetDashboardStats(context.Context, *GetDashboardStatsRequest) (*GetDashboardStatsResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetDashboardStats not implemented")
 }
 func (UnimplementedFulfillmentServiceServer) mustEmbedUnimplementedFulfillmentServiceServer() {}
 
@@ -466,6 +482,24 @@ func _FulfillmentService_GetTimeDelivery_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FulfillmentService_GetDashboardStats_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetDashboardStatsRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).GetDashboardStats(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/hubstore.fulfillment.v1.FulfillmentService/GetDashboardStats",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).GetDashboardStats(ctx, req.(*GetDashboardStatsRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FulfillmentService_ServiceDesc is the grpc.ServiceDesc for FulfillmentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -520,6 +554,10 @@ var FulfillmentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTimeDelivery",
 			Handler:    _FulfillmentService_GetTimeDelivery_Handler,
+		},
+		{
+			MethodName: "GetDashboardStats",
+			Handler:    _FulfillmentService_GetDashboardStats_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},

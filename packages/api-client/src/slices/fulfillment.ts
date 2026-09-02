@@ -1,9 +1,11 @@
 import { api, createListQuery } from '../api';
+import type { DashboardStats } from '@hub-store/shared';
 
 /**
- * STUB slice — SF-7 (orders remote D1+D1c) fills real URLs/DTOs from
- * packages/shared/api-contracts. Deliberately UNtyped (unknown) here: response
- * DTO shapes are authored by SF-2 — do NOT duplicate shared types.
+ * Slice fulfillment — SF-7 (orders remote D1+D1c) dùng URLs/DTOs từ
+ * packages/shared/api-contracts. List endpoints deliberately UNtyped (unknown):
+ * response DTO shapes are authored by SF-2 — do NOT duplicate shared types.
+ * Dashboard (SF-9) typed qua `import type` — TS-path alias, KHÔNG runtime edge.
  */
 const enhanced = api.injectEndpoints({
   endpoints: (builder) => ({
@@ -18,7 +20,12 @@ const enhanced = api.injectEndpoints({
         providesTags: () => [{ type: 'Fulfillment' as const, id: 'LIST' }],
       }),
     ),
+    // Dashboard SF-9 — GET /fulfillment/dashboard-stats (BFF owns aggregation).
+    getDashboardStats: builder.query<DashboardStats, void>({
+      query: () => ({ url: '/fulfillment/dashboard-stats', method: 'GET' }),
+      providesTags: [{ type: 'Fulfillment' as const, id: 'STATS' }],
+    }),
   }),
 });
 
-export const { useListOrdersQuery } = enhanced;
+export const { useListOrdersQuery, useGetDashboardStatsQuery } = enhanced;

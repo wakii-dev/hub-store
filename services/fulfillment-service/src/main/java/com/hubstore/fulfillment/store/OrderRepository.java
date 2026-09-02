@@ -41,4 +41,8 @@ public interface OrderRepository {
 
     /** Distinct shopCode từ orders (first-seen order) — backing GET /master-data/shops. */
     List<SeedModels.ShopSeed> distinctShops();
+
+    /** Dashboard aggregate (SF-9): 30 ô theo original_time_from (TZ zone),
+     *  totalToday, pendingApproval (order_status=0), per-batch (batch_code ≠ ''). */
+    DashboardStatsData dashboardStats(java.time.LocalDate today, java.time.ZoneId zone);
 }

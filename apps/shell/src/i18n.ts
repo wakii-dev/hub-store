@@ -9,6 +9,7 @@ export const shellResources: I18nResources = {
     shell: {
       "header.title": "Hub Store",
       "header.subtitle": "Hub Store Order · Điều phối vận hành",
+      "nav.dashboard": "Tổng quan",
       "nav.orders": "Đơn hàng",
       "nav.batch": "Phiếu soạn",
       "nav.print": "In phiếu",
@@ -69,6 +70,7 @@ export const shellResources: I18nResources = {
     shell: {
       "header.title": "Hub Store",
       "header.subtitle": "Hub Store Order · Operations hub",
+      "nav.dashboard": "Dashboard",
       "nav.orders": "Orders",
       "nav.batch": "Picking batches",
       "nav.print": "Print documents",

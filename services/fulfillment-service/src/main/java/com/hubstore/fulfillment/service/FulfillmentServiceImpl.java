@@ -2,14 +2,19 @@ package com.hubstore.fulfillment.service;
 
 import com.hubstore.fulfillment.events.OrderEventPublisher;
 import com.hubstore.fulfillment.seed.SeedModels;
+import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.FilterResult;
 import com.hubstore.fulfillment.store.OrderFilter;
 import com.hubstore.fulfillment.store.OrderRepository;
 import com.hubstore.fulfillment.v1.AssignShopHubRequest;
 import com.hubstore.fulfillment.v1.AssignShopHubResponse;
+import com.hubstore.fulfillment.v1.BatchOrderCount;
 import com.hubstore.fulfillment.v1.BatchStatus;
 import com.hubstore.fulfillment.v1.CoordinationStatus;
+import com.hubstore.fulfillment.v1.DayCount;
 import com.hubstore.fulfillment.v1.DeliveryStaff;
+import com.hubstore.fulfillment.v1.GetDashboardStatsRequest;
+import com.hubstore.fulfillment.v1.GetDashboardStatsResponse;
 import com.hubstore.fulfillment.v1.FilterOrdersRequest;
 import com.hubstore.fulfillment.v1.FilterOrdersResponse;
 import com.hubstore.fulfillment.v1.FulfillmentServiceGrpc;
@@ -49,6 +54,7 @@ import net.devh.boot.grpc.server.service.GrpcService;
 
 import java.time.Duration;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.ZoneId;
 import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
@@ -387,6 +393,35 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                             .setFrom(from.format(iso)).setTo(to.format(iso)))
                     .build());
             responseObserver.onCompleted();
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    // ---------------- Dashboard (SF-9) ----------------
+
+    /** GET /fulfillment/dashboard-stats — aggregate thuần fulfillment DB
+     *  (30 ngày theo original_time_from, TZ Asia/Ho_Chi_Minh; BFF merge phiếu). */
+    @Override
+    public void getDashboardStats(GetDashboardStatsRequest request,
+            StreamObserver<GetDashboardStatsResponse> responseObserver) {
+        try {
+            ZoneId zone = ZoneId.of("Asia/Ho_Chi_Minh");
+            LocalDate today = LocalDate.now(zone);
+            DashboardStatsData s = repo.dashboardStats(today, zone);
+            GetDashboardStatsResponse.Builder b = GetDashboardStatsResponse.newBuilder()
+                    .setTotalToday(s.totalToday()).setPendingApproval(s.pendingApproval());
+            for (DashboardStatsData.DayCount d : s.ordersPerDay()) {
+                b.addOrdersPerDay(DayCount.newBuilder().setDate(d.date()).setCount(d.count()));
+            }
+            for (DashboardStatsData.BatchCount c : s.ordersPerBatch()) {
+                b.addOrdersPerBatch(BatchOrderCount.newBuilder()
+                        .setBatchCode(c.batchCode()).setCount(c.count()));
+            }
+            responseObserver.onNext(b.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
         } catch (RuntimeException e) {
             responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
         }

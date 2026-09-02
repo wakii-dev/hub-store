@@ -23,6 +23,7 @@ import UsersPage from "./features/users/UsersPage";
 import RemoteBoundary from "./RemoteBoundary";
 
 // Federation lazy imports — exposes contract ĐÃ PIN (spec §2.7)
+const DashboardPage = lazy(() => import("orders/DashboardPage"));
 const D1Page = lazy(() => import("orders/D1Page"));
 const BatchListPage = lazy(() => import("fulfillment/BatchListPage"));
 const PrintPage = lazy(() => import("fulfillment/PrintPage"));
@@ -171,6 +172,16 @@ export default function App() {
             >
               <Routes>
                 <Route path="/" element={<Navigate to="/hub-store-order/order" replace />} />
+                <Route
+                  path="/hub-store-order/dashboard"
+                  element={
+                    <RequirePermission permission="dashboard.view">
+                      <RemoteBoundary>
+                        <DashboardPage />
+                      </RemoteBoundary>
+                    </RequirePermission>
+                  }
+                />
                 <Route
                   path="/hub-store-order/order"
                   element={

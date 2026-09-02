@@ -1,5 +1,11 @@
 // Type declarations cho các module federation — exposes contract ĐÃ PIN (spec §2.7).
 // Đổi tên module ở đây = đổi exposes ở remote = DAG gãy.
+declare module "orders/DashboardPage" {
+  import type { ComponentType } from "react";
+  const DashboardPage: ComponentType;
+  export default DashboardPage;
+}
+
 declare module "orders/D1Page" {
   import type { ComponentType } from "react";
   const D1Page: ComponentType;

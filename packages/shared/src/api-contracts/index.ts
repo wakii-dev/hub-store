@@ -31,6 +31,7 @@ export type {
   TimeDeliveryRequest,
   TimeDeliveryResponse,
   UpdateDeliveryTimeRequest,
+  DashboardStats,
 } from './fulfillment';
 
 export type {

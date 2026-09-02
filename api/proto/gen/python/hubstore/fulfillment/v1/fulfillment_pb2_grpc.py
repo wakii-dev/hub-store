@@ -98,6 +98,11 @@ class FulfillmentServiceStub:
                 request_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetTimeDeliveryRequest.SerializeToString,
                 response_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetTimeDeliveryResponse.FromString,
                 _registered_method=True)
+        self.GetDashboardStats = channel.unary_unary(
+                '/hubstore.fulfillment.v1.FulfillmentService/GetDashboardStats',
+                request_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsRequest.SerializeToString,
+                response_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsResponse.FromString,
+                _registered_method=True)
 
 
 class FulfillmentServiceServicer:
@@ -192,6 +197,13 @@ class FulfillmentServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def GetDashboardStats(self, request, context):
+        """GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_FulfillmentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -254,6 +266,11 @@ def add_FulfillmentServiceServicer_to_server(servicer, server):
                     servicer.GetTimeDelivery,
                     request_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetTimeDeliveryRequest.FromString,
                     response_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetTimeDeliveryResponse.SerializeToString,
+            ),
+            'GetDashboardStats': grpc.unary_unary_rpc_method_handler(
+                    servicer.GetDashboardStats,
+                    request_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsRequest.FromString,
+                    response_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -584,6 +601,33 @@ class FulfillmentService:
             '/hubstore.fulfillment.v1.FulfillmentService/GetTimeDelivery',
             hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetTimeDeliveryRequest.SerializeToString,
             hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetTimeDeliveryResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def GetDashboardStats(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hubstore.fulfillment.v1.FulfillmentService/GetDashboardStats',
+            hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsRequest.SerializeToString,
+            hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsResponse.FromString,
             options,
             channel_credentials,
             insecure,
