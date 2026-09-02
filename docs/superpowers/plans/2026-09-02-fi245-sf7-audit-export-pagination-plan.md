@@ -248,7 +248,7 @@ Mapping đầy đủ: `order.assign_shop` (detail `{toShopCode}`) · `order.upda
 - Modify: `services/bff-gateway/src/routes/fulfillment.ts` (route ĐẶT TRƯỚC `/fulfillment/:fulfillCode` — route order!)
 - Create: `services/bff-gateway/test/audit.route.test.ts`
 
-- [ ] **Step 1: Route** (đặt cạnh các route static; Fastify find-my-way ưu tiên static `/fulfillment/audit` over parametric `/:fulfillCode` bất kể thứ tự — giữ mọi route trong 1 file theo convention):
+- [x] **Step 1: Route** (đặt cạnh các route static; Fastify find-my-way ưu tiên static `/fulfillment/audit` over parametric `/:fulfillCode` bất kể thứ tự — giữ mọi route trong 1 file theo convention):
 
 ```typescript
 // Audit viewer (SF-7) — Manager-only (bracket SF-11). Route order: TRƯỚC
@@ -288,8 +288,8 @@ app.get<{ Querystring: AuditQuery }>(
 );
 ```
 
-- [ ] **Step 2: test route** — harness: Manager token → 200 envelope `{items,page,pageSize,total}`; Coordinator → 403; filter querystring actor/dateFrom/dateTo đẩy đúng vào WHERE (stub pool capture SQL+params); pageSize 500 → query pageSize 100 (cap).
-- [ ] **Step 3: Run** `npx vitest run` → PASS + cũ xanh. **Commit** `feat(fi245-sf7): GET /fulfillment/audit — Manager-only, filter actor/action/date (UTC pin), pagination cap 100`
+- [x] **Step 2: test route** — harness: Manager token → 200 envelope `{items,page,pageSize,total}`; Coordinator → 403; filter querystring actor/dateFrom/dateTo đẩy đúng vào WHERE (stub pool capture SQL+params); pageSize 500 → query pageSize 100 (cap).
+- [x] **Step 3: Run** `npx vitest run` → PASS + cũ xanh. **Commit** `feat(fi245-sf7): GET /fulfillment/audit — Manager-only, filter actor/action/date (UTC pin), pagination cap 100`
 
 ### Task 4: GET /fulfillment/orders/export.csv — buffer-then-send, Excel-safe
 
