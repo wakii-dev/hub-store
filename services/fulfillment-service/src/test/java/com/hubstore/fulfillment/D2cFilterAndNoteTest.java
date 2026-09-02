@@ -66,7 +66,7 @@ class D2cFilterAndNoteTest {
 
     @Test
     void multiStatusAndExactCategoryType() {
-        assertThat(ids(repo.filter(filter().statuses("NEW", "PUSHED").build()))).containsExactly(1L, 2L, 4L, 5L);
+        assertThat(ids(repo.filter(filter().statuses("pending", "pushed").build()))).containsExactly(1L, 2L, 4L, 5L);
         assertThat(ids(repo.filter(filter().productCategory("Điện tử").build()))).containsExactly(1L, 3L, 5L);
         assertThat(ids(repo.filter(filter().productCategory("Điện tử").productType("Điện thoại").build())))
                 .containsExactly(1L, 5L);
@@ -202,8 +202,8 @@ class D2cFilterAndNoteTest {
                 .build(), obs);
         assertThat(obs.error).isInstanceOf(StatusRuntimeException.class);
         StatusRuntimeException e = (StatusRuntimeException) obs.error;
-        assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.INVALID_ARGUMENT);
-        assertThat(e.getStatus().getDescription()).isEqualTo("Không tìm thấy đơn D2C D2C-KHONG-TON-TAI");
+        assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.NOT_FOUND);
+        assertThat(e.getStatus().getDescription()).isEqualTo("Order D2C-KHONG-TON-TAI not found.");
     }
 
     // ---------------- helpers ----------------

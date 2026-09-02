@@ -331,7 +331,7 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
         }
     }
 
-    /** Note khóa order_code; không thấy → INVALID_ARGUMENT (contract SF-18 spec §note). */
+    /** Note khóa order_code; không thấy → NOT_FOUND (precedent UpdateNote). */
     @Override
     public void updateD2cOrderNote(UpdateD2cOrderNoteRequest request, StreamObserver<UpdateD2cOrderNoteResponse> responseObserver) {
         try {
@@ -341,10 +341,7 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
             }
             // actor_role chỉ phục vụ audit BFF — repo không dùng (giữ contract proto).
             D2cOrderRecord updated = d2cRepo.updateNote(request.getOrderCode(), request.getNote())
-                    .orElseThrow(() -> GrpcErrors.withDetails(Status.INVALID_ARGUMENT,
-                            "Không tìm thấy đơn D2C " + request.getOrderCode(),
-                            List.of(new GrpcErrors.ErrorDetail("orderCode",
-                                    "Không tìm thấy đơn D2C " + request.getOrderCode()))));
+                    .orElseThrow(() -> GrpcErrors.notFound("orderCode", request.getOrderCode()));
             responseObserver.onNext(UpdateD2cOrderNoteResponse.newBuilder()
                     .setOrder(toD2cOrder(updated))
                     .build());

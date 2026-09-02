@@ -20,19 +20,19 @@ final class D2cFixture {
         return List.of(
                 order(1, prefix + "100%_LIT", "DL-001", "GHN", "Shop A", "NV Xuất 1",
                         "2026-08-15T08:30:00+07:00", "2026-08-01T03:00:00Z",
-                        "Điện tử", "Điện thoại", false, "NEW"),
+                        "Điện tử", "Điện thoại", false, "pending"),
                 order(2, prefix + "2001", "DL-002", "GHTK", "Shop B", "NV Xuất 1",
                         "2026-08-15T14:45:00+07:00", "2026-08-02T03:00:00Z",
-                        "Thời trang", "Áo", true, "PUSHED"),
+                        "Thời trang", "Áo", true, "pushed"),
                 order(3, prefix + "3001", "DL-003", "GHN", "Shop A", "NV Xuất 2",
                         "2026-08-15T20:10:00+07:00", "2026-08-03T03:00:00Z",
-                        "Điện tử", "Máy tính bảng", false, "DELIVERED"),
+                        "Điện tử", "Máy tính bảng", false, "exported"),
                 order(4, prefix + "4001", "DL-004", "ViettelPost", "Shop C", "NV Xuất 2",
                         null, "2026-08-04T03:00:00Z",
-                        "Nhà cửa", "Gia dụng", false, "NEW"),
+                        "Nhà cửa", "Gia dụng", false, "pending"),
                 order(5, prefix + "5001", "DL-001", "GHN", "Shop B", "NV Xuất 1",
                         "2026-08-15T08:45:00+07:00", "2026-08-05T03:00:00Z",
-                        "Điện tử", "Điện thoại", true, "PUSHED"));
+                        "Điện tử", "Điện thoại", true, "pushed"));
     }
 
     private static D2cOrderRecord order(long id, String code, String deliveryId, String carrier,
