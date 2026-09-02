@@ -205,8 +205,8 @@ D2cOrderRecord = Java record 19 fields khớp proto D2cOrder. D2cOrderFilter = r
 - Test: `services/bff-gateway/test/d2c.route.test.ts`
 
 **Steps:**
-- [ ] **Step 1: Facade methods** — FulfillmentApi thêm `filterD2cOrders(filter)` + `updateD2cOrderNote(orderCode, note, role)` gọi grpc client (pattern method có sẵn).
-- [ ] **Step 2: Guard helper** — export function `assertExportRange(from, to)`:
+- [x] **Step 1: Facade methods** — FulfillmentApi thêm `filterD2cOrders(filter)` + `updateD2cOrderNote(orderCode, note, role)` gọi grpc client (pattern method có sẵn).
+- [x] **Step 2: Guard helper** — export function `assertExportRange(from, to)`:
 ```ts
 // date-only comparison; blocked when (to - from) > 31 days
 export function exportRangeDays(from: string, to: string): number {
@@ -216,14 +216,14 @@ export function exportRangeDays(from: string, to: string): number {
 }
 // blocked nếu exportRangeDays > 31 hoặc from > to
 ```
-- [ ] **Step 3: Route module d2c.ts** (pattern routes/fulfillment.ts — requireUser, envelope, sendGrpcError):
+- [x] **Step 3: Route module d2c.ts** (pattern routes/fulfillment.ts — requireUser, envelope, sendGrpcError):
   - `POST /d2c-orders/filter` → map body → D2cFilterRequest → `paginated(items.map(mapD2cItem), total, page, pageSize)`
   - `PUT /d2c-orders/:orderCode/note` body `{note}` → updateD2cOrderNote → `{ item }`
   - `GET /d2c-orders/export?from&to` → guard: sai thiếu from/to hoặc `exportRangeDays > 31` → 400 envelope `{ error: { message: 'Khoảng thời gian export tối đa 31 ngày' } }` (from>to cũng 400). OK → loop filterD2cOrders (pageSize 500, page++ đến đủ total) → build CSV string: BOM `\uFEFF` + header tiếng Việt (`Mã đơn,Mã nội bộ,Mã vận đơn,Hãng vận chuyển,Shop,Người xuất,Thời gian xuất,Thời gian đẩy,Người nhận,Điện thoại,Địa chỉ,Loại dịch vụ,Ngành hàng,Loại sản phẩm,Tách nợ,Ghi chú,Trạng thái,Ngày tạo`) + rows (escape giá trị có `,` `"` `\n` bằng bọc `"..."` + `""`), timestamps format `yyyy-MM-dd HH:mm:ss` +07. Reply: header `Content-Type: text/csv; charset=utf-8`, `Content-Disposition: attachment; filename="D2C_Order_${from}_${to}.csv"`, `reply.send(csvBuffer)` (Buffer từ BOM+csv utf8).
   - **Role guard per-route:** helper `requireD2cRole(request, reply)` → role ∈ {WarehouseEmployee, WarehouseOps, Manager} else 403 envelope.
-- [ ] **Step 4: Vitest** (pattern test/harness.ts + startTestIdentity): d2c.route.test.ts — mock gRPC upstream (gen code); cases: filter 200 envelope paginated; export 40 ngày → 400 message đúng; **export biên 32 ngày → 400 / 31 ngày → 200**; 200 + body bắt đầu `\uFEFF` + Content-Disposition filename đúng; note 200 gọi upstream với order_code; role Coordinator → 403 cả 3 endpoint.
-- [ ] **Step 5: Run** `cd services/bff-gateway && npm test` xanh + `npm run build`/tsc không lỗi.
-- [ ] **Step 6: Commit** `feat(fi245-sf18): BFF /d2c-orders filter+note+export CSV guard 31 ngày`
+- [x] **Step 4: Vitest** (pattern test/harness.ts + startTestIdentity): d2c.route.test.ts — mock gRPC upstream (gen code); cases: filter 200 envelope paginated; export 40 ngày → 400 message đúng; **export biên 32 ngày → 400 / 31 ngày → 200**; 200 + body bắt đầu `\uFEFF` + Content-Disposition filename đúng; note 200 gọi upstream với order_code; role Coordinator → 403 cả 3 endpoint.
+- [x] **Step 5: Run** `cd services/bff-gateway && npm test` xanh + `npm run build`/tsc không lỗi.
+- [x] **Step 6: Commit** `feat(fi245-sf18): BFF /d2c-orders filter+note+export CSV guard 31 ngày`
 
 ### Task 4: WarehouseEmployee role (realm + BFF + FE + E2E setup)
 
