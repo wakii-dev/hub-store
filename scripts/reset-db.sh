@@ -3,7 +3,7 @@
 #
 #   1. TRUNCATE ... RESTART IDENTITY cả 2 DB (fulfillment: orders,
 #      shop_assignment_history, regions, delivery_staff; batching: batches,
-#      batch_items)
+#      batch_items; d2c_orders SF-18 — chỉ khi bảng tồn tại)
 #   2. Xóa keycloak volume (SF-4 realm re-import sạch khi up lại)
 #   3. Reseed qua seed-db.sh (tự setval batches_code_seq = max batchCode seed)
 #
@@ -35,7 +35,14 @@ BEGIN
      OR to_regclass('public.delivery_staff') IS NULL THEN
     RAISE EXCEPTION 'fulfillment: thiếu bảng — %', 'chạy migration trước — see SF-2/SF-3';
   END IF;
-  TRUNCATE public.orders, public.shop_assignment_history, public.regions, public.delivery_staff RESTART IDENTITY;
+  -- SF-18 (FI-263): d2c_orders chỉ TRUNCATE khi bảng tồn tại (V5) — vắng bảng không crash.
+  IF to_regclass('public.d2c_orders') IS NOT NULL THEN
+    TRUNCATE public.orders, public.shop_assignment_history, public.regions,
+             public.delivery_staff, public.d2c_orders RESTART IDENTITY CASCADE;
+  ELSE
+    TRUNCATE public.orders, public.shop_assignment_history, public.regions,
+             public.delivery_staff RESTART IDENTITY CASCADE;
+  END IF;
 END
 $reset$;
 SQL
