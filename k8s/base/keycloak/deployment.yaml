@@ -34,6 +34,11 @@ spec:
               value: "true"
             - name: KC_HTTP_RELATIVE_PATH
               value: /keycloak
+            # KC 26: management path MẶC ĐỊNH kế thừa http-relative-path (health sẽ là
+            # /keycloak/health/*) → set "/" để probe path chuẩn /health/* trên :9000,
+            # tách khỏi contract /keycloak (SF-4 ingress chỉ route main port).
+            - name: KC_HTTP_MANAGEMENT_RELATIVE_PATH
+              value: /
             - name: KC_DB
               value: postgres
             - name: KC_DB_URL
