@@ -1,0 +1,14 @@
+{
+  "name": "@hub-store/e2e",
+  "private": true,
+  "type": "commonjs",
+  "scripts": {
+    "backend-integration": "tsx backend-integration.ts",
+    "e2e": "playwright test"
+  },
+  "devDependencies": {
+    "@grpc/grpc-js": "1.14.4",
+    "@playwright/test": "1.49.1",
+    "tsx": "4.19.2"
+  }
+}
