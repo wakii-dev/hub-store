@@ -64,6 +64,7 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Shell login: redirect PKCE qua `VITE_OIDC_AUTHORITY/CLIENT_ID/REDIRECT_URI` (env đã có, uncomment + wire); logout; **silent renew** access token (oidc-client-ts); 401 → redirect login.
 - BFF: verify access token qua **JWKS** (không còn HS256 shared secret cho user flow); **JWKS cache refresh khi gặp unknown `kid`** (Keycloak rotate/restart giữa run); map roles claim (`realm_access.roles` — SF-4 làm cả 2 phía, tự nhất quán) → `x-user-role` gửi xuống gRPC services (services KHÔNG đổi — vẫn nhận x-user-role, M-3 ghi note để sau).
 - Fake-JWT dev-stub: loại khỏi runtime path; GIỮ code path test-only (unit test mock).
+- **Forgot-password C1 (dev-only)**: FE custom page "Forgot password" (user nhập username + password mới trực tiếp, KHÔNG email) → BFF endpoint gọi Keycloak Admin API set password. KHÔNG có bước xác minh danh tính → CHỈ an toàn local-dev — bắt buộc ghi rõ dev-only trong README + code comment; production thật cần OTP email hoặc bật forgot-password Keycloak (để sau).
 - E2E login helper: **Playwright global-setup login UI 1 lần → storageState reuse** cho cả 13 specs (không login lại mỗi spec; không ROPC); nếu token hết hạn giữa run → helper re-login. Specs không đổi business assertions.
 - Pin versions: Keycloak image, oidc-client-ts, Flyway, golang-migrate, pgx v5.
 
@@ -82,6 +83,43 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Nội dung: theme LESS tokens mới (palette mở rộng từ #EB6E09, radius, shadow/depth, spacing, typography), skeletons/empty-states, micro-interactions, polish màn login wrapper quanh Keycloak.
 - Cứng: KHÔNG antd5; KHÔNG đổi testids/DOM mà E2E Playwright phụ thuộc; KHÔNG đổi business logic; KHÔNG đụng e2e/, services/, compose (SF-5 read-only apps/**).
 
+### 3.7 Product completion — BE foundation (SF-7, deps SF-2)
+- Bảng `activity_log` (fulfillment DB): actor, action, targetType/targetId, detail JSONB, timestamp — ghi tại mọi mutation endpoint (assign/cancel/complete/batch create/transition).
+- Export CSV endpoint: danh sách đơn theo filter hiện tại (cùng tham số /orders filter).
+- Chuẩn hóa pagination server-side (page/pageSize + total) cho list orders + batches — giữ response shape hiện tại cho fields, thêm pagination envelope mới (endpoint cũ không vỡ).
+
+### 3.8 Product completion — Users management UI (SF-8, deps SF-4)
+- Màn "Users" chỉ Manager thấy: list users (từ Keycloak), tạo user + gán role, set password, khóa/mở — qua BFF endpoints gọi Keycloak Admin API (service-account credential qua env).
+- Màn theo design language SF-6 nếu direction đã có; SF-11 hội tụ sau.
+
+### 3.9 Product completion — Dashboard thống kê (SF-9, deps SF-2)
+- Màn Dashboard (mặc định sau login cho Manager; Coordinator thấy nếu phù hợp): đơn/ngày (30 ngày), tỷ lệ hoàn thành/hủy, workload shipper, đơn đang chờ xử lý — aggregate API riêng, KHÔNG N+1 loop client-side.
+
+### 3.10 Product completion — Realtime SSE (SF-10, deps SF-2+SF-3)
+- BFF SSE endpoint + event bus: mutation order (assign/cancel/complete) và batch (create/transition) đẩy event → FE hook subscribe, D1/D2 refetch hoặc update optimistic.
+- Reconnect + fallback polling; auth cùng access token (query param hoặc header).
+
+### 3.11 Product completion — FE convergence mới (SF-11, deps SF-6+SF-7+SF-8+SF-9+SF-10)
+- Audit-log viewer (Manager), export UI (nút export theo filter), mobile responsive polish (breakpoints cho tablet shipper), all-in design system SF-6; skeleton/empty-state cho screens mới; E2E specs mới cho features mới (users UI, dashboard, export, audit) — không sửa assertions specs cũ.
+
+### 3.13 Order intake + delivery exceptions (SF-13, deps SF-2+SF-3)
+- **Import đơn**: upload CSV/Excel (template tải được) → validate (địa chỉ, SĐT, items, COD) → preview bảng + rows lỗi báo rõ từng cột → confirm insert vào orders. Coordinator dùng.
+- **Tạo đơn thủ công**: form "Tạo đơn" trên D1 — khách, địa chỉ, items, COD; generate fulfillCode đúng dải `ORD-*` hiện có.
+- **Delivery exceptions**: trạng thái per-order FAILED + lý do (enum: khách vắng/sai địa chỉ/khách từ chối + ghi chú tự do) — thao tác từ D2 (WarehouseOps) và màn shipper nếu có; đơn FAILED → flow giao lại (tạo retry mới hoặc reopen state — chọn 1, giữ audit). Proto thay đổi CHỈ additive (enum/method MỚI, không phá message cũ).
+- UI intake/exceptions xây antd4 sạch; SF-11 harmonize về design system.
+
+### 3.14 COD đối soát (SF-14, deps SF-13)
+- Xác nhận thu COD per-order (số tiền thu + người thu + thời gian) — mặc định từ batch hoàn tất.
+- Màn đối soát theo shop: tổng COD theo kỳ (ngày), so khớp đơn hoàn tất-COD vs đã-thu vs chênh lệch; export CSV đối soát (pattern SF-7).
+- Bảng/fields lưu settlement trong DB `fulfillment` (Flyway V3+); không đụng batching DB.
+
+### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14 — CUỐI)
+- **M-3 resolved**: s2s auth — token passthrough (BFF forward access token, services verify JWKS) HOẶC mTLS nội mạng compose — SF-12 chọn 1, ghi rationale.
+- Secrets: `.env` ra khỏi git (gitignore + rotate credentials), compose đọc từ env file local.
+- Monitoring: healthcheck endpoints mọi service + uptime checks compose; logs structured.
+- CI/CD: GitHub Actions — lint + unit test + E2E (E2E=1) + docker build mỗi PR.
+- Backup: cron `pg_dump` cả 2 DB + restore doc.
+
 ## 4. ACCEPTANCE (user-visible)
 1. `docker compose up --build` trên máy sạch → mở :3000 → đăng nhập username/password thật → D1 lọc đơn → D1b tạo phiếu (DnD + suggest + shipper) → D2 hủy/hoàn tất → D3 in PDF — toàn bộ hoạt động.
 2. Tạo 1 phiếu → `docker compose restart` → đăng nhập lại → phiếu VẪN ĐÓ.
@@ -89,11 +127,18 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 4. E2E Playwright xanh khi `E2E=1`.
 5. `run.sh` từng service chạy được khi postgres đang lên; unit test pass không cần DB.
 6. UI nhìn hiện đại, thống nhất 1 design system mới (3-hướng đã user chọn) — verify bằng browser 3 tầng, không phải chỉ "chạy được".
+7. Manager tạo/khóa user + gán role ngay trong app (không cần vào Keycloak console).
+8. Dashboard hiện số liệu thật (đơn/ngày, tỷ lệ hoàn thành, workload shipper).
+9. Mutate đơn/batch ở 1 tab → tab khác cập nhật gần như tức thì (SSE).
+10. Export CSV theo filter; mọi mutation có audit log, Manager xem được.
+11. CI chạy test + E2E mỗi PR; backup `pg_dump` cron chạy; s2s auth không còn plain x-user-role.
+12. Coordinator import file đơn (CSV/Excel) → đơn vào D1 xử lý được; tạo đơn thủ công OK; đơn giao thất bại có lý do + giao lại được.
+13. COD thu được xác nhận per-order; Manager xem màn đối soát theo shop + export; số liệu khớp DB.
 
 ## 5. Boundary (KHÔNG làm)
-- KHÔNG TLS/HA/backup automation/monitoring prod thật; KHÔNG k8s/helm; KHÔNG horizontal scaling.
-- KHÔNG đổi gRPC proto, REST routes, response shape, FE business logic (ngoài login).
-- KHÔNG mTLS s2s (M-3) — chỉ ghi note.
+- KHÔNG TLS/HA; KHÔNG k8s/helm; KHÔNG horizontal scaling. (Backup automation + monitoring giờ IN scope — SF-12.)
+- KHÔNG đổi gRPC proto, REST routes, response shape hiện có (SF-7 thêm endpoint/pagination envelope MỚI, không vỡ endpoint cũ; SF-10 thêm SSE endpoint).
+- M-3 s2s auth giờ IN scope — SF-12 (token passthrough hoặc mTLS, SF-12 chọn + rationale).
 - KHÔNG đổi nội dung `api/seed/canonical-seed.json`.
 - KHÔNG xóa `.env` khỏi git trong story này (M-2 full fix để sau) — nhưng DB credentials phải đi pattern env mới không thêm secret mới vào git.
 
