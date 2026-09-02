@@ -33,7 +33,7 @@ export function FilterBar({
   resetLabel = 'Reset',
 }: FilterBarProps) {
   return (
-    <div data-testid="filter-bar">
+    <div data-testid="filter-bar" style={{ marginBottom: 18 }}>
       <div style={gridStyle}>{children}</div>
       <Space style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 12 }}>
         <Button onClick={onReset}>{resetLabel}</Button>

@@ -61,6 +61,8 @@ export const antdLessModifyVars: Record<string, string> = {
   '@component-background': DESIGN_TOKENS.color.bgWhite,
   '@table-padding-vertical': '13px',
   '@table-padding-horizontal': '14px',
+  '@input-height-base': '36px',
+  '@btn-height-base': '36px',
 };
 
 /** CSS custom properties — SF-6 direction B. */

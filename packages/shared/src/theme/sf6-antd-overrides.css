@@ -197,6 +197,15 @@
   transform: translateY(-1px);
 }
 
+/* ─── §2.2 Table row states ─── */
+
+.ant-table-tbody > tr.sf6-row-selected > td {
+  background: #fef6ee !important; /* primaryBg */
+}
+.ant-table-tbody > tr:hover > td {
+  transition: background 0.12s ease;
+}
+
 /* ─── §2.3 Message/notification reskin theo semantic ─── */
 
 .ant-message .ant-message-notice-content {
