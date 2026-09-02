@@ -110,6 +110,23 @@ bash scripts/k8s-preflight.sh
 Script báo driver + resource + addon ingress; thoát non-zero khi thiếu gì đó (kèm hướng dẫn fix).
 Lưu ý: toàn bộ secrets trong `k8s/` là DEV-ONLY (giá trị giả lập) — không dùng ở môi trường thật.
 
+### Keycloak (dev realm — FLAG FI-245)
+
+Keycloak 26.3.4 chạy trong cluster với realm **minimal dev-only** (`k8s/base/keycloak/realm-hub-store.json`):
+3 roles `Coordinator`/`WarehouseOps`/`Manager`, mỗi role 1 dev user (credentials nằm trong realm JSON —
+DEV-ONLY), client `hub-store-app` public + password grant (smoke). Realm endpoints ở prefix
+`/keycloak` (KC_HTTP_RELATIVE_PATH — contract với Ingress route `/keycloak` của SF-4).
+
+> **FLAG FI-245:** khi FI-245 SF-4 merge, realm JSON này có thể THAY bằng artifact realm đầy đủ
+> của FI-245 (bản minimal chỉ để smoke token). SF-5 ghi hướng thay chính thức trong wiring doc.
+
+Smoke nhanh:
+```bash
+kubectl -n hub-store port-forward deployment/keycloak 18080:8080
+curl -s -X POST http://127.0.0.1:18080/keycloak/realms/hub-store/protocol/openid-connect/token \
+  -d "grant_type=password&client_id=hub-store-app&username=coordinator-dev&password=coordinator-dev-pass"
+```
+
 ## Roles dev stub
 
 Login page cho chọn 1 trong 3 role (JWT giả, OIDC production): **Coordinator** (D1+D2+D3), **WarehouseOps** (D2+D3), **Manager** (tất cả).
