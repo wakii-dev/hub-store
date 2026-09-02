@@ -675,9 +675,9 @@ SQL
 - Modify: `src/clients/index.ts` (export), `src/app.ts` (register + harness deps), `src/lib/grpc-error.ts` (thêm case FAILED_PRECONDITION → 409 CONFLICT), `test/harness.ts` (mock TechServiceService), `test/fixtures.ts`
 - Test: `test/tech.contract.test.ts`
 
-- [ ] **Step 1: clients/tech.ts** — pattern fulfillment.ts: interface `TechApi { filterDeliveryOrders(req, role); filterInstallationOrders(req, role); assignTechnician(req, role); suggestTechnicians(req, role); close(); }`; factory `createTechClient(addr, deadlineMs)` dùng `callUnary` từ grpc.ts, service def `TechServiceService` từ `../../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service.js`.
-- [ ] **Step 2: mappers/tech.ts** — `mapDeliveryOrder`, `mapInstallationOrder` (timelineJson → `timeline: JSON.parse` guarded try), `mapSuggestedTechnician`, `mapTechButtons` (snake→camel).
-- [ ] **Step 3: routes/tech.ts** — `registerTechRoutes(app, deps: { tech: TechApi })`:
+- [x] **Step 1: clients/tech.ts** — pattern fulfillment.ts: interface `TechApi { filterDeliveryOrders(req, role); filterInstallationOrders(req, role); assignTechnician(req, role); suggestTechnicians(req, role); close(); }`; factory `createTechClient(addr, deadlineMs)` dùng `callUnary` từ grpc.ts, service def `TechServiceService` từ `../../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service.js`.
+- [x] **Step 2: mappers/tech.ts** — `mapDeliveryOrder`, `mapInstallationOrder` (timelineJson → `timeline: JSON.parse` guarded try), `mapSuggestedTechnician`, `mapTechButtons` (snake→camel).
+- [x] **Step 3: routes/tech.ts** — `registerTechRoutes(app, deps: { tech: TechApi })`:
 
 ```typescript
 app.post("/delivery-orders/filter", async (req, reply) => {
@@ -690,9 +690,9 @@ app.post("/service-orders/:code/assign", ...);  // body { technicianCode } → a
 app.get("/technicians/suggest", ...);      // query regionCode → sendGrpcError / reply.send({ items: [...] })
 ```
 Mọi route: try/catch `sendGrpcError(reply, err, SERVICE_NAMES.fulfillment)`. Register trong app.ts (deps tech client tạo từ `config.grpc.fulfillment` — cùng addr fulfillment service).
-- [ ] **Step 4: harness.ts** — thêm mock server `TechServiceService` + `h.tech` (pattern h.fulfillment: override per-test). fixtures: `techResponses` (1 delivery item + buttons, 1 installation + timeline, suggest 2 items).
-- [ ] **Step 5: tech.contract.test.ts** — auth 401 không token; POST /delivery-orders/filter → 200 paginated envelope `{items,total,page,pageSize}` buttons camelCase; POST /service-orders/filter timeline parse; assign → 200 + gọi đúng gRPC args; assign FAILED_PRECONDITION → 503? — NO: mapping grpc-error.ts hiện có: FAILED_PRECONDITION chưa có case → thêm explicit mapping **422 VALIDATION_ERROR**? Quy ước: FAILED_PRECONDITION = trạng thái sai → 409 CONFLICT (thêm 1 case vào sendGrpcError + test); INVALID_ARGUMENT → 422; NOT_FOUND SO → 404; suggest → 200 items; upstream chết → 503.
-- [ ] **Step 6: `npm test` (vitest) PASS + `npm run build` PASS; commit** `feat(fi245-sf19): BFF tech client + routes + mappers + contract tests`
+- [x] **Step 4: harness.ts** — thêm mock server `TechServiceService` + `h.tech` (pattern h.fulfillment: override per-test). fixtures: `techResponses` (1 delivery item + buttons, 1 installation + timeline, suggest 2 items).
+- [x] **Step 5: tech.contract.test.ts** — auth 401 không token; POST /delivery-orders/filter → 200 paginated envelope `{items,total,page,pageSize}` buttons camelCase; POST /service-orders/filter timeline parse; assign → 200 + gọi đúng gRPC args; assign FAILED_PRECONDITION → 503? — NO: mapping grpc-error.ts hiện có: FAILED_PRECONDITION chưa có case → thêm explicit mapping **422 VALIDATION_ERROR**? Quy ước: FAILED_PRECONDITION = trạng thái sai → 409 CONFLICT (thêm 1 case vào sendGrpcError + test); INVALID_ARGUMENT → 422; NOT_FOUND SO → 404; suggest → 200 items; upstream chết → 503.
+- [x] **Step 6: `npm test` (vitest) PASS + `npm run build` PASS; commit** `feat(fi245-sf19): BFF tech client + routes + mappers + contract tests`
 
 ### Task 8: Verify ACCEPTANCE end-to-end
 
