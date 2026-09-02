@@ -16,8 +16,9 @@ Hệ thống gốc có màn D2C/Dropship theo dõi đơn đẩy từ sàn D2C sa
 4. BFF: `src/routes/d2c.ts` — `POST /d2c-orders/filter` (envelope paginated), `PUT /d2c-orders/:id/note`, `GET /d2c-orders/export` (CSV BOM stream, guard ≤31 ngày).
 5. FE: `D2CPage` trong `apps/orders` (expose + shell route + nav), bảng + expand + note modal + FilterBar đầy đủ + nút export với date-range guard client-side.
 6. Role `WarehouseEmployee` mới (realm JSON + user dev + BFF KNOWN_ROLES + FE ROLES/matrix) — REQUIREMENT-GAP đã log FI-245.
-7. Seed `api/seed/d2c-sample.json` (riêng, KHÔNG đụng canonical-seed.json) + loader section trong `scripts/seed-db.sh` (emptiness-gate).
+7. Seed `api/seed/d2c-sample.json` (riêng, KHÔNG đụng canonical-seed.json) + loader section trong `scripts/seed-db.sh` (emptiness-gate) + **`scripts/reset-db.sh`: thêm `d2c_orders` vào danh sách TRUNCATE + gate `to_regclass`** (nếu thiếu → D2C rows sống sót qua reset, E2E run-2 thấy state cũ).
 8. E2E `e2e/tests/05-d2c.spec.ts` + storageState user mới trong `auth.setup.ts`.
+9. Cập nhật unit tests chạm shared surfaces: `usePermissions.test.tsx` (ROLES matrix), `tokenGetter.test.ts`/`App.test.tsx` (giả định 3 roles nếu có), `bff.contract.test.ts` (KNOWN_ROLES) — chỉ bổ sung, không xóa case.
 
 **Out (boundary):**
 - Không tạo/sửa/xóa đơn D2C từ FE (chỉ list + note + export).
@@ -63,28 +64,29 @@ Assumption ghi rõ: enum `status` 4 giá trị trên là thiết kế mới (d�
 
 `D2cOrderFilter` (proto message mới `D2cFilterRequest`): orderCode/deliveryId (search LIKE escaped), statuses (multi), carriers (multi), shops (multi), exportEmployees (multi), productCategory, productType, createdFrom/createdTo, pushFrom/pushTo (datetime range), pushSlotFrom/pushSlotTo (khung giờ — HH:mm, so với time-of-day của push_time), page/pageSize.
 
-SQL pattern y hệt PostgresOrderRepository.filter: 1 statement `COUNT(*) OVER()` — giữ nguyên semantics SF-2 đã chuẩn hóa (LIKE escape, empty-page total).
+SQL pattern y hệt PostgresOrderRepository.filter: 1 statement `COUNT(*) OVER()` — giữ nguyên semantics SF-2 đã chuẩn hóa (LIKE escape, empty-page total). **ORDER BY xác định: `id ASC`** (bắt buộc cho export paging không trùng/sót dòng; in-memory impl phải match). Proto: `status` là plain string (không enum mới — tránh gen drift 3 ngôn ngữ).
 
 ### 3.3 API
 
 - `POST /d2c-orders/filter` → `paginated(items,total,page,pageSize)` (envelope chuẩn packages/shared).
-- `PUT /d2c-orders/:id/note` body `{note}` → trả item đã cập nhật; audit để dành SF-7 (không tự chế activity_log — SF-7 sở hữu).
-- `GET /d2c-orders/export?from=&to=` (+ các filter params khác) → CSV stream UTF-8 **BOM** (Excel hiển thị tiếng Việt đúng), filename `D2C_Order_{from}_{to}.csv`; range > 31 ngày → HTTP 400 envelope lỗi message rõ ("Khoảng thời gian export tối đa 31 ngày"). BFF assemble bằng cách loop FilterD2cOrders (pageSize 500) — không cần streaming proto.
+- `PUT /d2c-orders/:orderCode/note` body `{note}` — **khóa nghiệp vụ theo `order_code`** (nhất quán precedent `UpdateNote` khóa `fulfill_code`), KHÔNG surrogate id. Proto: `UpdateD2cOrderNoteRequest {order_code, note, actor_role}` → `UpdateD2cOrderNoteResponse {order: D2cOrder}`; trả item đã cập nhật.
+- `GET /d2c-orders/export?from=&to=` — **SF này export chỉ theo from/to** (không mang filter khác; mở rộng là việc khác). Response: CSV UTF-8 với **BOM bytes `EF BB BF`** đầu stream (Excel hiển thị tiếng Việt đúng), header `Content-Disposition: attachment; filename="D2C_Order_{from}_{to}.csv"`, BFF chunked-send từ buffer assemble. Đây là **code mới** (pattern SF-7 chỉ là mô tả spec, chưa có code trên branch) — Phase 3 ước lượng như work mới.
+- **Guard công thức (dùng chung FE + BFF):** `dayDiff(to) - dayDiff(from)` tính trên ngày kiểu `YYYY-MM-DD` (date-only, theo múi giờ VN); blocked khi `(to - from).days > 31`, tức from=01, to=01-tháng-kế (31 ngày khoảng cách) OK; from=01, to=02-tháng-kế (32) → chặn. AC "40 chặn / 31 OK" thỏa. Message: "Khoảng thời gian export tối đa 31 ngày".
 - Role guard BFF (per-route, mới — additive): list/export/update yêu cầu role ∈ {WarehouseEmployee, WarehouseOps, Manager}.
 
 ### 3.4 FE
 
-- `apps/orders/src/pages/D2CPage.tsx` — self-wrap Provider (pattern D1Page), expose `./D2CPage`, đăng ký `remotes.config.json` + shell route `/d2c` + nav entry (`nav.ts`, labelKey `nav.d2c`, permission `d2c.view`).
+- `apps/orders/src/pages/D2CPage.tsx` — self-wrap Provider (pattern D1Page), expose `./D2CPage`, đăng ký `remotes.config.json` + shell route **`/hub-store-order/d2c`** (theo convention route hiện có) + nav entry (`nav.ts`, labelKey `nav.d2c`, permission `d2c.view`, icon mapping AppLayout nếu cần) + `firstPathForRole(WarehouseEmployee) = /hub-store-order/d2c`.
 - RTKQ slice `d2c.ts` trong packages/api-client (`createListQuery` cho list; mutations note/export).
 - Bảng antd4: cột orderCode, carrier, shop, pushTime, status, note indicator; expandable rows (controlled, pattern D1) — expand hiện push/export info (pushTime, exportEmployee/exportTime), người nhận (name/phone/address), serviceType, isDebtSplitting, note.
 - FilterBar: TextSearch (code/deliveryId), MultiSelect (status/carrier/shop/NV xuất), Select (ngành hàng, loại SP), DateTimeRange (ngày tạo), DateTimeRange (giờ đẩy) + khung giờ (slot time range). Filter↔URL qua `useUrlState`.
 - Note modal (pattern HubStoreTransferModal): mở từ row action, textarea, lưu → refetch.
 - Nút Export: 2 DatePicker from/to, client-side guard >31 ngày → message.error trước khi gọi; thành công → download blob.
-- Permission `d2c.view` cho roles WarehouseEmployee, WarehouseOps, Manager (PERMISSION_MATRIX); Coordinator không thấy nav/route.
+- Permission `d2c.view` cho roles WarehouseEmployee, WarehouseOps, Manager (PERMISSION_MATRIX); Coordinator không thấy nav/route. **WarehouseEmployee KHÔNG được cấp `orders.view`** (WarehouseOps hiện cũng không có — cùng họ NV kho; tránh mở D1 ngoài scope). UI strings mới qua i18n keys (`apps/shell/src/i18n.ts` vi/en — rule §3.22).
 
 ### 3.5 Roles & Keycloak
 
-- Realm JSON: thêm realm role `WarehouseEmployee` + user `warehouse-emp` (password `Password123!` dev-only literal, cùng style user cũ) + gán role.
+- Realm JSON: thêm realm role `WarehouseEmployee` + user `warehouse-emp` (password `Password123!` dev-only literal, cùng style user cũ) + gán role. Lưu ý: user chỉ tồn tại sau khi realm volume re-import (reset keycloak-data / compose down-v trong E2E boot flow).
 - BFF `KNOWN_ROLES` += `WarehouseEmployee`.
 - FE `ROLES`/matrix += WarehouseEmployee: d2c.view + orders.view (không cần fulfillment.print).
 - `auth.setup.ts`: thêm storageState `.auth/warehouse-emp.json`.
@@ -101,7 +103,7 @@ SQL pattern y hệt PostgresOrderRepository.filter: 1 statement `COUNT(*) OVER()
 |---|---|
 | Lọc D2C theo carrier + khung giờ đẩy → đúng; expand đủ info | E2E 05-d2c + Rule 0 browser walkthrough |
 | Ghi chú → lưu + hiện lại | E2E + browser |
-| Export 40 ngày → chặn message; 31 ngày → file mở Excel OK | E2E download + unit test guard + mở file kiểm tra |
+| Export 40 ngày → chặn message; 31 ngày → file mở Excel OK | E2E download + unit test guard; file check programmatic: BOM `EF BB BF` đầu file, số data rows = total, header UTF-8 decode đúng (mở Excel thủ công là check trình bày, không phải gate CI) |
 | E2E cũ + mới xanh | full playwright run |
 
 ## 5. Test strategy
@@ -114,7 +116,8 @@ SQL pattern y hệt PostgresOrderRepository.filter: 1 statement `COUNT(*) OVER()
 
 ## 6. Risks
 
-1. V4-skip khi SF-17 merge sau (dev DB recreate nên thấp; policy comment trong V5 file).
+1. V4-skip khi SF-17 merge sau (dev DB recreate nên thấp; policy comment trong V5 file; **verify số free-version khi implement** — recheck migration dir trước khi commit V5).
 2. Proto regen chạm gen/ của 3 ngôn ngữ — chỉ additive; java gencode wired qua build-helper.
 3. Slot filter SQL (time-of-day): khung giờ là khái niệm nghiệp vụ VN → compare `push_time AT TIME ZONE 'Asia/Ho_Chi_Minh'` (EXTRACT hour/minute) — seed ghi timestamp có offset +07.
-4. Seed script section mới phải fail-loud khi bảng chưa có (mirror contract hiện có).
+4. Seed script section mới phải fail-loud khi bảng chưa có (mirror contract hiện có); `api/seed/validate.py` chỉ validate canonical — d2c-sample.json ngoài scope của nó (note trong README nếu cần).
+5. reset-db.sh phải truncate d2c_orders + reset sequence (P0 critic finding) — nếu sót, E2E run-2 nhiễm state cũ.
