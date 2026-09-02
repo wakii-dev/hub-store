@@ -7,6 +7,7 @@ kind: Kustomization
 namespace: hub-store
 
 resources:
+  - ./namespace.yaml
   - ./secrets.yaml
   - ./postgres
   - ./kafka
