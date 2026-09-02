@@ -118,10 +118,15 @@ function fmtCsvTime(d: Date | undefined): string {
   return `${get('year')}-${get('month')}-${get('day')} ${get('hour')}:${get('minute')}:${get('second')}`;
 }
 
-/** CSV escape: bọc `"..."` khi chứa , " hoặc newline; `"` đôi thành `""`. */
+/**
+ * CSV escape: bọc `"..."` khi chứa , " hoặc newline; `"` đôi thành `""`.
+ * Chống CSV formula injection (OWASP): giá trị bắt đầu bằng = + - @ \t \r
+ * được prefix `'` để Excel/LibreOffice không thực thi formula.
+ */
 function csvEscape(v: string): string {
-  if (/[",\n\r]/.test(v)) return `"${v.replace(/"/g, '""')}"`;
-  return v;
+  const neutralized = /^[=+\-@\t\r]/.test(v) ? `'${v}` : v;
+  if (/[",\n\r]/.test(neutralized)) return `"${neutralized.replace(/"/g, '""')}"`;
+  return neutralized;
 }
 
 function d2cCsvRow(o: D2cOrder): string {
@@ -214,8 +219,15 @@ export function registerD2cRoutes(app: FastifyInstance, deps: D2cRouteDeps): voi
     async (request, reply) => {
       const { role } = requireUser(request);
       if (!requireD2cRole(request, reply)) return reply;
+      const rawNote = (request.body as { note?: string } | undefined)?.note;
+      if (typeof rawNote !== 'string' || rawNote.length > 500) {
+        void reply
+          .code(400)
+          .send(errorEnvelope(400, 'Ghi chú bắt buộc là chuỗi ≤ 500 ký tự.', { code: 'BAD_REQUEST' }));
+        return reply;
+      }
       try {
-        const resp = await f.updateD2cOrderNote(request.params.orderCode, request.body.note, role);
+        const resp = await f.updateD2cOrderNote(request.params.orderCode, rawNote, role);
         return await reply.send({ item: resp.order ? mapD2cItem(resp.order) : null });
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -240,25 +252,27 @@ export function registerD2cRoutes(app: FastifyInstance, deps: D2cRouteDeps): voi
         const items: D2cOrder[] = [];
         let page = 1;
         let total = Number.POSITIVE_INFINITY;
+        // from/to = khoảng NGÀY TẠO (created_at) — bounds full-day theo giờ VN.
+        const rangeFilter = {
+          search: '',
+          statuses: [],
+          carriers: [],
+          shops: [],
+          exportEmployees: [],
+          productCategory: '',
+          productType: '',
+          createdFrom: new Date(`${from}T00:00:00+07:00`),
+          createdTo: new Date(`${to}T23:59:59+07:00`),
+          pushFrom: undefined,
+          pushTo: undefined,
+          pushSlotFrom: '',
+          pushSlotTo: '',
+          page,
+          pageSize: EXPORT_PAGE_SIZE,
+        };
         while (items.length < total) {
           const resp = await f.filterD2cOrders(
-            {
-              search: '',
-              statuses: [],
-              carriers: [],
-              shops: [],
-              exportEmployees: [],
-              productCategory: '',
-              productType: '',
-              createdFrom: undefined,
-              createdTo: undefined,
-              pushFrom: undefined,
-              pushTo: undefined,
-              pushSlotFrom: '',
-              pushSlotTo: '',
-              page,
-              pageSize: EXPORT_PAGE_SIZE,
-            },
+            { ...rangeFilter, page },
             role,
           );
           total = Number(resp.total);

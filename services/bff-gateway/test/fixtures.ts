@@ -132,7 +132,7 @@ export const fixtureD2cOrder: D2cOrder = {
   productType: 'Điện thoại',
   isDebtSplitting: false,
   note: 'Giao giờ hành chính, gọi trước khi đến',
-  status: 'PUSHED',
+  status: 'pushed',
   createdAt: new Date('2026-08-14T09:00:00+07:00'),
   id: 1,
 };

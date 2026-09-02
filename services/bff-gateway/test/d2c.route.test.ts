@@ -95,6 +95,43 @@ describe('GET /d2c-orders/export — guard 31 ngày (date-only +07)', () => {
     const dataRows = res.rawPayload.toString('utf8').split('\n').length - 1; // trừ header
     expect(dataRows).toBe(3);
   });
+
+  it('export truyền from/to vào upstream như khoảng ngày tạo (bounds full-day +07)', async () => {
+    let captured: { createdFrom?: Date; createdTo?: Date } | null = null;
+    h.fulfillment.override({
+      filterD2COrders: (call, cb) => {
+        captured = { createdFrom: call.request.createdFrom, createdTo: call.request.createdTo };
+        cb(null, { items: [{ ...fixtureD2cOrder, id: 1 }], total: 1 });
+      },
+    });
+    const res = await authedInject(h.app, 'GET', '/d2c-orders/export?from=2026-07-01&to=2026-07-07');
+    expect(res.statusCode).toBe(200);
+    expect(captured!.createdFrom).toEqual(new Date('2026-07-01T00:00:00+07:00'));
+    expect(captured!.createdTo).toEqual(new Date('2026-07-07T23:59:59+07:00'));
+  });
+
+  it('csvEscape neutralize formula injection — giá trị bắt đầu bằng = + - @ được prefix apostrophe', async () => {
+    h.fulfillment.override({
+      filterD2COrders: (_call, cb) => {
+        cb(null, {
+          items: [
+            { ...fixtureD2cOrder, id: 1, note: '=HYPERLINK("http://evil","x")' },
+            { ...fixtureD2cOrder, orderCode: '-CMD', id: 2 },
+            { ...fixtureD2cOrder, orderCode: '@x', id: 3 },
+            { ...fixtureD2cOrder, orderCode: '+1', id: 4 },
+          ],
+          total: 4,
+        });
+      },
+    });
+    const res = await authedInject(h.app, 'GET', '/d2c-orders/export?from=2026-07-01&to=2026-07-07');
+    const text = res.rawPayload.toString('utf8');
+    expect(text).toContain("'=HYPERLINK");
+    expect(text).toContain("'-CMD");
+    expect(text).toContain("'@x");
+    expect(text).toContain("'+1");
+    expect(text).not.toContain('=HYPERLINK("http://evil"');
+  });
 });
 
 describe('PUT /d2c-orders/:orderCode/note', () => {
@@ -110,6 +147,26 @@ describe('PUT /d2c-orders/:orderCode/note', () => {
     expect(res.statusCode).toBe(200);
     expect(captured).toMatchObject({ orderCode: 'D2C-1001', note: 'Ghi chú mới', actorRole: 'Manager' });
     expect((res.body as { item: { note: string } }).item.note).toBe('Ghi chú mới');
+  });
+
+  it('body thiếu / note quá dài → 400 envelope (không 500)', async () => {
+    h.fulfillment.override({
+      updateD2COrderNote: (_call, cb) => cb(null, { order: { ...fixtureD2cOrder } }),
+    });
+    const noBody = await authedInject(h.app, 'PUT', '/d2c-orders/D2C-1001/note');
+    expect(noBody.statusCode).toBe(400);
+    const emptyNote = await authedInject(h.app, 'PUT', '/d2c-orders/D2C-1001/note', {});
+    expect(emptyNote.statusCode).toBe(400);
+    const tooLong = await authedInject(h.app, 'PUT', '/d2c-orders/D2C-1001/note', {
+      note: 'x'.repeat(501),
+    });
+    expect(tooLong.statusCode).toBe(400);
+    expect((tooLong.body as { message: string }).message).toContain('500');
+    // 500 ký tự đúng biên → qua guard, gọi upstream.
+    const atLimit = await authedInject(h.app, 'PUT', '/d2c-orders/D2C-1001/note', {
+      note: 'x'.repeat(500),
+    });
+    expect(atLimit.statusCode).toBe(200);
   });
 });
 
