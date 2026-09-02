@@ -13,3 +13,7 @@ packages/*/src/**/*.d.ts
 # MF runtime diagnostics (thay đổi mỗi lần build/dev)
 .mf/
 
+# SF-11 E2E artifacts (Playwright)
+e2e/test-results/
+e2e/playwright-report/
+__pycache__/

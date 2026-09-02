@@ -10,6 +10,11 @@ const configDir = __dirname;
 const mfShared = {
   react: { singleton: true, requiredVersion: "^18.0.0" },
   "react-dom": { singleton: true, requiredVersion: "^18.0.0" },
+  // SF-11 convergence fix: jsx-runtime PHẢI là share đăng ký sync lúc MF init —
+  // nếu không, pre-bundle react-pdf (automatic jsx runtime) loadShare async
+  // CHẬM hơn render đầu → "_jsx2 is not a function" (D3 preview chết).
+  "react/jsx-runtime": { singleton: true, requiredVersion: "^18.0.0" },
+  "react/jsx-dev-runtime": { singleton: true, requiredVersion: "^18.0.0" },
   antd: { singleton: true, requiredVersion: "4.24.16" },
   "@reduxjs/toolkit": { singleton: true, requiredVersion: "^2.12.0" },
   "react-redux": { singleton: true, requiredVersion: "^9.0.0" },

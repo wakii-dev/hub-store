@@ -13,6 +13,14 @@ import { getSessionToken, restoreSession } from "./auth/session";
 import { LANG_STORAGE_KEY, shellResources } from "./i18n";
 import App from "./App";
 
+// SF-11 convergence fix: pre-warm MF share cache cho react/jsx-runtime.
+// Pre-bundle react-pdf (D3 PrintPage) import jsx-runtime qua MF virtual
+// loadShare — resolve ASYNC; nếu không pre-warm, render đầu của <Document>
+// chạy trước khi share kịp resolve → "_jsx2 is not a function" (race thắng/thua
+// tuỳ navigation flow). Cache là global trên trang — pre-warm 1 lần ở host
+// che phủ mọi remote.
+void import("react/jsx-runtime");
+
 // Shell owns i18n init — MỘT instance duy nhất, remotes dùng qua MF singleton.
 const i18n = initI18n({
   resources: shellResources,
