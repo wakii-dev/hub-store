@@ -538,7 +538,7 @@ Test cases (AssertJ, pattern FilterAndHydrationTest + CollectingObserver):
 - Create: `src/main/java/com/hubstore/fulfillment/config/TechRepositoryConfig.java`
 - Test: `src/test/java/com/hubstore/fulfillment/PostgresTechOrderRepositoryIT.java`
 
-- [ ] **Step 1: PostgresTechOrderRepository** — JdbcTemplate, pattern PostgresOrderRepository:
+- [x] **Step 1: PostgresTechOrderRepository** — JdbcTemplate, pattern PostgresOrderRepository:
   - Filter 1 query LATERAL: `SELECT c.total_all, d.* FROM (SELECT count(*) FROM delivery_orders <where>) c LEFT JOIN LATERAL (SELECT ... FROM delivery_orders <where> ORDER BY id OFFSET ? LIMIT ?) d ON TRUE`
   - WHERE builder: statuses IN, driver_name ILIKE ? ESCAPE '\', region/province =, date range trên delivery_date, category: `EXISTS (SELECT 1 FROM jsonb_array_elements(items) it WHERE it->>'categoryL1' = ANY(?))` (L2 tương ứng)
   - Delivery date params: `LocalDate` qua `java.sql.Date.valueOf`
@@ -546,9 +546,9 @@ Test cases (AssertJ, pattern FilterAndHydrationTest + CollectingObserver):
   - items JSONB: `items::text` → Jackson List<TechItem>; timeline/coordination passthrough text
   - assignTechnician `@Transactional`: SELECT ... FOR UPDATE installation, validate status → IllegalStateException, UPDATE technician_code, INSERT history (from = current hoặc NULL)
   - suggestTechnicians: 1 query `LEFT JOIN (SELECT technician_code, count(*) cnt FROM installation_orders WHERE technician_code IS NOT NULL AND status NOT IN ('DELIVERED','CANCELLED','RETURNED') GROUP BY technician_code) w ON ... WHERE t.region_code = ? ORDER BY COALESCE(w.cnt,0) ASC, t.seq ASC`
-- [ ] **Step 2: TechRepositoryConfig.java** — 2 bean `@ConditionalOnProperty(name="fulfillment.store", havingValue="postgres", matchIfMissing=true)` / `inmemory` trả TechOrderRepository tương ứng (InMemory nhận seed tech-sample qua `TechSeedLoader`).
-- [ ] **Step 3: IT** — copy pattern PostgresOrderRepositoryIT: `connectOrSkip()` (Assumptions.abort khi không DB/unmigrated/trống), parity vs InMemory trên cùng seed, mutating test snapshot/restore. Run: `mvn test -Dtest=PostgresTechOrderRepositoryIT` (cần postgres compose lên + migrated + seeded).
-- [ ] **Step 4: `mvn test` toàn bộ PASS; commit** `feat(fi245-sf19): PostgresTechOrderRepository + config wiring + IT`
+- [x] **Step 2: TechRepositoryConfig.java** — 2 bean `@ConditionalOnProperty(name="fulfillment.store", havingValue="postgres", matchIfMissing=true)` / `inmemory` trả TechOrderRepository tương ứng (InMemory nhận seed tech-sample qua `TechSeedLoader`).
+- [x] **Step 3: IT** — copy pattern PostgresOrderRepositoryIT: `connectOrSkip()` (Assumptions.abort khi không DB/unmigrated/trống), parity vs InMemory trên cùng seed, mutating test snapshot/restore. Run: `mvn test -Dtest=PostgresTechOrderRepositoryIT` (cần postgres compose lên + migrated + seeded).
+- [x] **Step 4: `mvn test` toàn bộ PASS; commit** `feat(fi245-sf19): PostgresTechOrderRepository + config wiring + IT`
 
 ### Task 5: TechServiceImpl @GrpcService
 
