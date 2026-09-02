@@ -95,8 +95,8 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 ### 3.9 Product completion — Dashboard thống kê (SF-9, deps SF-2)
 - Màn Dashboard (mặc định sau login cho Manager; Coordinator thấy nếu phù hợp): đơn/ngày (30 ngày), tỷ lệ hoàn thành/hủy, workload shipper, đơn đang chờ xử lý — aggregate API riêng, KHÔNG N+1 loop client-side.
 
-### 3.10 Product completion — Realtime SSE (SF-10, deps SF-2+SF-3)
-- BFF SSE endpoint + event bus: mutation order (assign/cancel/complete) và batch (create/transition) đẩy event → FE hook subscribe, D1/D2 refetch hoặc update optimistic.
+### 3.10 Product completion — Realtime SSE (SF-10, deps SF-2+SF-3+SF-27)
+- BFF SSE endpoint: Java/Go publish domain events lên Kafka (`order-events`, `batch-events`) → BFF consumer → đẩy qua SSE → FE hook subscribe, D1/D2 refetch hoặc update optimistic. Reconnect + fallback polling khi Kafka/BFF consumer lỗi.
 - Reconnect + fallback polling; auth cùng access token (query param hoặc header).
 
 ### 3.11 Product completion — FE convergence mới (SF-11, deps SF-6+SF-7+SF-8+SF-9+SF-10)
@@ -113,12 +113,71 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Màn đối soát theo shop: tổng COD theo kỳ (ngày), so khớp đơn hoàn tất-COD vs đã-thu vs chênh lệch; export CSV đối soát (pattern SF-7).
 - Bảng/fields lưu settlement trong DB `fulfillment` (Flyway V3+); không đụng batching DB.
 
-### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14 — CUỐI)
+### 3.15 NVC backend — Ahamove adapter dual-mode (SF-15, deps SF-3)
+- **Adapter dual-mode**: `AHAMOVE_MODE=mock` (mặc định — CHƯA có credential) | `real` (khi env có `AHAMOVE_API_KEY` + `AHAMOVE_PARTNER_TOKEN` — tự nhận). Mock mode trả response THỰC TẾ shape Ahamove (quotes 6 tải trọng, booking gán tài xế + timeline trạng thái tự chạy theo thời gian) và ghi tag `[MOCK]` trong log + response meta. Real mode gọi api.ahamove.com thật. Điền key = đổi thật, KHÔNG sửa code.
+- Endpoints: quotes (theo tải trọng xe, phí, distance, isExceedFeeLimit), planning/confirm, booking (batchCode + shipmentPlannings COD/totalBill/stopOrder), cancel per-đơn/cả batch, searchbookingdetail (timeline).
+- Storage batching DB (migration V2): plannings, bookings, shipment statuses, tracking events, addon catalog, **fee limits per-SP**.
+- Fee-limit rules BE-authoritative: baseFee > limit → disable; total > limit → block (FE chỉ render).
+- KHÔNG có §3.27 riêng — mock+real gộp trong SF-15 adapter.
+
+### 3.16 NVC FE — carrier section + replan/rebook/tracking (SF-16, deps SF-15+SF-6)
+- D1b modal: 3 nhóm carrier (Tự giao / xe tải quotes / FPT_DELIVERY), quotes display + recalculate, addon services (ROUTE/LOADING radio, DOCUMENT checkbox, ROUND-TRIP), hạn mức phí gates.
+- D2: replan / rebook (gate theo trạng thái), hủy vận đơn per-đơn/cả batch + note.
+- Tracking modal: timeline 2 cột (BE + partner), link tracking; 15 mã trạng thái vận đơn master mapping.
+
+### 3.17 Khu vực hoạt động NV (SF-17, deps SF-2) — KHÔNG MOCK
+- BE (Flyway V4 fulfillment): service_employees + regions/wards + payment account; CRUD + active toggle.
+- Verify payment account dual-mode: có `ZALOPAY_*` env → Zalopay API thật; KHÔNG có (mặc định) → **mock verify** (trả valid khi đúng format, tag `[MOCK]`) — UI hiển thị nguồn kết quả thật/mock rõ ràng.
+- FE: list + lọc (chức danh/NV/vùng) + expand wards; define/edit form (vùng multi → chức danh → NV → payment account → khu vực tỉnh/phường); chỉ Admin viết, roles khác xem.
+
+### 3.18 D2C/Dropship module (SF-18, deps SF-2)
+- BE: d2c_orders (Flyway) + filter đa chiều (carrier, shop, NV xuất, ngành hàng, khung giờ đẩy) + ghi chú + **export Excel/CSV ≤31 ngày** (pattern SF-7).
+- FE: list + expand (push/export info, người nhận, tách nợ) + note modal; role WarehouseEmployee.
+
+### 3.19 Đơn dịch vụ kỹ thuật BE (SF-19, deps SF-2)
+- delivery_orders + installation_orders + technicians (Flyway); 10 mã trạng thái giao; assign/re-assign + **suggest employee**; timelines; service fees (payout/adjust); receiver/sender lat-long.
+
+### 3.20 Đơn dịch vụ kỹ thuật FE (SF-20, deps SF-19+SF-6)
+- 3 tab Giao hàng / Lắp đặt / KTV-CTV; filter lưu URL; assign modal + gợi ý NV; KTV-CTV detail theo ngày; gọi điện `tel:`; buttons BE-authoritative.
+
+### 3.21 Print expansion + platform polish (SF-21, deps SF-15+SF-6)
+- In mở rộng 5 loại chứng từ (bill, vận đơn, handover_receipt, goods_handover, installation_acceptance); printer management (bảng printers + chọn theo shop, bill vs A4); print errors per-đơn; preview; "in tất cả".
+- Platform: hotkeys (F4 save/F6 create/F8 cancel), empty-states dùng chung.
+
+### 3.22 i18n vi/en toàn app (SF-22, deps SF-6)
+- Khung i18next (hoặc tương đương nhẹ) + namespace theo module; bản VI đầy đủ (mặc định) + EN cho toàn bộ screens; language switcher trong shell; persist localStorage.
+- Chuẩn: KHÔNG hardcode string mới ở mọi SF từ điểm này — i18n keys là pattern bắt buộc cho code mới.
+
+### 3.23 PWA + Push OneSignal + GA (SF-23, deps SF-10)
+- PWA: manifest + service worker (cache shell, offline fallback trang tĩnh), installable.
+- OneSignal dual-mode: có `ONESIGNAL_APP_ID` + `ONESIGNAL_REST_API_KEY` → push thật; KHÔNG có (mặc định) → **mock mode** — event push ghi log + lưu bảng `notification_log` (FE không phân biệt, nhận qua cùng channel khi có push). Tag `[MOCK]` trong log.
+- GA dual-mode: có `GA_MEASUREMENT_ID` → GA thật; KHÔNG có → events ghi vào log nội bộ (không gửi ngoài).
+- Cả hai tự chọn mode theo env; điền key sau = chuyển thật không sửa code.
+
+### 3.24 Map view (SF-24, deps SF-16+SF-20)
+- Bản đồ Leaflet + OpenStreetMap (KHÔNG cần API key): pins đơn theo lat/long (tech service), route stops của batch (theo thứ tự stop), warehouse marker; mở từ tracking modal + tech service screens.
+
+### 3.25 KTV/CTV mobile web app (SF-25, deps SF-20+SF-23)
+- Mobile web (installable PWA, breakpoint điện thoại) cho KTV/CTV: my-orders hôm nay, accept/complete/reschedule theo buttons flags, xem timeline + địa chỉ (deep-link map), gọi KH.
+- Auth cùng OIDC; role KTV tương đương (thêm role vào realm nếu thiếu).
+
+### 3.26 Webhook nhận đơn từ sàn (SF-26, deps SF-13+SF-27)
+- Endpoint `POST /webhooks/orders` (HMAC signature header qua env) nhận đơn từ hệ thống bán hàng/sàn: validate + idempotency (dedupe theo externalId) + map vào orders (fulfillCode tự sinh) + audit; retry response 2xx/4xx/5xx chuẩn; config mapping qua env. Đơn tạo xong publish event `order.created` lên Kafka topic `order-events` (SSE/push hưởng qua BFF consumer).
+
+### 3.27 Kafka event bus — trung tâm (SF-27, deps SF-2+SF-3, Tier 2)
+- **Infra**: kafka (KRaft mode, không zookeeper) + kafka-ui (dev) trong docker-compose; healthcheck; 3 topics khai báo lúc init: `order-events`, `batch-events`, `notification-events` (partitions=1, RF=1 — dev single-node).
+- **Producer**: Java fulfillment publish event khi mutate order (ASSIGNED/CANCELLED/COMPLETED/FAILED/redelivery); Go batching publish khi create/transition batch. Event envelope chung: `{eventId, type, occurredAt, source, payload}` — JSON, key = orderCode/batchCode. Publish best-effort + log — KHÔNG outbox pattern trong story này (saga giữ nguyên direct gRPC như cũ, Kafka là side-channel quan sát/realtime, KHÔNG phải path nghiệp vụ blocking).
+- **Consumer**: BFF consumer group đọc topics → fan-out tới SSE (SF-10) và notification pipeline (SF-23); webhook SF-26 publish `order.created` (không cần consumer riêng nếu BFF đã subscribe chung).
+- **Env**: `KAFKA_BOOTSTRAP_SERVERS` + `KAFKA_ENABLED` (false → producer/consumer no-op không lỗi — tương thích môi trường không Kafka, E2E cũ không vỡ).
+- KHÔNG đổi gRPC contract; KHÔNG đổi flow nghiệp vụ đồng bộ hiện có; KHÔNG event-sourcing.
+
+### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14+SF-16+SF-20+SF-21+SF-22..26 — CUỐI, Tier 6)
 - **M-3 resolved**: s2s auth — token passthrough (BFF forward access token, services verify JWKS) HOẶC mTLS nội mạng compose — SF-12 chọn 1, ghi rationale.
 - Secrets: `.env` ra khỏi git (gitignore + rotate credentials), compose đọc từ env file local.
 - Monitoring: healthcheck endpoints mọi service + uptime checks compose; logs structured.
 - CI/CD: GitHub Actions — lint + unit test + E2E (E2E=1) + docker build mỗi PR.
 - Backup: cron `pg_dump` cả 2 DB + restore doc.
+- **Reconciliation job**: định kỳ quét đơn PREPARING không có batch tương ứng (mồ côi do network partition giữa Go compensate + Java mutate) → revert về NOT_PREPARED + audit log; chạy trong Go/Java service hoặc cron compose.
 
 ## 4. ACCEPTANCE (user-visible)
 1. `docker compose up --build` trên máy sạch → mở :3000 → đăng nhập username/password thật → D1 lọc đơn → D1b tạo phiếu (DnD + suggest + shipper) → D2 hủy/hoàn tất → D3 in PDF — toàn bộ hoạt động.
@@ -134,6 +193,16 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 11. CI chạy test + E2E mỗi PR; backup `pg_dump` cron chạy; s2s auth không còn plain x-user-role.
 12. Coordinator import file đơn (CSV/Excel) → đơn vào D1 xử lý được; tạo đơn thủ công OK; đơn giao thất bại có lý do + giao lại được.
 13. COD thu được xác nhận per-order; Manager xem màn đối soát theo shop + export; số liệu khớp DB.
+14. NVC: tạo phiếu có báo giá xe tải + addon + chặn vượt hạn mức phí; book/replan/rebook/hủy vận đơn; tracking timeline; (provider mock local — swap Ahamove thật sau).
+15. Đủ 4 module của app gốc: khu vực NV, hub-store-order, D2C, đơn dịch vụ kỹ thuật (3 tab + KTV-CTV) — hoạt động trên DB/auth/design mới.
+16. In đủ 5 loại chứng từ + chọn máy in theo shop + theo dõi lỗi in.
+17. Đổi ngôn ngữ VI/EN toàn app; lưu lựa chọn.
+18. App cài được như PWA; nhận push khi có đơn mới/batch hoàn tất; GA đo sự kiện chính.
+19. Thấy bản đồ pins/route từ tracking + tech service (OpenStreetMap).
+20. KTV dùng mobile web: nhận việc, hoàn tất, đổi lịch — trên điện thoại.
+21. Hệ thống bán hàng đẩy đơn qua webhook → đơn vào D1 xử lý (idempotent).
+22. Đổi env sang Ahamove thật → quotes/booking chạy thật (khi có credential).
+23. `KAFKA_ENABLED=true` → kafka-ui thấy events chảy khi mutate đơn/batch; SSE + push hoạt động qua Kafka; `KAFKA_ENABLED=false` (mặc định dev nhẹ) → app vẫn chạy trọn vẹn không lỗi.
 
 ## 5. Boundary (KHÔNG làm)
 - KHÔNG TLS/HA; KHÔNG k8s/helm; KHÔNG horizontal scaling. (Backup automation + monitoring giờ IN scope — SF-12.)
