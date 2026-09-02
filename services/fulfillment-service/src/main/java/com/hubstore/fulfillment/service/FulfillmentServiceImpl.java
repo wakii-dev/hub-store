@@ -438,7 +438,13 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                 .setCodAmount(o.codAmount())
                 .setTotalQuantity(o.totalQuantity())
                 .setIsDebtSplittingOrder(o.isDebtSplittingOrder())
-                .setCustomerAddress(orEmpty(o.customerAddress()));
+                .setCustomerAddress(orEmpty(o.customerAddress()))
+                // SF-13 fields 16-20 (intake) — fail state phải tới FE (D2 exception UI).
+                .setCustomerName(orEmpty(o.customerName()))
+                .setCustomerPhone(orEmpty(o.customerPhone()))
+                .setFailReason(orEmpty(o.failReason()))
+                .setFailNote(orEmpty(o.failNote()))
+                .setOldFulfillCode(orEmpty(o.oldFulfillCode()));
         if (o.batchCode() != null) {
             b.setBatchCode(o.batchCode());
         }

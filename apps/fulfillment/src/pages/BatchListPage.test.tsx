@@ -2,7 +2,7 @@ import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/re
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
 import { getI18n, initI18n } from "@hub-store/shared";
-import type { Batch } from "@hub-store/shared";
+import type { Batch, HubStoreOrderFilterItem } from "@hub-store/shared";
 import { fulfillmentResources } from "../i18n";
 import BatchListPage from "./BatchListPage";
 
@@ -69,6 +69,8 @@ const paginated = (items: Batch[]) => ({ items, total: items.length, page: 1, pa
 const filterMock = vi.hoisted(() => vi.fn());
 const cancelMutate = vi.hoisted(() => vi.fn());
 const completeMutate = vi.hoisted(() => vi.fn());
+const batchOrdersMock = vi.hoisted(() => vi.fn());
+const redeliverMutate = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../api/batchesApi", () => ({
@@ -78,6 +80,10 @@ vi.mock("../api/batchesApi", () => ({
   useCancelBatchMutation: () => [cancelMutate, { isLoading: false }] as any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useCompletePickingMutation: () => [completeMutate, { isLoading: false }] as any,
+  // D7 hydration — GET /orders/by-batch/:batchCode (BFF owns aggregation).
+  useGetBatchOrdersQuery: (arg: unknown) => batchOrdersMock(arg),
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useRedeliverOrderMutation: () => [redeliverMutate, { isLoading: false }] as any,
 }));
 
 vi.mock("react-router-dom", async (importOriginal) => ({
@@ -90,6 +96,25 @@ function mockListResult(items: Batch[]) {
   filterMock.mockReturnValue({ data: paginated(items), isLoading: false, isFetching: false, refetch });
 }
 
+/** Hydration row (GET /orders/by-batch) — chỉ fields D7 UI đọc. */
+function makeHydrated(overrides: Partial<HubStoreOrderFilterItem>): HubStoreOrderFilterItem {
+  return {
+    fulfillCode: "ORD-3007",
+    statusCode: 2,
+    batchStatus: 1,
+    shopAssignment: { shopCode: "30201", shopName: "FPT Shop Cầu Giấy", address: "124 Xuân Thủy" },
+    originalTime: ACTIVE_BATCH.deliveryTime,
+    deliveryTime: ACTIVE_BATCH.deliveryTime,
+    orderStatus: 1,
+    items: [],
+    codAmount: 0,
+    totalQuantity: 0,
+    isDebtSplittingOrder: false,
+    customerAddress: "Số 33, phố Cầu Giấy, Hà Nội",
+    ...overrides,
+  } as HubStoreOrderFilterItem;
+}
+
 // ---- Suite -------------------------------------------------------------------
 
 beforeEach(() => {
@@ -98,9 +123,14 @@ beforeEach(() => {
   refetch.mockReset();
   cancelMutate.mockReset();
   completeMutate.mockReset();
+  batchOrdersMock.mockReset();
+  redeliverMutate.mockReset();
   navigateMock.mockReset();
   cancelMutate.mockReturnValue({ unwrap: () => Promise.resolve(null) });
   completeMutate.mockReturnValue({ unwrap: () => Promise.resolve(null) });
+  redeliverMutate.mockReturnValue({ unwrap: () => Promise.resolve({ fulfillCode: "ORD-9001" }) });
+  // Mặc định hydration chưa có dữ liệu (chưa expand / BFF lỗi) — UI vẫn render.
+  batchOrdersMock.mockReturnValue({ data: undefined });
   window.history.replaceState(null, "", "/");
 });
 
@@ -225,5 +255,50 @@ describe("BatchListPage (D2)", () => {
     fireEvent.click(document.querySelector(".ant-table-row-expand-icon")!);
     expect(screen.getByText("Modem WiFi 6 FPT")).toBeTruthy();
     expect(screen.getByText("PRD-001")).toBeTruthy();
+  });
+
+  it("D7 expand đơn chưa fail — nút Mark thất bại, KHÔNG tag/redeliver", () => {
+    mockListResult([ACTIVE_BATCH]);
+    // Hydration join theo index (BFF giữ thứ tự codes) — RSA-700107 = items[0].
+    batchOrdersMock.mockReturnValue({
+      data: [makeHydrated({ fulfillCode: "ORD-3007" }), makeHydrated({ fulfillCode: "ORD-3008" })],
+    });
+    renderPage();
+
+    fireEvent.click(document.querySelector(".ant-table-row-expand-icon")!);
+    expect(screen.getByTestId("mark-fail-button-RSA-700107")).toBeTruthy();
+    expect(screen.queryByTestId("fail-tag-RSA-700107")).toBeNull();
+    expect(screen.queryByTestId("redeliver-button-RSA-700107")).toBeNull();
+  });
+
+  it("D7 expand đơn FAILED — tag lý do (label VI) + nút Giao lại, ẩn Mark", () => {
+    mockListResult([ACTIVE_BATCH]);
+    batchOrdersMock.mockReturnValue({
+      data: [
+        makeHydrated({ fulfillCode: "ORD-3007", failReason: "KHACH_VANG", failNote: "Gọi không nghe" }),
+      ],
+    });
+    renderPage();
+
+    fireEvent.click(document.querySelector(".ant-table-row-expand-icon")!);
+    const tag = screen.getByTestId("fail-tag-RSA-700107");
+    expect(tag.textContent).toBe("Khách vắng");
+    expect(screen.getByText("Gọi không nghe")).toBeTruthy();
+    expect(screen.queryByTestId("mark-fail-button-RSA-700107")).toBeNull();
+    expect(screen.getByTestId("redeliver-button-RSA-700107")).toBeTruthy();
+  });
+
+  it("D7 Giao lại — mutation đúng code + message mã đơn mới (resp.fulfillCode)", async () => {
+    mockListResult([ACTIVE_BATCH]);
+    batchOrdersMock.mockReturnValue({
+      data: [makeHydrated({ fulfillCode: "ORD-3007", failReason: "KHAC" })],
+    });
+    renderPage();
+
+    fireEvent.click(document.querySelector(".ant-table-row-expand-icon")!);
+    fireEvent.click(screen.getByTestId("redeliver-button-RSA-700107"));
+    await waitFor(() =>
+      expect(redeliverMutate).toHaveBeenCalledWith({ code: "RSA-700107" }),
+    );
   });
 });

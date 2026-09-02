@@ -30,6 +30,14 @@ import type {
   PrintResponse,
 } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
 import type {
+  ConfirmImportOrdersResponse,
+  CreateManualOrderResponse,
+  GetOrderAuditResponse,
+  MarkOrderFailedResponse,
+  RedeliverOrderResponse,
+  ValidateImportOrdersResponse,
+} from '../../../api/proto/gen/ts/hubstore/intake/v1/intake';
+import type {
   CancelDeliveryBatchResponse,
   CancelDeliveryOrderResponse,
   ConfirmPlanningResponse,
@@ -158,6 +166,12 @@ export const fixtureOrder: HubStoreOrderFilterItem = {
   customerAddress: 'Số 1 Trịnh Văn Bô',
   distance: 4.2,
   note: '',
+  // SF-13 additive fields (proto fields 16-20 — required strings).
+  customerName: 'Nguyễn Văn A',
+  customerPhone: '0912345678',
+  failReason: '',
+  failNote: '',
+  oldFulfillCode: '',
 };
 
 export const fixtureBatch: Batch = {
@@ -362,4 +376,24 @@ export const deliveryBatchResponses = {
     addons: [{ code: 'LOADING', name: 'Bốc xếp', grp: 'LOADING', fee: 50000, vehicleTypes: ['SGCN', '1T2'] }],
     meta: { mock: true },
   } as ListAddonServicesResponse,
+};
+
+/** SF-13 intake — happy-path defaults (per-test override khi cần fail). */
+export const intakeResponses = {
+  validateImportOrders: { errors: [] } as ValidateImportOrdersResponse,
+  confirmImportOrders: { fulfillCodes: ['ORD-4001', 'ORD-4002'] } as ConfirmImportOrdersResponse,
+  createManualOrder: { fulfillCode: 'ORD-4001' } as CreateManualOrderResponse,
+  markOrderFailed: {} as MarkOrderFailedResponse,
+  redeliverOrder: { newFulfillCode: 'ORD-9001' } as RedeliverOrderResponse,
+  getOrderAudit: {
+    entries: [
+      {
+        actor: 'coordinator1',
+        action: 'order.imported',
+        target: 'ORD-4001',
+        detailJson: '{"createdAt":"2026-09-02T10:00:00+07:00"}',
+        createdAt: '2026-09-02T10:00:00+07:00',
+      },
+    ],
+  } as GetOrderAuditResponse,
 };

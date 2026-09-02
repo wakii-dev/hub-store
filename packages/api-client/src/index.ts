@@ -25,6 +25,7 @@ import './slices/fulfillment';
 import './slices/batches';
 import './slices/masterData';
 import './slices/users';
+import './slices/intake';
 
 // Re-export the stub hooks for convenience (remotes can deep-import the slice
 // files directly too).
@@ -43,3 +44,8 @@ export {
   type UserListItem,
   type CreateUserArg,
 } from './slices/users';
+export {
+  usePreviewImportMutation,
+  useConfirmImportMutation,
+  useCreateManualOrderMutation,
+} from './slices/intake';

@@ -7,6 +7,7 @@ import {
   Modal,
   Space,
   Table,
+  Tag,
   Typography,
 } from "antd";
 import type { ColumnsType } from "antd/es/table";
@@ -19,6 +20,8 @@ import {
   BATCH_ENTITY_STATUS,
   DESIGN_TOKENS,
   EmptyState,
+  DELIVERY_FAIL_REASON,
+  DELIVERY_FAIL_REASON_LABELS,
   FilterBar,
   MultiSelect,
   StatusTag,
@@ -29,6 +32,7 @@ import {
   type Batch,
   type BatchEntityStatus,
   type BatchingItem,
+  type HubStoreOrderFilterItem,
   type Locale,
   type Product,
 } from "@hub-store/shared";
@@ -37,9 +41,12 @@ import {
   useCompletePickingMutation,
   useFilterBatchesQuery,
   useGetBatchCriteriaQuery,
+  useGetBatchOrdersQuery,
+  useRedeliverOrderMutation,
 } from "../api/batchesApi";
 import { fulfillmentStore } from "../store";
 import { registerFulfillmentResources } from "../i18n";
+import { MarkFailModal } from "../features/MarkFailModal";
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
 registerFulfillmentResources();
@@ -90,6 +97,87 @@ function ProductTable({ products }: { products: Product[] }) {
   );
 }
 
+/**
+ * Expand content 1 đơn (D7): product table + exception UI.
+ *
+ * Hydration: GET /orders/by-batch/:batchCode (BFF owns aggregation — plan T8).
+ * BFF trả HubStoreOrderFilterItem[] THEO THỨ TỰ codes yêu cầu (repo
+ * findByCodes giữ order, bỏ code lạ) → join theo index với batch.items.
+ * FAILED = có failReason (server set khi markOrderFailed; gate cuối ở server).
+ */
+function OrderExpandContent({
+  record,
+  onMarkFail,
+}: {
+  record: BatchRow;
+  onMarkFail: (orderCode: string) => void;
+}) {
+  const { t, i18n } = useTranslation("fulfillment");
+  const locale: Locale = i18n.language.startsWith("vi") ? "vi" : "en";
+  const { batch, item } = record;
+  const { data: orders } = useGetBatchOrdersQuery(batch.batchCode);
+  const [redeliverOrder, { isLoading: redelivering }] = useRedeliverOrderMutation();
+
+  const index = batch.items.findIndex((i) => i.orderCode === item.orderCode);
+  const order: HubStoreOrderFilterItem | undefined = index >= 0 ? orders?.[index] : undefined;
+  const failed = Boolean(order?.failReason);
+
+  // failReason từ BFF là enum-name string (KHACH_VANG | ...) → label qua shared map.
+  const reasonNum = order?.failReason
+    ? DELIVERY_FAIL_REASON[order.failReason as keyof typeof DELIVERY_FAIL_REASON]
+    : undefined;
+  const reasonLabel =
+    order?.failReason && reasonNum !== undefined
+      ? DELIVERY_FAIL_REASON_LABELS[reasonNum][locale]
+      : order?.failReason;
+
+  const handleRedeliver = async () => {
+    try {
+      const resp = await redeliverOrder({ code: item.orderCode }).unwrap();
+      message.success(t("exception.redeliverSuccess", { code: resp.fulfillCode }));
+    } catch (err) {
+      // Double-redeliver (server 422 INVALID_ARGUMENT) hoặc lỗi khác — message envelope.
+      message.error(`${t("exception.actionFailed")}: ${errMessage(err)}`);
+    }
+  };
+
+  return (
+    <div data-testid={`order-expand-${item.orderCode}`}>
+      <Space size={4} wrap align="center" style={{ marginBottom: 8 }}>
+        {failed && reasonLabel && (
+          <Tag color="error" data-testid={`fail-tag-${item.orderCode}`}>
+            {reasonLabel}
+          </Tag>
+        )}
+        {order?.failNote && (
+          <Typography.Text type="secondary">{order.failNote}</Typography.Text>
+        )}
+        {!failed && (
+          <Button
+            size="small"
+            danger
+            data-testid={`mark-fail-button-${item.orderCode}`}
+            onClick={() => onMarkFail(item.orderCode)}
+          >
+            {t("exception.markFail")}
+          </Button>
+        )}
+        {failed && (
+          <Button
+            size="small"
+            loading={redelivering}
+            data-testid={`redeliver-button-${item.orderCode}`}
+            onClick={() => void handleRedeliver()}
+          >
+            {t("exception.redeliver")}
+          </Button>
+        )}
+      </Space>
+      <ProductTable products={item.items} />
+    </div>
+  );
+}
+
 /** Exposed qua federation là `fulfillment/BatchListPage` → route /hub-store-order/batch. */
 export default function BatchListPage() {
   return (
@@ -128,6 +216,9 @@ function BatchListPageInner() {
   // Hủy phiếu — modal confirm + reason (bắt buộc).
   const [cancelTarget, setCancelTarget] = useState<Batch | null>(null);
   const [reason, setReason] = useState("");
+
+  // Mark thất bại (D7) — mã đơn đang mở modal (mount theo điều kiện → reset state).
+  const [failTarget, setFailTarget] = useState<string | null>(null);
 
   const batches = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -339,7 +430,9 @@ function BatchListPageInner() {
             onChange: (p) => setPage(p),
           }}
           expandable={{
-            expandedRowRender: (record) => <ProductTable products={record.item.items} />,
+            expandedRowRender: (record) => (
+              <OrderExpandContent record={record} onMarkFail={setFailTarget} />
+            ),
           }}
         />
       </div>
@@ -362,6 +455,10 @@ function BatchListPageInner() {
           rows={3}
         />
       </Modal>
+
+      {failTarget !== null && (
+        <MarkFailModal open orderCode={failTarget} onClose={() => setFailTarget(null)} />
+      )}
     </div>
   );
 }

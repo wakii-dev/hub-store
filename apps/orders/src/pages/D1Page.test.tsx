@@ -107,7 +107,10 @@ afterEach(() => {
 });
 
 describe("D1Page", () => {
-  it("render title + đủ 8 filter fields", () => {
+  // Timeout 20s mỗi test (SF-13): máy đang load cao (các worktree anh em chạy
+  // test song song) → test đầu tiên trong worker hay vượt default 5s dù logic
+  // không đổi. Solo ổn định ~1-2s/test.
+  it("render title + đủ 8 filter fields", { timeout: 20000 }, () => {
     renderD1();
     expect(screen.getByText("Danh sách đơn hàng kho chi nhánh")).toBeTruthy();
     // TextSearch → placeholder attr; MultiSelect (antd Select) → .ant-select-selection-placeholder;
@@ -130,7 +133,7 @@ describe("D1Page", () => {
     expect(screen.getAllByText(/ORD-300[129]/)).toHaveLength(3);
   });
 
-  it("tick 2 đơn CÙNG kho → Tạo phiếu soạn enable, Chuyển kho disable (≠1 row)", () => {
+  it("tick 2 đơn CÙNG kho → Tạo phiếu soạn enable, Chuyển kho disable (≠1 row)", { timeout: 20000 }, () => {
     renderD1();
     clickRowCheckbox(0);
     clickRowCheckbox(1);
@@ -141,14 +144,14 @@ describe("D1Page", () => {
     expect(screen.getByText("Lọc đơn theo kho để tạo phiếu soạn")).toBeTruthy();
   });
 
-  it("tick 2 đơn KHÁC kho → Tạo phiếu soạn disable", () => {
+  it("tick 2 đơn KHÁC kho → Tạo phiếu soạn disable", { timeout: 20000 }, () => {
     renderD1();
     clickRowCheckbox(0); // 30201
     clickRowCheckbox(2); // 30202
     expect((screen.getByTestId("bulk-create-batch") as HTMLButtonElement).disabled).toBe(true);
   });
 
-  it("tick đúng 1 đơn → Chuyển kho enable → mở modal", async () => {
+  it("tick đúng 1 đơn → Chuyển kho enable → mở modal", { timeout: 20000 }, async () => {
     renderD1();
     clickRowCheckbox(0);
     expect((screen.getByTestId("bulk-transfer") as HTMLButtonElement).disabled).toBe(false);
@@ -156,7 +159,7 @@ describe("D1Page", () => {
     await waitFor(() => expect(screen.getByTestId("transfer-order-code").textContent).toBe("ORD-3001"));
   });
 
-  it('expand (Chi tiết) → hàng expand mở (content render thật ở browser — rc-table ẩn khi componentWidth=0 trong jsdom)', () => {
+  it('expand (Chi tiết) → hàng expand mở (content render thật ở browser — rc-table ẩn khi componentWidth=0 trong jsdom)', { timeout: 20000 }, () => {
     renderD1();
     const row = screen.getByTestId("fulfill-code-ORD-3001").closest("tr")!;
     expect(document.querySelectorAll(".ant-table-expanded-row")).toHaveLength(0);
@@ -164,20 +167,20 @@ describe("D1Page", () => {
     expect(document.querySelectorAll(".ant-table-expanded-row").length).toBeGreaterThan(0);
   });
 
-  it("edit delivery-time CHỈ hiện trên đơn batchStatus=0", () => {
+  it("edit delivery-time CHỈ hiện trên đơn batchStatus=0", { timeout: 20000 }, () => {
     renderD1();
     expect(screen.getByTestId("edit-delivery-ORD-3001")).toBeTruthy(); // batchStatus 0
     expect(screen.getByTestId("edit-delivery-ORD-3009")).toBeTruthy(); // batchStatus 0
     expect(screen.queryByTestId("edit-delivery-ORD-3002")).toBeNull(); // batchStatus 1 → read-only
   });
 
-  it("batchCode link navigate cross-remote /hub-store-order/batch", () => {
+  it("batchCode link navigate cross-remote /hub-store-order/batch", { timeout: 20000 }, () => {
     renderD1();
     fireEvent.click(screen.getByTestId("batch-link-BATCH-0001"));
     expect(screen.getByTestId("batch-page-probe")).toBeTruthy();
   });
 
-  it("useUrlState round-trip: filter → URL → remount giữ nguyên", () => {
+  it("useUrlState round-trip: filter → URL → remount giữ nguyên", { timeout: 20000 }, () => {
     const { unmount } = renderD1();
     const input = screen.getByPlaceholderText("Số đơn hàng") as HTMLInputElement;
     fireEvent.change(input, { target: { value: "ORD-1" } });

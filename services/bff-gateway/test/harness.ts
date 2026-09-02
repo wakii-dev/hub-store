@@ -26,12 +26,14 @@ import {
   printResponses,
   deliveryBatchResponses,
   techResponses,
+  intakeResponses,
 } from './fixtures.js';
 import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import { TechServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
 import { BatchingServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/batching';
 import { DeliveryBatchServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/delivery_batch';
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
+import { IntakeServiceService } from '../../../api/proto/gen/ts/hubstore/intake/v1/intake';
 
 export const TEST_ISSUER = 'https://keycloak.test/realms/hubstore';
 export const TEST_AUDIENCE = 'hubstore-api';
@@ -165,6 +167,7 @@ export interface Harness {
   batching: MockUpstream;
   deliverybatch: MockUpstream;
   print: MockUpstream;
+  intake: MockUpstream;
   app: FastifyInstance;
   identity: TestIdentity;
   kc: MockKcAdmin;
@@ -269,6 +272,9 @@ async function startMockKcAdmin(): Promise<MockKcAdmin> {
 const fulfillmentDefaults: Record<string, UnaryHandler> = {
   filterOrders: (_c, cb) => cb(null, fulfillmentResponses.filterOrders),
   getOrderDetail: (_c, cb) => cb(null, fulfillmentResponses.getOrderDetail),
+  // SF-13 hydration /orders/by-batch — BFF gọi GetOrdersByCodes (plan T8).
+  getOrdersByCodes: (_c, cb) =>
+    cb(null, { orders: [fulfillmentResponses.getOrderDetail.order] }),
   assignShopHub: (_c, cb) => cb(null, { order: fulfillmentResponses.getOrderDetail.order }),
   getAssignHistory: (_c, cb) => cb(null, fulfillmentResponses.getAssignHistory),
   getDashboardStats: (_c, cb) => cb(null, fulfillmentResponses.getDashboardStats),
@@ -313,6 +319,15 @@ const deliveryBatchDefaults: Record<string, UnaryHandler> = {
   listAddonServices: (_c, cb) => cb(null, deliveryBatchResponses.listAddonServices),
 };
 
+const intakeDefaults: Record<string, UnaryHandler> = {
+  validateImportOrders: (_c, cb) => cb(null, intakeResponses.validateImportOrders),
+  confirmImportOrders: (_c, cb) => cb(null, intakeResponses.confirmImportOrders),
+  createManualOrder: (_c, cb) => cb(null, intakeResponses.createManualOrder),
+  markOrderFailed: (_c, cb) => cb(null, intakeResponses.markOrderFailed),
+  redeliverOrder: (_c, cb) => cb(null, intakeResponses.redeliverOrder),
+  getOrderAudit: (_c, cb) => cb(null, intakeResponses.getOrderAudit),
+};
+
 /** Port "chắc chắn chết": bind rồi đóng — dùng cho test 503 conn-refused. */
 async function grabDeadPort(): Promise<number> {
   const s = new Server();
@@ -329,13 +344,14 @@ export interface HarnessOptions {
   /** Deadline ngắn để test thật đường DEADLINE_EXCEEDED mà không chậm. */
   deadlineMs?: number;
   /** Trỏ 1 upstream tới port chết — test 503 UPSTREAM_UNAVAILABLE. */
-  deadUpstream?: 'fulfillment' | 'batching' | 'deliverybatch' | 'print';
+  deadUpstream?: 'fulfillment' | 'batching' | 'deliverybatch' | 'print' | 'intake';
   /** Override handler mặc định lúc boot. */
   fulfillmentHandlers?: Record<string, UnaryHandler>;
   techHandlers?: Record<string, UnaryHandler>;
   batchingHandlers?: Record<string, UnaryHandler>;
   deliverybatchHandlers?: Record<string, UnaryHandler>;
   printHandlers?: Record<string, UnaryHandler>;
+  intakeHandlers?: Record<string, UnaryHandler>;
 }
 
 export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> {
@@ -375,12 +391,17 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     ...printDefaults,
     ...opts.printHandlers,
   });
+  const intake = await startMockServer(IntakeServiceService, {
+    ...intakeDefaults,
+    ...opts.intakeHandlers,
+  });
 
   const addrs: Record<string, string> = {
     fulfillment: fulfillment.addr,
     batching: batching.addr,
     deliverybatch: deliverybatch.addr,
     print: print.addr,
+    intake: intake.addr,
   };
   if (opts.deadUpstream) {
     addrs[opts.deadUpstream] = `127.0.0.1:${await grabDeadPort()}`;
@@ -406,6 +427,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       batching: addrs.batching,
       deliverybatch: addrs.deliverybatch,
       print: addrs.print,
+      intake: addrs.intake,
       deadlineMs: opts.deadlineMs ?? 2000,
     },
     devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
@@ -419,6 +441,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     batching,
     deliverybatch,
     print,
+    intake,
     app,
     identity,
     kc,
@@ -429,6 +452,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       await batching.close();
       await deliverybatch.close();
       await print.close();
+      await intake.close();
       await identity.close();
       await kc.close();
     },

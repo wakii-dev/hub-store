@@ -135,6 +135,15 @@ message HubStoreOrderFilterItem {
   // Ghi chú — field thêm bởi SF-2 cho PUT /fulfillment/{code}/note
   // (spec §3.8: implement backend đầy đủ, KHÔNG có FE screen).
   optional string note = 15;
+  // --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+  string customer_name = 16;      // MỚI SF-13 — seed orders NULL → rỗng
+  string customer_phone = 17;     // MỚI SF-13
+  // Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+  // STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+  string fail_reason = 18;
+  string fail_note = 19;
+  // Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+  string old_fulfill_code = 20;
 }
 
 // ShopAssignmentHistoryEntry — 1 entry lịch sử chuyển kho (D1c history view).

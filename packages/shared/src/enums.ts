@@ -53,3 +53,27 @@ export const PRINT_TYPES = [
   'installation_acceptance',
 ] as const;
 export type PrintType = (typeof PRINT_TYPES)[number];
+
+/**
+ * DeliveryFailReason — lý do giao thất bại (SF-13, spec D1/D7).
+ * Wire codes mirror hubstore.intake.v1.DeliveryFailReason (intake.proto).
+ * Đơn KHÔNG fail → cột failReason rỗng (không có mã "không fail" trong enum).
+ */
+export const DELIVERY_FAIL_REASON = {
+  KHACH_VANG: 0,
+  SAI_DIA_CHI: 1,
+  KHACH_TU_CHOI: 2,
+  KHAC: 3,
+} as const;
+export type DeliveryFailReason =
+  (typeof DELIVERY_FAIL_REASON)[keyof typeof DELIVERY_FAIL_REASON];
+
+/** Labels VI/EN cho fail reason — export riêng (STATUS_TAG_LABELS thuộc StatusTag scope). */
+export const DELIVERY_FAIL_REASON_LABELS: Readonly<
+  Record<DeliveryFailReason, { vi: string; en: string }>
+> = {
+  0: { vi: 'Khách vắng', en: 'Customer absent' },
+  1: { vi: 'Sai địa chỉ', en: 'Wrong address' },
+  2: { vi: 'Khách từ chối', en: 'Customer refused' },
+  3: { vi: 'Khác', en: 'Other' },
+};

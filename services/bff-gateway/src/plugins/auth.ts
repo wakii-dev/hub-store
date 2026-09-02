@@ -83,3 +83,25 @@ export function requireUser(request: FastifyRequest): RequestUser {
   // Guard onRequest đảm bảo user luôn set cho route không public.
   return request.user as RequestUser;
 }
+
+/**
+ * Role gate (SF-13 intake): user có 1 trong `roles` → user; ngược lại send 403
+ * envelope PERMISSION_DENIED và trả null — route `if (!user) return reply;`.
+ */
+export function requireRole(
+  request: FastifyRequest,
+  reply: { code(c: number): { send(b: unknown): unknown } },
+  ...roles: readonly string[]
+): RequestUser | null {
+  const user = requireUser(request);
+  if (!roles.includes(user.role)) {
+    const body: ErrorEnvelope = {
+      statusCode: 403,
+      message: `Role ${user.role} is not allowed for this operation.`,
+      code: 'PERMISSION_DENIED',
+    };
+    void reply.code(403).send(body);
+    return null;
+  }
+  return user;
+}

@@ -17,15 +17,23 @@ type UnaryFn<Req, Res> = (
   callback: (error: ServiceError | null, response: Res) => void,
 ) => ClientUnaryCall;
 
-/** Promisify 1 gRPC unary call + deadline + x-user-role metadata. */
+/**
+ * Promisify 1 gRPC unary call + deadline + x-user-role metadata.
+ * `actor` (optional, SF-13) — x-user-name cho audit trail intake; các call cũ
+ * không truyền → metadata giữ nguyên shape (additive).
+ */
 export function callUnary<Req, Res>(
   fn: UnaryFn<Req, Res>,
   request: Req,
   role: string,
   deadlineMs: number,
+  actor?: string,
 ): Promise<Res> {
   const metadata = new Metadata();
   metadata.set('x-user-role', role);
+  if (actor) {
+    metadata.set('x-user-name', actor);
+  }
   return new Promise<Res>((resolve, reject) => {
     fn(request, metadata, { deadline: Date.now() + deadlineMs }, (err, response) => {
       if (err) {

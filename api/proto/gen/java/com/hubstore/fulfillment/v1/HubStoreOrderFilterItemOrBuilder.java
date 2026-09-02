@@ -316,4 +316,98 @@ public interface HubStoreOrderFilterItemOrBuilder extends
    */
   com.google.protobuf.ByteString
       getNoteBytes();
+
+  /**
+   * <pre>
+   * --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+   * </pre>
+   *
+   * <code>string customer_name = 16;</code>
+   * @return The customerName.
+   */
+  java.lang.String getCustomerName();
+  /**
+   * <pre>
+   * --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+   * </pre>
+   *
+   * <code>string customer_name = 16;</code>
+   * @return The bytes for customerName.
+   */
+  com.google.protobuf.ByteString
+      getCustomerNameBytes();
+
+  /**
+   * <pre>
+   * MỚI SF-13
+   * </pre>
+   *
+   * <code>string customer_phone = 17;</code>
+   * @return The customerPhone.
+   */
+  java.lang.String getCustomerPhone();
+  /**
+   * <pre>
+   * MỚI SF-13
+   * </pre>
+   *
+   * <code>string customer_phone = 17;</code>
+   * @return The bytes for customerPhone.
+   */
+  com.google.protobuf.ByteString
+      getCustomerPhoneBytes();
+
+  /**
+   * <pre>
+   * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+   * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+   * </pre>
+   *
+   * <code>string fail_reason = 18;</code>
+   * @return The failReason.
+   */
+  java.lang.String getFailReason();
+  /**
+   * <pre>
+   * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+   * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+   * </pre>
+   *
+   * <code>string fail_reason = 18;</code>
+   * @return The bytes for failReason.
+   */
+  com.google.protobuf.ByteString
+      getFailReasonBytes();
+
+  /**
+   * <code>string fail_note = 19;</code>
+   * @return The failNote.
+   */
+  java.lang.String getFailNote();
+  /**
+   * <code>string fail_note = 19;</code>
+   * @return The bytes for failNote.
+   */
+  com.google.protobuf.ByteString
+      getFailNoteBytes();
+
+  /**
+   * <pre>
+   * Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+   * </pre>
+   *
+   * <code>string old_fulfill_code = 20;</code>
+   * @return The oldFulfillCode.
+   */
+  java.lang.String getOldFulfillCode();
+  /**
+   * <pre>
+   * Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+   * </pre>
+   *
+   * <code>string old_fulfill_code = 20;</code>
+   * @return The bytes for oldFulfillCode.
+   */
+  com.google.protobuf.ByteString
+      getOldFulfillCodeBytes();
 }

@@ -11,6 +11,7 @@
   "dependencies": {
     "@bufbuild/protobuf": "2.14.0",
     "@fastify/cors": "^10.0.1",
+    "@fastify/multipart": "^9.4.0",
     "@grpc/grpc-js": "^1.12.6",
     "@hub-store/shared": "workspace:*",
     "dotenv": "^16.4.7",
@@ -19,7 +20,8 @@
     "kafkajs": "^2.2.4",
     "pg": "^8.23.0",
     "ts-proto": "2.7.7",
-    "tsx": "^4.19.2"
+    "tsx": "^4.19.2",
+    "xlsx": "0.18.5"
   },
   "devDependencies": {
     "@types/node": "26.4.0",

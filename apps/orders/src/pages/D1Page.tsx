@@ -52,6 +52,8 @@ import { buildRegionOptions } from "../utils/regions";
 import { OrdersExpandContent } from "../features/OrdersExpandContent";
 import { DeliveryTimeCell } from "../features/DeliveryTimeCell";
 import { HubStoreTransferModal } from "../features/HubStoreTransferModal";
+import { CreateOrderModal } from "../features/CreateOrderModal";
+import { ImportOrdersModal } from "../features/ImportOrdersModal";
 import { CreateBatchingModal } from "../batching/CreateBatchingModal";
 import { StatStrip } from "./StatStrip";
 
@@ -120,6 +122,9 @@ function D1Content() {
   // Modals
   const [transferOrder, setTransferOrder] = useState<HubStoreOrderFilterItem | null>(null);
   const [createBatchOpen, setCreateBatchOpen] = useState(false);
+  // SF-13 — tạo đơn tay + nhập đơn file
+  const [createOrderOpen, setCreateOrderOpen] = useState(false);
+  const [importOrdersOpen, setImportOrdersOpen] = useState(false);
 
   // Expand (controlled — nút "Chi tiết" toggle cùng hàng với icon expand)
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
@@ -340,6 +345,22 @@ function D1Content() {
         />
       </FilterBar>
 
+      {/* SF-13 — tạo đơn tay + nhập đơn (đứng trước bulk-bar) */}
+      <Space style={{ marginTop: 12 }}>
+        <Button
+          data-testid="create-order-button"
+          onClick={() => setCreateOrderOpen(true)}
+        >
+          {t("intake.createOrderButton")}
+        </Button>
+        <Button
+          data-testid="import-orders-button"
+          onClick={() => setImportOrdersOpen(true)}
+        >
+          {t("intake.importOrdersButton")}
+        </Button>
+      </Space>
+
       {selectedRowKeys.length > 0 && (
         <Space
           style={{
@@ -428,6 +449,8 @@ function D1Content() {
         orders={selectedRows}
         onClose={() => setCreateBatchOpen(false)}
       />
+      <CreateOrderModal open={createOrderOpen} onClose={() => setCreateOrderOpen(false)} />
+      <ImportOrdersModal open={importOrdersOpen} onClose={() => setImportOrdersOpen(false)} />
     </div>
   );
 }

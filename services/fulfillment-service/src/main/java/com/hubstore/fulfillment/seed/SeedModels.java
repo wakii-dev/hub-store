@@ -2,6 +2,7 @@ package com.hubstore.fulfillment.seed;
 
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
 
+import java.time.Instant;
 import java.util.List;
 
 /**
@@ -22,7 +23,12 @@ public final class SeedModels {
             List<RegionSeed> regions) {
     }
 
-    /** REQUIREMENTS §4 order — đầy đủ fields §4 (validate.py ORDER_REQUIRED). */
+    /**
+     * REQUIREMENTS §4 order — đầy đủ fields §4 (validate.py ORDER_REQUIRED).
+     * SF-13 intake: 7 field cuối nullable (Jackson seed JSON thiếu → null):
+     * intake fields (customerName/customerPhone/oldFulfillCode), mark-fail
+     * (failReason/failNote/failedAt) + createdTime (audit trace).
+     */
     @JsonIgnoreProperties(ignoreUnknown = true)
     public record OrderSeed(
             String fulfillCode,
@@ -41,34 +47,59 @@ public final class SeedModels {
             String customerAddress,
             Double distance,
             String note,
-            List<HistoryEntrySeed> history) {
+            List<HistoryEntrySeed> history,
+            String customerName,
+            String customerPhone,
+            String oldFulfillCode,
+            String failReason,
+            String failNote,
+            Instant failedAt,
+            Instant createdTime) {
 
         public OrderSeed withBatchStatus(int newStatus, String newBatchCode) {
             return new OrderSeed(fulfillCode, orderCode, statusCode, newStatus, newBatchCode,
                     shopAssignment, originalTime, deliveryTime, orderStatus, items,
                     codAmount, totalQuantity, isDebtSplittingOrder, customerAddress,
-                    distance, note, history);
+                    distance, note, history,
+                    customerName, customerPhone, oldFulfillCode,
+                    failReason, failNote, failedAt, createdTime);
         }
 
         public OrderSeed withShopAssignment(ShopAssignmentSeed newAssignment) {
             return new OrderSeed(fulfillCode, orderCode, statusCode, batchStatus, batchCode,
                     newAssignment, originalTime, deliveryTime, orderStatus, items,
                     codAmount, totalQuantity, isDebtSplittingOrder, customerAddress,
-                    distance, note, history);
+                    distance, note, history,
+                    customerName, customerPhone, oldFulfillCode,
+                    failReason, failNote, failedAt, createdTime);
         }
 
         public OrderSeed withDeliveryTime(TimeRangeSeed newTime) {
             return new OrderSeed(fulfillCode, orderCode, statusCode, batchStatus, batchCode,
                     shopAssignment, originalTime, newTime, orderStatus, items,
                     codAmount, totalQuantity, isDebtSplittingOrder, customerAddress,
-                    distance, note, history);
+                    distance, note, history,
+                    customerName, customerPhone, oldFulfillCode,
+                    failReason, failNote, failedAt, createdTime);
         }
 
         public OrderSeed withNote(String newNote) {
             return new OrderSeed(fulfillCode, orderCode, statusCode, batchStatus, batchCode,
                     shopAssignment, originalTime, deliveryTime, orderStatus, items,
                     codAmount, totalQuantity, isDebtSplittingOrder, customerAddress,
-                    distance, newNote, history);
+                    distance, newNote, history,
+                    customerName, customerPhone, oldFulfillCode,
+                    failReason, failNote, failedAt, createdTime);
+        }
+
+        /** Mark-fail (SF-13 intake): set fail fields, giữ nguyên phần còn lại. */
+        public OrderSeed withFail(String reason, String failNote, Instant at) {
+            return new OrderSeed(fulfillCode, orderCode, statusCode, batchStatus, batchCode,
+                    shopAssignment, originalTime, deliveryTime, orderStatus, items,
+                    codAmount, totalQuantity, isDebtSplittingOrder, customerAddress,
+                    distance, note, history,
+                    customerName, customerPhone, oldFulfillCode,
+                    reason, failNote, at, createdTime);
         }
     }
 

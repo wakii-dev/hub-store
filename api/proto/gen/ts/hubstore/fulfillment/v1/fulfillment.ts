@@ -279,7 +279,21 @@ export interface HubStoreOrderFilterItem {
    * Ghi chú — field thêm bởi SF-2 cho PUT /fulfillment/{code}/note
    * (spec §3.8: implement backend đầy đủ, KHÔNG có FE screen).
    */
-  note?: string | undefined;
+  note?:
+    | string
+    | undefined;
+  /** --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) --- */
+  customerName: string;
+  /** MỚI SF-13 */
+  customerPhone: string;
+  /**
+   * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+   * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+   */
+  failReason: string;
+  failNote: string;
+  /** Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng) */
+  oldFulfillCode: string;
 }
 
 /** ShopAssignmentHistoryEntry — 1 entry lịch sử chuyển kho (D1c history view). */
@@ -1042,6 +1056,11 @@ function createBaseHubStoreOrderFilterItem(): HubStoreOrderFilterItem {
     customerAddress: "",
     distance: undefined,
     note: undefined,
+    customerName: "",
+    customerPhone: "",
+    failReason: "",
+    failNote: "",
+    oldFulfillCode: "",
   };
 }
 
@@ -1091,6 +1110,21 @@ export const HubStoreOrderFilterItem: MessageFns<HubStoreOrderFilterItem> = {
     }
     if (message.note !== undefined) {
       writer.uint32(122).string(message.note);
+    }
+    if (message.customerName !== "") {
+      writer.uint32(130).string(message.customerName);
+    }
+    if (message.customerPhone !== "") {
+      writer.uint32(138).string(message.customerPhone);
+    }
+    if (message.failReason !== "") {
+      writer.uint32(146).string(message.failReason);
+    }
+    if (message.failNote !== "") {
+      writer.uint32(154).string(message.failNote);
+    }
+    if (message.oldFulfillCode !== "") {
+      writer.uint32(162).string(message.oldFulfillCode);
     }
     return writer;
   },
@@ -1222,6 +1256,46 @@ export const HubStoreOrderFilterItem: MessageFns<HubStoreOrderFilterItem> = {
           message.note = reader.string();
           continue;
         }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.customerName = reader.string();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.customerPhone = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.failReason = reader.string();
+          continue;
+        }
+        case 19: {
+          if (tag !== 154) {
+            break;
+          }
+
+          message.failNote = reader.string();
+          continue;
+        }
+        case 20: {
+          if (tag !== 162) {
+            break;
+          }
+
+          message.oldFulfillCode = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -1250,6 +1324,11 @@ export const HubStoreOrderFilterItem: MessageFns<HubStoreOrderFilterItem> = {
       customerAddress: isSet(object.customerAddress) ? globalThis.String(object.customerAddress) : "",
       distance: isSet(object.distance) ? globalThis.Number(object.distance) : undefined,
       note: isSet(object.note) ? globalThis.String(object.note) : undefined,
+      customerName: isSet(object.customerName) ? globalThis.String(object.customerName) : "",
+      customerPhone: isSet(object.customerPhone) ? globalThis.String(object.customerPhone) : "",
+      failReason: isSet(object.failReason) ? globalThis.String(object.failReason) : "",
+      failNote: isSet(object.failNote) ? globalThis.String(object.failNote) : "",
+      oldFulfillCode: isSet(object.oldFulfillCode) ? globalThis.String(object.oldFulfillCode) : "",
     };
   },
 
@@ -1300,6 +1379,21 @@ export const HubStoreOrderFilterItem: MessageFns<HubStoreOrderFilterItem> = {
     if (message.note !== undefined) {
       obj.note = message.note;
     }
+    if (message.customerName !== "") {
+      obj.customerName = message.customerName;
+    }
+    if (message.customerPhone !== "") {
+      obj.customerPhone = message.customerPhone;
+    }
+    if (message.failReason !== "") {
+      obj.failReason = message.failReason;
+    }
+    if (message.failNote !== "") {
+      obj.failNote = message.failNote;
+    }
+    if (message.oldFulfillCode !== "") {
+      obj.oldFulfillCode = message.oldFulfillCode;
+    }
     return obj;
   },
 
@@ -1329,6 +1423,11 @@ export const HubStoreOrderFilterItem: MessageFns<HubStoreOrderFilterItem> = {
     message.customerAddress = object.customerAddress ?? "";
     message.distance = object.distance ?? undefined;
     message.note = object.note ?? undefined;
+    message.customerName = object.customerName ?? "";
+    message.customerPhone = object.customerPhone ?? "";
+    message.failReason = object.failReason ?? "";
+    message.failNote = object.failNote ?? "";
+    message.oldFulfillCode = object.oldFulfillCode ?? "";
     return message;
   },
 };

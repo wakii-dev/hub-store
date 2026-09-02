@@ -41,6 +41,11 @@ private static final long serialVersionUID = 0L;
     items_ = java.util.Collections.emptyList();
     customerAddress_ = "";
     note_ = "";
+    customerName_ = "";
+    customerPhone_ = "";
+    failReason_ = "";
+    failNote_ = "";
+    oldFulfillCode_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -573,6 +578,235 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int CUSTOMER_NAME_FIELD_NUMBER = 16;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object customerName_ = "";
+  /**
+   * <pre>
+   * --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+   * </pre>
+   *
+   * <code>string customer_name = 16;</code>
+   * @return The customerName.
+   */
+  @java.lang.Override
+  public java.lang.String getCustomerName() {
+    java.lang.Object ref = customerName_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      customerName_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+   * </pre>
+   *
+   * <code>string customer_name = 16;</code>
+   * @return The bytes for customerName.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getCustomerNameBytes() {
+    java.lang.Object ref = customerName_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      customerName_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int CUSTOMER_PHONE_FIELD_NUMBER = 17;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object customerPhone_ = "";
+  /**
+   * <pre>
+   * MỚI SF-13
+   * </pre>
+   *
+   * <code>string customer_phone = 17;</code>
+   * @return The customerPhone.
+   */
+  @java.lang.Override
+  public java.lang.String getCustomerPhone() {
+    java.lang.Object ref = customerPhone_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      customerPhone_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * MỚI SF-13
+   * </pre>
+   *
+   * <code>string customer_phone = 17;</code>
+   * @return The bytes for customerPhone.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getCustomerPhoneBytes() {
+    java.lang.Object ref = customerPhone_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      customerPhone_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int FAIL_REASON_FIELD_NUMBER = 18;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object failReason_ = "";
+  /**
+   * <pre>
+   * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+   * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+   * </pre>
+   *
+   * <code>string fail_reason = 18;</code>
+   * @return The failReason.
+   */
+  @java.lang.Override
+  public java.lang.String getFailReason() {
+    java.lang.Object ref = failReason_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      failReason_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+   * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+   * </pre>
+   *
+   * <code>string fail_reason = 18;</code>
+   * @return The bytes for failReason.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getFailReasonBytes() {
+    java.lang.Object ref = failReason_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      failReason_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int FAIL_NOTE_FIELD_NUMBER = 19;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object failNote_ = "";
+  /**
+   * <code>string fail_note = 19;</code>
+   * @return The failNote.
+   */
+  @java.lang.Override
+  public java.lang.String getFailNote() {
+    java.lang.Object ref = failNote_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      failNote_ = s;
+      return s;
+    }
+  }
+  /**
+   * <code>string fail_note = 19;</code>
+   * @return The bytes for failNote.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getFailNoteBytes() {
+    java.lang.Object ref = failNote_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      failNote_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
+  public static final int OLD_FULFILL_CODE_FIELD_NUMBER = 20;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object oldFulfillCode_ = "";
+  /**
+   * <pre>
+   * Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+   * </pre>
+   *
+   * <code>string old_fulfill_code = 20;</code>
+   * @return The oldFulfillCode.
+   */
+  @java.lang.Override
+  public java.lang.String getOldFulfillCode() {
+    java.lang.Object ref = oldFulfillCode_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      oldFulfillCode_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+   * </pre>
+   *
+   * <code>string old_fulfill_code = 20;</code>
+   * @return The bytes for oldFulfillCode.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getOldFulfillCodeBytes() {
+    java.lang.Object ref = oldFulfillCode_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      oldFulfillCode_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -631,6 +865,21 @@ private static final long serialVersionUID = 0L;
     }
     if (((bitField0_ & 0x00000020) != 0)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 15, note_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(customerName_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 16, customerName_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(customerPhone_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 17, customerPhone_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(failReason_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 18, failReason_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(failNote_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 19, failNote_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(oldFulfillCode_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 20, oldFulfillCode_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -697,6 +946,21 @@ private static final long serialVersionUID = 0L;
     if (((bitField0_ & 0x00000020) != 0)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(15, note_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(customerName_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(16, customerName_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(customerPhone_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(17, customerPhone_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(failReason_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(18, failReason_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(failNote_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(19, failNote_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(oldFulfillCode_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(20, oldFulfillCode_);
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -758,6 +1022,16 @@ private static final long serialVersionUID = 0L;
       if (!getNote()
           .equals(other.getNote())) return false;
     }
+    if (!getCustomerName()
+        .equals(other.getCustomerName())) return false;
+    if (!getCustomerPhone()
+        .equals(other.getCustomerPhone())) return false;
+    if (!getFailReason()
+        .equals(other.getFailReason())) return false;
+    if (!getFailNote()
+        .equals(other.getFailNote())) return false;
+    if (!getOldFulfillCode()
+        .equals(other.getOldFulfillCode())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -816,6 +1090,16 @@ private static final long serialVersionUID = 0L;
       hash = (37 * hash) + NOTE_FIELD_NUMBER;
       hash = (53 * hash) + getNote().hashCode();
     }
+    hash = (37 * hash) + CUSTOMER_NAME_FIELD_NUMBER;
+    hash = (53 * hash) + getCustomerName().hashCode();
+    hash = (37 * hash) + CUSTOMER_PHONE_FIELD_NUMBER;
+    hash = (53 * hash) + getCustomerPhone().hashCode();
+    hash = (37 * hash) + FAIL_REASON_FIELD_NUMBER;
+    hash = (53 * hash) + getFailReason().hashCode();
+    hash = (37 * hash) + FAIL_NOTE_FIELD_NUMBER;
+    hash = (53 * hash) + getFailNote().hashCode();
+    hash = (37 * hash) + OLD_FULFILL_CODE_FIELD_NUMBER;
+    hash = (53 * hash) + getOldFulfillCode().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -995,6 +1279,11 @@ private static final long serialVersionUID = 0L;
       customerAddress_ = "";
       distance_ = 0D;
       note_ = "";
+      customerName_ = "";
+      customerPhone_ = "";
+      failReason_ = "";
+      failNote_ = "";
+      oldFulfillCode_ = "";
       return this;
     }
 
@@ -1096,6 +1385,21 @@ private static final long serialVersionUID = 0L;
         result.note_ = note_;
         to_bitField0_ |= 0x00000020;
       }
+      if (((from_bitField0_ & 0x00008000) != 0)) {
+        result.customerName_ = customerName_;
+      }
+      if (((from_bitField0_ & 0x00010000) != 0)) {
+        result.customerPhone_ = customerPhone_;
+      }
+      if (((from_bitField0_ & 0x00020000) != 0)) {
+        result.failReason_ = failReason_;
+      }
+      if (((from_bitField0_ & 0x00040000) != 0)) {
+        result.failNote_ = failNote_;
+      }
+      if (((from_bitField0_ & 0x00080000) != 0)) {
+        result.oldFulfillCode_ = oldFulfillCode_;
+      }
       result.bitField0_ |= to_bitField0_;
     }
 
@@ -1185,6 +1489,31 @@ private static final long serialVersionUID = 0L;
       if (other.hasNote()) {
         note_ = other.note_;
         bitField0_ |= 0x00004000;
+        onChanged();
+      }
+      if (!other.getCustomerName().isEmpty()) {
+        customerName_ = other.customerName_;
+        bitField0_ |= 0x00008000;
+        onChanged();
+      }
+      if (!other.getCustomerPhone().isEmpty()) {
+        customerPhone_ = other.customerPhone_;
+        bitField0_ |= 0x00010000;
+        onChanged();
+      }
+      if (!other.getFailReason().isEmpty()) {
+        failReason_ = other.failReason_;
+        bitField0_ |= 0x00020000;
+        onChanged();
+      }
+      if (!other.getFailNote().isEmpty()) {
+        failNote_ = other.failNote_;
+        bitField0_ |= 0x00040000;
+        onChanged();
+      }
+      if (!other.getOldFulfillCode().isEmpty()) {
+        oldFulfillCode_ = other.oldFulfillCode_;
+        bitField0_ |= 0x00080000;
         onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
@@ -1302,6 +1631,31 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00004000;
               break;
             } // case 122
+            case 130: {
+              customerName_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00008000;
+              break;
+            } // case 130
+            case 138: {
+              customerPhone_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00010000;
+              break;
+            } // case 138
+            case 146: {
+              failReason_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00020000;
+              break;
+            } // case 146
+            case 154: {
+              failNote_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00040000;
+              break;
+            } // case 154
+            case 162: {
+              oldFulfillCode_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00080000;
+              break;
+            } // case 162
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -2833,6 +3187,451 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       note_ = value;
       bitField0_ |= 0x00004000;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object customerName_ = "";
+    /**
+     * <pre>
+     * --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+     * </pre>
+     *
+     * <code>string customer_name = 16;</code>
+     * @return The customerName.
+     */
+    public java.lang.String getCustomerName() {
+      java.lang.Object ref = customerName_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        customerName_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+     * </pre>
+     *
+     * <code>string customer_name = 16;</code>
+     * @return The bytes for customerName.
+     */
+    public com.google.protobuf.ByteString
+        getCustomerNameBytes() {
+      java.lang.Object ref = customerName_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        customerName_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+     * </pre>
+     *
+     * <code>string customer_name = 16;</code>
+     * @param value The customerName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCustomerName(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      customerName_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+     * </pre>
+     *
+     * <code>string customer_name = 16;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCustomerName() {
+      customerName_ = getDefaultInstance().getCustomerName();
+      bitField0_ = (bitField0_ & ~0x00008000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
+     * </pre>
+     *
+     * <code>string customer_name = 16;</code>
+     * @param value The bytes for customerName to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCustomerNameBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      customerName_ = value;
+      bitField0_ |= 0x00008000;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object customerPhone_ = "";
+    /**
+     * <pre>
+     * MỚI SF-13
+     * </pre>
+     *
+     * <code>string customer_phone = 17;</code>
+     * @return The customerPhone.
+     */
+    public java.lang.String getCustomerPhone() {
+      java.lang.Object ref = customerPhone_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        customerPhone_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * MỚI SF-13
+     * </pre>
+     *
+     * <code>string customer_phone = 17;</code>
+     * @return The bytes for customerPhone.
+     */
+    public com.google.protobuf.ByteString
+        getCustomerPhoneBytes() {
+      java.lang.Object ref = customerPhone_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        customerPhone_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * MỚI SF-13
+     * </pre>
+     *
+     * <code>string customer_phone = 17;</code>
+     * @param value The customerPhone to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCustomerPhone(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      customerPhone_ = value;
+      bitField0_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * MỚI SF-13
+     * </pre>
+     *
+     * <code>string customer_phone = 17;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearCustomerPhone() {
+      customerPhone_ = getDefaultInstance().getCustomerPhone();
+      bitField0_ = (bitField0_ & ~0x00010000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * MỚI SF-13
+     * </pre>
+     *
+     * <code>string customer_phone = 17;</code>
+     * @param value The bytes for customerPhone to set.
+     * @return This builder for chaining.
+     */
+    public Builder setCustomerPhoneBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      customerPhone_ = value;
+      bitField0_ |= 0x00010000;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object failReason_ = "";
+    /**
+     * <pre>
+     * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+     * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+     * </pre>
+     *
+     * <code>string fail_reason = 18;</code>
+     * @return The failReason.
+     */
+    public java.lang.String getFailReason() {
+      java.lang.Object ref = failReason_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        failReason_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+     * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+     * </pre>
+     *
+     * <code>string fail_reason = 18;</code>
+     * @return The bytes for failReason.
+     */
+    public com.google.protobuf.ByteString
+        getFailReasonBytes() {
+      java.lang.Object ref = failReason_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        failReason_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+     * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+     * </pre>
+     *
+     * <code>string fail_reason = 18;</code>
+     * @param value The failReason to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFailReason(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      failReason_ = value;
+      bitField0_ |= 0x00020000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+     * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+     * </pre>
+     *
+     * <code>string fail_reason = 18;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFailReason() {
+      failReason_ = getDefaultInstance().getFailReason();
+      bitField0_ = (bitField0_ & ~0x00020000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Lý do giao thất bại (enum hubstore.intake.v1.DeliveryFailReason giữ dạng
+     * STRING ở đây để KHÔNG import ngược intake.proto — additive string; rỗng = không fail)
+     * </pre>
+     *
+     * <code>string fail_reason = 18;</code>
+     * @param value The bytes for failReason to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFailReasonBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      failReason_ = value;
+      bitField0_ |= 0x00020000;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object failNote_ = "";
+    /**
+     * <code>string fail_note = 19;</code>
+     * @return The failNote.
+     */
+    public java.lang.String getFailNote() {
+      java.lang.Object ref = failNote_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        failNote_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <code>string fail_note = 19;</code>
+     * @return The bytes for failNote.
+     */
+    public com.google.protobuf.ByteString
+        getFailNoteBytes() {
+      java.lang.Object ref = failNote_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        failNote_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <code>string fail_note = 19;</code>
+     * @param value The failNote to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFailNote(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      failNote_ = value;
+      bitField0_ |= 0x00040000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string fail_note = 19;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearFailNote() {
+      failNote_ = getDefaultInstance().getFailNote();
+      bitField0_ = (bitField0_ & ~0x00040000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <code>string fail_note = 19;</code>
+     * @param value The bytes for failNote to set.
+     * @return This builder for chaining.
+     */
+    public Builder setFailNoteBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      failNote_ = value;
+      bitField0_ |= 0x00040000;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object oldFulfillCode_ = "";
+    /**
+     * <pre>
+     * Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+     * </pre>
+     *
+     * <code>string old_fulfill_code = 20;</code>
+     * @return The oldFulfillCode.
+     */
+    public java.lang.String getOldFulfillCode() {
+      java.lang.Object ref = oldFulfillCode_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        oldFulfillCode_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+     * </pre>
+     *
+     * <code>string old_fulfill_code = 20;</code>
+     * @return The bytes for oldFulfillCode.
+     */
+    public com.google.protobuf.ByteString
+        getOldFulfillCodeBytes() {
+      java.lang.Object ref = oldFulfillCode_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        oldFulfillCode_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+     * </pre>
+     *
+     * <code>string old_fulfill_code = 20;</code>
+     * @param value The oldFulfillCode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOldFulfillCode(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      oldFulfillCode_ = value;
+      bitField0_ |= 0x00080000;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+     * </pre>
+     *
+     * <code>string old_fulfill_code = 20;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearOldFulfillCode() {
+      oldFulfillCode_ = getDefaultInstance().getOldFulfillCode();
+      bitField0_ = (bitField0_ & ~0x00080000);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
+     * </pre>
+     *
+     * <code>string old_fulfill_code = 20;</code>
+     * @param value The bytes for oldFulfillCode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setOldFulfillCodeBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      oldFulfillCode_ = value;
+      bitField0_ |= 0x00080000;
       onChanged();
       return this;
     }

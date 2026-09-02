@@ -45,4 +45,27 @@ public interface OrderRepository {
     /** Dashboard aggregate (SF-9): 30 ô theo original_time_from (TZ zone),
      *  totalToday, pendingApproval (order_status=0), per-batch (batch_code ≠ ''). */
     DashboardStatsData dashboardStats(java.time.LocalDate today, java.time.ZoneId zone);
+
+    // ---------------- SF-13 intake ----------------
+
+    /** Sinh fulfillCode ORD-* tiếp dải (atomic per impl); n = số đơn cần sinh. */
+    List<String> nextFulfillCodes(int n);
+
+    /** Insert batch đơn (đã gán codes) — all-or-nothing; trả các đơn như đã lưu. */
+    List<SeedModels.OrderSeed> insertOrders(List<SeedModels.OrderSeed> orders);
+
+    /** Mark-fail: yêu cầu order tồn tại + chưa FAILED — service validate, repo mutate. */
+    SeedModels.OrderSeed markFailed(String fulfillCode, String reason, String note, Instant at);
+
+    /** Tồn tại đơn retry của code? (chặn double-redeliver). */
+    boolean hasRetry(String fulfillCode);
+
+    /** Đơn gốc của 1 retry (oldFulfillCode) — chỉ match fulfill_code, KHÔNG dual-match orderCode. */
+    Optional<SeedModels.OrderSeed> findByExactFulfillCode(String fulfillCode);
+
+    /** Append 1 dòng activity_log (target = fulfillCode). */
+    void appendAudit(String actor, String action, String target, String detailJson);
+
+    /** READ — audit entries của 1 target (fulfillCode), không mutate state. */
+    List<AuditEntry> getAudit(String fulfillCode);
 }

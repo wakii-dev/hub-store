@@ -1,7 +1,8 @@
 /**
  * Fulfillment-service (Java, :50051) gRPC client — facade cho các RPC mà BFF
- * REST surface dùng. MutateOrderStatus/GetOrdersByCodes là internal chain
- * Go→Java (spec §3.3) — BFF KHÔNG gọi, không expose.
+ * REST surface dùng. MutateOrderStatus là internal chain Go→Java (spec §3.3) —
+ * BFF KHÔNG gọi. GetOrdersByCodes: SF-13 mở cho BFF (route /orders/by-batch
+ * aggregation — plan T8 deconflict), vẫn không expose MutateOrderStatus.
  */
 import { FulfillmentServiceClient } from '../../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import type {
@@ -15,6 +16,8 @@ import type {
   GetDashboardStatsResponse,
   GetOrderDetailRequest,
   GetOrderDetailResponse,
+  GetOrdersByCodesRequest,
+  GetOrdersByCodesResponse,
   GetTimeDeliveryRequest,
   GetTimeDeliveryResponse,
   ListDeliveryStaffRequest,
@@ -33,6 +36,7 @@ import { callUnary, insecureChannel, SERVICE_NAMES } from './grpc.js';
 export interface FulfillmentApi {
   filterOrders(req: FilterOrdersRequest, role: string): Promise<FilterOrdersResponse>;
   getOrderDetail(req: GetOrderDetailRequest, role: string): Promise<GetOrderDetailResponse>;
+  getOrdersByCodes(req: GetOrdersByCodesRequest, role: string): Promise<GetOrdersByCodesResponse>;
   assignShopHub(req: AssignShopHubRequest, role: string): Promise<AssignShopHubResponse>;
   getAssignHistory(req: GetAssignHistoryRequest, role: string): Promise<GetAssignHistoryResponse>;
   getDashboardStats(req: GetDashboardStatsRequest, role: string): Promise<GetDashboardStatsResponse>;
@@ -50,6 +54,7 @@ export function createFulfillmentClient(addr: string, deadlineMs: number): Fulfi
   return {
     filterOrders: (req, role) => callUnary(c.filterOrders.bind(c), req, role, deadlineMs),
     getOrderDetail: (req, role) => callUnary(c.getOrderDetail.bind(c), req, role, deadlineMs),
+    getOrdersByCodes: (req, role) => callUnary(c.getOrdersByCodes.bind(c), req, role, deadlineMs),
     assignShopHub: (req, role) => callUnary(c.assignShopHub.bind(c), req, role, deadlineMs),
     getAssignHistory: (req, role) => callUnary(c.getAssignHistory.bind(c), req, role, deadlineMs),
     getDashboardStats: (req, role) => callUnary(c.getDashboardStats.bind(c), req, role, deadlineMs),

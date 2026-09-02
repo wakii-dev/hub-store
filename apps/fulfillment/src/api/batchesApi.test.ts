@@ -92,6 +92,44 @@ describe("batchesApi slice (real store + stubbed axios adapter)", () => {
     expect(JSON.parse(String(req!.data))).toEqual({ batchCode: "BATCH-0001" });
   });
 
+  // --- SF-13 D7 (plan T8) — prefix /orders* thống nhất intake surface ---
+
+  it("getBatchOrders — GET /orders/by-batch/:batchCode (BFF owns aggregation)", async () => {
+    const store = createAppStore();
+    await store.dispatch(api.endpoints.getBatchOrders.initiate("BATCH 1"));
+    const req = captured.find((c) => c.url.includes("/orders/by-batch/"));
+    expect(req).toBeDefined();
+    // encodeURIComponent contract — batchCode có space vẫn encode an toàn.
+    expect(req!.url).toBe("/orders/by-batch/BATCH%201");
+    expect(req!.method).toBe("get");
+  });
+
+  it("failOrder — POST /orders/:code/fail với {reason} (+note khi có)", async () => {
+    const store = createAppStore();
+    await store.dispatch(
+      api.endpoints.failOrder.initiate({ code: "ORD 3007", reason: 1, note: "Sai tầng" }),
+    );
+    const req = captured.find((c) => c.url.includes("/fail"));
+    expect(req).toBeDefined();
+    expect(req!.url).toBe("/orders/ORD%203007/fail");
+    expect(req!.method).toBe("post");
+    expect(JSON.parse(String(req!.data))).toEqual({ reason: 1, note: "Sai tầng" });
+
+    await store.dispatch(api.endpoints.failOrder.initiate({ code: "ORD-3008", reason: 0 }));
+    const req2 = captured.filter((c) => c.url.includes("/fail")).at(-1)!;
+    // Note rỗng → không gửi field (BFF default "").
+    expect(JSON.parse(String(req2!.data))).toEqual({ reason: 0 });
+  });
+
+  it("redeliverOrder — POST /orders/:code/redeliver", async () => {
+    const store = createAppStore();
+    await store.dispatch(api.endpoints.redeliverOrder.initiate({ code: "ORD-3007" }));
+    const req = captured.find((c) => c.url.includes("/redeliver"));
+    expect(req).toBeDefined();
+    expect(req!.url).toBe("/orders/ORD-3007/redeliver");
+    expect(req!.method).toBe("post");
+  });
+
   it("invalidation — cancelBatch refetch filterBatches (invalidatesTags Batches LIST)", async () => {
     vi.useFakeTimers();
     const store = createAppStore();

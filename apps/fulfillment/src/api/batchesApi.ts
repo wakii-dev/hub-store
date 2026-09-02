@@ -6,6 +6,7 @@ import type {
   CompletePickingRequest,
   FilterBatchesRequest,
   FilterBatchesResponse,
+  HubStoreOrderFilterItem,
 } from '@hub-store/shared';
 
 /**
@@ -51,6 +52,42 @@ const batchesApi = api.injectEndpoints({
       query: (body) => ({ url: '/fulfillment/complete-picking', method: 'PUT', data: body }),
       invalidatesTags: () => [{ type: 'Batches', id: 'LIST' }],
     }),
+
+    // --- SF-13 D7 exception (plan T8) — prefix /orders* thống nhất intake surface ---
+
+    // Hydration đơn của phiếu — GET /orders/by-batch/:batchCode (BFF owns
+    // aggregation: batching detail → codes → fulfillment getOrdersByCodes).
+    // BFF trả HubStoreOrderFilterItem[] THEO THỨ TỰ codes của phiếu (repo
+    // findByCodes giữ order) → FE join theo index với batch.items.
+    getBatchOrders: builder.query<HubStoreOrderFilterItem[], string>({
+      query: (batchCode) => ({
+        url: `/orders/by-batch/${encodeURIComponent(batchCode)}`,
+        method: 'GET',
+      }),
+      providesTags: () => [{ type: 'Fulfillment', id: 'LIST' }],
+    }),
+
+    // Mark giao thất bại — POST /orders/:code/fail (204 rỗng). reason = wire
+    // code DeliveryFailReason (DELIVERY_FAIL_REASON); note tuỳ chọn.
+    // Server reject 422 nếu đơn đã FAILED (FE ẩn nút, server là chốt cuối).
+    failOrder: builder.mutation<void, { code: string; reason: number; note?: string }>({
+      query: ({ code, reason, note }) => ({
+        url: `/orders/${encodeURIComponent(code)}/fail`,
+        method: 'POST',
+        data: note ? { reason, note } : { reason },
+      }),
+      invalidatesTags: () => [{ type: 'Fulfillment', id: 'LIST' }],
+    }),
+
+    // Tạo đơn giao lại — POST /orders/:code/redeliver → { fulfillCode } (201).
+    // Double-redeliver: server INVALID_ARGUMENT (→ 422) → FE chỉ message lỗi.
+    redeliverOrder: builder.mutation<{ fulfillCode: string }, { code: string }>({
+      query: ({ code }) => ({
+        url: `/orders/${encodeURIComponent(code)}/redeliver`,
+        method: 'POST',
+      }),
+      invalidatesTags: () => [{ type: 'Fulfillment', id: 'LIST' }],
+    }),
   }),
 });
 
@@ -59,4 +96,7 @@ export const {
   useGetBatchCriteriaQuery,
   useCancelBatchMutation,
   useCompletePickingMutation,
+  useGetBatchOrdersQuery,
+  useFailOrderMutation,
+  useRedeliverOrderMutation,
 } = batchesApi;

@@ -55,5 +55,14 @@ export default defineConfig({
       less: { javascriptEnabled: true, modifyVars: antdLessModifyVars },
     },
   },
-  test: { environment: "jsdom", setupFiles: [resolve(configDir, "src/testing/setup.ts")] },
+  test: {
+    environment: "jsdom",
+    setupFiles: [resolve(configDir, "src/testing/setup.ts")],
+    // antd render trong jsdom chậm + worktree có thể chạy song song agent khác →
+    // test ~3-8s/cái, default 5s timeout flake khi máy load cao.
+    testTimeout: 15000,
+    // Chạy file tuần tự — 6 file antd/pdfjs song song làm CPU bão hòa,
+    // timeout flake khi có build/test khác chạy cùng lúc.
+    fileParallelism: false,
+  },
 });

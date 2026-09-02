@@ -231,7 +231,7 @@ public final class Fulfillment {
       " \001(\tH\000\210\001\001B\016\n\014_parent_code\"<\n\rDeliverySta" +
       "ff\022\n\n\002id\030\001 \001(\t\022\014\n\004name\030\002 \001(\t\022\021\n\tshop_cod" +
       "e\030\003 \001(\t\"3\n\004Shop\022\014\n\004code\030\001 \001(\t\022\014\n\004name\030\002 " +
-      "\001(\t\022\017\n\007address\030\003 \001(\t\"\241\005\n\027HubStoreOrderFi" +
+      "\001(\t\022\017\n\007address\030\003 \001(\t\"\222\006\n\027HubStoreOrderFi" +
       "lterItem\022\024\n\014fulfill_code\030\001 \001(\t\022@\n\013status" +
       "_code\030\002 \001(\0162+.hubstore.fulfillment.v1.Co" +
       "ordinationStatus\022:\n\014batch_status\030\003 \001(\0162$" +
@@ -247,132 +247,135 @@ public final class Fulfillment {
       "d_amount\030\n \001(\003\022\026\n\016total_quantity\030\013 \001(\005\022\037" +
       "\n\027is_debt_splitting_order\030\014 \001(\010\022\030\n\020custo" +
       "mer_address\030\r \001(\t\022\025\n\010distance\030\016 \001(\001H\001\210\001\001" +
-      "\022\021\n\004note\030\017 \001(\tH\002\210\001\001B\r\n\013_batch_codeB\013\n\t_d" +
-      "istanceB\007\n\005_note\"\320\001\n\032ShopAssignmentHisto" +
-      "ryEntry\022\024\n\014fulfill_code\030\001 \001(\t\022:\n\tfrom_sh" +
-      "op\030\002 \001(\0132\'.hubstore.fulfillment.v1.ShopA" +
-      "ssignment\0228\n\007to_shop\030\003 \001(\0132\'.hubstore.fu" +
-      "lfillment.v1.ShopAssignment\022\022\n\nchanged_a" +
-      "t\030\004 \001(\t\022\022\n\nchanged_by\030\005 \001(\t\"\301\003\n\023FilterOr" +
-      "dersRequest\022\024\n\014fulfill_code\030\001 \001(\t\022<\n\016bat" +
-      "ch_statuses\030\002 \003(\0162$.hubstore.fulfillment" +
-      ".v1.BatchStatus\0229\n\rdelivery_time\030\003 \001(\0132\"" +
-      ".hubstore.fulfillment.v1.TimeRange\022\024\n\014re" +
-      "gion_codes\030\004 \003(\t\022\022\n\nshop_codes\030\005 \003(\t\022<\n\016" +
-      "order_statuses\030\006 \003(\0162$.hubstore.fulfillm" +
-      "ent.v1.OrderStatus\0228\n\014created_time\030\007 \001(\013" +
-      "2\".hubstore.fulfillment.v1.TimeRange\0229\n\r" +
-      "original_time\030\010 \001(\0132\".hubstore.fulfillme" +
-      "nt.v1.TimeRange\022\035\n\025exclude_fulfill_codes" +
-      "\030\t \003(\t\022\014\n\004page\030\n \001(\005\022\021\n\tpage_size\030\013 \001(\005\"" +
-      "\207\001\n\024FilterOrdersResponse\022?\n\005items\030\001 \003(\0132" +
-      "0.hubstore.fulfillment.v1.HubStoreOrderF" +
-      "ilterItem\022\r\n\005total\030\002 \001(\003\022\014\n\004page\030\003 \001(\005\022\021" +
-      "\n\tpage_size\030\004 \001(\005\"-\n\025GetOrderDetailReque" +
-      "st\022\024\n\014fulfill_code\030\001 \001(\t\"Y\n\026GetOrderDeta" +
-      "ilResponse\022?\n\005order\030\001 \001(\01320.hubstore.ful" +
-      "fillment.v1.HubStoreOrderFilterItem\"\224\001\n\030" +
-      "MutateOrderStatusRequest\022\025\n\rfulfill_code" +
-      "s\030\001 \003(\t\022A\n\023target_batch_status\030\002 \001(\0162$.h" +
-      "ubstore.fulfillment.v1.BatchStatus\022\023\n\006re" +
-      "ason\030\003 \001(\tH\000\210\001\001B\t\n\007_reason\"Q\n\027MutateOrde" +
-      "rStatusResult\022\024\n\014fulfill_code\030\001 \001(\t\022\017\n\007s" +
-      "uccess\030\002 \001(\010\022\017\n\007message\030\003 \001(\t\"^\n\031MutateO" +
-      "rderStatusResponse\022A\n\007results\030\001 \003(\01320.hu" +
-      "bstore.fulfillment.v1.MutateOrderStatusR" +
-      "esult\"0\n\027GetOrdersByCodesRequest\022\025\n\rfulf" +
-      "ill_codes\030\001 \003(\t\"\\\n\030GetOrdersByCodesRespo" +
-      "nse\022@\n\006orders\030\001 \003(\01320.hubstore.fulfillme" +
-      "nt.v1.HubStoreOrderFilterItem\"F\n\024AssignS" +
-      "hopHubRequest\022\024\n\014fulfill_code\030\001 \001(\t\022\030\n\020t" +
-      "arget_shop_code\030\002 \001(\t\"X\n\025AssignShopHubRe" +
-      "sponse\022?\n\005order\030\001 \001(\01320.hubstore.fulfill" +
-      "ment.v1.HubStoreOrderFilterItem\"/\n\027GetAs" +
-      "signHistoryRequest\022\024\n\014fulfill_code\030\001 \001(\t" +
-      "\"`\n\030GetAssignHistoryResponse\022D\n\007entries\030" +
-      "\001 \003(\01323.hubstore.fulfillment.v1.ShopAssi" +
-      "gnmentHistoryEntry\"l\n\031UpdateDeliveryTime" +
-      "Request\022\024\n\014fulfill_code\030\001 \001(\t\0229\n\rdeliver" +
-      "y_time\030\002 \001(\0132\".hubstore.fulfillment.v1.T" +
-      "imeRange\"]\n\032UpdateDeliveryTimeResponse\022?" +
-      "\n\005order\030\001 \001(\01320.hubstore.fulfillment.v1." +
-      "HubStoreOrderFilterItem\"7\n\021UpdateNoteReq" +
-      "uest\022\024\n\014fulfill_code\030\001 \001(\t\022\014\n\004note\030\002 \001(\t" +
-      "\"U\n\022UpdateNoteResponse\022?\n\005order\030\001 \001(\01320." +
-      "hubstore.fulfillment.v1.HubStoreOrderFil" +
-      "terItem\"\024\n\022ListRegionsRequest\"G\n\023ListReg" +
-      "ionsResponse\0220\n\007regions\030\001 \003(\0132\037.hubstore" +
-      ".fulfillment.v1.Region\"@\n\030ListDeliverySt" +
-      "affRequest\022\026\n\tshop_code\030\001 \001(\tH\000\210\001\001B\014\n\n_s" +
-      "hop_code\"R\n\031ListDeliveryStaffResponse\0225\n" +
-      "\005items\030\001 \003(\0132&.hubstore.fulfillment.v1.D" +
-      "eliveryStaff\"\032\n\030ListDistinctShopsRequest" +
-      "\"I\n\031ListDistinctShopsResponse\022,\n\005items\030\001" +
-      " \003(\0132\035.hubstore.fulfillment.v1.Shop\"E\n\026G" +
-      "etTimeDeliveryRequest\022\021\n\tshop_code\030\001 \001(\t" +
-      "\022\030\n\020customer_address\030\002 \001(\t\"U\n\027GetTimeDel" +
-      "iveryResponse\022:\n\016suggested_time\030\001 \001(\0132\"." +
-      "hubstore.fulfillment.v1.TimeRange\"\032\n\030Get" +
-      "DashboardStatsRequest\"\'\n\010DayCount\022\014\n\004dat" +
-      "e\030\001 \001(\t\022\r\n\005count\030\002 \001(\005\"4\n\017BatchOrderCoun" +
-      "t\022\022\n\nbatch_code\030\001 \001(\t\022\r\n\005count\030\002 \001(\005\"\311\001\n" +
-      "\031GetDashboardStatsResponse\0229\n\016orders_per" +
-      "_day\030\001 \003(\0132!.hubstore.fulfillment.v1.Day" +
-      "Count\022\023\n\013total_today\030\002 \001(\005\022\030\n\020pending_ap" +
-      "proval\030\003 \001(\005\022B\n\020orders_per_batch\030\004 \003(\0132(" +
-      ".hubstore.fulfillment.v1.BatchOrderCount" +
-      "*\205\001\n\013BatchStatus\022\035\n\031BATCH_STATUS_NOT_PRE" +
-      "PARED\020\000\022\032\n\026BATCH_STATUS_PREPARING\020\001\022\031\n\025B" +
-      "ATCH_STATUS_PREPARED\020\002\022 \n\034BATCH_STATUS_W" +
-      "EIGHT_EXCEEDED\020\003*f\n\013OrderStatus\022!\n\035ORDER" +
-      "_STATUS_PENDING_APPROVAL\020\000\022\031\n\025ORDER_STAT" +
-      "US_APPROVED\020\001\022\031\n\025ORDER_STATUS_REJECTED\020\002" +
-      "*}\n\022CoordinationStatus\022\037\n\033COORDINATION_S" +
-      "TATUS_PENDING\020\000\022#\n\037COORDINATION_STATUS_I" +
-      "N_PROGRESS\020\001\022!\n\035COORDINATION_STATUS_COMP" +
-      "LETED\020\002*<\n\nRegionType\022\030\n\024REGION_TYPE_PRO" +
-      "VINCE\020\000\022\024\n\020REGION_TYPE_WARD\020\0012\214\014\n\022Fulfil" +
-      "lmentService\022k\n\014FilterOrders\022,.hubstore." +
-      "fulfillment.v1.FilterOrdersRequest\032-.hub" +
-      "store.fulfillment.v1.FilterOrdersRespons" +
-      "e\022q\n\016GetOrderDetail\022..hubstore.fulfillme" +
-      "nt.v1.GetOrderDetailRequest\032/.hubstore.f" +
-      "ulfillment.v1.GetOrderDetailResponse\022z\n\021" +
-      "MutateOrderStatus\0221.hubstore.fulfillment" +
-      ".v1.MutateOrderStatusRequest\0322.hubstore." +
-      "fulfillment.v1.MutateOrderStatusResponse" +
-      "\022w\n\020GetOrdersByCodes\0220.hubstore.fulfillm" +
-      "ent.v1.GetOrdersByCodesRequest\0321.hubstor" +
-      "e.fulfillment.v1.GetOrdersByCodesRespons" +
-      "e\022n\n\rAssignShopHub\022-.hubstore.fulfillmen" +
-      "t.v1.AssignShopHubRequest\032..hubstore.ful" +
-      "fillment.v1.AssignShopHubResponse\022w\n\020Get" +
-      "AssignHistory\0220.hubstore.fulfillment.v1." +
-      "GetAssignHistoryRequest\0321.hubstore.fulfi" +
-      "llment.v1.GetAssignHistoryResponse\022}\n\022Up" +
-      "dateDeliveryTime\0222.hubstore.fulfillment." +
-      "v1.UpdateDeliveryTimeRequest\0323.hubstore." +
-      "fulfillment.v1.UpdateDeliveryTimeRespons" +
-      "e\022e\n\nUpdateNote\022*.hubstore.fulfillment.v" +
-      "1.UpdateNoteRequest\032+.hubstore.fulfillme" +
-      "nt.v1.UpdateNoteResponse\022h\n\013ListRegions\022" +
-      "+.hubstore.fulfillment.v1.ListRegionsReq" +
-      "uest\032,.hubstore.fulfillment.v1.ListRegio" +
-      "nsResponse\022z\n\021ListDeliveryStaff\0221.hubsto" +
-      "re.fulfillment.v1.ListDeliveryStaffReque" +
-      "st\0322.hubstore.fulfillment.v1.ListDeliver" +
-      "yStaffResponse\022z\n\021ListDistinctShops\0221.hu" +
-      "bstore.fulfillment.v1.ListDistinctShopsR" +
-      "equest\0322.hubstore.fulfillment.v1.ListDis" +
-      "tinctShopsResponse\022t\n\017GetTimeDelivery\022/." +
-      "hubstore.fulfillment.v1.GetTimeDeliveryR" +
-      "equest\0320.hubstore.fulfillment.v1.GetTime" +
-      "DeliveryResponse\022z\n\021GetDashboardStats\0221." +
-      "hubstore.fulfillment.v1.GetDashboardStat" +
-      "sRequest\0322.hubstore.fulfillment.v1.GetDa" +
-      "shboardStatsResponseBV\n\033com.hubstore.ful" +
-      "fillment.v1P\001Z5hubstore/gen/go/hubstore/" +
-      "fulfillment/v1;fulfillmentv1b\006proto3"
+      "\022\021\n\004note\030\017 \001(\tH\002\210\001\001\022\025\n\rcustomer_name\030\020 \001" +
+      "(\t\022\026\n\016customer_phone\030\021 \001(\t\022\023\n\013fail_reaso" +
+      "n\030\022 \001(\t\022\021\n\tfail_note\030\023 \001(\t\022\030\n\020old_fulfil" +
+      "l_code\030\024 \001(\tB\r\n\013_batch_codeB\013\n\t_distance" +
+      "B\007\n\005_note\"\320\001\n\032ShopAssignmentHistoryEntry" +
+      "\022\024\n\014fulfill_code\030\001 \001(\t\022:\n\tfrom_shop\030\002 \001(" +
+      "\0132\'.hubstore.fulfillment.v1.ShopAssignme" +
+      "nt\0228\n\007to_shop\030\003 \001(\0132\'.hubstore.fulfillme" +
+      "nt.v1.ShopAssignment\022\022\n\nchanged_at\030\004 \001(\t" +
+      "\022\022\n\nchanged_by\030\005 \001(\t\"\301\003\n\023FilterOrdersReq" +
+      "uest\022\024\n\014fulfill_code\030\001 \001(\t\022<\n\016batch_stat" +
+      "uses\030\002 \003(\0162$.hubstore.fulfillment.v1.Bat" +
+      "chStatus\0229\n\rdelivery_time\030\003 \001(\0132\".hubsto" +
+      "re.fulfillment.v1.TimeRange\022\024\n\014region_co" +
+      "des\030\004 \003(\t\022\022\n\nshop_codes\030\005 \003(\t\022<\n\016order_s" +
+      "tatuses\030\006 \003(\0162$.hubstore.fulfillment.v1." +
+      "OrderStatus\0228\n\014created_time\030\007 \001(\0132\".hubs" +
+      "tore.fulfillment.v1.TimeRange\0229\n\rorigina" +
+      "l_time\030\010 \001(\0132\".hubstore.fulfillment.v1.T" +
+      "imeRange\022\035\n\025exclude_fulfill_codes\030\t \003(\t\022" +
+      "\014\n\004page\030\n \001(\005\022\021\n\tpage_size\030\013 \001(\005\"\207\001\n\024Fil" +
+      "terOrdersResponse\022?\n\005items\030\001 \003(\01320.hubst" +
+      "ore.fulfillment.v1.HubStoreOrderFilterIt" +
+      "em\022\r\n\005total\030\002 \001(\003\022\014\n\004page\030\003 \001(\005\022\021\n\tpage_" +
+      "size\030\004 \001(\005\"-\n\025GetOrderDetailRequest\022\024\n\014f" +
+      "ulfill_code\030\001 \001(\t\"Y\n\026GetOrderDetailRespo" +
+      "nse\022?\n\005order\030\001 \001(\01320.hubstore.fulfillmen" +
+      "t.v1.HubStoreOrderFilterItem\"\224\001\n\030MutateO" +
+      "rderStatusRequest\022\025\n\rfulfill_codes\030\001 \003(\t" +
+      "\022A\n\023target_batch_status\030\002 \001(\0162$.hubstore" +
+      ".fulfillment.v1.BatchStatus\022\023\n\006reason\030\003 " +
+      "\001(\tH\000\210\001\001B\t\n\007_reason\"Q\n\027MutateOrderStatus" +
+      "Result\022\024\n\014fulfill_code\030\001 \001(\t\022\017\n\007success\030" +
+      "\002 \001(\010\022\017\n\007message\030\003 \001(\t\"^\n\031MutateOrderSta" +
+      "tusResponse\022A\n\007results\030\001 \003(\01320.hubstore." +
+      "fulfillment.v1.MutateOrderStatusResult\"0" +
+      "\n\027GetOrdersByCodesRequest\022\025\n\rfulfill_cod" +
+      "es\030\001 \003(\t\"\\\n\030GetOrdersByCodesResponse\022@\n\006" +
+      "orders\030\001 \003(\01320.hubstore.fulfillment.v1.H" +
+      "ubStoreOrderFilterItem\"F\n\024AssignShopHubR" +
+      "equest\022\024\n\014fulfill_code\030\001 \001(\t\022\030\n\020target_s" +
+      "hop_code\030\002 \001(\t\"X\n\025AssignShopHubResponse\022" +
+      "?\n\005order\030\001 \001(\01320.hubstore.fulfillment.v1" +
+      ".HubStoreOrderFilterItem\"/\n\027GetAssignHis" +
+      "toryRequest\022\024\n\014fulfill_code\030\001 \001(\t\"`\n\030Get" +
+      "AssignHistoryResponse\022D\n\007entries\030\001 \003(\01323" +
+      ".hubstore.fulfillment.v1.ShopAssignmentH" +
+      "istoryEntry\"l\n\031UpdateDeliveryTimeRequest" +
+      "\022\024\n\014fulfill_code\030\001 \001(\t\0229\n\rdelivery_time\030" +
+      "\002 \001(\0132\".hubstore.fulfillment.v1.TimeRang" +
+      "e\"]\n\032UpdateDeliveryTimeResponse\022?\n\005order" +
+      "\030\001 \001(\01320.hubstore.fulfillment.v1.HubStor" +
+      "eOrderFilterItem\"7\n\021UpdateNoteRequest\022\024\n" +
+      "\014fulfill_code\030\001 \001(\t\022\014\n\004note\030\002 \001(\t\"U\n\022Upd" +
+      "ateNoteResponse\022?\n\005order\030\001 \001(\01320.hubstor" +
+      "e.fulfillment.v1.HubStoreOrderFilterItem" +
+      "\"\024\n\022ListRegionsRequest\"G\n\023ListRegionsRes" +
+      "ponse\0220\n\007regions\030\001 \003(\0132\037.hubstore.fulfil" +
+      "lment.v1.Region\"@\n\030ListDeliveryStaffRequ" +
+      "est\022\026\n\tshop_code\030\001 \001(\tH\000\210\001\001B\014\n\n_shop_cod" +
+      "e\"R\n\031ListDeliveryStaffResponse\0225\n\005items\030" +
+      "\001 \003(\0132&.hubstore.fulfillment.v1.Delivery" +
+      "Staff\"\032\n\030ListDistinctShopsRequest\"I\n\031Lis" +
+      "tDistinctShopsResponse\022,\n\005items\030\001 \003(\0132\035." +
+      "hubstore.fulfillment.v1.Shop\"E\n\026GetTimeD" +
+      "eliveryRequest\022\021\n\tshop_code\030\001 \001(\t\022\030\n\020cus" +
+      "tomer_address\030\002 \001(\t\"U\n\027GetTimeDeliveryRe" +
+      "sponse\022:\n\016suggested_time\030\001 \001(\0132\".hubstor" +
+      "e.fulfillment.v1.TimeRange\"\032\n\030GetDashboa" +
+      "rdStatsRequest\"\'\n\010DayCount\022\014\n\004date\030\001 \001(\t" +
+      "\022\r\n\005count\030\002 \001(\005\"4\n\017BatchOrderCount\022\022\n\nba" +
+      "tch_code\030\001 \001(\t\022\r\n\005count\030\002 \001(\005\"\311\001\n\031GetDas" +
+      "hboardStatsResponse\0229\n\016orders_per_day\030\001 " +
+      "\003(\0132!.hubstore.fulfillment.v1.DayCount\022\023" +
+      "\n\013total_today\030\002 \001(\005\022\030\n\020pending_approval\030" +
+      "\003 \001(\005\022B\n\020orders_per_batch\030\004 \003(\0132(.hubsto" +
+      "re.fulfillment.v1.BatchOrderCount*\205\001\n\013Ba" +
+      "tchStatus\022\035\n\031BATCH_STATUS_NOT_PREPARED\020\000" +
+      "\022\032\n\026BATCH_STATUS_PREPARING\020\001\022\031\n\025BATCH_ST" +
+      "ATUS_PREPARED\020\002\022 \n\034BATCH_STATUS_WEIGHT_E" +
+      "XCEEDED\020\003*f\n\013OrderStatus\022!\n\035ORDER_STATUS" +
+      "_PENDING_APPROVAL\020\000\022\031\n\025ORDER_STATUS_APPR" +
+      "OVED\020\001\022\031\n\025ORDER_STATUS_REJECTED\020\002*}\n\022Coo" +
+      "rdinationStatus\022\037\n\033COORDINATION_STATUS_P" +
+      "ENDING\020\000\022#\n\037COORDINATION_STATUS_IN_PROGR" +
+      "ESS\020\001\022!\n\035COORDINATION_STATUS_COMPLETED\020\002" +
+      "*<\n\nRegionType\022\030\n\024REGION_TYPE_PROVINCE\020\000" +
+      "\022\024\n\020REGION_TYPE_WARD\020\0012\214\014\n\022FulfillmentSe" +
+      "rvice\022k\n\014FilterOrders\022,.hubstore.fulfill" +
+      "ment.v1.FilterOrdersRequest\032-.hubstore.f" +
+      "ulfillment.v1.FilterOrdersResponse\022q\n\016Ge" +
+      "tOrderDetail\022..hubstore.fulfillment.v1.G" +
+      "etOrderDetailRequest\032/.hubstore.fulfillm" +
+      "ent.v1.GetOrderDetailResponse\022z\n\021MutateO" +
+      "rderStatus\0221.hubstore.fulfillment.v1.Mut" +
+      "ateOrderStatusRequest\0322.hubstore.fulfill" +
+      "ment.v1.MutateOrderStatusResponse\022w\n\020Get" +
+      "OrdersByCodes\0220.hubstore.fulfillment.v1." +
+      "GetOrdersByCodesRequest\0321.hubstore.fulfi" +
+      "llment.v1.GetOrdersByCodesResponse\022n\n\rAs" +
+      "signShopHub\022-.hubstore.fulfillment.v1.As" +
+      "signShopHubRequest\032..hubstore.fulfillmen" +
+      "t.v1.AssignShopHubResponse\022w\n\020GetAssignH" +
+      "istory\0220.hubstore.fulfillment.v1.GetAssi" +
+      "gnHistoryRequest\0321.hubstore.fulfillment." +
+      "v1.GetAssignHistoryResponse\022}\n\022UpdateDel" +
+      "iveryTime\0222.hubstore.fulfillment.v1.Upda" +
+      "teDeliveryTimeRequest\0323.hubstore.fulfill" +
+      "ment.v1.UpdateDeliveryTimeResponse\022e\n\nUp" +
+      "dateNote\022*.hubstore.fulfillment.v1.Updat" +
+      "eNoteRequest\032+.hubstore.fulfillment.v1.U" +
+      "pdateNoteResponse\022h\n\013ListRegions\022+.hubst" +
+      "ore.fulfillment.v1.ListRegionsRequest\032,." +
+      "hubstore.fulfillment.v1.ListRegionsRespo" +
+      "nse\022z\n\021ListDeliveryStaff\0221.hubstore.fulf" +
+      "illment.v1.ListDeliveryStaffRequest\0322.hu" +
+      "bstore.fulfillment.v1.ListDeliveryStaffR" +
+      "esponse\022z\n\021ListDistinctShops\0221.hubstore." +
+      "fulfillment.v1.ListDistinctShopsRequest\032" +
+      "2.hubstore.fulfillment.v1.ListDistinctSh" +
+      "opsResponse\022t\n\017GetTimeDelivery\022/.hubstor" +
+      "e.fulfillment.v1.GetTimeDeliveryRequest\032" +
+      "0.hubstore.fulfillment.v1.GetTimeDeliver" +
+      "yResponse\022z\n\021GetDashboardStats\0221.hubstor" +
+      "e.fulfillment.v1.GetDashboardStatsReques" +
+      "t\0322.hubstore.fulfillment.v1.GetDashboard" +
+      "StatsResponseBV\n\033com.hubstore.fulfillmen" +
+      "t.v1P\001Z5hubstore/gen/go/hubstore/fulfill" +
+      "ment/v1;fulfillmentv1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -419,7 +422,7 @@ public final class Fulfillment {
     internal_static_hubstore_fulfillment_v1_HubStoreOrderFilterItem_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_hubstore_fulfillment_v1_HubStoreOrderFilterItem_descriptor,
-        new java.lang.String[] { "FulfillCode", "StatusCode", "BatchStatus", "BatchCode", "ShopAssignment", "OriginalTime", "DeliveryTime", "OrderStatus", "Items", "CodAmount", "TotalQuantity", "IsDebtSplittingOrder", "CustomerAddress", "Distance", "Note", });
+        new java.lang.String[] { "FulfillCode", "StatusCode", "BatchStatus", "BatchCode", "ShopAssignment", "OriginalTime", "DeliveryTime", "OrderStatus", "Items", "CodAmount", "TotalQuantity", "IsDebtSplittingOrder", "CustomerAddress", "Distance", "Note", "CustomerName", "CustomerPhone", "FailReason", "FailNote", "OldFulfillCode", });
     internal_static_hubstore_fulfillment_v1_ShopAssignmentHistoryEntry_descriptor =
       getDescriptor().getMessageTypes().get(7);
     internal_static_hubstore_fulfillment_v1_ShopAssignmentHistoryEntry_fieldAccessorTable = new

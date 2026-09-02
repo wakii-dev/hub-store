@@ -35,4 +35,12 @@ export interface HubStoreOrderFilterItem {
   customerAddress: string;
   /** Khoảng cách (km) */
   distance?: number;
+  // --- SF-13 intake/exception (additive, proto fields 16-20; seed NULL → undefined) ---
+  customerName?: string;
+  customerPhone?: string;
+  /** Lý do giao thất bại (string enum name; rỗng = không fail) */
+  failReason?: string;
+  failNote?: string;
+  /** Đơn gốc của đơn retry (đơn retry có giá trị; đơn gốc rỗng) */
+  oldFulfillCode?: string;
 }
