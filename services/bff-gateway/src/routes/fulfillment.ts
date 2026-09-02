@@ -19,12 +19,16 @@ import type {
   TimeDeliveryResponse,
   AssignHistoryResponse,
   OrderDetail,
+  TimeRange,
 } from '@hub-store/shared';
+import type { HubStoreOrderFilterItem as ProtoOrderItem } from '../../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import type { FulfillmentApi, BatchingApi } from '../clients/index.js';
 import { SERVICE_NAMES } from '../config.js';
 import { requireUser } from '../plugins/auth.js';
 import { paginated } from '../lib/envelope.js';
 import { sendGrpcError, grpcError } from '../lib/grpc-error.js';
+import { logActivity, getAuditPool, buildAuditWhere, normalizeAuditPage, type AuditQuery } from '../lib/audit.js';
+import { csvRow, EXPORT_COLUMNS } from '../lib/csv.js';
 import {
   mapOrderItem,
   mapOrderDetail,
@@ -38,6 +42,37 @@ import { mapBatch } from '../mappers/batching.js';
 export interface RouteDeps {
   fulfillment: FulfillmentApi;
   batching: BatchingApi;
+}
+
+/** Querystring GET export — mirror body /filter (giá trị runtime là string). */
+interface ExportOrdersQuery {
+  fulfillCode?: string;
+  /** comma-separated ints — "0,1" */
+  batchStatus?: string;
+  regionCodes?: string;
+  shopCodes?: string;
+  orderStatus?: string;
+  /** YYYY-MM-DD — wrap full-day UTC */
+  createdAt?: string;
+}
+
+/** ""/undefined → [] — tránh [''] từ ''.split(','). */
+function splitStringList(s?: string): string[] {
+  return s ? s.split(',').map((x) => x.trim()).filter((x) => x !== '') : [];
+}
+
+function splitIntList(s?: string): number[] {
+  return splitStringList(s)
+    .map(Number)
+    .filter((n) => Number.isInteger(n));
+}
+
+/** yyyyMMdd-HHmmss theo UTC (BFF chạy UTC — pattern audit date pin). */
+function exportTimestamp(d: Date): string {
+  const p = (n: number) => String(n).padStart(2, '0');
+  return `${d.getUTCFullYear()}${p(d.getUTCMonth() + 1)}${p(d.getUTCDate())}-${p(d.getUTCHours())}${p(
+    d.getUTCMinutes(),
+  )}${p(d.getUTCSeconds())}`;
 }
 
 export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps): void {
@@ -70,6 +105,133 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
     } catch (err) {
       return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
     }
+  });
+
+  // Audit viewer (SF-7) — Manager-only (bracket SF-11). Route order: static
+  // beats parametric (find-my-way) nhưng giữ cạnh route static cho dễ đọc —
+  // TRƯỚC /fulfillment/:fulfillCode (single-segment conflict — pattern batches criteria).
+  app.get<{ Querystring: AuditQuery }>(
+    '/fulfillment/audit',
+    async (request, reply) => {
+      const { role } = requireUser(request);
+      if (role !== 'Manager') {
+        return sendGrpcError(
+          reply,
+          grpcError(GrpcStatus.PERMISSION_DENIED, 'Manager only.'),
+          SERVICE_NAMES.fulfillment,
+        );
+      }
+      const p = getAuditPool();
+      if (!p) {
+        return sendGrpcError(
+          reply,
+          grpcError(GrpcStatus.UNAVAILABLE, 'Audit store unavailable.'),
+          SERVICE_NAMES.fulfillment,
+        );
+      }
+      const { whereSql, params } = buildAuditWhere(request.query);
+      const { page, pageSize, offset } = normalizeAuditPage(request.query);
+      try {
+        const { rows } = await p.query(
+          `SELECT c.total_all, a.* FROM (SELECT count(*) AS total_all FROM activity_log WHERE ${whereSql}) c
+           LEFT JOIN LATERAL (SELECT * FROM activity_log WHERE ${whereSql}
+             ORDER BY created_at DESC, id DESC OFFSET $${params.length + 1} LIMIT $${params.length + 2}) a ON TRUE`,
+          [...params, offset, pageSize],
+        );
+        const total = rows.length > 0 ? Number(rows[0].total_all) : 0;
+        const items = rows
+          .filter((r: Record<string, unknown>) => r.id != null)
+          .map((r: Record<string, unknown>) => ({
+            id: Number(r.id),
+            actor: r.actor,
+            action: r.action,
+            targetType: r.target_type,
+            targetId: r.target_id,
+            detail: r.detail ?? null,
+            createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+          }));
+        return await reply.send(paginated(items, total, page, pageSize));
+      } catch (err) {
+        request.log.error(err);
+        return sendGrpcError(
+          reply,
+          grpcError(GrpcStatus.INTERNAL, 'Audit query failed.'),
+          SERVICE_NAMES.fulfillment,
+        );
+      }
+    },
+  );
+
+  /**
+   * GET /fulfillment/orders/export.csv (SF-7) — mirror body của /filter nhưng
+   * qua querystring (GET): lists comma-separated, createdAt = ngày đơn
+   * YYYY-MM-DD → wrap full-day UTC như dayToTimeRange batches.ts. Multi-segment
+   * không conflict /:fulfillCode nhưng đặt cạnh audit cho gọn.
+   * Buffer-then-send: loop FilterOrders pageSize 500 theo total page đầu
+   * (TOCTOU best-effort) — lỗi gRPC BẤT KỲ page → sendGrpcError TRƯỚC khi
+   * send, không bao giờ trả CSV đứt giữa chừng.
+   */
+  app.get<{ Querystring: ExportOrdersQuery }>('/fulfillment/orders/export.csv', async (request, reply) => {
+    const { role } = requireUser(request);
+    const q = request.query;
+    const createdTime: TimeRange | undefined = q.createdAt
+      ? { from: `${q.createdAt}T00:00:00.000Z`, to: `${q.createdAt}T23:59:59.999Z` }
+      : undefined;
+    const PAGE_SIZE = 500;
+    const collected: ProtoOrderItem[] = [];
+    let maxPages = 1; // review T4 P1: freeze theo total PAGE ĐẦU — chống unbounded khi total drift/lừa
+    let page = 1;
+    try {
+      for (;;) {
+        const resp = await f.filterOrders(
+          {
+            fulfillCode: q.fulfillCode ?? '',
+            batchStatuses: splitIntList(q.batchStatus),
+            regionCodes: splitStringList(q.regionCodes),
+            shopCodes: splitStringList(q.shopCodes),
+            orderStatuses: splitIntList(q.orderStatus),
+            createdTime,
+            deliveryTime: undefined,
+            originalTime: undefined,
+            excludeFulfillCodes: [],
+            page,
+            pageSize: PAGE_SIZE,
+          },
+          role,
+        );
+        if (page === 1) {
+          maxPages = Math.max(Math.ceil(Number(resp.total) / PAGE_SIZE), 1);
+        }
+        const items = resp.items ?? [];
+        if (items.length === 0) break;
+        collected.push(...items);
+        if (page >= maxPages) break;
+        page += 1;
+      }
+    } catch (err) {
+      return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
+    }
+    // Map từ RAW proto items — KHÔNG mapOrderItem: note trên proto nhưng DTO
+    // không map; orderCode là GAP proto (documented ở mappers) → cột xuất rỗng.
+    const lines = [
+      csvRow([...EXPORT_COLUMNS]),
+      ...collected.map((o) =>
+        csvRow([
+          o.fulfillCode,
+          '',
+          o.batchStatus,
+          o.shopAssignment?.shopCode ?? '',
+          o.shopAssignment?.shopName ?? '',
+          o.shopAssignment?.address ?? '',
+          o.deliveryTime?.from ?? '',
+          o.deliveryTime?.to ?? '',
+          o.note ?? '',
+        ]),
+      ),
+    ];
+    reply.type('text/csv; charset=utf-8');
+    reply.header('Content-Disposition', `attachment; filename="orders-export-${exportTimestamp(new Date())}.csv"`);
+    return await reply.send('\uFEFF' + lines.join(''));
   });
 
   // D1 detail — FE waive tường minh (spec §3.8) nhưng implement đầy đủ.
@@ -106,12 +268,20 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.post<{ Params: { code: string }; Body: AssignShopHubRequest }>(
     '/fulfillment/:code/assign-shop-hub',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const { role, sub } = requireUser(request);
       try {
         const resp = await f.assignShopHub(
           { fulfillCode: request.params.code, targetShopCode: request.body.toShopCode },
           role,
         );
+        // SF-7 audit — fire-and-forget SAU gRPC thành công, fail-open.
+        logActivity({
+          actor: sub,
+          action: 'order.assign_shop',
+          targetType: 'order',
+          targetId: request.params.code,
+          detail: { toShopCode: request.body.toShopCode },
+        });
         return await reply.send(resp.order ? mapOrderItem(resp.order) : null);
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -136,12 +306,19 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.put<{ Params: { code: string }; Body: UpdateNoteRequest }>(
     '/fulfillment/:code/note',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const { role, sub } = requireUser(request);
       try {
         const resp = await f.updateNote(
           { fulfillCode: request.params.code, note: request.body.note },
           role,
         );
+        logActivity({
+          actor: sub,
+          action: 'order.update_note',
+          targetType: 'order',
+          targetId: request.params.code,
+          detail: { noteLength: (request.body.note ?? '').length },
+        });
         return await reply.send(resp.order ? mapOrderItem(resp.order) : null);
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -153,12 +330,19 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.put<{ Params: { code: string }; Body: UpdateDeliveryTimeRequest }>(
     '/fulfillment/:code/delivery-time',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const { role, sub } = requireUser(request);
       try {
         const resp = await f.updateDeliveryTime(
           { fulfillCode: request.params.code, deliveryTime: request.body.deliveryTime },
           role,
         );
+        logActivity({
+          actor: sub,
+          action: 'order.update_delivery_time',
+          targetType: 'order',
+          targetId: request.params.code,
+          detail: { from: request.body.deliveryTime?.from, to: request.body.deliveryTime?.to },
+        });
         return await reply.send(resp.order ? mapOrderItem(resp.order) : null);
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -231,12 +415,18 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   // batching-service (Go owns batch transitions, spec §3.3) dù path nằm dưới
   // /fulfillment (REQUIREMENTS §5 giữ nguyên path).
   app.put<{ Body: { batchCode: string } }>('/fulfillment/complete-picking', async (request, reply) => {
-    const { role } = requireUser(request);
+    const { role, sub } = requireUser(request);
     try {
       const resp = await deps.batching.completePicking(
         { batchCode: request.body.batchCode },
         role,
       );
+      logActivity({
+        actor: sub,
+        action: 'batch.complete',
+        targetType: 'batch',
+        targetId: request.body.batchCode,
+      });
       return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
     } catch (err) {
       return sendGrpcError(reply, err, SERVICE_NAMES.batching);

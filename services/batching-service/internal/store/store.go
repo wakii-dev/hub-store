@@ -9,6 +9,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
@@ -117,6 +118,116 @@ func (s *PostgresStore) List(ctx context.Context) ([]*batchingv1.Batch, error) {
 		return nil, err
 	}
 	return out, nil
+}
+
+// BatchFilter — tham số FilterBatches (SF-7). Zero-value = không filter;
+// Page <1 → 1, PageSize <=0 → 10 (normalize trong Filter — khớp server cũ).
+type BatchFilter struct {
+	Search                 string
+	Statuses               []batchingv1.BatchEntityStatus
+	CreatedFrom, CreatedTo *time.Time
+	Page, PageSize         int
+}
+
+// Filter — pagination SQL giữ sort semantics của List (created_at →
+// batch_code), KHÔNG đụng List(). Count = scalar subquery với CÙNG WHERE +
+// LEFT JOIN LATERAL anchor (pattern SF-2 PostgresOrderRepository — 1 statement
+// = 1 snapshot; page vượt last page → items rỗng nhưng total vẫn đúng).
+// Search khớp batch_code HOẶC order_code của items (EXISTS batch_items —
+// port matchesSearch in-memory batching_server.go). CreatedTo loại-trừ (<) —
+// BFF wrap ngày hết 23:59:59.999 nên tương đương semantics in-memory.
+func (s *PostgresStore) Filter(ctx context.Context, f BatchFilter) ([]*batchingv1.Batch, int64, error) {
+	var where strings.Builder
+	where.WriteString(" WHERE TRUE")
+	var params []any
+	if search := strings.TrimSpace(f.Search); search != "" {
+		params = append(params, "%"+escapeLike(search)+"%")
+		n := len(params)
+		fmt.Fprintf(&where, " AND (batch_code ILIKE $%d ESCAPE '\\' OR EXISTS"+
+			" (SELECT 1 FROM batch_items bi WHERE bi.batch_code = batches.batch_code"+
+			" AND bi.order_code ILIKE $%d ESCAPE '\\'))", n, n)
+	}
+	if len(f.Statuses) > 0 {
+		sts := make([]int, 0, len(f.Statuses))
+		for _, st := range f.Statuses {
+			sts = append(sts, int(st))
+		}
+		params = append(params, sts)
+		fmt.Fprintf(&where, " AND status = ANY($%d)", len(params))
+	}
+	if f.CreatedFrom != nil {
+		params = append(params, *f.CreatedFrom)
+		fmt.Fprintf(&where, " AND created_at >= $%d", len(params))
+	}
+	if f.CreatedTo != nil {
+		params = append(params, *f.CreatedTo)
+		fmt.Fprintf(&where, " AND created_at < $%d", len(params))
+	}
+	page := f.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := f.PageSize
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	// pgx dùng placeholder ordinal — CÙNG $n tái sử dụng được nhiều lần trong
+	// 1 statement nên params KHÔNG nhân đôi như JDBC '?' (khác pattern SF-2);
+	// OFFSET/LIMIT là 2 ordinal cuối.
+	whereSql := where.String()
+	sql := `SELECT c.total_all, b.batch_code, b.shop_code, b.shipper_id,
+		b.delivery_time_from, b.delivery_time_to, b.status, b.created_at
+		FROM (SELECT count(*) AS total_all FROM batches` + whereSql + `) c
+		LEFT JOIN LATERAL (SELECT batch_code, shop_code, shipper_id,
+			delivery_time_from, delivery_time_to, status, created_at
+			FROM batches` + whereSql + ` ORDER BY created_at ASC, batch_code ASC
+			OFFSET $` + fmt.Sprint(len(params)+1) + ` LIMIT $` + fmt.Sprint(len(params)+2) + `) b ON TRUE`
+	args := append(params, (page-1)*pageSize, pageSize)
+
+	rows, err := s.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var total int64
+	var out []*batchingv1.Batch
+	var codes []string
+	for rows.Next() {
+		// Lateral nullable: page vượt last page → chỉ anchor row (b.* NULL).
+		var t int64
+		var code, shop, shipper *string
+		var status *int32
+		var fromT, toT, createdAt *time.Time
+		if err := rows.Scan(&t, &code, &shop, &shipper,
+			&fromT, &toT, &status, &createdAt); err != nil {
+			return nil, 0, err
+		}
+		total = t // anchor row luôn có ≥1 row — total đồng nhất mọi page
+		if code == nil {
+			continue
+		}
+		b := &batchingv1.Batch{BatchCode: *code}
+		if shop != nil {
+			b.ShopCode = *shop
+		}
+		if shipper != nil {
+			b.ShipperId = *shipper
+		}
+		if status != nil {
+			b.Status = batchingv1.BatchEntityStatus(*status)
+		}
+		mapBatchTimes(b, fromT, toT, createdAt)
+		out = append(out, b)
+		codes = append(codes, b.BatchCode)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if err := s.attachItems(ctx, out, codes); err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
 }
 
 func (s *PostgresStore) Get(ctx context.Context, batchCode string) (*batchingv1.Batch, error) {
@@ -308,6 +419,12 @@ func scanBatch(r row) (*batchingv1.Batch, error) {
 	if err := r.Scan(&b.BatchCode, &b.ShopCode, &b.ShipperId, &fromT, &toT, &b.Status, &createdAt); err != nil {
 		return nil, err
 	}
+	mapBatchTimes(b, fromT, toT, createdAt)
+	return b, nil
+}
+
+// mapBatchTimes — mapping timestamptz nullable → proto (dùng chung scanBatch + Filter).
+func mapBatchTimes(b *batchingv1.Batch, fromT, toT, createdAt *time.Time) {
 	if fromT != nil {
 		b.DeliveryTime = &fulfillmentv1.TimeRange{From: fromT.UTC().Format(time.RFC3339)}
 	}
@@ -320,7 +437,12 @@ func scanBatch(r row) (*batchingv1.Batch, error) {
 	if createdAt != nil {
 		b.CreatedAt = createdAt.UTC().Format(time.RFC3339)
 	}
-	return b, nil
+}
+
+// escapeLike vô hiệu hoá wildcard user (\ % _) — in-memory strings.Contains
+// match literal nên ILIKE cần ESCAPE để tương đương semantics cũ (SF-7).
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
 }
 
 func insertBatch(ctx context.Context, tx pgx.Tx, b *batchingv1.Batch) error {

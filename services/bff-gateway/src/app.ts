@@ -14,8 +14,10 @@ import {
   createFulfillmentClient,
   createBatchingClient,
   createPrintClient,
+  createTechClient,
 } from './clients/index.js';
 import { registerFulfillmentRoutes } from './routes/fulfillment.js';
+import { registerTechRoutes } from './routes/tech.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
 import { registerAuthRoutes } from './routes/auth.js';
@@ -55,15 +57,19 @@ export function buildApp(config: BffConfig): FastifyInstance {
 
   // gRPC clients — insecure nội bộ (spec §2); close dọn sạch khi shutdown.
   const fulfillment = createFulfillmentClient(config.grpc.fulfillment, config.grpc.deadlineMs);
+  // TechService (SF-19) sống cùng fulfillment-service — chung addr.
+  const tech = createTechClient(config.grpc.fulfillment, config.grpc.deadlineMs);
   const batching = createBatchingClient(config.grpc.batching, config.grpc.deadlineMs);
   const print = createPrintClient(config.grpc.print, config.grpc.deadlineMs);
   app.addHook('onClose', async () => {
     fulfillment.close();
+    tech.close();
     batching.close();
     print.close();
   });
 
   registerFulfillmentRoutes(app, { fulfillment, batching });
+  registerTechRoutes(app, { tech });
   registerBatchRoutes(app, batching);
   registerPrintRoutes(app, { batching, print });
   // DEV-ONLY — fail-safe: chỉ mount khi ENABLE_DEV_RESET_PASSWORD=1 tường minh

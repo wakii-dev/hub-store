@@ -1,0 +1,162 @@
+syntax = "proto3";
+
+package hubstore.fulfillment.v1;
+
+option go_package = "hubstore/gen/go/hubstore/fulfillment/v1;fulfillmentv1";
+option java_multiple_files = true;
+option java_package = "com.hubstore.fulfillment.v1";
+
+// SF-19 (FI-264) — Đơn dịch vụ kỹ thuật. Additive file — KHÔNG đụng fulfillment.proto.
+// 10 mã trạng thái (REQUIREMENT-GAP FI-245: assumption, xem spec SF-19 §4).
+enum DeliveryStatus {
+  DELIVERY_STATUS_NEW = 0;
+  DELIVERY_STATUS_CONFIRMED = 1;
+  DELIVERY_STATUS_PROCESSING = 2;
+  DELIVERY_STATUS_SHIPPING = 3;
+  DELIVERY_STATUS_DELIVERED = 4;
+  DELIVERY_STATUS_FAILED = 5;
+  DELIVERY_STATUS_REDELIVERY = 6;
+  DELIVERY_STATUS_RESCHEDULED = 7;
+  DELIVERY_STATUS_CANCELLED = 8;
+  DELIVERY_STATUS_RETURNED = 9;
+}
+
+message GeoPoint {
+  double lat = 1;
+  double long = 2;
+}
+
+message TechItem {
+  string code = 1;
+  string name = 2;
+  int32 quantity = 3;
+  string category_l1 = 4;
+  string category_l2 = 5;
+}
+
+message Contact {
+  string name = 1;
+  string phone = 2;
+  GeoPoint location = 3;
+}
+
+// Buttons BE-authoritative — FE render theo flag, không tự suy.
+message TechButtons {
+  bool allow_cancel = 1;
+  bool allow_assign = 2;
+  bool allow_reassign = 3;
+  bool allow_accept = 4;
+  bool allow_reschedule = 5;
+}
+
+message DeliveryOrder {
+  string code = 1;
+  DeliveryStatus status = 2;
+  string driver_name = 3;
+  string driver_phone = 4;
+  Contact receiver = 5;
+  Contact sender = 6;
+  double fee = 7;
+  double tip = 8;
+  repeated TechItem items = 9;
+  string region_code = 10;
+  string province = 11;
+  string coordination_json = 12; // JSONB passthrough
+  string delivery_date = 13;     // ISO date YYYY-MM-DD
+  string created_at = 14;        // ISO-8601
+  TechButtons buttons = 15;
+}
+
+message InstallationOrder {
+  string service_order_code = 1;
+  string delivery_order_code = 2;
+  string technician_code = 3;
+  DeliveryStatus status = 4;
+  string expected_time = 5;      // ISO-8601
+  string timeline_json = 6;      // JSONB passthrough
+  double service_fee = 7;
+  double fee_adjust = 8;
+  repeated TechItem items = 9;
+  string region_code = 10;
+  string province = 11;
+  string created_at = 12;
+  TechButtons buttons = 13;
+}
+
+message Technician {
+  string code = 1;
+  string name = 2;
+  string type = 3; // KTV | CTV
+  string region_code = 4;
+}
+
+message FilterDeliveryOrdersRequest {
+  repeated DeliveryStatus statuses = 1;
+  string driver_name = 2;
+  repeated string category_l1 = 3;
+  repeated string category_l2 = 4;
+  string region_code = 5;
+  string province = 6;
+  string date_from = 7; // YYYY-MM-DD; cả from+to absent → today default (server-side)
+  string date_to = 8;
+  int32 page = 9;
+  int32 page_size = 10;
+}
+
+message FilterDeliveryOrdersResponse {
+  repeated DeliveryOrder items = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message FilterInstallationOrdersRequest {
+  repeated DeliveryStatus statuses = 1;
+  string technician_code = 2;
+  repeated string category_l1 = 3;
+  repeated string category_l2 = 4;
+  string region_code = 5;
+  string province = 6;
+  string date_from = 7; // trên expected_time::date; KHÔNG có today default
+  string date_to = 8;
+  int32 page = 9;
+  int32 page_size = 10;
+}
+
+message FilterInstallationOrdersResponse {
+  repeated InstallationOrder items = 1;
+  int64 total = 2;
+  int32 page = 3;
+  int32 page_size = 4;
+}
+
+message AssignTechnicianRequest {
+  string service_order_code = 1;
+  string technician_code = 2;
+}
+
+message AssignTechnicianResponse {
+  InstallationOrder order = 1; // flags re-computed sau assign
+}
+
+message SuggestTechniciansRequest {
+  string region_code = 1;
+}
+
+message SuggestedTechnician {
+  string code = 1;
+  string name = 2;
+  string type = 3;
+  int32 active_count = 4;
+}
+
+message SuggestTechniciansResponse {
+  repeated SuggestedTechnician items = 1;
+}
+
+service TechService {
+  rpc FilterDeliveryOrders(FilterDeliveryOrdersRequest) returns (FilterDeliveryOrdersResponse);
+  rpc FilterInstallationOrders(FilterInstallationOrdersRequest) returns (FilterInstallationOrdersResponse);
+  rpc AssignTechnician(AssignTechnicianRequest) returns (AssignTechnicianResponse);
+  rpc SuggestTechnicians(SuggestTechniciansRequest) returns (SuggestTechniciansResponse);
+}

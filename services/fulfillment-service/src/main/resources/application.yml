@@ -9,6 +9,10 @@ spring:
     url: jdbc:postgresql://${FULFILLMENT_DB_HOST:localhost}:${FULFILLMENT_DB_PORT:5432}/${FULFILLMENT_DB_NAME:fulfillment}
     username: ${FULFILLMENT_DB_USER:hubstore}
     password: ${FULFILLMENT_DB_PASSWORD:}
+    hikari:
+      # Spec §6.1 today-default: Asia/Ho_Chi_Minh — Postgres session TZ mặc định
+      # UTC làm CURRENT_DATE / expected_time::date lệch ngày từ 00:00–06:59 VN.
+      connection-init-sql: SET timezone='Asia/Ho_Chi_Minh'
   flyway:
     # Migrate-on-boot: V1__orders_schema.sql tự áp khi service start.
     enabled: true
