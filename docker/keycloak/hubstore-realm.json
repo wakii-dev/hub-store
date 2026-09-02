@@ -69,6 +69,9 @@
             "access.token.claim": "true",
             "userinfo.token.claim": "true"
           }
+        }
+      ]
+    },
     {
       "clientId": "hubstore-admin",
       "name": "Hub Store Admin API (SF-8)",

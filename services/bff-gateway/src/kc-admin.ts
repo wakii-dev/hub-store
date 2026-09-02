@@ -293,7 +293,28 @@ export class KcAdminClient {
     );
   }
 
-  /** Tạo user + credential password (temporary: false). KC 409 → kind 'conflict'. */
+  async getUserByUsername(username: string): Promise<ManagedUser | null> {
+    const token = await this.getToken();
+    const res = await this.kcFetch(
+      `/users?username=${encodeURIComponent(username)}&exact=true&max=1`,
+      { method: 'GET' },
+      token,
+    );
+    if (!res.ok) {
+      throw new KcAdminError(503, `Keycloak user lookup failed (${res.status}).`, 'upstream');
+    }
+    const users = (await res.json()) as KcUser[];
+    const u = users[0];
+    if (typeof u?.id !== 'string' || typeof u?.username !== 'string') return null;
+    return { id: u.id, username: u.username, enabled: u.enabled === true };
+  }
+
+  /**
+   * Tạo user + credential password (temporary: false).
+   * Idempotent với partial-create: lần tạo trước đứt giữa chừng (user có rồi
+   * nhưng role chưa gán) → KC 409 → set-password user tồn tại + trả id cũ để
+   * route gán role và trả 201 (tránh username kẹt vĩnh viễn 409→422).
+   */
   async createUser(username: string, password: string): Promise<string> {
     const token = await this.getToken();
     const res = await this.kcFetch(
@@ -310,6 +331,11 @@ export class KcAdminClient {
       token,
     );
     if (res.status === 409) {
+      const existing = await this.getUserByUsername(username);
+      if (existing) {
+        await this.setPassword(existing.id, password);
+        return existing.id;
+      }
       throw new KcAdminError(422, `Username "${username}" already exists.`, 'conflict');
     }
     if (!res.ok) {

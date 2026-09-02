@@ -61,4 +61,24 @@ describe('users routes (SF-8, Manager-only)', () => {
     const missing = await harness.app.inject({ method: 'PUT', url: '/users/u-404/enabled', payload: { enabled: false }, headers: { authorization: `Bearer ${await harness.identity.signToken('Manager')}` } });
     expect(missing.statusCode).toBe(404);
   });
+
+  it('Manager → POST /users idempotent: 409 + user tồn tại → heal (set-password + gán role) 201', async () => {
+    harness.kc.setCreateStatus(409); // simulate partial-create: user đã tồn tại, role chưa gán
+    harness.kc.setUsers([
+      { id: 'u-1', username: 'coordinator', enabled: true },
+      { id: 'u-2', username: 'warehouse', enabled: true },
+      { id: 'u-3', username: 'manager', enabled: true },
+      { id: 'ghost-uid', username: 'ghost', enabled: true }, // "tồn tại" từ lần tạo đứt
+    ]);
+    try {
+      const res = await harness.app.inject({ method: 'POST', url: '/users', payload: { username: 'ghost', password: 'Healed123!', role: 'Manager' }, headers: { authorization: `Bearer ${await harness.identity.signToken('Manager')}` } });
+      expect(res.statusCode).toBe(201);
+      expect(res.json()).toMatchObject({ username: 'ghost', roles: ['Manager'] });
+      // heal gọi reset-password + role-mappings cho user cũ
+      const reset = harness.kc.requests.find((r) => r.url.includes('/users/ghost-uid/reset-password'));
+      expect(reset).toBeDefined();
+    } finally {
+      harness.kc.setCreateStatus(201);
+    }
+  });
 });

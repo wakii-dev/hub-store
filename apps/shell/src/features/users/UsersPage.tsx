@@ -3,7 +3,7 @@
  * testids: users-page, users-table, users-add-button, users-add-modal,
  * user-row-<username>, user-toggle-<username>, user-set-password-<username>.
  */
-import { useState } from "react";
+import { useState, type HTMLAttributes } from "react";
 import {
   Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, message,
 } from "antd";
@@ -110,8 +110,7 @@ export default function UsersPage(props: { currentUsername: string }) {
           </Button>
           {record.enabled ? (
             <Popconfirm
-              title={t("users.toggle.disable")}
-              description={record.username}
+              title={`${t("users.toggle.disable")}: ${record.username}`}
               onConfirm={() => void toggle(record.id, record.username, false)}
               disabled={record.username === props.currentUsername}
             >
@@ -157,7 +156,9 @@ export default function UsersPage(props: { currentUsername: string }) {
             loading={isLoading}
             dataSource={users}
             columns={columns}
-            onRow={(record) => ({ "data-testid": `user-row-${record.username}` })}
+            onRow={(record): HTMLAttributes<HTMLTableRowElement> =>
+              ({ "data-testid": `user-row-${record.username}` } as HTMLAttributes<HTMLTableRowElement>)
+            }
           />
         </div>
       </Space>
@@ -178,7 +179,7 @@ export default function UsersPage(props: { currentUsername: string }) {
             label={t("users.form.username")}
             rules={[
               { required: true },
-              { pattern: /^[a-zA-Z0-9._-]{3,64}$/, message: "3–64 ký tự [a-zA-Z0-9._-]" },
+              { pattern: /^[a-zA-Z0-9._-]{3,64}$/, message: t("users.form.usernameHint") },
             ]}
           >
             <Input autoComplete="off" />

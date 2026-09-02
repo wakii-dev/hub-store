@@ -167,6 +167,8 @@ export interface MockKcAdmin {
   setRoleIds(ids: Record<string, string>): void;
   /** toggle grant 401 invalid_client (self-heal path). */
   setGrantStatus(status: number): void;
+  /** POST /users trả status này (mặc định 201 + location; 409 = simulate conflict). */
+  setCreateStatus(status: number): void;
   requests: Array<{ method: string; url: string; body?: unknown }>;
   close(): Promise<void>;
 }
@@ -177,6 +179,7 @@ async function startMockKcAdmin(): Promise<MockKcAdmin> {
     roleUsers: {} as Record<string, string[]>,
     roleIds: {} as Record<string, string>,
     grantStatus: 200,
+    createStatus: 201,
     requests: [] as Array<{ method: string; url: string; body?: unknown }>,
   };
   const server = createServer((req, res) => {
@@ -208,10 +211,17 @@ async function startMockKcAdmin(): Promise<MockKcAdmin> {
         return id ? send(200, { id, name }) : send(404, { error: 'not found' });
       }
       if (url.split('?')[0] === '/admin/realms/hubstore/users' && req.method === 'POST') {
+        if (state.createStatus !== 201) return send(state.createStatus, { error: 'conflict' });
         // createUser đọc location header để lấy id — mock PHẢI trả header này.
         return send(201, {}, { location: `${url}/u-new-1` });
       }
-      if (url.split('?')[0] === '/admin/realms/hubstore/users' && req.method === 'GET') return send(200, state.users);
+      if (url.split('?')[0] === '/admin/realms/hubstore/users' && req.method === 'GET') {
+        const q = new URLSearchParams(url.split('?')[1] ?? '');
+        const uname = q.get('username');
+        const filtered =
+          uname !== null ? state.users.filter((u) => u.username === uname) : state.users;
+        return send(200, filtered);
+      }
       if (url.startsWith('/admin/realms/hubstore/users/')) {
         const id = decodeURIComponent(url.split('/users/')[1]?.split('/')[0] ?? '');
         const user = state.users.find((u) => u.id === id);
@@ -231,6 +241,7 @@ async function startMockKcAdmin(): Promise<MockKcAdmin> {
     setRoleUsers: (r, us) => { state.roleUsers[r] = us; },
     setRoleIds: (ids) => { state.roleIds = ids; },
     setGrantStatus: (s) => { state.grantStatus = s; },
+    setCreateStatus: (s) => { state.createStatus = s; },
     requests: state.requests,
     close: () => new Promise<void>((res) => server.close(() => res())),
   };
