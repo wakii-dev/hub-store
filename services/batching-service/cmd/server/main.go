@@ -17,6 +17,7 @@ import (
 	"os"
 
 	"hubstore/batching-service/internal/fulfillment"
+	"hubstore/batching-service/internal/health"
 	"hubstore/batching-service/internal/server"
 	"hubstore/batching-service/internal/store"
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
@@ -37,12 +38,16 @@ func main() {
 	fulfillAddr := env("FULFILLMENT_ADDR", "localhost:50051")
 	seedPath := env("CANONICAL_SEED_PATH", "../../api/seed/canonical-seed.json")
 
+	// gRPC health (SF-2): NOT_SERVING tới khi seed load xong.
+	hs := health.New()
+
 	// Batches store — seed từ canonical fixture (một nguồn, KHÔNG seed riêng).
 	st, err := store.LoadSeedFile(seedPath)
 	if err != nil {
 		log.Fatalf("batching-service: seed load failed: %v", err)
 	}
 	log.Printf("batching-service: canonical seed loaded from %s", seedPath)
+	health.SetServing(hs)
 
 	// Java client — hydration (GetOrdersByCodes) + mutation (MutateOrderStatus).
 	fc, err := fulfillment.NewGRPCClient(context.Background(), fulfillAddr)
@@ -58,6 +63,7 @@ func main() {
 	}
 	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(server.RoleUnaryInterceptor))
 	batchingv1.RegisterBatchingServiceServer(grpcServer, server.New(st, fc))
+	health.Register(grpcServer, hs) // SF-2: grpc.health.v1
 	reflection.Register(grpcServer)
 
 	log.Printf("batching-service: listening on :%s", port)
