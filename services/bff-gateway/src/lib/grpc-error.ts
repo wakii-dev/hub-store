@@ -119,6 +119,18 @@ export function mapGrpcError(
         statusCode: 404,
         body: errorEnvelope(404, err.details ?? 'Not found.', { code: 'NOT_FOUND' }),
       };
+    case GrpcStatus.FAILED_PRECONDITION:
+      // SF-15: fee-limit / trạng thái sai (book trên planning không CONFIRMED)
+      // → 422 (spec §3.6 + §4: "vượt fee limit → BE chặn (422)"). Trước đây
+      // rơi vào default 500 — không test/e2e nào phụ thuộc 500 nên map chung
+      // được (cả CancelBatch rule-4 hưởng lợi: 500 → 422 đúng ngữ nghĩa hơn).
+      return {
+        statusCode: 422,
+        body: errorEnvelope(422, err.details ?? 'Precondition failed.', {
+          code: 'PRECONDITION_FAILED',
+          details: parseDetails(err),
+        }),
+      };
     case GrpcStatus.DEADLINE_EXCEEDED:
     case GrpcStatus.UNAVAILABLE:
     case GrpcStatus.UNKNOWN:

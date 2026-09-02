@@ -20,9 +20,10 @@ import { createServer } from 'node:http';
 type RsaPrivateKey = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 import { buildApp } from '../src/app.js';
 import type { BffConfig } from '../src/config.js';
-import { fulfillmentResponses, batchingResponses, printResponses } from './fixtures.js';
+import { fulfillmentResponses, batchingResponses, printResponses, deliveryBatchResponses } from './fixtures.js';
 import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import { BatchingServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/batching';
+import { DeliveryBatchServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/delivery_batch';
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
 
 export const TEST_ISSUER = 'https://keycloak.test/realms/hubstore';
@@ -145,6 +146,7 @@ export async function signTestToken(role = 'Manager', sub = 'tester'): Promise<s
 export interface Harness {
   fulfillment: MockUpstream;
   batching: MockUpstream;
+  deliverybatch: MockUpstream;
   print: MockUpstream;
   app: FastifyInstance;
   identity: TestIdentity;
@@ -183,6 +185,16 @@ const printDefaults: Record<string, UnaryHandler> = {
   print: (_c, cb) => cb(null, printResponses.print),
 };
 
+const deliveryBatchDefaults: Record<string, UnaryHandler> = {
+  getQuotes: (_c, cb) => cb(null, deliveryBatchResponses.getQuotes),
+  confirmPlanning: (_c, cb) => cb(null, deliveryBatchResponses.confirmPlanning),
+  createBooking: (_c, cb) => cb(null, deliveryBatchResponses.createBooking),
+  cancelDeliveryOrder: (_c, cb) => cb(null, deliveryBatchResponses.cancelDeliveryOrder),
+  cancelDeliveryBatch: (_c, cb) => cb(null, deliveryBatchResponses.cancelDeliveryBatch),
+  searchBookingDetail: (_c, cb) => cb(null, deliveryBatchResponses.searchBookingDetail),
+  listAddonServices: (_c, cb) => cb(null, deliveryBatchResponses.listAddonServices),
+};
+
 /** Port "chắc chắn chết": bind rồi đóng — dùng cho test 503 conn-refused. */
 async function grabDeadPort(): Promise<number> {
   const s = new Server();
@@ -199,10 +211,11 @@ export interface HarnessOptions {
   /** Deadline ngắn để test thật đường DEADLINE_EXCEEDED mà không chậm. */
   deadlineMs?: number;
   /** Trỏ 1 upstream tới port chết — test 503 UPSTREAM_UNAVAILABLE. */
-  deadUpstream?: 'fulfillment' | 'batching' | 'print';
+  deadUpstream?: 'fulfillment' | 'batching' | 'deliverybatch' | 'print';
   /** Override handler mặc định lúc boot. */
   fulfillmentHandlers?: Record<string, UnaryHandler>;
   batchingHandlers?: Record<string, UnaryHandler>;
+  deliverybatchHandlers?: Record<string, UnaryHandler>;
   printHandlers?: Record<string, UnaryHandler>;
 }
 
@@ -217,6 +230,10 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     ...batchingDefaults,
     ...opts.batchingHandlers,
   });
+  const deliverybatch = await startMockServer(DeliveryBatchServiceService, {
+    ...deliveryBatchDefaults,
+    ...opts.deliverybatchHandlers,
+  });
   const print = await startMockServer(PrintServiceService, {
     ...printDefaults,
     ...opts.printHandlers,
@@ -225,6 +242,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
   const addrs: Record<string, string> = {
     fulfillment: fulfillment.addr,
     batching: batching.addr,
+    deliverybatch: deliverybatch.addr,
     print: print.addr,
   };
   if (opts.deadUpstream) {
@@ -246,6 +264,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     grpc: {
       fulfillment: addrs.fulfillment,
       batching: addrs.batching,
+      deliverybatch: addrs.deliverybatch,
       print: addrs.print,
       deadlineMs: opts.deadlineMs ?? 2000,
     },
@@ -256,6 +275,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
   return {
     fulfillment,
     batching,
+    deliverybatch,
     print,
     app,
     identity,
@@ -264,6 +284,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       await app.close();
       await fulfillment.close();
       await batching.close();
+      await deliverybatch.close();
       await print.close();
       await identity.close();
     },

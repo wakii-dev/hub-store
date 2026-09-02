@@ -18,6 +18,16 @@ Env (tuỳ chọn):
 | `FULFILLMENT_ADDR`    | `localhost:50051`                      | Java fulfillment-service         |
 | `CANONICAL_SEED_PATH` | `<repo>/api/seed/canonical-seed.json`  | Canonical seed fixture           |
 
+Ahamove adapter (SF-15 — dual-mode):
+
+| Var                   | Default                                | Ý nghĩa                          |
+|-----------------------|----------------------------------------|----------------------------------|
+| `AHAMOVE_MODE`        | `mock`                                 | `mock` in-memory / `real` gọi partner thật (`real` YÊU CẦU key dưới) |
+| `AHAMOVE_API_KEY`     | —                                      | Bearer token Ahamove (real mode; local-only, KHÔNG commit) |
+| `AHAMOVE_PARTNER_TOKEN` | —                                    | Partner token Ahamove (real mode) |
+| `AHAMOVE_BASE_URL`    | `https://partner-gw.ahamove.com`       | Partner gateway base URL         |
+| `AHAMOVE_MOCK_FAST`   | —                                      | TEST-ONLY: mock timeline tiến tức thì (E2E 05-nvc-api precondition) |
+
 Java chưa chạy? Dùng dev stub (KHÔNG thay thế verify thật — SF-11 làm):
 
 ```bash

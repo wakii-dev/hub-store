@@ -27,6 +27,11 @@ export interface BffGrpcConfig {
   fulfillment: string;
   /** Host:port của batching-service (Go, mặc định localhost:50052). */
   batching: string;
+  /**
+   * Host:port của DeliveryBatchService (SF-15) — cùng process batching-service
+   * nên mặc định đọc cùng GRPC_BATCHING; tách field để test inject mock độc lập.
+   */
+  deliverybatch: string;
   /** Host:port của print-service (Python, mặc định localhost:50053). */
   print: string;
   /** Deadline mỗi gRPC upstream call — spec §3.1 resilience (mặc định 5000ms). */
@@ -120,6 +125,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
     grpc: {
       fulfillment: grpcAddr(env.GRPC_FULFILLMENT, '50051'),
       batching: grpcAddr(env.GRPC_BATCHING, '50052'),
+      deliverybatch: grpcAddr(env.GRPC_BATCHING, '50052'),
       print: grpcAddr(env.GRPC_PRINT, '50053'),
       deadlineMs: Number(env.BFF_GRPC_DEADLINE_MS ?? 5000),
     },
