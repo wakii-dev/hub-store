@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { Alert, Button, Card, Form, Input, Result } from 'antd';
 import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
+import { DESIGN_TOKENS } from '@hub-store/shared';
 import { getAxiosInstance } from '@hub-store/api-client';
 
 /**
@@ -44,17 +45,31 @@ export default function ForgotPasswordPage() {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#F2F4F7',
+        background: `linear-gradient(180deg, rgba(235,110,9,0.03) 0%, ${DESIGN_TOKENS.color.bgSubtle} 40%)`,
       }}
       data-testid="forgot-password-page"
     >
-      <Card style={{ width: 380 }}>
+      <Card
+        style={{
+          width: 380,
+          borderRadius: DESIGN_TOKENS.radius.modal,
+          boxShadow: DESIGN_TOKENS.shadow.lg,
+          border: `1px solid ${DESIGN_TOKENS.color.divider}`,
+        }}
+      >
         {done ? (
           <Result status="success" title={t('auth.forgot.success')} />
         ) : (
           <>
             <div style={{ textAlign: 'center', marginBottom: 16 }}>
-              <h1 style={{ fontSize: 20, fontWeight: 700, color: '#101828', margin: 0 }}>
+              <h1
+                style={{
+                  fontSize: DESIGN_TOKENS.typography.h2.fontSize,
+                  fontWeight: DESIGN_TOKENS.typography.h2.fontWeight,
+                  color: DESIGN_TOKENS.color.textStrong,
+                  margin: 0,
+                }}
+              >
                 {t('auth.forgot.title')}
               </h1>
             </div>
@@ -95,7 +110,11 @@ export default function ForgotPasswordPage() {
           </>
         )}
         <div style={{ textAlign: 'center', marginTop: 16 }}>
-          <Link to="/" style={{ fontSize: 12 }} data-testid="back-to-login-link">
+          <Link
+            to="/"
+            style={{ fontSize: 12.5, color: DESIGN_TOKENS.color.primary, fontWeight: 600 }}
+            data-testid="back-to-login-link"
+          >
             {t('auth.forgot.backToLogin')}
           </Link>
         </div>

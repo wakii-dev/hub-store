@@ -1,12 +1,24 @@
-/* CreateBatchingModal — modal 1310×918 (REQUIREMENTS §3 D1b — kích thước pin). */
+/* CreateBatchingModal — SF-6 §2.3 (modal 1240, stepper sectioned, E2E-safe D1).
+ * Hex cứng cho phép ở file này (plan T5) — mirror DESIGN_TOKENS, guard review:
+ * primary #EB6E09 · hover #F68A2E · active #D96408 · primaryBg #FEF6EE ·
+ * primaryBorder #FDEADA · border #D0D5DD · divider #EAECF0 · dividerSoft #F2F4F7 ·
+ * bgSubtle #F7F8FA · textStrong #101828 · textSecondary #344054 · textMuted #667085 ·
+ * radius card 16 · lg 12 · modal 20 · shadow.lg 0 12px 32px -8px rgba(16,24,40,.14) ·
+ * shadow.primary 0 3px 10px rgba(235,110,9,.35) · gradient 135deg #F68A2E→#EB6E09 60%→#D96408
+ */
+
+/* ─── Modal shell — 1240×918 pin (REQUIREMENTS §3 D1b), radius 20 shadow.lg ─── */
 .create-batching-modal {
   top: 12px;
   padding-bottom: 0;
 }
 .create-batching-modal .ant-modal-content {
   height: 918px;
+  border-radius: 20px;
+  box-shadow: 0 12px 32px -8px rgba(16, 24, 40, 0.14), 0 4px 10px -2px rgba(16, 24, 40, 0.06);
   display: flex;
   flex-direction: column;
+  overflow: hidden;
 }
 .create-batching-modal .ant-modal-body {
   flex: 1;
@@ -14,10 +26,63 @@
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  padding: 16px 24px;
+  padding: 16px 24px 20px;
 }
 
-/* Toolbar trên cùng: gợi ý đóng gói + tính lại km + thêm đơn */
+/* ─── Stepper — §2.3 sectioned (non-blocking, Deviation D1) ─── */
+.sf6-stepper {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 2px 0 14px;
+  border-bottom: 1px solid #eaecf0;
+  margin-bottom: 14px;
+}
+.sf6-step-wrap {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+.sf6-step-line {
+  width: 36px;
+  height: 1.5px;
+  border-radius: 2px;
+  margin: 0 6px;
+}
+.sf6-step-node {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  user-select: none;
+}
+.sf6-step-cur {
+  background: linear-gradient(135deg, #f68a2e 0%, #eb6e09 60%, #d96408 100%);
+  color: #ffffff;
+  box-shadow: 0 3px 10px rgba(235, 110, 9, 0.35);
+}
+.sf6-step-done {
+  background: #fef6ee;
+  border: 1px solid #fdeada;
+  color: #eb6e09;
+}
+.sf6-step-upcoming {
+  background: #ffffff;
+  border: 1px solid #d0d5dd;
+  color: #667085;
+}
+.sf6-step-label {
+  font-size: 12.5px;
+  white-space: nowrap;
+}
+
+/* ─── Toolbar ─── */
 .batch-toolbar {
   display: flex;
   align-items: center;
@@ -30,7 +95,7 @@
   min-width: 360px;
 }
 
-/* Bảng đơn đã chọn — header + sortable rows (grid hàng theo cột) */
+/* ─── Bảng đơn đã chọn — grid 9 cột theo §2.3 ─── */
 .batch-table-header,
 .batch-row {
   display: flex;
@@ -38,18 +103,23 @@
   gap: 8px;
 }
 .batch-table-header {
+  font-size: 12px;
   font-weight: 600;
-  color: rgba(0, 0, 0, 0.85);
-  padding: 8px 8px;
-  border-bottom: 1px solid #f0f0f0;
-  background: #fafafa;
+  color: #667085; /* textMuted */
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+  padding: 10px 12px;
+  border-bottom: 1px solid #eaecf0;
+  background: #f9fafb; /* bgSubtle family */
+  border-radius: 16px 16px 0 0;
 }
 .batch-list {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  border: 1px solid #f0f0f0;
-  border-radius: 4px;
+  border: 1px solid #eaecf0;
+  border-radius: 16px;
+  background: #ffffff;
 }
 .batch-list ul {
   margin: 0;
@@ -57,28 +127,56 @@
   list-style: none;
 }
 .batch-row {
-  padding: 8px;
-  border-bottom: 1px solid #f0f0f0;
+  padding: 8px 12px;
+  border-bottom: 1px solid #f2f4f7;
   background: #fff;
+  transition: background 0.12s ease;
 }
-.batch-row.dragging {
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+.batch-row:hover {
+  background: #f9fafb;
+}
+.batch-row.batch-row-dragging {
+  box-shadow: 0 6px 16px -4px rgba(16, 24, 40, 0.1), 0 2px 6px -2px rgba(16, 24, 40, 0.06);
   z-index: 10;
+  border-radius: 10px;
 }
 .batch-drag-handle {
   cursor: grab;
-  color: rgba(0, 0, 0, 0.45);
+  color: #98a2b3;
   user-select: none;
   font-size: 16px;
   line-height: 1;
+  width: 20px;
+  text-align: center;
+}
+.batch-row.batch-row-dragging .batch-drag-handle {
+  cursor: grabbing;
 }
 .batch-cell-stop {
-  width: 80px;
+  width: 28px;
   flex-shrink: 0;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+/* Stop number badge 26×26 — grouped rows giữ màu nền row (bg từ inline style) */
+.batch-row [data-testid="batch-stop-order"] {
+  min-width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #344054;
+  background: #f2f4f7;
 }
 .batch-cell-code {
   width: 130px;
   flex-shrink: 0;
+  font-size: 13.5px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #101828;
 }
 .batch-cell-address {
   flex: 1;
@@ -86,32 +184,38 @@
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+  color: #344054;
 }
 .batch-cell-distance {
-  width: 100px;
+  width: 90px;
   flex-shrink: 0;
+  font-variant-numeric: tabular-nums;
 }
 .batch-cell-time {
-  width: 190px;
+  width: 160px;
   flex-shrink: 0;
   font-size: 12px;
+  color: #667085;
 }
 .batch-cell-status {
   width: 110px;
   flex-shrink: 0;
 }
 .batch-cell-qty {
-  width: 64px;
+  width: 60px;
   flex-shrink: 0;
   text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 .batch-cell-cod {
-  width: 120px;
+  width: 110px;
   flex-shrink: 0;
   text-align: right;
+  font-variant-numeric: tabular-nums;
+  font-weight: 500;
 }
 
-/* Nhóm packing suggest */
+/* ─── Nhóm packing suggest ─── */
 .batch-groups {
   margin: 8px 0 0;
   display: flex;
@@ -119,38 +223,148 @@
   flex-wrap: wrap;
 }
 .batch-group-chip {
-  padding: 2px 10px;
-  border-radius: 12px;
+  padding: 3px 11px;
+  border-radius: 999px;
   font-size: 12px;
+  font-weight: 500;
   border: 1px solid;
 }
 
-/* Form dưới: shipper + TG giao + hint */
+/* ─── Section 2: shipper + TG giao (form cards) ─── */
 .batch-form {
-  border-top: 1px solid #f0f0f0;
-  margin-top: 12px;
-  padding-top: 12px;
+  margin-top: 14px;
+  min-height: 0;
+  overflow-y: auto;
 }
 .batch-form-row {
   display: flex;
-  gap: 16px;
-  align-items: flex-start;
+  gap: 14px;
+  align-items: stretch;
   flex-wrap: wrap;
 }
+.sf6-form-card {
+  flex: 1;
+  min-width: 280px;
+  background: #ffffff;
+  border: 1px solid #f2f4f7;
+  border-radius: 14px;
+  padding: 16px 18px;
+  box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
+}
+
+/* ─── Sumbar — §2.3: 4 ô Số đơn / Sản phẩm / Quãng đường / Tổng COD ─── */
+.sf6-sumbar {
+  display: flex;
+  gap: 12px;
+  margin: 14px 0;
+}
+.sf6-sum-cell {
+  flex: 1;
+  background: #ffffff;
+  border: 1px solid #eaecf0;
+  border-radius: 14px;
+  padding: 10px 16px;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+.sf6-sum-key {
+  font-size: 11px;
+  font-weight: 600;
+  color: #667085;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+}
+.sf6-sum-val {
+  font-size: 16px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #101828;
+}
+
+/* ─── Section 3: review ─── */
+.sf6-review {
+  border: 1px solid #eaecf0;
+  border-radius: 16px;
+  overflow: hidden;
+}
+.sf6-review-row {
+  display: grid;
+  grid-template-columns: 220px 1fr;
+  border-bottom: 1px solid #f2f4f7;
+}
+.sf6-review-row:last-child {
+  border-bottom: none;
+}
+.sf6-review-key {
+  background: #fbfcfd;
+  padding: 9px 16px;
+  font-size: 12.5px;
+  color: #667085;
+  border-right: 1px solid #f2f4f7;
+}
+.sf6-review-val {
+  padding: 9px 16px;
+  font-size: 13px;
+  color: #101828;
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+/* ─── Note banner ─── */
+.sf6-note-banner {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-top: 12px;
+  background: #fef6ee;
+  border: 1px solid #fdeada;
+  border-radius: 12px;
+  padding: 10px 14px;
+  font-size: 12.5px;
+  color: #344054;
+}
+.sf6-note-icon {
+  flex-shrink: 0;
+  width: 22px;
+  height: 22px;
+  border-radius: 50%;
+  background: #eb6e09;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+  font-style: italic;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-family: Georgia, serif;
+}
+
+/* ─── Hint chips (slot TG giao) ─── */
 .batch-hint-chip {
   cursor: pointer;
   padding: 2px 10px;
-  border-radius: 12px;
+  border-radius: 999px;
   font-size: 12px;
-  border: 1px solid #ffd591;
-  background: #fff7e6;
+  font-weight: 500;
+  border: 1px solid #fdeada;
+  background: #fef6ee;
+  transition: all 0.15s ease;
 }
 .batch-hint-chip:hover {
-  background: #ffe7ba;
+  background: #fdeada;
 }
+
+/* ─── Footer ─── */
 .batch-footer {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
   gap: 8px;
-  padding-top: 12px;
+  padding-top: 14px;
+  border-top: 1px solid #eaecf0;
+  margin-top: auto;
+}
+.sf6-footer-hint {
+  font-size: 12.5px;
+  color: #667085;
 }

@@ -205,6 +205,13 @@ services:
       ENABLE_DEV_RESET_PASSWORD: "1" # DEV-ONLY — bật /auth/reset-password (prod không set → 404)
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092 # internal listener (host view = localhost:9092)
+      # SF-7 (FI-252): audit trail — BFF ghi activity_log trực tiếp DB fulfillment
+      # (thêm của SF-7 trong scope compose của SF-1, additive-only)
+      FULFILLMENT_DB_HOST: postgres
+      FULFILLMENT_DB_PORT: "5432"
+      FULFILLMENT_DB_NAME: fulfillment
+      FULFILLMENT_DB_USER: ${POSTGRES_USER:-hubstore}
+      FULFILLMENT_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
     depends_on:
       - fulfillment-service
       - batching-service

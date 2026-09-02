@@ -1,14 +1,30 @@
 import { DESIGN_TOKENS } from '../../theme/design-tokens';
 
-/** Tone preset — 4 tokens duy nhất (§7 status colors). Single-source với theme. */
+/** Tone preset — 4 tokens duy nhất (SF-6 §1.1 status pastel). Single-source với theme. */
 export type StatusTone = 'success' | 'error' | 'warning' | 'info';
 
-/** Tone → antd Tag color. Không hardcode màu ở nơi khác — luôn import map này. */
+/** Tone → pastel background (antd Tag color prop giữ mechanism này). */
 export const STATUS_TAG_TOKENS: Record<StatusTone, string> = {
+  success: DESIGN_TOKENS.color.status.successBg,
+  error: DESIGN_TOKENS.color.status.errorBg,
+  warning: DESIGN_TOKENS.color.status.warningBg,
+  info: DESIGN_TOKENS.color.status.infoBg,
+};
+
+/** Tone → solid text color (chữ + chấm tròn ::before currentColor). */
+export const STATUS_TAG_TEXT: Record<StatusTone, string> = {
   success: DESIGN_TOKENS.color.status.success,
   error: DESIGN_TOKENS.color.status.error,
   warning: DESIGN_TOKENS.color.status.warning,
   info: DESIGN_TOKENS.color.status.info,
+};
+
+/** Tone → border line color (pattern Untitled-UI pastel). */
+export const STATUS_TAG_LINE: Record<StatusTone, string> = {
+  success: DESIGN_TOKENS.color.status.successLine,
+  error: DESIGN_TOKENS.color.status.errorLine,
+  warning: DESIGN_TOKENS.color.status.warningLine,
+  info: DESIGN_TOKENS.color.status.infoLine,
 };
 
 export type StatusTagKind =

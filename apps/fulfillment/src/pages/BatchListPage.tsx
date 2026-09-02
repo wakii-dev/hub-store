@@ -17,6 +17,8 @@ import { PrinterOutlined } from "@ant-design/icons";
 import moment from "moment";
 import {
   BATCH_ENTITY_STATUS,
+  DESIGN_TOKENS,
+  EmptyState,
   FilterBar,
   MultiSelect,
   StatusTag,
@@ -256,8 +258,24 @@ function BatchListPageInner() {
   ];
 
   return (
-    <div data-probe="fulfillment" style={{ padding: 16 }}>
-      <Typography.Title level={4}>{t("page.batch.title")}</Typography.Title>
+    <div data-probe="fulfillment" style={{ padding: 0 }}>
+      {/* Page-head — SF-6 §2.2: h1 tokens + sub count */}
+      <div>
+        <h1
+          style={{
+            fontSize: DESIGN_TOKENS.typography.h1.fontSize,
+            fontWeight: DESIGN_TOKENS.typography.h1.fontWeight,
+            letterSpacing: DESIGN_TOKENS.typography.h1.letterSpacing,
+            color: DESIGN_TOKENS.color.textStrong,
+            margin: 0,
+          }}
+        >
+          {t("page.batch.title")}
+        </h1>
+        <div style={{ fontSize: 13, color: DESIGN_TOKENS.color.textMuted, marginTop: 4 }}>
+          {total} phiếu
+        </div>
+      </div>
 
       <FilterBar
         onSearch={() => refetch()}
@@ -285,24 +303,46 @@ function BatchListPageInner() {
         />
       </FilterBar>
 
-      <Table<BatchRow>
-        style={{ marginTop: 16 }}
-        rowKey={(r) => `${r.item.batchCode}-${r.item.orderCode}`}
-        size="middle"
-        loading={isLoading || isFetching}
-        dataSource={rows}
-        columns={columns}
-        pagination={{
-          current: page,
-          pageSize: PAGE_SIZE,
-          total,
-          showSizeChanger: false,
-          onChange: (p) => setPage(p),
+      {/* Table card — SF-6 §2.2: white card radius card + shadow.sm */}
+      <div
+        style={{
+          marginTop: 16,
+          background: DESIGN_TOKENS.color.bgWhite,
+          border: `1px solid ${DESIGN_TOKENS.color.divider}`,
+          borderRadius: DESIGN_TOKENS.radius.card,
+          boxShadow: DESIGN_TOKENS.shadow.sm,
+          overflow: "hidden",
         }}
-        expandable={{
-          expandedRowRender: (record) => <ProductTable products={record.item.items} />,
-        }}
-      />
+      >
+        <Table<BatchRow>
+          style={{ padding: 0 }}
+          rowKey={(r) => `${r.item.batchCode}-${r.item.orderCode}`}
+          size="middle"
+          loading={isLoading || isFetching}
+          dataSource={rows}
+          columns={columns}
+          locale={{
+            emptyText: (
+              <EmptyState
+                title={t("empty.title")}
+                sub={t("empty.sub")}
+                actionLabel={t("action.reset")}
+                onAction={() => updateFilter({ search: "", status: [], createdAt: "" })}
+              />
+            ),
+          }}
+          pagination={{
+            current: page,
+            pageSize: PAGE_SIZE,
+            total,
+            showSizeChanger: false,
+            onChange: (p) => setPage(p),
+          }}
+          expandable={{
+            expandedRowRender: (record) => <ProductTable products={record.item.items} />,
+          }}
+        />
+      </div>
 
       <Modal
         open={cancelTarget !== null}

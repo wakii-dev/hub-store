@@ -1,4 +1,4 @@
-import type { ReactNode } from 'react';
+import type { CSSProperties, ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button, Tooltip } from 'antd';
@@ -8,13 +8,13 @@ import {
   PrinterOutlined,
   LogoutOutlined,
 } from '@ant-design/icons';
-import { usePermissions, sharedCssVariables } from '@hub-store/shared';
+import { DESIGN_TOKENS, usePermissions, sharedCssVariables } from '@hub-store/shared';
 import type { ShellSession } from '../../auth/oidc';
 import { NAV_ROUTES } from '../../nav';
 
-// Tokens §7 — sidebar 48px dark, header 55px trắng, FPT orange qua LESS modifyVars.
-const SIDEBAR_WIDTH = 48;
-const HEADER_HEIGHT = 55;
+// Tokens SF-6 §1.4 — rail 64px #101828, header 60px trắng, FPT orange gradient.
+const SIDEBAR_WIDTH = DESIGN_TOKENS.layout.sidebarWidth; // 64
+const HEADER_HEIGHT = DESIGN_TOKENS.layout.headerHeight; // 60
 
 /** Icon map theo path — data route/permission nằm ở src/nav.ts (shared với LoginPage). */
 const NAV_ICONS: Record<string, ReactNode> = {
@@ -23,11 +23,40 @@ const NAV_ICONS: Record<string, ReactNode> = {
   '/hub-store-order/batch/print': <PrinterOutlined />,
 };
 
+/** Logo gradient cam — hand-off §2.1 (34×34 header, 36×36 rail). */
+function GradientLogo({ size }: { size: number }) {
+  return (
+    <div
+      aria-hidden="true"
+      style={{
+        width: size,
+        height: size,
+        borderRadius: 10,
+        background: DESIGN_TOKENS.color.primaryGradient,
+        boxShadow: DESIGN_TOKENS.shadow.primary,
+        display: 'flex',
+        alignItems: 'center',
+        justifyContent: 'center',
+        color: DESIGN_TOKENS.color.bgWhite,
+        fontWeight: 700,
+        fontSize: size * 0.42,
+        flexShrink: 0,
+      }}
+    >
+      IS
+    </div>
+  );
+}
+
 /**
- * AppLayout — chrome shell theo tokens §7: sidebar 48px dark (nav icon filter
- * theo permission), header 55px trắng (title / VI-EN / user / logout), main =
+ * AppLayout — chrome shell theo SF-6 direction B (hand-off §2.1): rail 64px
+ * #101828 (nav icon 40×40, active gradient + indicator — class sf6-nav-*,
+ * CSS trong sf6-antd-overrides.css), header 60px trắng shadow.xs (logo
+ * gradient + 2 dòng text / VI-EN pill / user chip / logout ghost), main =
  * mount region cho remotes. ConfigProvider wrap từ App (ngoài).
  * SF-4: role đến từ Keycloak (realm role) — role switcher dev-stub đã bỏ.
+ * DOM/testid giữ nguyên (app-header, app-sidebar, nav-*, lang-toggle,
+ * logout-button, header-user, remote-mount).
  */
 export default function AppLayout(props: {
   session: ShellSession;
@@ -43,9 +72,25 @@ export default function AppLayout(props: {
 
   const visibleNav = NAV_ROUTES.filter((item) => can(item.permission));
 
+  const langPillStyle: CSSProperties = {
+    height: 34,
+    padding: '0 14px',
+    borderRadius: DESIGN_TOKENS.radius.pill,
+    border: `1px solid ${DESIGN_TOKENS.color.divider}`,
+    background: DESIGN_TOKENS.color.bgWhite,
+    boxShadow: DESIGN_TOKENS.shadow.xs,
+    color: DESIGN_TOKENS.color.textSecondary,
+    fontSize: 12.5,
+    fontWeight: 500,
+    display: 'inline-flex',
+    alignItems: 'center',
+    cursor: 'pointer',
+    transition: 'all .15s ease',
+  };
+
   return (
     <div
-      style={{ ...(sharedCssVariables as React.CSSProperties), display: 'flex', flexDirection: 'column', minHeight: '100vh' }}
+      style={{ ...(sharedCssVariables as CSSProperties), display: 'flex', flexDirection: 'column', minHeight: '100vh', background: DESIGN_TOKENS.color.bgSubtle }}
     >
       <header
         style={{
@@ -54,21 +99,78 @@ export default function AppLayout(props: {
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 16px',
-          background: '#FFFFFF',
-          borderBottom: '1px solid #EAECF0',
+          padding: '0 20px',
+          background: DESIGN_TOKENS.color.bgWhite,
+          borderBottom: `1px solid ${DESIGN_TOKENS.color.divider}`,
+          boxShadow: DESIGN_TOKENS.shadow.xs,
+          position: 'relative',
+          zIndex: 10,
         }}
         data-testid="app-header"
       >
-        <strong style={{ fontSize: 16, color: '#101828' }}>{t('header.title')}</strong>
+        <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          <GradientLogo size={34} />
+          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
+            <strong style={{ fontSize: 14.5, fontWeight: 700, color: DESIGN_TOKENS.color.textStrong }}>
+              {t('header.title')}
+            </strong>
+            <span style={{ fontSize: 11, color: DESIGN_TOKENS.color.textMuted }}>
+              {t('header.subtitle')}
+            </span>
+          </div>
+        </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ fontSize: 12, color: '#475467' }} data-testid="header-user">
-            {props.session.sub}
+          <span
+            style={{ ...langPillStyle }}
+            onClick={props.onToggleLanguage}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                props.onToggleLanguage();
+              }
+            }}
+            data-testid="lang-toggle"
+            role="button"
+            tabIndex={0}
+          >
+            {props.lang.startsWith('vi') ? 'VI' : 'EN'}
           </span>
-          <Button size="small" onClick={props.onToggleLanguage} data-testid="lang-toggle">
-            {props.lang.startsWith('vi') ? 'EN' : 'VI'}
-          </Button>
-          <Button size="small" icon={<LogoutOutlined />} onClick={props.onSignOut} data-testid="logout-button">
+          <span
+            style={{
+              height: 34,
+              display: 'inline-flex',
+              alignItems: 'center',
+              gap: 8,
+              padding: '0 12px 0 6px',
+              borderRadius: DESIGN_TOKENS.radius.pill,
+              border: `1px solid ${DESIGN_TOKENS.color.divider}`,
+              background: DESIGN_TOKENS.color.bgWhite,
+              boxShadow: DESIGN_TOKENS.shadow.xs,
+            }}
+          >
+            <span
+              aria-hidden="true"
+              style={{
+                width: 28,
+                height: 28,
+                borderRadius: '50%',
+                background: DESIGN_TOKENS.color.primaryGradient,
+                color: DESIGN_TOKENS.color.bgWhite,
+                fontSize: 11,
+                fontWeight: 700,
+                display: 'inline-flex',
+                alignItems: 'center',
+                justifyContent: 'center',
+                textTransform: 'uppercase',
+              }}
+            >
+              {props.session.sub.slice(0, 2)}
+            </span>
+            <span style={{ fontSize: 12.5, fontWeight: 500, color: DESIGN_TOKENS.color.textPrimary }} data-testid="header-user">
+              {props.session.sub}
+            </span>
+          </span>
+          <Button type="text" icon={<LogoutOutlined />} onClick={props.onSignOut} data-testid="logout-button">
             {t('auth.logout')}
           </Button>
         </div>
@@ -78,15 +180,17 @@ export default function AppLayout(props: {
           style={{
             width: SIDEBAR_WIDTH,
             flexShrink: 0,
-            background: '#001529',
+            background: DESIGN_TOKENS.color.sidebar,
             display: 'flex',
             flexDirection: 'column',
             alignItems: 'center',
-            gap: 8,
-            paddingTop: 12,
+            gap: 6,
+            padding: '14px 0',
           }}
           data-testid="app-sidebar"
         >
+          <GradientLogo size={36} />
+          <div style={{ height: 10 }} />
           {visibleNav.map((item) => {
             const active = location.pathname.startsWith(item.path);
             return (
@@ -97,17 +201,17 @@ export default function AppLayout(props: {
                     e.preventDefault();
                     navigate(item.path);
                   }}
+                  className={active ? 'sf6-nav-item sf6-nav-item-active' : 'sf6-nav-item'}
                   style={{
-                    width: 32,
-                    height: 32,
+                    width: 40,
+                    height: 40,
                     display: 'flex',
                     alignItems: 'center',
                     justifyContent: 'center',
-                    borderRadius: 2,
-                    fontSize: 16,
+                    borderRadius: DESIGN_TOKENS.radius.lg,
+                    fontSize: 17,
                     textDecoration: 'none',
-                    color: active ? '#FFFFFF' : '#A6ADB4',
-                    background: active ? '#EB6E09' : 'transparent',
+                    color: active ? DESIGN_TOKENS.color.bgWhite : DESIGN_TOKENS.color.textFaint,
                   }}
                   data-testid={`nav-${item.labelKey.split('.')[1]}`}
                 >
@@ -117,7 +221,7 @@ export default function AppLayout(props: {
             );
           })}
         </nav>
-        <main style={{ flex: 1, minWidth: 0, padding: 16 }} data-testid="remote-mount">
+        <main style={{ flex: 1, minWidth: 0, padding: '24px 28px' }} data-testid="remote-mount">
           {props.children}
         </main>
       </div>

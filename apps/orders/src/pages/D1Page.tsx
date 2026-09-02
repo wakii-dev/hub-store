@@ -26,6 +26,9 @@ import {
   FilterBar,
   formatPeriodOfTime,
   useUrlState,
+  DESIGN_TOKENS,
+  StatStripSkeleton,
+  EmptyState,
   type HubStoreOrderFilterItem,
   type RegionsResponse,
   type ShopsResponse,
@@ -50,6 +53,7 @@ import { OrdersExpandContent } from "../features/OrdersExpandContent";
 import { DeliveryTimeCell } from "../features/DeliveryTimeCell";
 import { HubStoreTransferModal } from "../features/HubStoreTransferModal";
 import { CreateBatchingModal } from "../batching/CreateBatchingModal";
+import { StatStrip } from "./StatStrip";
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
 registerOrdersResources();
@@ -66,7 +70,7 @@ function D1Content() {
   const [filters, setFilters] = useUrlState<OrdersFilterUrlState>(FILTER_URL_DEFAULTS);
   const request = useMemo(() => buildFilterRequest(filters), [filters]);
 
-  const { data, isLoading, isFetching } = useListOrdersQuery(
+  const { data, isLoading, isFetching, refetch } = useListOrdersQuery(
     request as unknown as Record<string, unknown>,
   );
   const envelope = data as PaginationEnvelope<HubStoreOrderFilterItem> | undefined;
@@ -142,7 +146,16 @@ function D1Content() {
       width: 120,
       fixed: "left",
       render: (code: string) => (
-        <Typography.Text copyable={{ text: code, tooltips: [code, "Copied"] }} data-testid={`fulfill-code-${code}`}>
+        <Typography.Text
+          copyable={{ text: code, tooltips: [code, "Copied"] }}
+          style={{
+            fontSize: 13.5,
+            fontWeight: 600,
+            color: DESIGN_TOKENS.color.textStrong,
+            fontVariantNumeric: "tabular-nums",
+          }}
+          data-testid={`fulfill-code-${code}`}
+        >
           {code}
         </Typography.Text>
       ),
@@ -229,8 +242,37 @@ function D1Content() {
   };
 
   return (
-    <div style={{ padding: 16 }}>
-      <Typography.Title level={4}>{t("page.title")}</Typography.Title>
+    <div style={{ padding: 0 }}>
+      {/* Page-head — SF-6 §2.2: h1 21/700 + sub count · nút "Làm mới" ghost */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          marginBottom: 18,
+        }}
+      >
+        <div>
+          <h1
+            style={{
+              fontSize: DESIGN_TOKENS.typography.h1.fontSize,
+              fontWeight: DESIGN_TOKENS.typography.h1.fontWeight,
+              letterSpacing: DESIGN_TOKENS.typography.h1.letterSpacing,
+              color: DESIGN_TOKENS.color.textStrong,
+              margin: 0,
+            }}
+          >
+            {t("page.title")}
+          </h1>
+          <div style={{ fontSize: 13, color: DESIGN_TOKENS.color.textMuted, marginTop: 4 }}>
+            {t("page.subtitle", { total })}
+          </div>
+        </div>
+        <Button onClick={() => void refetch()}>{t("action.refresh")}</Button>
+      </div>
+
+      {/* Stat-strip — SF-6 §2.2 (page-scoped, Deviation D2) */}
+      {isLoading ? <StatStripSkeleton /> : <StatStrip items={rows} />}
 
       <FilterBar
         onSearch={() => setFilter({})}
@@ -299,7 +341,17 @@ function D1Content() {
       </FilterBar>
 
       {selectedRowKeys.length > 0 && (
-        <Space style={{ marginTop: 12 }} data-testid="bulk-bar">
+        <Space
+          style={{
+            marginTop: 12,
+            width: "100%",
+            background: DESIGN_TOKENS.color.primaryBg,
+            borderBottom: `1px solid ${DESIGN_TOKENS.color.primaryBorder}`,
+            borderRadius: `${DESIGN_TOKENS.radius.md}px ${DESIGN_TOKENS.radius.md}px 0 0`,
+            padding: "12px 18px",
+          }}
+          data-testid="bulk-bar"
+        >
           <Tooltip title={bulk.canCreateBatch ? undefined : t("bulk.hint")}>
             <Button
               type="primary"
@@ -321,15 +373,40 @@ function D1Content() {
         </Space>
       )}
 
-      <Table<HubStoreOrderFilterItem>
-        style={{ marginTop: 12 }}
-        rowKey="fulfillCode"
-        columns={columns}
-        dataSource={rows}
-        loading={isLoading || isFetching}
-        pagination={pagination}
-        scroll={{ x: 1400 }}
-        expandable={{
+      {/* Table card — SF-6 §2.2: radius 16, border, shadow.sm; refetch → mờ 0.6 */}
+      <div
+        style={{
+          marginTop: 12,
+          background: DESIGN_TOKENS.color.bgWhite,
+          border: `1px solid ${DESIGN_TOKENS.color.divider}`,
+          borderRadius: DESIGN_TOKENS.radius.card,
+          boxShadow: DESIGN_TOKENS.shadow.sm,
+          overflow: "hidden",
+          transition: "opacity .15s ease",
+          opacity: isFetching && !isLoading ? 0.6 : 1,
+        }}
+      >
+        <Table<HubStoreOrderFilterItem>
+          rowKey="fulfillCode"
+          columns={columns}
+          dataSource={rows}
+          loading={isLoading}
+          pagination={pagination}
+          scroll={{ x: 1400 }}
+          rowClassName={(record) =>
+            selectedRowKeys.includes(record.fulfillCode) ? "sf6-row-selected" : ""
+          }
+          locale={{
+            emptyText: (
+              <EmptyState
+                title={t("empty.title")}
+                sub={t("empty.sub")}
+                actionLabel={t("empty.clear")}
+                onAction={handleReset}
+              />
+            ),
+          }}
+          expandable={{
           expandedRowKeys: [...expandedRowKeys],
           onExpandedRowsChange: (keys) => setExpandedRowKeys([...keys]),
           expandedRowRender: (record) => <OrdersExpandContent order={record} />,
@@ -338,7 +415,8 @@ function D1Content() {
           selectedRowKeys,
           onChange: (keys) => setSelectedRowKeys([...keys]),
         }}
-      />
+        />
+      </div>
 
       <HubStoreTransferModal
         open={transferOrder !== null}
