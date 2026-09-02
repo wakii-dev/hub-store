@@ -18,6 +18,7 @@ import { firstPathForRole } from "./nav";
 import AppLayout from "./features/layout/AppLayout";
 import LoginPage from "./features/login/LoginPage";
 import ForgotPasswordPage from "./features/login/ForgotPasswordPage";
+import TechServicePage from "./features/tech/TechServicePage";
 import RemoteBoundary from "./RemoteBoundary";
 
 // Federation lazy imports — exposes contract ĐÃ PIN (spec §2.7)
@@ -196,6 +197,15 @@ export default function App() {
                       <RemoteBoundary>
                         <PrintPage />
                       </RemoteBoundary>
+                    </RequirePermission>
+                  }
+                />
+                {/* SF-20 — màn tech service là shell-owned (không remote): import trực tiếp. */}
+                <Route
+                  path="/hub-store-order/tech"
+                  element={
+                    <RequirePermission permission="orders.view">
+                      <TechServicePage />
                     </RequirePermission>
                   }
                 />

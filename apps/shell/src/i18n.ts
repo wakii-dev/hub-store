@@ -12,6 +12,7 @@ export const shellResources: I18nResources = {
       "nav.orders": "Đơn hàng",
       "nav.batch": "Phiếu soạn",
       "nav.print": "In phiếu",
+      "nav.tech": "DV kỹ thuật",
       "remote.unavailable":
         "Remote không khả dụng — vui lòng kiểm tra remote service đã chạy và thử lại.",
       "remote.loading": "Đang tải module…",
@@ -46,6 +47,7 @@ export const shellResources: I18nResources = {
       "nav.orders": "Orders",
       "nav.batch": "Picking batches",
       "nav.print": "Print documents",
+      "nav.tech": "Tech service",
       "remote.unavailable":
         "Remote unavailable — please check that the remote service is running and try again.",
       "remote.loading": "Loading module…",
