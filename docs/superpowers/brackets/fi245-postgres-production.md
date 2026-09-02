@@ -118,9 +118,9 @@ Tasks: carrier-section-d1b / quotes-display-recalc / addon-selector / fee-limit-
 ## SF-17 Khu vực hoạt động NV
 Tier: 3
 linear: FI-262
-What: BE Flyway V4 (service_employees + regions/wards + payment account — verify Zalopay thật (env ZALOPAY_*) hoặc nhập tay nếu chưa có credential — KHÔNG giả lập) CRUD + active toggle; FE list + lọc chức danh/NV/vùng + expand wards; define/edit form (vùng multi → chức danh → NV → payment → khu vực tỉnh/phường); Admin viết, role khác xem; design system SF-6
+What: BE Flyway V4 (service_employees + regions/wards + payment account — verify dual-mode (ZALOPAY_* env có → thật; không → mock tag [MOCK]; UI hiện nguồn kết quả) CRUD + active toggle; FE list + lọc chức danh/NV/vùng + expand wards; define/edit form (vùng multi → chức danh → NV → payment → khu vực tỉnh/phường); Admin viết, role khác xem; design system SF-6
 Depends on: SF-2
-Tasks: area-staff-schema / area-staff-crud-api / payment-verify-real / fe-area-list / fe-area-form / active-toggle / role-guard / e2e-area-spec
+Tasks: area-staff-schema / area-staff-crud-api / payment-verify-dual / fe-area-list / fe-area-form / active-toggle / role-guard / e2e-area-spec
 
 ## SF-18 D2C/Dropship module
 Tier: 3
@@ -160,9 +160,9 @@ Tasks: i18n-framework-setup / namespaces-modules / vi-full / en-full / language-
 ## SF-23 PWA + Push OneSignal + GA
 Tier: 4
 linear: FI-268
-What: PWA manifest + service worker (installable, offline fallback tĩnh); OneSignal THẬT qua env (app ID + REST key do user cấp) — push đơn mới/batch hoàn tất/vận đơn giao, subscribe khi login; GA thật qua env GA_MEASUREMENT_ID — pageview + sự kiện chính, off khi env trống; KHÔNG giả lập response
+What: PWA manifest + service worker (installable, offline fallback tĩnh); OneSignal dual-mode (env key → push thật; không → mock: log + notification_log DB, FE cùng channel); GA dual-mode (env ID → thật; không → log nội bộ); tự chọn mode theo env, điền key = thật
 Depends on: SF-10
-Tasks: pwa-manifest-sw / offline-fallback / onesignal-init-real / push-events / subscribe-login / ga-hook / env-wiring / e2e-wiring-skip-if-no-env
+Tasks: pwa-manifest-sw / offline-fallback / onesignal-dual-mode / push-events / notification-log / subscribe-login / ga-dual-mode / env-wiring / e2e-both-modes
 
 ## SF-24 Map view
 Tier: 5
