@@ -298,7 +298,7 @@ app.get<{ Querystring: AuditQuery }>(
 - Modify: `services/bff-gateway/src/routes/fulfillment.ts` (route mới, đặt cạnh audit)
 - Create: `services/bff-gateway/test/export.csv.test.ts`
 
-- [ ] **Step 1: `src/lib/csv.ts`** (pure, test không HTTP):
+- [x] **Step 1: `src/lib/csv.ts`** (pure, test không HTTP):
 
 ```typescript
 /** CSV cell Excel-safe (spec §2 In-4): formula-guard TRƯỚC quoting. */
@@ -317,7 +317,7 @@ export const EXPORT_COLUMNS = [
 ] as const;
 ```
 
-- [ ] **Step 2: Route export** — GET querystring mirror list body: `fulfillCode`, `batchStatus` (comma list → number[]), `regionCodes`, `shopCodes`, `orderStatus` (comma lists), `createdAt` (YYYY-MM-DD → `dayToTimeRange`-style wrap `T00:00:00.000Z`/`T23:59:59.999Z`). requireUser (mọi role — D1 list role-open). Loop `f.filterOrders` page=1.. pageSize=500 theo `total` page đầu (dừng khi items rỗng hoặc đủ total). **Map từ RAW proto items (KHÔNG qua `mapOrderItem`)** — plan-critic P0#1: DTO không có `orderCode` (GAP documented, KHÔNG đổi proto) → cột xuất rỗng; `note` có trên proto (field 15) nhưng mapOrderItem không map; shop fields lồng trong `shopAssignment`. LỖI gRPC bất kỳ page → `sendGrpcError` TRƯỚC khi send (buffer-then-send). Thành công:
+- [x] **Step 2: Route export** — GET querystring mirror list body: `fulfillCode`, `batchStatus` (comma list → number[]), `regionCodes`, `shopCodes`, `orderStatus` (comma lists), `createdAt` (YYYY-MM-DD → `dayToTimeRange`-style wrap `T00:00:00.000Z`/`T23:59:59.999Z`). requireUser (mọi role — D1 list role-open). Loop `f.filterOrders` page=1.. pageSize=500 theo `total` page đầu (dừng khi items rỗng hoặc đủ total). **Map từ RAW proto items (KHÔNG qua `mapOrderItem`)** — plan-critic P0#1: DTO không có `orderCode` (GAP documented, KHÔNG đổi proto) → cột xuất rỗng; `note` có trên proto (field 15) nhưng mapOrderItem không map; shop fields lồng trong `shopAssignment`. LỖI gRPC bất kỳ page → `sendGrpcError` TRƯỚC khi send (buffer-then-send). Thành công:
 
 ```typescript
 // raw proto item fields (ts-proto camelCase): fulfillCode, batchStatus,
@@ -335,8 +335,8 @@ return await reply.send('\uFEFF' + lines.join(''));
 ```
 
 (đối chiếu field names thật của `mapOrderItem` trong `src/mappers/fulfillment.ts` trước khi port — Step 1 risk list).
-- [ ] **Step 3: test** — pure: csvCell formula-guard + quote combo; route: mock gRPC 2 trang (total 600) → 600 data rows + header; mock gRPC lỗi page 2 → error envelope KHÔNG phải CSV; headers đúng content-type/filename/BOM.
-- [ ] **Step 4: Run** `npx vitest run` → PASS. **Commit** `feat(fi245-sf7): export orders CSV — buffer-then-send, Excel-safe, filter mirror list`
+- [x] **Step 3: test** — pure: csvCell formula-guard + quote combo; route: mock gRPC 2 trang (total 600) → 600 data rows + header; mock gRPC lỗi page 2 → error envelope KHÔNG phải CSV; headers đúng content-type/filename/BOM.
+- [x] **Step 4: Run** `npx vitest run` → PASS. **Commit** `feat(fi245-sf7): export orders CSV — buffer-then-send, Excel-safe, filter mirror list`
 
 ### Task 5: Go batches — SQL pagination (PostgresStore.Filter + FilterBatches)
 
