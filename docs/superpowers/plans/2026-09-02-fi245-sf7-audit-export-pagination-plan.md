@@ -72,7 +72,7 @@ Testing: vitest pure (date/where-builder/CSV escape + route với pg stub); Go t
 - Create: `services/bff-gateway/test/audit.lib.test.ts`
 - Modify: `services/bff-gateway/package.json` (+`pg`, +`@types/pg`)
 
-- [ ] **Step 1: Migration V2** (style khớp V1 — timestamptz, comment tiếng Việt)
+- [x] **Step 1: Migration V2** (style khớp V1 — timestamptz, comment tiếng Việt)
 
 ```sql
 -- SF-7 (FI-252): audit trail mọi mutation. Append-only — KHÔNG update/delete.
@@ -91,8 +91,8 @@ CREATE INDEX idx_activity_log_action ON activity_log (action);
 CREATE INDEX idx_activity_log_target ON activity_log (target_type, target_id);
 ```
 
-- [ ] **Step 2: `cd services/bff-gateway && npm install pg && npm install -D @types/pg`**
-- [ ] **Step 3: `src/lib/audit.ts`** — pool + fire-and-forget write + pure query builder (test được không cần DB):
+- [x] **Step 2: `cd services/bff-gateway && npm install pg && npm install -D @types/pg`**
+- [x] **Step 3: `src/lib/audit.ts`** — pool + fire-and-forget write + pure query builder (test được không cần DB):
 
 ```typescript
 /**
@@ -198,8 +198,8 @@ export function normalizeAuditPage(q: AuditQuery): { page: number; pageSize: num
 }
 ```
 
-- [ ] **Step 4: test `test/audit.lib.test.ts`** — parseDateBound (bare date UTC bounds from/to; full ISO; invalid → null), buildAuditWhere (mỗi filter, combo, escape `%`), normalizeAuditPage (cap 100, default 20, page<1→1). Vitest thuần, không mock DB.
-- [ ] **Step 5: Wire env cho BFF (plan-critic P0#2 — additive compose edit):** `docker-compose.yml` service `bff` CHƯA có `FULFILLMENT_DB_*` (chỉ fulfillment-service có) → thêm block env additive vào bff (KHÔNG đụng phần khác của SF-1):
+- [x] **Step 4: test `test/audit.lib.test.ts`** — parseDateBound (bare date UTC bounds from/to; full ISO; invalid → null), buildAuditWhere (mỗi filter, combo, escape `%`), normalizeAuditPage (cap 100, default 20, page<1→1). Vitest thuần, không mock DB.
+- [x] **Step 5: Wire env cho BFF (plan-critic P0#2 — additive compose edit):** `docker-compose.yml` service `bff` CHƯA có `FULFILLMENT_DB_*` (chỉ fulfillment-service có) → thêm block env additive vào bff (KHÔNG đụng phần khác của SF-1):
 
 ```yaml
     environment:
@@ -211,9 +211,9 @@ export function normalizeAuditPage(q: AuditQuery): { page: number; pageSize: num
 ```
 
 + `.env.example` ghi chú BFF audit dùng chung credentials. Ghi chú boundary deviation: additive-only, cần cho ACCEPTANCE #1. `docker compose config` để verify YAML.
-- [ ] **Step 6: Validate V2 trên DB thật (fail sớm — P1):** nếu dev Postgres chạy (`docker compose ps postgres`): `docker compose exec -T postgres psql -U $POSTGRES_USER -d fulfillment -c "\d activity_log"` SAU khi boot fulfillment-service 1 lần (Flyway apply on boot), HOẶC apply tay file V2 bằng psql để bắt syntax. Không có DB → ghi rõ deferred sang Phase 5.
-- [ ] **Step 7: Run** `cd services/bff-gateway && npx vitest run test/audit.lib.test.ts` → PASS. Chạy thêm `npx vitest run` toàn bộ → cũ vẫn xanh (chưa đụng route).
-- [ ] **Step 8: Commit** `feat(fi245-sf7): activity_log Flyway V2 + BFF audit lib (pg pool fail-open + query builder) + bff env wiring`
+- [x] **Step 6: Validate V2 trên DB thật (fail sớm — P1):** nếu dev Postgres chạy (`docker compose ps postgres`): `docker compose exec -T postgres psql -U $POSTGRES_USER -d fulfillment -c "\d activity_log"` SAU khi boot fulfillment-service 1 lần (Flyway apply on boot), HOẶC apply tay file V2 bằng psql để bắt syntax. Không có DB → DEFERRED Phase 5 (docker compose ps rỗng lúc T1 — T2 "Thứ 2" 2026-09-02).
+- [x] **Step 7: Run** `cd services/bff-gateway && npx vitest run test/audit.lib.test.ts` → PASS. Chạy thêm `npx vitest run` toàn bộ → cũ vẫn xanh (chưa đụng route).
+- [x] **Step 8: Commit** `feat(fi245-sf7): activity_log Flyway V2 + BFF audit lib (pg pool fail-open + query builder) + bff env wiring`
 
 ### Task 2: Audit hooks tại mọi mutation route BFF + test fail-open
 
