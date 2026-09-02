@@ -125,18 +125,22 @@ test("kafka có đủ 3 topics", async () => {
 test("assign shop-hub → order-events có order.assigned", async ({ page, request }) => {
   const api = bff(request, await bearerToken(page));
 
-  // 1 đơn Chưa soạn (batchStatus=0) từ seed.
-  const filterRes = await api.post("/fulfillment/filter", { batchStatus: [0], page: 1, pageSize: 1 });
+  // Đơn Chưa soạn (batchStatus=0), bỏ đơn chia nợ (assign 422 theo rule nghiệp vụ).
+  const filterRes = await api.post("/fulfillment/filter", { batchStatus: [0], page: 1, pageSize: 10 });
   expect(filterRes.ok(), `filter fail: ${filterRes.status()}`).toBeTruthy();
-  const code = ((await filterRes.json()) as { items: Array<{ fulfillCode: string }> }).items[0]
-    ?.fulfillCode;
-  expect(code, "cần 1 đơn batchStatus=0 từ seed").toBeTruthy();
+  const orders = (await filterRes.json()) as {
+    items: Array<{ fulfillCode: string; isDebtSplittingOrder?: boolean; shopAssignment?: { shopCode?: string } }>;
+  };
+  const code = orders.items.find((o) => !o.isDebtSplittingOrder)?.fulfillCode;
+  expect(code, "cần 1 đơn batchStatus=0 không chia nợ từ seed").toBeTruthy();
 
-  // Shop khác shop hiện tại của đơn — lấy shop đầu trong master-data.
+  // Shop KHÁC shop hiện tại của đơn — tránh no-op/validity sai.
   const shopsRes = await api.get("/master-data/shops");
-  const shops = (await shopsRes.json()) as Array<{ shopCode: string }>;
-  const target = shops.find((s) => s.shopCode)?.shopCode;
-  expect(target, "cần ít nhất 1 shop trong master-data").toBeTruthy();
+  const shopsBody = (await shopsRes.json()) as { items?: Array<{ shopCode: string }> };
+  const currentShop = orders.items.find((o) => o.fulfillCode === code)?.shopAssignment?.shopCode;
+  const target = (shopsBody.items ?? []).find((s) => s.shopCode && s.shopCode !== currentShop)
+    ?.shopCode;
+  expect(target, "cần ít nhất 1 shop khác shop hiện tại trong master-data").toBeTruthy();
 
   const assignRes = await api.post(`/fulfillment/${code}/assign-shop-hub`, { toShopCode: target });
   expect(assignRes.ok(), `assign fail: ${assignRes.status()} — ${await assignRes.text()}`).toBeTruthy();
@@ -149,11 +153,19 @@ test("assign shop-hub → order-events có order.assigned", async ({ page, reque
 test("create batch → batch-events có batch.created", async ({ page, request }) => {
   const api = bff(request, await bearerToken(page));
 
-  // Đơn Chưa soạn để tạo phiếu (Go derive shop từ hydration).
-  const filterRes = await api.post("/fulfillment/filter", { batchStatus: [0], page: 1, pageSize: 10 });
+  // Đơn Chưa soạn (bỏ đơn chia nợ), CÙNG 1 shop — rule 1 cấm phiếu khác shop.
+  const filterRes = await api.post("/fulfillment/filter", { batchStatus: [0], page: 1, pageSize: 50 });
   expect(filterRes.ok(), `filter fail: ${filterRes.status()}`).toBeTruthy();
-  const orders = (await filterRes.json()) as { items: Array<{ fulfillCode: string }> };
-  const codes = orders.items.map((o) => o.fulfillCode).slice(0, 2);
+  const orders = (await filterRes.json()) as {
+    items: Array<{ fulfillCode: string; isDebtSplittingOrder?: boolean; shopAssignment?: { shopCode?: string } }>;
+  };
+  const byShop = new Map<string, string[]>();
+  for (const o of orders.items) {
+    if (o.isDebtSplittingOrder) continue;
+    const shop = o.shopAssignment?.shopCode ?? "?";
+    byShop.set(shop, [...(byShop.get(shop) ?? []), o.fulfillCode]);
+  }
+  const codes = [...byShop.values()].sort((a, b) => b.length - a.length)[0]?.slice(0, 2) ?? [];
   expect(codes.length, "cần đơn để tạo batch").toBeGreaterThan(0);
 
   const createRes = await api.post("/fulfillment/batches/create", {
