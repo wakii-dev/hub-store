@@ -98,21 +98,42 @@ export function parseDateBound(input: string, bound: 'from' | 'to'): Date | null
   return t;
 }
 
+/**
+ * Querystring runtime là string, nhưng repeated key (?actor=a&actor=b) cho
+ * string[] — review T3 P1: chuẩn hóa về 1 string (phần tử đầu) hoặc undefined
+ * để không đẩy array vào pg (type error 500).
+ */
+function asQueryString(v: unknown): string | undefined {
+  if (Array.isArray(v)) return typeof v[0] === 'string' && v[0] ? v[0] : undefined;
+  return typeof v === 'string' && v ? v : undefined;
+}
+
 /** WHERE động + params — pure, vitest trực tiếp. */
 export function buildAuditWhere(q: AuditQuery): { whereSql: string; params: unknown[] } {
   const where: string[] = ['TRUE'];
   const params: unknown[] = [];
-  if (q.actor) { params.push(`%${escapeLike(q.actor)}%`); where.push(`actor ILIKE $${params.length} ESCAPE '\\'`); }
-  if (q.action) { params.push(`%${escapeLike(q.action)}%`); where.push(`action ILIKE $${params.length} ESCAPE '\\'`); }
-  if (q.targetType) { params.push(q.targetType); where.push(`target_type = $${params.length}`); }
-  if (q.targetId) { params.push(`%${escapeLike(q.targetId)}%`); where.push(`target_id ILIKE $${params.length} ESCAPE '\\'`); }
-  if (q.dateFrom) { const d = parseDateBound(q.dateFrom, 'from'); if (d) { params.push(d); where.push(`created_at >= $${params.length}`); } }
-  if (q.dateTo) { const d = parseDateBound(q.dateTo, 'to'); if (d) { params.push(d); where.push(`created_at < $${params.length}`); } }
+  const actor = asQueryString(q.actor);
+  const action = asQueryString(q.action);
+  const targetType = asQueryString(q.targetType);
+  const targetId = asQueryString(q.targetId);
+  const dateFrom = asQueryString(q.dateFrom);
+  const dateTo = asQueryString(q.dateTo);
+  if (actor) { params.push(`%${escapeLike(actor)}%`); where.push(`actor ILIKE $${params.length} ESCAPE '\\'`); }
+  if (action) { params.push(`%${escapeLike(action)}%`); where.push(`action ILIKE $${params.length} ESCAPE '\\'`); }
+  if (targetType) { params.push(targetType); where.push(`target_type = $${params.length}`); }
+  if (targetId) { params.push(`%${escapeLike(targetId)}%`); where.push(`target_id ILIKE $${params.length} ESCAPE '\\'`); }
+  if (dateFrom) { const d = parseDateBound(dateFrom, 'from'); if (d) { params.push(d); where.push(`created_at >= $${params.length}`); } }
+  if (dateTo) { const d = parseDateBound(dateTo, 'to'); if (d) { params.push(d); where.push(`created_at < $${params.length}`); } }
   return { whereSql: where.join(' AND '), params };
 }
 
 export function normalizeAuditPage(q: AuditQuery): { page: number; pageSize: number; offset: number } {
-  const page = Math.max(q.page ?? 1, 1);
-  const pageSize = Math.min(Math.max(q.pageSize ?? AUDIT_PAGE_SIZE_DEFAULT, 1), AUDIT_PAGE_SIZE_CAP);
+  // Review T3 P1: ?pageSize=abc → NaN → pg type error 500. Number.isFinite
+  // guard — input rác về default thay vì 500.
+  const pageRaw = Number(q.page ?? 1);
+  const page = Math.max(Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.floor(pageRaw) : 1, 1);
+  const sizeRaw = Number(q.pageSize ?? AUDIT_PAGE_SIZE_DEFAULT);
+  const size = Number.isFinite(sizeRaw) ? Math.max(Math.floor(sizeRaw), 1) : AUDIT_PAGE_SIZE_DEFAULT;
+  const pageSize = Math.min(size, AUDIT_PAGE_SIZE_CAP);
   return { page, pageSize, offset: (page - 1) * pageSize };
 }

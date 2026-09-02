@@ -152,3 +152,30 @@ describe('getAuditPool fail-open', () => {
     expect(getAuditPool({} as NodeJS.ProcessEnv)).toBeNull();
   });
 });
+
+describe('normalizeAuditPage — input rác (review T3 P1)', () => {
+  it('pageSize=abc (string) → default, KHÔNG NaN', () => {
+    const r = normalizeAuditPage({ pageSize: 'abc' as unknown as number });
+    expect(r.pageSize).toBe(AUDIT_PAGE_SIZE_DEFAULT);
+    expect(Number.isFinite(r.offset)).toBe(true);
+  });
+
+  it('page=abc → 1; page=2.9 → floor 2', () => {
+    expect(normalizeAuditPage({ page: 'abc' as unknown as number }).page).toBe(1);
+    expect(normalizeAuditPage({ page: 2.9 }).page).toBe(2);
+  });
+});
+
+describe('buildAuditWhere — repeated querystring key (review T3 P1)', () => {
+  it('actor=a&actor=b → string[] runtime → dùng phần tử đầu, không đẩy array vào params', () => {
+    const r = buildAuditWhere({ actor: ['a', 'b'] as unknown as string });
+    expect(r.params).toEqual(['%a%']);
+    expect(r.whereSql).toContain('actor ILIKE');
+  });
+
+  it('array rỗng → filter bị bỏ qua', () => {
+    const r = buildAuditWhere({ actor: [] as unknown as string });
+    expect(r.whereSql).toBe('TRUE');
+    expect(r.params).toEqual([]);
+  });
+});
