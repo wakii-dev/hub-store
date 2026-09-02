@@ -165,7 +165,7 @@ export const intakeResponses = {
         actor: 'coordinator1',
         action: 'order.imported',
         target: 'ORD-4001',
-        detailJson: '{"importedAt":"2026-09-02T10:00:00+07:00"}',
+        detailJson: '{"createdAt":"2026-09-02T10:00:00+07:00"}',
         createdAt: '2026-09-02T10:00:00+07:00',
       },
     ],

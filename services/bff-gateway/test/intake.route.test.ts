@@ -338,18 +338,26 @@ describe('SF-13 intake — fail / redeliver (WarehouseOps only)', () => {
     expect(res.json()).toEqual({ fulfillCode: 'ORD-9001' });
   });
 
-  it('fail reason lạ — upstream INVALID_ARGUMENT → 422 VALIDATION_ERROR', async () => {
+  it('fail — upstream INVALID_ARGUMENT (reason lạ qua BFF check) → 422 VALIDATION_ERROR', async () => {
+    let called = false;
     h.intake.override({
-      markOrderFailed: (_c, cb) => cb(mockGrpcError(3, 'reason không hợp lệ.')),
+      markOrderFailed: (_c, cb) => {
+        called = true;
+        cb(mockGrpcError(3, 'reason không hợp lệ.'));
+      },
     });
     const res = await h.app.inject({
       method: 'POST',
       url: '/orders/ORD-3001/fail',
-      payload: { reason: 99 },
+      // reason 0 valid ở BFF (0-3) — call phải chạm ĐÚNG upstream mock rồi
+      // mapping INVALID_ARGUMENT → 422 mới là path được test (không phải
+      // BFF validation chặn trước).
+      payload: { reason: 0 },
       headers: { authorization: `Bearer ${await signTestToken('WarehouseOps')}` },
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('VALIDATION_ERROR');
+    expect(called).toBe(true);
   });
 });
 
@@ -367,7 +375,7 @@ describe('SF-13 intake — GET /orders/:code/audit', () => {
       actor: 'coordinator1',
       action: 'order.imported',
       target: 'ORD-4001',
-      detail: { importedAt: '2026-09-02T10:00:00+07:00' },
+      detail: { createdAt: '2026-09-02T10:00:00+07:00' },
       createdAt: '2026-09-02T10:00:00+07:00',
     });
   });
