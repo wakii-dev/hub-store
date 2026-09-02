@@ -21,7 +21,8 @@ import { expect, request as newRequest, test, type APIRequestContext } from "@pl
  *                     row MỚI (carrierBookingId mới).
  *   7. Cancel-batch — cancelledCount ≥ 1; planning CONFIRMED chưa book → DRAFT.
  *
- * Dùng đơn shop 30203 (ORD-3018/3019/3020 — KHÔNG đụng đơn 01-04 đã dùng) +
+ * Dùng đơn ORD-3019/3020/3021 (shop 30203; ORD-3021 7.9km — fee-limit batch,
+ * 8T @ 7.9km = 222.700 > 150.000) — KHÔNG đụng đơn 01-04 đã dùng +
  * shipper STAFF-004. Batch fulfillment được cancel trong afterAll (đơn revert
  * Chưa soạn) → spec chạy LẠI được trên DB persist (FI-245).
  *
@@ -31,11 +32,13 @@ import { expect, request as newRequest, test, type APIRequestContext } from "@pl
  * export trước khi chạy. Thiếu → test 5 skip với message rõ, KHÔNG fail.
  */
 
-const BFF = "http://localhost:8080";
 const SHOP = "30203";
 const SHIPPER = "STAFF-004"; // seed deliveryStaff shop 30203
 const LIMIT = 150000; // fee_limits seed 30201..30205
-const STORAGE_STATE = path.resolve(__dirname, "..", ".auth", "coordinator.json");
+// Private-port E2E seam: override qua env (playwright.nvc.config.ts — ports
+// riêng tránh xung đột cross-worktree); mặc định khớp stack boot-all chuẩn.
+const BFF = process.env.E2E_NVC_BFF ?? "http://localhost:8080";
+const STORAGE_STATE = process.env.E2E_NVC_STORAGE ?? path.resolve(__dirname, "..", ".auth", "coordinator.json");
 
 /** mockFleet (internal/ahamove/mock.go) — bảng giá deterministic VND/km. */
 const FLEET = [
@@ -56,10 +59,10 @@ const feeOf = (serviceId: string, km: number) => {
 
 // State chung — workers=1 + serial nên chia biến module là deterministic.
 let api: APIRequestContext;
-let batchCode: string; // batch chính (ORD-3018 + ORD-3019)
+let batchCode: string; // batch chính (ORD-3019 + ORD-3020, shop 30203)
 let item1: { stopOrder: number; orderCode: string; distance: number; codAmount: number };
 let item2: { stopOrder: number; orderCode: string; distance: number; codAmount: number };
-let batchCode2: string; // batch fee-limit (ORD-3020)
+let batchCode2: string; // batch fee-limit (ORD-3021, 7.9km → 8T vượt limit)
 let item3: { stopOrder: number; orderCode: string; distance: number; codAmount: number };
 let planning1: string; // planningId stop 1 batch chính
 let planning2: string; // planningId stop 2 batch chính
@@ -104,11 +107,12 @@ test.beforeAll(async () => {
   });
 
   // Đơn 30203 phải Chưa soạn — dọn batch ACTIVE của lần chạy trước nếu có.
-  await cancelActiveBatchesOf(["ORD-3018", "ORD-3019", "ORD-3020"]);
+  await cancelActiveBatchesOf(["ORD-3018", "ORD-3019", "ORD-3020", "ORD-3021"]);
 
   const deliveryTime = { from: "2026-09-05T08:00:00Z", to: "2026-09-05T12:00:00Z" };
+  // ORD-3019+ORD-3020 = shop 30203 (cùng shop — rule 1 không cản trộn).
   const res1 = await api.post("/fulfillment/batches/create", {
-    data: { orderCodes: ["ORD-3018", "ORD-3019"], shipperId: SHIPPER, deliveryTime },
+    data: { orderCodes: ["ORD-3019", "ORD-3020"], shipperId: SHIPPER, deliveryTime },
   });
   expect(res1.status()).toBe(200);
   const batch1 = (await res1.json()) as {
@@ -117,11 +121,11 @@ test.beforeAll(async () => {
   };
   batchCode = batch1.batchCode;
   [item1, item2] = batch1.items;
-  expect(item1.orderCode).toBe("ORD-3018");
-  expect(item2.orderCode).toBe("ORD-3019");
+  expect(item1.orderCode).toBe("ORD-3019");
+  expect(item2.orderCode).toBe("ORD-3020");
 
   const res2 = await api.post("/fulfillment/batches/create", {
-    data: { orderCodes: ["ORD-3020"], shipperId: SHIPPER, deliveryTime },
+    data: { orderCodes: ["ORD-3021"], shipperId: SHIPPER, deliveryTime },
   });
   expect(res2.status()).toBe(200);
   const batch2 = (await res2.json()) as { batchCode: string; items: typeof batch1.items };
@@ -251,7 +255,7 @@ test("§NVC 3: booking — carrierBookingId MOCK-*, driver + biển số, DRIVER
 });
 
 test("§NVC 4: fee-limit chặn — confirm 8T (fee > 150000) → 422 PRECONDITION_FAILED, không persist", async () => {
-  // 8T @ distance của ORD-3020 phải vượt limit — guard else skip (seed đổi).
+  // 8T @ 7.9km của ORD-3021 = 222.700 > 150.000 — guard else skip (seed đổi).
   const qRes = await api.post("/delivery-batch/quotes", {
     data: {
       shopCode: SHOP,
@@ -390,6 +394,21 @@ test("§NVC 6: cancel-delivery-order → CANCELLED; rebook = confirm lại + boo
 });
 
 test("§NVC 7: cancel-batch — booking ACTIVE → CANCELLED (cancelledCount ≥ 1), CONFIRMED chưa book → DRAFT", async () => {
+  // Đảm bảo planning2 ở CONFIRMED CHƯA book: test 3 đã book cả 2 stop (planning2
+  // có booking ACTIVE) — hủy booking đó trước rồi confirm lại (chưa book).
+  await api.post("/delivery-batch/cancel-delivery-order", {
+    data: { planningId: planning2, reason: "e2e 05 — trả planning2 về CONFIRMED-chưa-book cho test 7" },
+  });
+  const cfRes = await api.post("/delivery-batch/planning/confirm", {
+    data: {
+      batchCode,
+      plannings: [
+        { stopOrder: item2.stopOrder, orderCode: item2.orderCode, vehicleType: "1T", serviceId: "1T", addons: [] },
+      ],
+    },
+  });
+  expect(cfRes.status()).toBe(200);
+
   const res = await api.post("/delivery-batch/cancel-batch", {
     data: { batchCode, reason: "e2e 05 — hủy cả phiếu giao" },
   });
