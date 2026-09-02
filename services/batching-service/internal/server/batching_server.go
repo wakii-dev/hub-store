@@ -185,6 +185,35 @@ func buildItems(batchCode string, wantCodes []string, byCode map[string]*fulfill
 // ---------------------------------------------------------------------------
 
 func (s *BatchingServer) FilterBatches(ctx context.Context, req *batchingv1.FilterBatchesRequest) (*batchingv1.FilterBatchesResponse, error) {
+	page := int(req.GetPage())
+	if page < 1 {
+		page = 1
+	}
+	pageSize := int(req.GetPageSize())
+	if pageSize < 1 {
+		pageSize = defaultPageSize
+	}
+
+	// SF-7: PostgresStore → pagination SQL (PostgresStore.Filter — không load
+	// toàn bộ batches). Store khác (fake trong tests) → fallback in-memory
+	// giữ nguyên semantics cũ.
+	if pg, ok := s.store.(*store.PostgresStore); ok {
+		items, total, err := pg.Filter(ctx, store.BatchFilter{
+			Search:      req.GetSearch(),
+			Statuses:    req.GetStatuses(),
+			CreatedFrom: timePtrOrNil(store.ParseTime(req.GetCreatedTime().GetFrom())),
+			CreatedTo:   timePtrOrNil(store.ParseTime(req.GetCreatedTime().GetTo())),
+			Page:        page,
+			PageSize:    pageSize,
+		})
+		if err != nil {
+			return nil, status.Errorf(grpccodes.Internal, "filter batches: %v", err)
+		}
+		return &batchingv1.FilterBatchesResponse{
+			Items: items, Total: total, Page: int32(page), PageSize: int32(pageSize),
+		}, nil
+	}
+
 	all, err := s.store.List(ctx)
 	if err != nil {
 		return nil, status.Errorf(grpccodes.Internal, "list batches: %v", err)
@@ -212,14 +241,6 @@ func (s *BatchingServer) FilterBatches(ctx context.Context, req *batchingv1.Filt
 	}
 
 	total := int64(len(filtered))
-	page := int(req.GetPage())
-	if page < 1 {
-		page = 1
-	}
-	pageSize := int(req.GetPageSize())
-	if pageSize < 1 {
-		pageSize = defaultPageSize
-	}
 	start := (page - 1) * pageSize
 	if start >= len(filtered) {
 		filtered = nil
@@ -487,6 +508,14 @@ func dedupeNonEmpty(in []string) []string {
 
 func round1(f float64) float64 {
 	return float64(int(f*10+0.5)) / 10
+}
+
+// timePtrOrNil — time zero → nil (BatchFilter: nil = không filter mốc này).
+func timePtrOrNil(t time.Time) *time.Time {
+	if t.IsZero() {
+		return nil
+	}
+	return &t
 }
 
 // RoleUnaryInterceptor extracts x-user-role từ incoming metadata (BFF gắn —

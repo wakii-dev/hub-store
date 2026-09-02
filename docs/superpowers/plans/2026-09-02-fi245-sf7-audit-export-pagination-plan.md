@@ -345,8 +345,8 @@ return await reply.send('\uFEFF' + lines.join(''));
 - Modify: `services/batching-service/internal/server/batching_server.go` (FilterBatches gọi store.Filter thay List+slice)
 - Modify: `services/batching-service/internal/store/store_test.go` (+tests)
 
-- [ ] **Step 1: Đọc batching_server.go:187-239** — port ĐÚNG semantics filter hiện tại (search khớp gì, statuses, createdTime range, defaultPageSize=10, page<1→1) vào `BatchFilter`. KHÔNG đổi response shape `FilterBatchesResponse{Items,Total,Page,PageSize}`.
-- [ ] **Step 2: Store method** — pattern scalar count + LATERAL như Java (params dùng lại 2 lần, OFFSET/LIMIT là 2 param cuối):
+- [x] **Step 1: Đọc batching_server.go:187-239** — port ĐÚNG semantics filter hiện tại (search khớp gì, statuses, createdTime range, defaultPageSize=10, page<1→1) vào `BatchFilter`. KHÔNG đổi response shape `FilterBatchesResponse{Items,Total,Page,PageSize}`.
+- [x] **Step 2: Store method** — pattern scalar count + LATERAL như Java (params dùng lại 2 lần, OFFSET/LIMIT là 2 param cuối):
 
 ```go
 // BatchFilter — tham số FilterBatches (SF-7). Zero-value = không filter.
@@ -365,9 +365,9 @@ func (s *PostgresStore) Filter(ctx context.Context, f BatchFilter) ([]*batchingv
 ```
 
 WHERE build bằng strings.Builder + params slice: search → `batch_code ILIKE '%'||$n||'%'` **OR EXISTS (SELECT 1 FROM batch_items bi WHERE bi.batch_code = batches.batch_code AND bi.order_code ILIKE '%'||$n||'%')** — in-memory `matchesSearch` khớp CẢ order codes của items (batching_server.go:241-249), thiếu EXISTS = âm thầm đổi behavior UI search; statuses → `status = ANY($n)`; created → `created_at >= / < $n` (pgx nhận *time.Time). Page normalize: `<1→1`, `<=0→10` pageSize. Sau query: `attachItems(ctx, out, codes)`.
-- [ ] **Step 3: Server** — `FilterBatches` build BatchFilter từ request (TimeRange proto → *time.Time qua parse hiện có), gọi `st.Filter` (guard type-assert chỉ khi PostgresStore; InMemory/fake store khác → giữ fallback List+slice như cũ để tests server cũ không vỡ — hoặc thêm Filter vào fake store, chọn theo đọc code thực tế, ghi rationale vào commit body).
-- [ ] **Step 4: Tests (testdb pattern, skip-when-no-DB)** — `TestFilter_PaginationTraversal`: seed >pageSize batches, duyệt page 1..N nhận đủ, không trùng/l thiếu; `TestFilter_OrderingCreatedAtThenCode`: giữ semantics List; `TestFilter_StatusesAndSearch`: combo filter; `TestFilter_TotalBeyondLastPage`: page 99 → items rỗng, total đúng.
-- [ ] **Step 5: Run** `go test ./...` (từ services/batching-service, POSTGRES_PASSWORD set nếu DB chạy) → PASS + `TestList_OrderingCreatedAtThenCode` vẫn xanh. **Commit** `feat(fi245-sf7): batches FilterBatches SQL pagination — PostgresStore.Filter giữ sort semantics, List() bất biến`
+- [x] **Step 3: Server** — `FilterBatches` build BatchFilter từ request (TimeRange proto → *time.Time qua parse hiện có), gọi `st.Filter` (guard type-assert chỉ khi PostgresStore; InMemory/fake store khác → giữ fallback List+slice như cũ để tests server cũ không vỡ — hoặc thêm Filter vào fake store, chọn theo đọc code thực tế, ghi rationale vào commit body).
+- [x] **Step 4: Tests (testdb pattern, skip-when-no-DB)** — `TestFilter_PaginationTraversal`: seed >pageSize batches, duyệt page 1..N nhận đủ, không trùng/l thiếu; `TestFilter_OrderingCreatedAtThenCode`: giữ semantics List; `TestFilter_StatusesAndSearch`: combo filter; `TestFilter_TotalBeyondLastPage`: page 99 → items rỗng, total đúng.
+- [x] **Step 5: Run** `go test ./...` (từ services/batching-service, POSTGRES_PASSWORD set nếu DB chạy) → PASS + `TestList_OrderingCreatedAtThenCode` vẫn xanh. **Commit** `feat(fi245-sf7): batches FilterBatches SQL pagination — PostgresStore.Filter giữ sort semantics, List() bất biến`
 
 ### Task 6: Pagination-orders verify + legacy-compat sweep + full test run
 
