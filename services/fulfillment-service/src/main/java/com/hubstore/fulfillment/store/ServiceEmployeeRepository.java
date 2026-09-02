@@ -30,6 +30,20 @@ public interface ServiceEmployeeRepository {
     record ListResult(List<ServiceEmployee> items, int total) {
     }
 
+    /** region_codes không tồn tại trong bảng regions (FK service_employee_regions.region_code). */
+    class InvalidRegionCodesException extends RuntimeException {
+        private final List<String> codes;
+
+        public InvalidRegionCodesException(List<String> codes) {
+            super("region_codes không tồn tại: " + String.join(", ", codes));
+            this.codes = List.copyOf(codes);
+        }
+
+        public List<String> codes() {
+            return codes;
+        }
+    }
+
     ListResult list(ListFilter filter);
 
     Optional<ServiceEmployee> get(String employeeCode);

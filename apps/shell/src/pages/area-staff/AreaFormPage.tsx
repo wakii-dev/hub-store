@@ -57,6 +57,9 @@ export default function AreaFormPage() {
   const [verifying, setVerifying] = useState(false);
   const [saving, setSaving] = useState(false);
   const [loadingEmployee, setLoadingEmployee] = useState(isEdit);
+  // BE PUT = full replace — edit phải giữ nguyên is_active đã load (không auto
+  // true, nếu không sửa NV bị off sẽ bật lại vô ý). Create luôn true.
+  const [loadedIsActive, setLoadedIsActive] = useState(true);
 
   useEffect(() => {
     areaStaffApi.regions().then(setRegions).catch(() => message.error(t('area.error.regions')));
@@ -69,6 +72,7 @@ export default function AreaFormPage() {
     areaStaffApi
       .get(code)
       .then((emp) => {
+        setLoadedIsActive(emp.isActive);
         form.setFieldsValue({
           titleCode: emp.titleCode,
           employeeCode: emp.employeeCode,
@@ -136,7 +140,7 @@ export default function AreaFormPage() {
       fullName: values.fullName,
       titleCode: values.titleCode,
       paymentAccount: values.paymentAccount,
-      isActive: true,
+      isActive: isEdit ? loadedIsActive : true,
       regionCodes: selectedCodes(),
     };
     setSaving(true);

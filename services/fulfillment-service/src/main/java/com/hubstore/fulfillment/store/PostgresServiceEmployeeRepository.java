@@ -95,6 +95,7 @@ public class PostgresServiceEmployeeRepository implements ServiceEmployeeReposit
     @Override
     @Transactional
     public ServiceEmployee create(ServiceEmployee employee) {
+        requireRegionsExist(employee.regionCodes());
         java.time.OffsetDateTime now = java.time.OffsetDateTime.now();
         jdbc.update("INSERT INTO service_employees "
                         + "(employee_code, full_name, title_code, payment_account, is_active, created_at, updated_at) "
@@ -108,6 +109,7 @@ public class PostgresServiceEmployeeRepository implements ServiceEmployeeReposit
     @Override
     @Transactional
     public ServiceEmployee update(String employeeCode, ServiceEmployee employee) {
+        requireRegionsExist(employee.regionCodes());
         jdbc.update("UPDATE service_employees SET full_name = ?, title_code = ?, "
                         + "payment_account = ?, is_active = ?, updated_at = now() "
                         + "WHERE employee_code = ?",
@@ -130,6 +132,26 @@ public class PostgresServiceEmployeeRepository implements ServiceEmployeeReposit
     }
 
     // ---------------- helpers ----------------
+
+    /**
+     * Pre-check trước insert/update regions: 1 SELECT code IN (...) — thiếu
+     * → InvalidRegionCodesException (impl map INVALID_ARGUMENT), thay vì để
+     * FK violation nổ DataIntegrityViolation (bị catch nhầm ALREADY_EXISTS).
+     */
+    private void requireRegionsExist(List<String> regionCodes) {
+        if (regionCodes == null || regionCodes.isEmpty()) {
+            return;
+        }
+        List<String> distinct = new ArrayList<>(new LinkedHashSet<>(regionCodes));
+        String placeholders = String.join(", ", Collections.nCopies(distinct.size(), "?"));
+        List<String> existing = jdbc.query(
+                "SELECT code FROM regions WHERE code IN (" + placeholders + ")",
+                (rs, n) -> rs.getString(1), distinct.toArray());
+        List<String> invalid = distinct.stream().filter(c -> !existing.contains(c)).toList();
+        if (!invalid.isEmpty()) {
+            throw new InvalidRegionCodesException(invalid);
+        }
+    }
 
     private void insertRegions(String employeeCode, List<String> regionCodes) {
         if (regionCodes == null || regionCodes.isEmpty()) {

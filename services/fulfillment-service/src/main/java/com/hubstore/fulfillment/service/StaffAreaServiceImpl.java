@@ -104,6 +104,10 @@ public class StaffAreaServiceImpl extends StaffAreaServiceGrpc.StaffAreaServiceI
             responseObserver.onCompleted();
         } catch (StatusRuntimeException e) {
             responseObserver.onError(e);
+        } catch (ServiceEmployeeRepository.InvalidRegionCodesException e) {
+            responseObserver.onError(GrpcErrors.withDetails(
+                    Status.INVALID_ARGUMENT, e.getMessage(),
+                    List.of(new GrpcErrors.ErrorDetail("regionCodes", e.getMessage()))));
         } catch (org.springframework.dao.DataIntegrityViolationException e) {
             responseObserver.onError(GrpcErrors.withDetails(
                     Status.ALREADY_EXISTS, "employee_code đã tồn tại.",
@@ -136,6 +140,10 @@ public class StaffAreaServiceImpl extends StaffAreaServiceGrpc.StaffAreaServiceI
             responseObserver.onCompleted();
         } catch (StatusRuntimeException e) {
             responseObserver.onError(e);
+        } catch (ServiceEmployeeRepository.InvalidRegionCodesException e) {
+            responseObserver.onError(GrpcErrors.withDetails(
+                    Status.INVALID_ARGUMENT, e.getMessage(),
+                    List.of(new GrpcErrors.ErrorDetail("regionCodes", e.getMessage()))));
         } catch (RuntimeException e) {
             responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
         }
