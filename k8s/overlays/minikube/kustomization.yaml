@@ -1,0 +1,6 @@
+# Overlay minikube — SF-1 tạo skeleton; SF-4 thêm glue (replicas/images), SF-5 thêm tune.
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - ../../base
