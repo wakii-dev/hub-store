@@ -67,14 +67,21 @@ Depends on: SF-2
 Tasks: dashboard-aggregate-api / fe-dashboard-screen / charts-antd / role-based-default-route / e2e-dashboard-spec
 
 ## SF-10 Realtime SSE
-Tier: 2
+Tier: 3
 linear: FI-255
-What: BFF SSE endpoint + event bus (order assign/cancel/complete, batch create/transition → event); FE hook subscribe — D1/D2 cập nhật realtime; reconnect + fallback polling; auth access token trên SSE
+What: BFF SSE endpoint consume Kafka topics (order-events/batch-events — SF-27) → fan-out SSE; FE hook subscribe — D1/D2 cập nhật realtime; reconnect + fallback polling (Kafka consumer lỗi/BFF restart); auth access token trên SSE
+Depends on: SF-2, SF-3, SF-27
+Tasks: bff-sse-endpoint / bff-kafka-consumer / fe-sse-hook / d1-d2-live-update / reconnect-fallback / e2e-sse-spec
+
+## SF-27 Kafka event bus — trung tâm
+Tier: 2
+linear: FI-273
+What: compose kafka KRaft + kafka-ui (dev) + healthcheck + 3 topics init (order-events/batch-events/notification-events, partitions=1 RF=1); producer Java (mutate order → publish) + Go (batch create/transition → publish) — envelope {eventId,type,occurredAt,source,payload}, key=code, best-effort + log; KAFKA_ENABLED=false → no-op không lỗi (mặc định); KHÔNG outbox, KHÔNG đổi gRPC/saga, Kafka là side-channel quan sát/realtime
 Depends on: SF-2, SF-3
-Tasks: bff-sse-endpoint / event-bus-mutations / fe-sse-hook / d1-d2-live-update / reconnect-fallback / e2e-sse-spec
+Tasks: compose-kafka-kraft / kafka-ui / topics-init / healthcheck-wiring / event-envelope / java-producer / go-producer / kafka-enabled-flag / env-example / unit-tests
 
 ## SF-11 FE convergence mới — audit viewer + export UI + mobile
-Tier: 3
+Tier: 4
 linear: FI-256
 What: audit-log viewer (Manager), export UI theo filter, mobile responsive polish (tablet shipper), toàn bộ screens mới (SF-8/9/13) hội tụ design system SF-6; skeleton/empty-state screens mới; E2E specs mới cho users/dashboard/export/audit — KHÔNG sửa assertions specs cũ
 Depends on: SF-6, SF-7, SF-8, SF-9, SF-10, SF-13
@@ -84,7 +91,7 @@ Tasks: audit-viewer-screen / export-ui / mobile-responsive / design-harmonize-sc
 Tier: 6
 linear: FI-257
 What: M-3 resolved (token passthrough HOẶC mTLS s2s — chọn 1 + rationale); .env ra khỏi git + rotate credentials + compose env-file local; healthcheck endpoints mọi service + logs structured; CI GitHub Actions (lint + unit + E2E E2E=1 + docker build mỗi PR); backup cron pg_dump 2 DB + restore doc
-Depends on: SF-5, SF-11, SF-14, SF-16, SF-20, SF-21, SF-22, SF-22, SF-23, SF-24, SF-25, SF-26
+Depends on: SF-5, SF-11, SF-14, SF-16, SF-20, SF-21, SF-22, SF-23, SF-24, SF-25, SF-26
 Tasks: s2s-token-passthrough-or-mtls / secrets-out-of-git / rotate-credentials / healthchecks-all / structured-logs / ci-pipeline / e2e-in-ci / backup-cron / restore-doc / security-final-audit
 
 ## SF-13 Order intake + delivery exceptions
@@ -101,10 +108,10 @@ What: xác nhận thu COD per-order (số tiền + người thu + thời điểm
 Depends on: SF-7, SF-13
 Tasks: cod-confirm-flow / settlement-table / settlement-aggregate-api / fe-settlement-screen / settlement-export / e2e-settlement-spec
 
-## SF-15 NVC backend + mock carrier provider
+## SF-15 NVC backend — Ahamove adapter dual-mode
 Tier: 3
 linear: FI-260
-What: tích hợp API Ahamove THẬT (api.ahamove.com — partner token env AHAMOVE_*, KHÔNG mock/provider giả; E2E NVC skip-if-no-credential); endpoints quotes/planning-confirm/booking/cancel/searchbookingdetail; batching DB V2 (plannings/bookings/statuses/tracking events/addon catalog/fee limits per-SP); fee-limit rules BE-authoritative
+What: Ahamove adapter dual-mode (env AHAMOVE_MODE — mock MẶC ĐỊNH: response shape Ahamove thực tế, quotes 6 tải trọng, timeline trạng thái tự chạy theo thời gian, tag [MOCK]; real khi có AHAMOVE_API_KEY+PARTNER_TOKEN — đổi env là thật, KHÔNG sửa code); endpoints quotes/planning-confirm/booking/cancel/searchbookingdetail; batching DB V2 (plannings/bookings/statuses/tracking events/addon catalog/fee limits per-SP); fee-limit rules BE-authoritative; mock state chỉ trong adapter (business data vẫn Postgres)
 Depends on: SF-3
 Tasks: ahamove-client-auth / quotes-endpoint / planning-confirm-endpoint / booking-endpoint / cancel-shipment-endpoints / tracking-detail-endpoint / addon-catalog / fee-limits-rules / batching-db-v2 / e2e-nvc-api-skip-if-no-env
 
@@ -182,6 +189,6 @@ Tasks: mobile-shell-pwa / my-orders-today / accept-complete-reschedule / timelin
 Tier: 4
 linear: FI-271
 What: POST /webhooks/orders (HMAC header qua env): validate + idempotency dedupe externalId + map vào orders (fulfillCode tự sinh) + audit; retry semantics chuẩn; config mapping qua env
-Depends on: SF-13
-Tasks: webhook-endpoint / hmac-auth / idempotency-store / order-mapping / retry-semantics / audit-integration / e2e-webhook
+Depends on: SF-13, SF-27
+Tasks: webhook-endpoint / hmac-auth / idempotency-store / order-mapping / order-created-publish-kafka / retry-semantics / audit-integration / e2e-webhook
 

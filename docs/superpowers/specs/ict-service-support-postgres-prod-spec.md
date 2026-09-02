@@ -95,8 +95,8 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 ### 3.9 Product completion — Dashboard thống kê (SF-9, deps SF-2)
 - Màn Dashboard (mặc định sau login cho Manager; Coordinator thấy nếu phù hợp): đơn/ngày (30 ngày), tỷ lệ hoàn thành/hủy, workload shipper, đơn đang chờ xử lý — aggregate API riêng, KHÔNG N+1 loop client-side.
 
-### 3.10 Product completion — Realtime SSE (SF-10, deps SF-2+SF-3)
-- BFF SSE endpoint + event bus: mutation order (assign/cancel/complete) và batch (create/transition) đẩy event → FE hook subscribe, D1/D2 refetch hoặc update optimistic.
+### 3.10 Product completion — Realtime SSE (SF-10, deps SF-2+SF-3+SF-27)
+- BFF SSE endpoint: Java/Go publish domain events lên Kafka (`order-events`, `batch-events`) → BFF consumer → đẩy qua SSE → FE hook subscribe, D1/D2 refetch hoặc update optimistic. Reconnect + fallback polling khi Kafka/BFF consumer lỗi.
 - Reconnect + fallback polling; auth cùng access token (query param hoặc header).
 
 ### 3.11 Product completion — FE convergence mới (SF-11, deps SF-6+SF-7+SF-8+SF-9+SF-10)
@@ -161,8 +161,15 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Mobile web (installable PWA, breakpoint điện thoại) cho KTV/CTV: my-orders hôm nay, accept/complete/reschedule theo buttons flags, xem timeline + địa chỉ (deep-link map), gọi KH.
 - Auth cùng OIDC; role KTV tương đương (thêm role vào realm nếu thiếu).
 
-### 3.26 Webhook nhận đơn từ sàn (SF-26, deps SF-13)
-- Endpoint `POST /webhooks/orders` (HMAC signature header qua env) nhận đơn từ hệ thống bán hàng/sàn: validate + idempotency (dedupe theo externalId) + map vào orders (fulfillCode tự sinh) + audit; retry response 2xx/4xx/5xx chuẩn; config mapping qua env.
+### 3.26 Webhook nhận đơn từ sàn (SF-26, deps SF-13+SF-27)
+- Endpoint `POST /webhooks/orders` (HMAC signature header qua env) nhận đơn từ hệ thống bán hàng/sàn: validate + idempotency (dedupe theo externalId) + map vào orders (fulfillCode tự sinh) + audit; retry response 2xx/4xx/5xx chuẩn; config mapping qua env. Đơn tạo xong publish event `order.created` lên Kafka topic `order-events` (SSE/push hưởng qua BFF consumer).
+
+### 3.27 Kafka event bus — trung tâm (SF-27, deps SF-2+SF-3, Tier 2)
+- **Infra**: kafka (KRaft mode, không zookeeper) + kafka-ui (dev) trong docker-compose; healthcheck; 3 topics khai báo lúc init: `order-events`, `batch-events`, `notification-events` (partitions=1, RF=1 — dev single-node).
+- **Producer**: Java fulfillment publish event khi mutate order (ASSIGNED/CANCELLED/COMPLETED/FAILED/redelivery); Go batching publish khi create/transition batch. Event envelope chung: `{eventId, type, occurredAt, source, payload}` — JSON, key = orderCode/batchCode. Publish best-effort + log — KHÔNG outbox pattern trong story này (saga giữ nguyên direct gRPC như cũ, Kafka là side-channel quan sát/realtime, KHÔNG phải path nghiệp vụ blocking).
+- **Consumer**: BFF consumer group đọc topics → fan-out tới SSE (SF-10) và notification pipeline (SF-23); webhook SF-26 publish `order.created` (không cần consumer riêng nếu BFF đã subscribe chung).
+- **Env**: `KAFKA_BOOTSTRAP_SERVERS` + `KAFKA_ENABLED` (false → producer/consumer no-op không lỗi — tương thích môi trường không Kafka, E2E cũ không vỡ).
+- KHÔNG đổi gRPC contract; KHÔNG đổi flow nghiệp vụ đồng bộ hiện có; KHÔNG event-sourcing.
 
 ### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14+SF-16+SF-20+SF-21+SF-22..26 — CUỐI, Tier 6)
 - **M-3 resolved**: s2s auth — token passthrough (BFF forward access token, services verify JWKS) HOẶC mTLS nội mạng compose — SF-12 chọn 1, ghi rationale.
@@ -195,6 +202,7 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 20. KTV dùng mobile web: nhận việc, hoàn tất, đổi lịch — trên điện thoại.
 21. Hệ thống bán hàng đẩy đơn qua webhook → đơn vào D1 xử lý (idempotent).
 22. Đổi env sang Ahamove thật → quotes/booking chạy thật (khi có credential).
+23. `KAFKA_ENABLED=true` → kafka-ui thấy events chảy khi mutate đơn/batch; SSE + push hoạt động qua Kafka; `KAFKA_ENABLED=false` (mặc định dev nhẹ) → app vẫn chạy trọn vẹn không lỗi.
 
 ## 5. Boundary (KHÔNG làm)
 - KHÔNG TLS/HA; KHÔNG k8s/helm; KHÔNG horizontal scaling. (Backup automation + monitoring giờ IN scope — SF-12.)

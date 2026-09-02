@@ -51,17 +51,25 @@ Secrets: postgres-credentials, jwt-dev-secret, keycloak-admin (dev values, .giti
 
 ## SF split (rubric)
 
-**SF-1 (Tier 0) K8s platform foundation + Postgres** — owns k8s/ skeleton, secrets, seed ConfigMap,
-Postgres StatefulSet 3-DB (fulfillment/batching/keycloak, pg_isready probes), image-build script
-`scripts/k8s-build-images.sh` (minikube image build ×5 — ENTRY POINT DUY NHẤT cho build; SF-4 deploy
-script CALL script này, không duplicate logic), preflight script (driver detect + resource check +
-khuyến nghị `minikube start --memory=6g --cpus=4` cho stack Java+Keycloak) + README requirement. 11 tasks.
+**SF-1 (Tier 0) K8s platform foundation + Postgres** — owns k8s/ skeleton + **kustomize composition
+contract**: `k8s/base/kustomization.yaml` (viết MỘT LẦN bởi SF-1) pre-include TẤT CẢ component dirs
+(postgres, keycloak, app services — mỗi dir có placeholder kustomization.yaml namespace-only do SF-1
+tạo); SF-3/SF-4 CHỈ thay nội dung dir của mình, KHÔNG BAO GIỜ sửa base kustomization → tier-1 chạy
+song song không same-file conflict; overlay minikube inherit toàn bộ base; secrets, seed ConfigMap
+(configMapGenerator + comment cảnh báo ~800KB limit), Postgres StatefulSet 3-DB
+(fulfillment/batching/keycloak, pg_isready probes), image-build script `scripts/k8s-build-images.sh`
+(minikube image build ×5 — ENTRY POINT DUY NHẤT cho build; SF-4 deploy script CALL script này;
+SF-2 KHÔNG có build script riêng — smoke bằng docker build ad hoc/local run), preflight script
+(driver detect + resource check + khuyến nghị `minikube start --memory=6g --cpus=4` cho stack
+Java+Keycloak) + README section preflight/requirements (SF-1 KHÔNG đụng phần khác của README). 11 tasks.
 
 **SF-2 (Tier 0) gRPC health + probes code** — owns TOÀN BỘ probe-code changes: Java/Go/Python
 grpc.health.v1 (Serving sau seed-load, chỉ THÊM file mới + registration tối thiểu — không refactor,
 giảm conflict FI-245), `location /healthz` trong docker/nginx.conf (SF-2 sở hữu conf change; rebuild
-web image là việc SF-4), grpcurl smoke script per-service, tests. Standalone testable qua
-grpcurl/docker — không phụ thuộc SF-1. 9 tasks.
+web image là việc SF-4), grpcurl smoke script per-service, tests. Standalone testable (docker build
+ad hoc / local binary run — KHÔNG tạo build script riêng, build entry point là SF-1). Exit criteria
+thêm: `mvn dependency:tree | grep grpc-services` pass — thiếu thì thêm 1 dòng pom
+(io.grpc:grpc-services cho HealthStatusManager). Không phụ thuộc SF-1. 10 tasks.
 
 **SF-3 (Tier 1, dep SF-1) Keycloak on k8s** — Deployment (image pin cụ thể, `KC_HEALTH_ENABLED=true`
 + management port 9000 cho probes, `KC_HTTP_RELATIVE_PATH=/keycloak` — contract với SF-4 ingress
@@ -69,22 +77,24 @@ route, KC_DB=postgres → db `keycloak` của SF-1) + realm JSON minimal (roles 
 Manager + dev users kèm credentials, client với `directAccessGrantsEnabled: true` để password grant
 smoke được) + startup/readiness probes (keycloak boot chậm) + smoke token qua port-forward. 8 tasks.
 
-**SF-4 (Tier 1, dep SF-1, SF-2) 5 app services + networking** — Deployments ×5 + Services, env wiring
-(GRPC_* cluster DNS, seed paths, JWT secret ref), probe wiring (endpoint từ SF-2 — CHỈ manifest,
-không code), `imagePullPolicy: IfNotPresent`, initContainer batching wait-fulfillment (busybox nc,
-timeout fail-loud 120s — không retry vô hạn), Ingress (/ → web, /api → bff strip prefix, /keycloak →
-keycloak — route thuộc SF-4, prefix env do SF-3 đặt), overlay minikube glue, `scripts/k8s-deploy.sh`
-(call k8s-build-images.sh + apply -k + rollout status — idempotent re-run được), smoke curl qua
-ingress. 13 tasks.
+**SF-4 (Tier 1, dep SF-1, SF-2) 5 app services + networking** — Deployments ×5 + Services (thay
+placeholder dirs của SF-1 — CHỈ đụng dir app, không sửa base kustomization), env wiring (GRPC_*
+cluster DNS, seed paths, JWT secret ref), probe wiring (endpoint từ SF-2 — CHỈ manifest, không code),
+`imagePullPolicy: IfNotPresent`, initContainer batching wait-fulfillment (busybox nc, timeout
+fail-loud 120s — không retry vô hạn), Ingress (/ → web, /api → bff strip prefix, /keycloak → keycloak
+— route thuộc SF-4, prefix env do SF-3 đặt), overlay minikube glue, `scripts/k8s-deploy.sh` (CALL
+k8s-build-images.sh + apply -k overlay + rollout status — idempotent re-run được), smoke curl qua
+ingress. NodePort fallback = README/docs snippet (SF-5), không dead config trong overlay. 13 tasks.
 
 **SF-5 (Tier 2, dep SF-3, SF-4) Convergence — cluster E2E + docs** — Playwright against cluster URL:
 sửa `e2e/playwright.config.ts` thành env-driven (`E2E_BASE_URL` — default vẫn http://localhost:3000 +
 webServer boot-all như cũ; set E2E_BASE_URL → dùng URL đó + SKIP webServer) — SF-5 sở hữu config
-change này, local e2e là default không đổi; gRPC integration check trong cluster (kubectl run job),
-keycloak token smoke QUA INGRESS (route /keycloak từ SF-4), Postgres persistence proof (delete pod
-postgres-0 → data survives), seed-update workflow doc (rebuild configmap + rollout restart), README
-deploy guide, FI-245 wiring doc (bật env nào khi code merge), security notes (dev-only secrets ghi
-rõ), final audit. 10 tasks.
+change này; **regression criterion bắt buộc: bare `npx playwright test` (không env) vẫn pass như
+trước**; gRPC integration check trong cluster (kubectl run job), keycloak token smoke QUA INGRESS
+(route /keycloak từ SF-4), Postgres persistence proof (delete pod postgres-0 → data survives),
+seed-update workflow doc (rebuild configmap + rollout restart), README deploy guide (+ NodePort
+fallback doc), FI-245 wiring doc (bật env nào khi code merge), security notes (dev-only secrets ghi
+rõ), final audit. 11 tasks.
 
 **Anti-duplicate audit** (liệt kê pattern trước khi chốt): health *code* chỉ ở SF-2; probe *manifest
 wiring* chỉ ở SF-4 (dùng endpoint SF-2 — yaml khác code, không trùng); realm JSON chỉ SF-3; scripts
