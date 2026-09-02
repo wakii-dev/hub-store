@@ -232,14 +232,14 @@ export function exportRangeDays(from: string, to: string): number {
 - Test: cập nhật `packages/shared/src/hooks/usePermissions.test.tsx`, `services/bff-gateway/test/bff.contract.test.ts` (KNOWN_ROLES), `apps/shell/src/auth/tokenGetter.test.ts` + `apps/shell/src/App.test.tsx` (nếu hard-code 3 roles — chỉ bổ sung)
 
 **Steps:**
-- [ ] **Step 1: Realm JSON** — thêm realm role `WarehouseEmployee` (mảng realm roles) + user `warehouse-emp` (enabled, password `Password123!` literal — dev-only, cùng style users cũ) + role mapping.
-- [ ] **Step 2: BFF** — KNOWN_ROLES += 'WarehouseEmployee' (auth.ts:18).
-- [ ] **Step 3: FE** — usePermissions: PERMISSIONS += 'd2c.view'; matrix: WarehouseEmployee {d2c.view}, WarehouseOps += d2c.view, Manager += d2c.view; Coordinator không. KHÔNG cấp orders.view cho WarehouseEmployee.
-- [ ] **Step 4: nav.ts** — NAV_ROUTES thêm `{ path: '/hub-store-order/d2c', labelKey: 'nav.d2c', permission: 'd2c.view' }` (icon AppLayout nếu map theo path — thêm icon matching) + `firstPathForRole`: WarehouseEmployee → '/hub-store-order/d2c'.
-- [ ] **Step 5: i18n** — `apps/shell/src/i18n.ts`: chỉ `nav.d2c` vi='D2C / Dropship' en='D2C / Dropship' (screen keys thuộc Task 6).
-- [ ] **Step 6: auth.setup.ts** — thêm user `warehouse-emp` login flow → `.auth/warehouse-emp.json` (pattern users có sẵn; password/env cùng cơ chế).
-- [ ] **Step 7: Unit tests update + run** — sửa assertions bổ sung role mới (không xóa case cũ); `cd packages/shared && npm test`, `cd apps/shell && npm test`, `cd services/bff-gateway && npm test` xanh. NOTE: storageState `.auth/warehouse-emp.json` chỉ verify được sau khi Keycloak re-import realm (dồn vào Task 7 Step 2 clean boot) — Task 4 chỉ commit realm JSON + setup code.
-- [ ] **Step 8: Commit** `feat(fi245-sf18): WarehouseEmployee role — realm user + KNOWN_ROLES + FE matrix + e2e storageState`
+- [x] **Step 1: Realm JSON** — thêm realm role `WarehouseEmployee` (mảng realm roles) + user `warehouse-emp` (enabled, password `Password123!` literal — dev-only, cùng style users cũ) + role mapping.
+- [x] **Step 2: BFF** — KNOWN_ROLES += 'WarehouseEmployee' (auth.ts:18).
+- [x] **Step 3: FE** — usePermissions: PERMISSIONS += 'd2c.view'; matrix: WarehouseEmployee {d2c.view}, WarehouseOps += d2c.view, Manager += d2c.view; Coordinator không. KHÔNG cấp orders.view cho WarehouseEmployee.
+- [x] **Step 4: nav.ts** — NAV_ROUTES thêm `{ path: '/hub-store-order/d2c', labelKey: 'nav.d2c', permission: 'd2c.view' }` (icon AppLayout nếu map theo path — thêm icon matching) + `firstPathForRole`: WarehouseEmployee → '/hub-store-order/d2c'.
+- [x] **Step 5: i18n** — `apps/shell/src/i18n.ts`: chỉ `nav.d2c` vi='D2C / Dropship' en='D2C / Dropship' (screen keys thuộc Task 6).
+- [x] **Step 6: auth.setup.ts** — thêm user `warehouse-emp` login flow → `.auth/warehouse-emp.json` (pattern users có sẵn; password/env cùng cơ chế).
+- [x] **Step 7: Unit tests update + run** — sửa assertions bổ sung role mới (không xóa case cũ); `cd packages/shared && npm test`, `cd apps/shell && npm test`, `cd services/bff-gateway && npm test` xanh. NOTE: storageState `.auth/warehouse-emp.json` chỉ verify được sau khi Keycloak re-import realm (dồn vào Task 7 Step 2 clean boot) — Task 4 chỉ commit realm JSON + setup code.
+- [x] **Step 8: Commit** `feat(fi245-sf18): WarehouseEmployee role — realm user + KNOWN_ROLES + FE matrix + e2e storageState`
 
 ### Task 5: Seed d2c-sample.json + seed-db.sh + reset-db.sh
 
