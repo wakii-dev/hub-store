@@ -106,7 +106,7 @@ Chung: publish SAU khi mutation thành công (post-persist); lỗi publish → `
   - `NoopEventPublisher` — `@ConditionalOnProperty(name="kafka.enabled", havingValue="false", matchIfMissing=true)` — no-op. (havingValue="false" + matchIfMissing: phủ CẢ explicit false lẫn unset — else Spring context fail thiếu bean khi .env set false tường minh.)
 - Hooks (post-success):
   - `assignShopHub` sau `repo.assignShopHub` thành công → `publish("order.assigned", fulfillCode, {fulfillCode, targetShop:{code,name,address}})`.
-  - `mutateOrderStatus` sau khi `repo.mutateBatchStatus` trả kết quả — publish per-order cho MỖI code update thành công, map theo `targetBatchStatus`: target 0 (reset khi hủy batch) → `order.cancelled` `{fulfillCode, reason}`; target 2 (hoàn tất soạn) → `order.completed` `{fulfillCode}`; target 1 (đang soạn, part of create-batch flow) → KHÔNG publish (đủ bởi `batch.created`). Reason lấy từ `request.getReason()` (truyền sẵn từ Go CancelBatch).
+  - `mutateOrderStatus` sau khi `repo.mutateBatchStatus` trả kết quả — publish per-order cho MỖI code update thành công (fallback P1-critic: nếu repo chỉ trả affected list một phần, publish cho đúng các code trong kết quả; nếu kết quả rỗng dù request có codes → log warn 1 lần, không publish). Map theo `targetBatchStatus`: target 0 (reset khi hủy batch) → `order.cancelled` `{fulfillCode, reason}`; target 2 (hoàn tất soạn) → `order.completed` `{fulfillCode}`; target 1 (đang soạn, part of create-batch flow) → KHÔNG publish (đủ bởi `batch.created`). Reason lấy từ `request.getReason()` (truyền sẵn từ Go CancelBatch). *(Xác minh ở P4: shape trả về thật của `mutateBatchStatus` — hiện trả list `OrderSeed` updated → per-order publish trực tiếp được.)*
 - Các type `order.*` còn lại (failed/redelivered/created): contract sẵn — hook thêm khi mutation order-level tương ứng ra đời (SF-13/SF-26/SF-28 sở hữu).
 
 ### 4b. Go (batching) — `batch-events`
@@ -118,8 +118,8 @@ Chung: publish SAU khi mutation thành công (post-persist); lỗi publish → `
   - Tạo trong `cmd/server/main.go` theo pattern `env()` hiện có (`KAFKA_ENABLED`, `KAFKA_BOOTSTRAP_SERVERS` default `localhost:9092`), inject `BatchingServer` qua field mới (mock-able cho test — pattern như `fulfill.Client`).
 - Hooks trong `internal/server/batching_server.go` (post-success):
   - `CreateBatch` (sau `store.CreateBatch` + mutate orders PREPARING thành công) → `batch.created` `{batchCode, itemCount, shopCode?}`.
-  - `CancelBatch` (sau transition → CANCELLED + orders reset NOT_PREPARED thành công) → `batch.transitioned` `{batchCode, to: "cancelled", reason}`.
-  - `CompletePicking` (sau transition → COMPLETED + orders PREPARED thành công) → `batch.transitioned` `{batchCode, to: "completed"}`.
+  - `CancelBatch` (sau transition → CANCELLED + orders reset NOT_PREPARED thành công) → `batch.transitioned` `{batchCode, from: "active", to: "cancelled", reason}`.
+  - `CompletePicking` (sau transition → COMPLETED + orders PREPARED thành công) → `batch.transitioned` `{batchCode, from: "active", to: "completed"}`.
   - Compensation transition (lỗi giữa chừng) → KHÔNG publish (chỉ user-facing success).
 
 ## 5. Consumer BFF — `bff-realtime` group
@@ -143,7 +143,7 @@ Compose: fulfillment/batching/bff thêm `KAFKA_ENABLED: ${KAFKA_ENABLED:-false}`
 
 - **Runbook enabled-mode** (E2E/spec kafka chỉ chạy khi bật thật):
   1. `docker compose --profile kafka up -d kafka kafka-init kafka-ui` (topics do kafka-init tạo; kafka-ui chỉ depends kafka → topic có thể xuất hiện muộn hơn ui — test poll).
-  2. Boot stack như thường: `scripts/boot-all.sh` (keycloak docker + services host-run). `KAFKA_ENABLED=true KAFKA_BOOTSTRAP_SERVERS=localhost:9092` phải set TRÊN SHELL gọi boot-all → export xuống các process con (`fulfillment-service/run.sh` KHÔNG tự source root .env — env truyền qua process env từ boot-all; Go run.sh có source .env nhưng nhận từ shell cũng ok).
+  2. Boot stack như thường: `scripts/boot-all.sh` (keycloak docker + services host-run). **Env precedence (P1-critic):** `batching-service/run.sh` source root `.env` với `set -a` → .env OVERWRITE shell export. Nguồn chính khi bật: set `KAFKA_ENABLED=true` TRONG `.env` (cả 3 service đọc đúng); shell export chỉ cần bổ sung cho Java/BFF (run.sh không source .env). Làm cả hai: `.env`=true + shell export=true.
   3. `KAFKA_ENABLED=true pnpm --filter e2e test` — cùng shell env → Playwright config/spec thấy flag.
 - `e2e/tests/05-kafka.spec.ts` (mới): `test.skip(!(process.env.KAFKA_ENABLED === '1' || process.env.KAFKA_ENABLED === 'true'), ...)` (rule truthy thống nhất `1|true` như BFF/Go) — khi bật: (1) kafka-ui REST `GET /api/clusters/local/topics` thấy đủ 3 topics; (2) assign shop-hub qua BFF API → `order-events` có message `type=order.assigned` key=fulfillCode; hủy batch → `order.cancelled`; (3) create batch → `batch-events` có `batch.created`. Đọc messages: `GET /api/clusters/local/topics/{topic}/messages?limit=N` (kafka-ui v0.7.2 REST). Poll timeout ~15s (async publish + ui indexing).
 - Unit tests:
