@@ -48,7 +48,8 @@ class ValidationAndMutationTest {
     void setUp() {
         seed = SeedLoader.load(Path.of("../../api/seed/canonical-seed.json"));
         repo = new InMemoryOrderRepository(seed);
-        service = new FulfillmentServiceImpl(repo);
+        service = new FulfillmentServiceImpl(repo,
+                new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()));
     }
 
     // ---------------- helpers ----------------

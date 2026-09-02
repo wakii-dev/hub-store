@@ -1,7 +1,9 @@
 package com.hubstore.fulfillment.config;
 
+import com.hubstore.fulfillment.store.D2cOrderRepository;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.store.OrderRepository;
+import com.hubstore.fulfillment.store.PostgresD2cOrderRepository;
 import com.hubstore.fulfillment.store.PostgresOrderRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
@@ -27,6 +29,13 @@ public class OrderRepositoryConfig {
     @ConditionalOnProperty(name = "fulfillment.store", havingValue = "postgres", matchIfMissing = true)
     public OrderRepository postgresOrderRepository(JdbcTemplate jdbcTemplate) {
         return new PostgresOrderRepository(jdbcTemplate);
+    }
+
+    /** SF-18 (FI-263): D2C store — Postgres là impl duy nhất (in-memory chỉ sống trong unit test). */
+    @Bean
+    @ConditionalOnProperty(name = "fulfillment.store", havingValue = "postgres", matchIfMissing = true)
+    public D2cOrderRepository postgresD2cOrderRepository(JdbcTemplate jdbcTemplate) {
+        return new PostgresD2cOrderRepository(jdbcTemplate);
     }
 
     @Bean
