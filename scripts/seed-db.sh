@@ -13,8 +13,11 @@
 # Chạy standalone (dev): bash scripts/seed-db.sh   (qua docker compose exec)
 # Chạy trong compose (one-shot service db-seed): env PGHOST=postgres → psql trực tiếp.
 #
-# JSON parse bằng psql (\set + jsonb_array_elements) — KHÔNG cần jq/python3
-# nên chạy được cả trong postgres image (db-seed container).
+# JSON parse bằng psql (:\'var\' + jsonb_array_elements) — KHÔNG cần jq/python3
+# nên chạy được cả trong postgres image (db-seed container). GOTCHA: psql KHÔNG
+# interpolate biến bên trong dollar-quoted (DO $$...$$) → control flow dùng psql
+# meta-commands (\gset + \if) ở top-level; DO block chỉ dùng cho exception
+# không tham chiếu biến (đọc từ temp table khi cần).
 #
 # COLUMN CONTRACT (SF-2 Flyway / SF-3 golang-migrate tạo schema khớp):
 #   fulfillment.orders: fulfill_code, order_code, status_code, batch_status, batch_code,
@@ -54,65 +57,63 @@ fi
 
 echo "seed-db: nạp DB fulfillment ← $(basename "$SEED_JSON") ..."
 psql_cmd -d fulfillment -v ON_ERROR_STOP=1 -v seed_json="$(cat "$SEED_JSON")" <<'SQL'
-DO $seed$
-BEGIN
-  IF to_regclass('public.orders') IS NULL
-     OR to_regclass('public.shop_assignment_history') IS NULL
-     OR to_regclass('public.regions') IS NULL
-     OR to_regclass('public.delivery_staff') IS NULL THEN
-    RAISE EXCEPTION 'fulfillment: thiếu bảng seed (orders/shop_assignment_history/regions/delivery_staff) — %', 'chạy migration trước — see SF-2/SF-3';
-  END IF;
+SELECT to_regclass('public.orders') IS NULL
+    OR to_regclass('public.shop_assignment_history') IS NULL
+    OR to_regclass('public.regions') IS NULL
+    OR to_regclass('public.delivery_staff') IS NULL AS missing \gset
+\if :missing
+DO $err$ BEGIN
+  RAISE EXCEPTION 'fulfillment: thiếu bảng seed (orders/shop_assignment_history/regions/delivery_staff) — chạy migration trước — see SF-2/SF-3';
+END $err$;
+\endif
+SELECT EXISTS (SELECT 1 FROM public.orders) AS has_data \gset
+\if :has_data
+\echo 'fulfillment đã có data — BỎ QUA nạp (emptiness-gate, không upsert)'
+\else
+INSERT INTO public.orders (
+  fulfill_code, order_code, status_code, batch_status, batch_code,
+  shop_code, shop_name, shop_address,
+  original_time_from, original_time_to, delivery_time_from, delivery_time_to,
+  order_status, items, cod_amount, total_quantity, is_debt_splitting_order,
+  customer_address, distance, note)
+SELECT
+  o->>'fulfillCode',
+  o->>'orderCode',
+  (o->>'statusCode')::int,
+  (o->>'batchStatus')::int,
+  o->>'batchCode',
+  o->'shopAssignment'->>'shopCode',
+  o->'shopAssignment'->>'shopName',
+  o->'shopAssignment'->>'address',
+  (o->'originalTime'->>'from')::timestamptz,
+  (o->'originalTime'->>'to')::timestamptz,
+  (o->'deliveryTime'->>'from')::timestamptz,
+  (o->'deliveryTime'->>'to')::timestamptz,
+  (o->>'orderStatus')::int,
+  o->'items',
+  (o->>'codAmount')::bigint,
+  (o->>'totalQuantity')::int,
+  (o->>'isDebtSplittingOrder')::boolean,
+  o->>'customerAddress',
+  (o->>'distance')::double precision,
+  o->>'note'
+FROM jsonb_array_elements(:'seed_json'::jsonb->'orders') AS o;
 
-  IF EXISTS (SELECT 1 FROM public.orders LIMIT 1) THEN
-    RAISE NOTICE 'fulfillment đã có data — BỎ QUA nạp (emptiness-gate, không upsert)';
-    RETURN;
-  END IF;
+INSERT INTO public.shop_assignment_history (fulfill_code, occurred_at, action, note)
+SELECT o->>'fulfillCode', (h->>'timestamp')::timestamptz, h->>'action', h->>'note'
+FROM jsonb_array_elements(:'seed_json'::jsonb->'orders') AS o,
+     jsonb_array_elements(o->'history') AS h;
 
-  INSERT INTO public.orders (
-    fulfill_code, order_code, status_code, batch_status, batch_code,
-    shop_code, shop_name, shop_address,
-    original_time_from, original_time_to, delivery_time_from, delivery_time_to,
-    order_status, items, cod_amount, total_quantity, is_debt_splitting_order,
-    customer_address, distance, note)
-  SELECT
-    o->>'fulfillCode',
-    o->>'orderCode',
-    (o->>'statusCode')::int,
-    (o->>'batchStatus')::int,
-    o->>'batchCode',
-    o->'shopAssignment'->>'shopCode',
-    o->'shopAssignment'->>'shopName',
-    o->'shopAssignment'->>'address',
-    (o->'originalTime'->>'from')::timestamptz,
-    (o->'originalTime'->>'to')::timestamptz,
-    (o->'deliveryTime'->>'from')::timestamptz,
-    (o->'deliveryTime'->>'to')::timestamptz,
-    (o->>'orderStatus')::int,
-    o->'items',
-    (o->>'codAmount')::bigint,
-    (o->>'totalQuantity')::int,
-    (o->>'isDebtSplittingOrder')::boolean,
-    o->>'customerAddress',
-    (o->>'distance')::double precision,
-    o->>'note'
-  FROM jsonb_array_elements(:'seed_json'::jsonb->'orders') AS o;
+INSERT INTO public.regions (code, name, type, parent_code)
+SELECT r->>'code', r->>'name', r->>'type', r->>'parentCode'
+FROM jsonb_array_elements(:'seed_json'::jsonb->'regions') AS r;
 
-  INSERT INTO public.shop_assignment_history (fulfill_code, occurred_at, action, note)
-  SELECT o->>'fulfillCode', (h->>'timestamp')::timestamptz, h->>'action', h->>'note'
-  FROM jsonb_array_elements(:'seed_json'::jsonb->'orders') AS o,
-       jsonb_array_elements(o->'history') AS h;
+INSERT INTO public.delivery_staff (staff_id, name, shop_code, phone)
+SELECT s->>'staffId', s->>'name', s->>'shopCode', s->>'phone'
+FROM jsonb_array_elements(:'seed_json'::jsonb->'deliveryStaff') AS s;
 
-  INSERT INTO public.regions (code, name, type, parent_code)
-  SELECT r->>'code', r->>'name', r->>'type', r->>'parentCode'
-  FROM jsonb_array_elements(:'seed_json'::jsonb->'regions') AS r;
-
-  INSERT INTO public.delivery_staff (staff_id, name, shop_code, phone)
-  SELECT s->>'staffId', s->>'name', s->>'shopCode', s->>'phone'
-  FROM jsonb_array_elements(:'seed_json'::jsonb->'deliveryStaff') AS s;
-
-  RAISE NOTICE 'fulfillment: seeded orders + shop_assignment_history + regions + delivery_staff';
-END
-$seed$;
+\echo 'fulfillment: seeded orders + shop_assignment_history + regions + delivery_staff'
+\endif
 SQL
 
 echo "seed-db: kiểm orderCode batch items ← fulfillment.orders ..."
@@ -128,73 +129,75 @@ echo "seed-db: nạp DB batching ← $(basename "$SEED_JSON") ..."
 psql_cmd -d batching -v ON_ERROR_STOP=1 \
   -v seed_json="$(cat "$SEED_JSON")" \
   -v order_codes="$ORDER_CODES" <<'SQL'
-DO $seed$
-DECLARE
-  bad_item text;
-BEGIN
-  IF to_regclass('public.batches') IS NULL
-     OR to_regclass('public.batch_items') IS NULL THEN
-    RAISE EXCEPTION 'batching: thiếu bảng seed (batches/batch_items) — %', 'chạy migration trước — see SF-2/SF-3';
+SELECT to_regclass('public.batches') IS NULL
+    OR to_regclass('public.batch_items') IS NULL AS missing \gset
+\if :missing
+DO $err$ BEGIN
+  RAISE EXCEPTION 'batching: thiếu bảng seed (batches/batch_items) — chạy migration trước — see SF-2/SF-3';
+END $err$;
+\endif
+SELECT EXISTS (SELECT 1 FROM public.batches) AS has_data \gset
+\if :has_data
+\echo 'batching đã có data — BỎ QUA nạp (emptiness-gate, không upsert)'
+\else
+CREATE TEMP TABLE bad_batch_item AS
+SELECT i->>'orderCode' AS code
+FROM jsonb_array_elements(:'seed_json'::jsonb->'batches') AS b,
+     jsonb_array_elements(b->'items') AS i
+WHERE NOT ((i->>'orderCode') = ANY (:'order_codes'::text[]))
+LIMIT 1;
+
+DO $err$ DECLARE c text; BEGIN
+  SELECT code INTO c FROM bad_batch_item;
+  IF c IS NOT NULL THEN
+    RAISE EXCEPTION 'batch item orderCode % không tồn tại trong fulfillment.orders — seed pipeline FAIL (nạp fulfillment trước / kiểm canonical-seed.json)', c;
   END IF;
+END $err$;
 
-  IF EXISTS (SELECT 1 FROM public.batches LIMIT 1) THEN
-    RAISE NOTICE 'batching đã có data — BỎ QUA nạp (emptiness-gate, không upsert)';
-    RETURN;
-  END IF;
+INSERT INTO public.batches (
+  batch_code, shop_code, shipper_id, delivery_time_from, delivery_time_to,
+  status, created_at)
+SELECT
+  b->>'batchCode',
+  b->>'shopCode',
+  b->>'shipperId',
+  (b->'deliveryTime'->>'from')::timestamptz,
+  (b->'deliveryTime'->>'to')::timestamptz,
+  (b->>'status')::int,
+  (b->>'createdAt')::timestamptz
+FROM jsonb_array_elements(:'seed_json'::jsonb->'batches') AS b;
 
-  SELECT i->>'orderCode' INTO bad_item
-  FROM jsonb_array_elements(:'seed_json'::jsonb->'batches') AS b,
-       jsonb_array_elements(b->'items') AS i
-  WHERE NOT ((i->>'orderCode') = ANY (:'order_codes'::text[]))
-  LIMIT 1;
-  IF bad_item IS NOT NULL THEN
-    RAISE EXCEPTION 'batch item orderCode % không tồn tại trong fulfillment.orders — seed pipeline FAIL (nạp fulfillment trước / kiểm canonical-seed.json)', bad_item;
-  END IF;
+INSERT INTO public.batch_items (
+  batch_code, stop_order, order_code, customer_address, distance,
+  from_delivery_time, to_delivery_time, order_status, order_type,
+  items, total_quantity, cod_amount)
+SELECT
+  i->>'batchCode',
+  (i->>'stopOrder')::int,
+  i->>'orderCode',
+  i->>'customerAddress',
+  (i->>'distance')::double precision,
+  (i->>'fromDeliveryTime')::timestamptz,
+  (i->>'toDeliveryTime')::timestamptz,
+  (i->>'orderStatus')::int,
+  (i->>'orderType')::int,
+  i->'items',
+  (i->>'totalQuantity')::int,
+  (i->>'codAmount')::bigint
+FROM jsonb_array_elements(:'seed_json'::jsonb->'batches') AS b,
+     jsonb_array_elements(b->'items') AS i;
 
-  INSERT INTO public.batches (
-    batch_code, shop_code, shipper_id, delivery_time_from, delivery_time_to,
-    status, created_at)
-  SELECT
-    b->>'batchCode',
-    b->>'shopCode',
-    b->>'shipperId',
-    (b->'deliveryTime'->>'from')::timestamptz,
-    (b->'deliveryTime'->>'to')::timestamptz,
-    (b->>'status')::int,
-    (b->>'createdAt')::timestamptz
-  FROM jsonb_array_elements(:'seed_json'::jsonb->'batches') AS b;
+SELECT to_regclass('public.batches_code_seq') IS NOT NULL AS has_seq \gset
+\if :has_seq
+SELECT setval('public.batches_code_seq',
+  (SELECT GREATEST(max(substring(batch_code from '[0-9]+$')::int), 1) FROM public.batches)) AS seq_val \gset
+\echo 'batching: setval batches_code_seq = max batchCode seed'
+\else
+\echo 'batches_code_seq chưa tồn tại (SF-3 migration tạo) — bỏ qua setval'
+\endif
 
-  INSERT INTO public.batch_items (
-    batch_code, stop_order, order_code, customer_address, distance,
-    from_delivery_time, to_delivery_time, order_status, order_type,
-    items, total_quantity, cod_amount)
-  SELECT
-    i->>'batchCode',
-    (i->>'stopOrder')::int,
-    i->>'orderCode',
-    i->>'customerAddress',
-    (i->>'distance')::double precision,
-    (i->>'fromDeliveryTime')::timestamptz,
-    (i->>'toDeliveryTime')::timestamptz,
-    (i->>'orderStatus')::int,
-    (i->>'orderType')::int,
-    i->'items',
-    (i->>'totalQuantity')::int,
-    (i->>'codAmount')::bigint
-  FROM jsonb_array_elements(:'seed_json'::jsonb->'batches') AS b,
-       jsonb_array_elements(b->'items') AS i;
-
-  IF to_regclass('public.batches_code_seq') IS NOT NULL THEN
-    PERFORM setval('public.batches_code_seq',
-      (SELECT GREATEST(max(substring(batch_code from '[0-9]+$')::int), 1) FROM public.batches));
-    RAISE NOTICE 'batching: setval batches_code_seq = max batchCode seed';
-  ELSE
-    RAISE NOTICE 'batches_code_seq chưa tồn tại (SF-3 migration tạo) — bỏ qua setval';
-  END IF;
-
-  RAISE NOTICE 'batching: seeded batches + batch_items';
-END
-$seed$;
+\echo 'batching: seeded batches + batch_items'
+\endif
 SQL
 
 echo "seed-db: HOÀN TẤT (fulfillment + batching). Emptiness-gate: KHÔNG upsert — seed file đổi thì bash scripts/reset-db.sh."
