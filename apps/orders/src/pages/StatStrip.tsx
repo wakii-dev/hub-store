@@ -1,6 +1,6 @@
 import type { CSSProperties } from "react";
 import { useTranslation } from "react-i18next";
-import { BATCH_STATUS, DESIGN_TOKENS } from "@hub-store/shared";
+import { BATCH_STATUS, DESIGN_TOKENS, type BatchStatus } from "@hub-store/shared";
 import type { HubStoreOrderFilterItem } from "@hub-store/shared";
 
 /**
@@ -13,7 +13,7 @@ import type { HubStoreOrderFilterItem } from "@hub-store/shared";
  */
 export function StatStrip({ items }: { items: HubStoreOrderFilterItem[] }) {
   const { t } = useTranslation("orders");
-  const count = (s: number) => items.filter((o) => o.batchStatus === s).length;
+  const count = (s: BatchStatus) => items.filter((o) => o.batchStatus === s).length;
   const codPending = items
     .filter((o) => o.batchStatus === BATCH_STATUS.NOT_PREPARED)
     .reduce((sum, o) => sum + (o.codAmount ?? 0), 0);

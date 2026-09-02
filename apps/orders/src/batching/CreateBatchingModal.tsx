@@ -558,7 +558,11 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
             onClick={() => void handleCreate()}
             data-testid="batch-submit"
           >
-            {created ? t("createBatch.created") : activeSection === 3 ? `✓ ${t("createBatch.create")}` : t("createBatch.create")}
+            {created
+              ? t("createBatch.created")
+              : activeSection === 3
+                ? `✓ ${t("createBatch.createStep3")}`
+                : t("createBatch.create")}
           </Button>
         </div>
       </div>
