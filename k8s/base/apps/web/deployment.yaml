@@ -24,6 +24,7 @@ spec:
             - name: http
               containerPort: 3000
           readinessProbe:
+            timeoutSeconds: 5
             httpGet:
               path: /healthz
               port: http
@@ -31,6 +32,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 12
           livenessProbe:
+            timeoutSeconds: 5
             httpGet:
               path: /healthz
               port: http

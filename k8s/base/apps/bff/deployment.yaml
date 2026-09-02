@@ -39,6 +39,7 @@ spec:
                   name: jwt-dev-secret
                   key: JWT_DEV_SECRET
           readinessProbe:
+            timeoutSeconds: 5
             httpGet:
               path: /healthz
               port: http
@@ -46,6 +47,7 @@ spec:
             periodSeconds: 5
             failureThreshold: 12
           livenessProbe:
+            timeoutSeconds: 5
             httpGet:
               path: /healthz
               port: http

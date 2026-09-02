@@ -31,12 +31,14 @@ spec:
               mountPath: /seed
               readOnly: true
           readinessProbe:
+            timeoutSeconds: 5
             grpc:
               port: 50053
             initialDelaySeconds: 5
             periodSeconds: 5
             failureThreshold: 12
           livenessProbe:
+            timeoutSeconds: 5
             grpc:
               port: 50053
             initialDelaySeconds: 15

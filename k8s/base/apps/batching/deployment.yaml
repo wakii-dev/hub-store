@@ -54,12 +54,14 @@ spec:
               mountPath: /seed
               readOnly: true
           readinessProbe:
+            timeoutSeconds: 5
             grpc:
               port: 50052
             initialDelaySeconds: 5 # Go boot nhanh + initContainer đã đợi fulfillment
             periodSeconds: 5
             failureThreshold: 12
           livenessProbe:
+            timeoutSeconds: 5
             grpc:
               port: 50052
             initialDelaySeconds: 20

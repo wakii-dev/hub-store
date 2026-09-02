@@ -33,12 +33,14 @@ spec:
               mountPath: /seed
               readOnly: true
           readinessProbe:
+            timeoutSeconds: 5
             grpc:
               port: 50051
             initialDelaySeconds: 15 # Spring boot + seed load
             periodSeconds: 5
             failureThreshold: 12
           livenessProbe:
+            timeoutSeconds: 5
             grpc:
               port: 50051
             initialDelaySeconds: 40
