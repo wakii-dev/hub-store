@@ -15,15 +15,16 @@ afterEach(() => {
   setRole(null); // reset module store giữa các test
 });
 
-/** Matrix kỳ vọng — transcribe TRỰC TIẾP từ REQUIREMENTS §2. */
+/** Matrix kỳ vọng — transcribe TRỰC TIẾP từ REQUIREMENTS §2 (+ SF-17 areastaff). */
 const EXPECTED: Record<Role, Record<Permission, boolean>> = {
-  Coordinator: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true },
-  WarehouseOps: { 'orders.view': false, 'fulfillment.view': true, 'fulfillment.print': true },
-  Manager: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true },
+  Coordinator: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'areastaff.view': true, 'areastaff.manage': false },
+  WarehouseOps: { 'orders.view': false, 'fulfillment.view': true, 'fulfillment.print': true, 'areastaff.view': true, 'areastaff.manage': false },
+  Manager: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'areastaff.view': true, 'areastaff.manage': false },
+  Admin: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'areastaff.view': true, 'areastaff.manage': true },
 };
 
 describe('usePermissions — role matrix §2 (exhaustive)', () => {
-  it('matrix const khớp bảng §2 cho đủ 3 roles × 3 permissions', () => {
+  it('matrix const khớp bảng §2 cho đủ roles × permissions (gồm SF-17 areastaff)', () => {
     for (const role of ROLES) {
       expect([...PERMISSION_MATRIX[role]].sort()).toEqual(
         PERMISSIONS.filter((p) => EXPECTED[role][p]).sort(),

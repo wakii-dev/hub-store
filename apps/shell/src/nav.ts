@@ -16,6 +16,7 @@ export const NAV_ROUTES: NavRoute[] = [
   { path: '/hub-store-order/order', labelKey: 'nav.orders', permission: 'orders.view' },
   { path: '/hub-store-order/batch', labelKey: 'nav.batch', permission: 'fulfillment.view' },
   { path: '/hub-store-order/batch/print', labelKey: 'nav.print', permission: 'fulfillment.print' },
+  { path: '/area-staff', labelKey: 'nav.areaStaff', permission: 'areastaff.view' },
 ];
 
 /** Path đầu tiên mà role này được phép xem (dùng sau login). */

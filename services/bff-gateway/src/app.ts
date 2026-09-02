@@ -14,10 +14,12 @@ import {
   createFulfillmentClient,
   createBatchingClient,
   createPrintClient,
+  createStaffAreaClient,
 } from './clients/index.js';
 import { registerFulfillmentRoutes } from './routes/fulfillment.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
+import { registerServiceEmployeesRoutes } from './routes/serviceEmployees.js';
 import { registerAuthRoutes } from './routes/auth.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
@@ -54,18 +56,22 @@ export function buildApp(config: BffConfig): FastifyInstance {
   app.get('/healthz', async () => ({ status: 'ok' }));
 
   // gRPC clients — insecure nội bộ (spec §2); close dọn sạch khi shutdown.
+  // StaffArea (SF-17) sống trong cùng process fulfillment-service → cùng addr.
   const fulfillment = createFulfillmentClient(config.grpc.fulfillment, config.grpc.deadlineMs);
   const batching = createBatchingClient(config.grpc.batching, config.grpc.deadlineMs);
   const print = createPrintClient(config.grpc.print, config.grpc.deadlineMs);
+  const staffArea = createStaffAreaClient(config.grpc.fulfillment, config.grpc.deadlineMs);
   app.addHook('onClose', async () => {
     fulfillment.close();
     batching.close();
     print.close();
+    staffArea.close();
   });
 
   registerFulfillmentRoutes(app, { fulfillment, batching });
   registerBatchRoutes(app, batching);
   registerPrintRoutes(app, { batching, print });
+  registerServiceEmployeesRoutes(app, { staffArea });
   // DEV-ONLY — fail-safe: chỉ mount khi ENABLE_DEV_RESET_PASSWORD=1 tường minh
   // (prod/K8s không set flag → endpoint không tồn tại thay vì dựa vào doc).
   if (config.devResetPassword) {
