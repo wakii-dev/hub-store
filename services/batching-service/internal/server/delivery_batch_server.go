@@ -45,6 +45,7 @@ const (
 	bookingFailed     = "FAILED"
 	eventOrderCreated = "ORDER_CREATED"
 	eventDriverFound  = "DRIVER_FOUND"
+	eventDelivering   = "DELIVERING"
 	eventCancelled    = "CANCELLED"
 	sourceBE          = "BE"
 	sourcePartner     = "PARTNER"
@@ -636,6 +637,185 @@ func (s *DeliveryBatchServer) CancelDeliveryBatch(ctx context.Context, req *batc
 		Results:        results,
 		CancelledCount: int32(cancelled),
 		Meta:           meta(s.nvc),
+	}, nil
+}
+
+// ---------------------------------------------------------------------------
+// SearchBookingDetail — timeline advance (spec §3.4/§3.6): per planning —
+// current booking (row mới nhất chưa CANCELLED) → adapter.Detail → INSERT
+// tracking_events thiếu (idempotent UNIQUE(booking_id,status)) → sync
+// bookings.status forward → trả entry {planning_id, booking|null, timeline}.
+// ---------------------------------------------------------------------------
+
+// bookingStatusRank — thứ tự tiến triển timeline. Dùng cho sync FORWARD-ONLY:
+// bookings.status không bao giờ bị lùi khi adapter trả trạng thái "cũ" hơn DB
+// (mock Book gán DRIVER_FOUND ngay lúc đặt, Detail stateless chỉ đạt mốc đó
+// sau +1m từ bookedAt — lùi về ORDER_CREATED sẽ sai hiện trạng).
+var bookingStatusRank = map[string]int{
+	eventOrderCreated: 1,
+	eventDriverFound:  2,
+	eventDelivering:   3,
+	bookingCompleted:  4,
+	bookingFailed:     4,
+	eventCancelled:    5,
+}
+
+func (s *DeliveryBatchServer) SearchBookingDetail(ctx context.Context, req *batchingv1.SearchBookingDetailRequest) (*batchingv1.SearchBookingDetailResponse, error) {
+	if len(req.GetPlanningIds()) == 0 {
+		return nil, status.Error(grpccodes.InvalidArgument, "planning_ids is required")
+	}
+
+	// 1 tx cho cả request: advance = insert events + sync status (ghi), nên
+	// nhất quán toàn bộ (1 planning lỗi → rollback cả đợt).
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "begin tx: %v", err)
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+
+	out := make([]*batchingv1.BookingEntry, 0, len(req.GetPlanningIds()))
+	for _, raw := range req.GetPlanningIds() {
+		entry, err := s.searchOne(ctx, tx, raw)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, entry)
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "commit search: %v", err)
+	}
+	return &batchingv1.SearchBookingDetailResponse{Bookings: out, Meta: meta(s.nvc)}, nil
+}
+
+// searchOne — 1 planning: current booking → advance timeline → entry đầy đủ.
+func (s *DeliveryBatchServer) searchOne(ctx context.Context, tx pgx.Tx, rawPlanningID string) (*batchingv1.BookingEntry, error) {
+	pid, err := parsePlanningID(rawPlanningID)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.InvalidArgument, "planning_id %q: %v", rawPlanningID, err)
+	}
+
+	// Planning phải tồn tại — không → InvalidArgument (§3.6 contract SF-16).
+	var batchCode string
+	var stopOrder int32
+	err = tx.QueryRow(ctx, `SELECT batch_code, stop_order FROM shipment_plannings
+		WHERE id = $1`, pid).Scan(&batchCode, &stopOrder)
+	if err == pgx.ErrNoRows {
+		return nil, status.Errorf(grpccodes.InvalidArgument, "planning %s not found", rawPlanningID)
+	}
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "load planning %s: %v", rawPlanningID, err)
+	}
+
+	// Current booking = row mới nhất chưa CANCELLED (§3.4 — ORDER BY id DESC).
+	// Lựa chọn documented: nếu planning CHỈ có bookings CANCELLED (đã hủy,
+	// chưa rebook) → coi như chưa có book hiệu lực → entry booking=null,
+	// timeline=[] — timeline cũ giữ nguyên DB, KHÔNG advance từ adapter
+	// (guard §3.4: booking CANCELLED không nhận event từ partner).
+	var (
+		bookingID                          int64
+		carrierID, bDriver, bPhone, bPlate string
+		bStatus                            string
+		bookedAt                           time.Time
+	)
+	err = tx.QueryRow(ctx, `SELECT id, carrier_booking_id, driver_name,
+		driver_phone, license_plate, status, booked_at FROM bookings
+		WHERE planning_id = $1 AND status <> $2 ORDER BY id DESC LIMIT 1`,
+		pid, bookingCancelled).
+		Scan(&bookingID, &carrierID, &bDriver, &bPhone, &bPlate, &bStatus, &bookedAt)
+	if err == pgx.ErrNoRows {
+		// Chưa book (hoặc chỉ còn booking CANCELLED) → entry rỗng.
+		return &batchingv1.BookingEntry{
+			PlanningId: rawPlanningID,
+			Timeline:   []*batchingv1.TrackingEvent{},
+		}, nil
+	}
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "current booking %s: %v", rawPlanningID, err)
+	}
+
+	// stopAddresses cho nhánh FAILED của mock (§3.1 — address chứa substring
+	// "FAILED"); real adapter bỏ qua (timeline do provider lưu).
+	var stopAddress string
+	if err := tx.QueryRow(ctx, `SELECT customer_address FROM batch_items
+		WHERE batch_code = $1 AND stop_order = $2`, batchCode, stopOrder).
+		Scan(&stopAddress); err == nil || err == pgx.ErrNoRows {
+		// batch_items thiếu (dữ liệu lệch) → address rỗng — vẫn advance được.
+	} else {
+		return nil, status.Errorf(grpccodes.Internal, "hydrate stop %d: %v", stopOrder, err)
+	}
+
+	// current booking không bao giờ CANCELLED (query đã loại) → cancelled=false.
+	adapterStatus, events, err := s.nvc.Detail(ctx, carrierID, bookedAt, false, []string{stopAddress})
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Unavailable, "carrier detail: %v", err)
+	}
+
+	// Idempotent insert (§3.4): chỉ event CHƯA CÓ mới vào — source=PARTNER,
+	// occurred_at từ mốc của adapter. Chỉ persist milestone ĐẠT ĐƯỢC (At ≤ now):
+	// mock Detail stateless trả full timeline tính từ bookedAt (kể cả mốc
+	// tương lai — COMPLETED +30m); real adapter trả events thật nên filter
+	// này là no-op. Không filter → timeline bị ô nhiễm event tương lai.
+	now := s.now()
+	for _, ev := range events {
+		if ev.At.After(now) {
+			continue
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO shipment_tracking_events
+			(booking_id, status, source, occurred_at, note) VALUES ($1,$2,$3,$4,$5)
+			ON CONFLICT (booking_id, status) DO NOTHING`,
+			bookingID, ev.Status, sourcePartner, ev.At, ev.Note); err != nil {
+			return nil, status.Errorf(grpccodes.Internal, "tracking event %s: %v", ev.Status, err)
+		}
+	}
+
+	// Sync bookings.status = trạng thái mới nhất — forward-only (không lùi).
+	if adapterStatus != bStatus && bookingStatusRank[adapterStatus] > bookingStatusRank[bStatus] {
+		if _, err := tx.Exec(ctx, `UPDATE bookings SET status = $1 WHERE id = $2`,
+			adapterStatus, bookingID); err != nil {
+			return nil, status.Errorf(grpccodes.Internal, "sync booking %d: %v", bookingID, err)
+		}
+		bStatus = adapterStatus
+	}
+
+	// Timeline đầy đủ của current booking từ DB.
+	rows, err := tx.Query(ctx, `SELECT status, source, occurred_at,
+		COALESCE(note, '') FROM shipment_tracking_events
+		WHERE booking_id = $1 ORDER BY occurred_at, id`, bookingID)
+	if err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "timeline %s: %v", rawPlanningID, err)
+	}
+	defer rows.Close()
+	timeline := make([]*batchingv1.TrackingEvent, 0, len(events))
+	for rows.Next() {
+		var (
+			evStatus, evSource, evNote string
+			evAt                       time.Time
+		)
+		if err := rows.Scan(&evStatus, &evSource, &evAt, &evNote); err != nil {
+			return nil, status.Errorf(grpccodes.Internal, "scan timeline %s: %v", rawPlanningID, err)
+		}
+		timeline = append(timeline, &batchingv1.TrackingEvent{
+			Status: evStatus, Source: evSource,
+			OccurredAt: evAt.Format(time.RFC3339), Note: evNote,
+		})
+	}
+	if err := rows.Err(); err != nil {
+		return nil, status.Errorf(grpccodes.Internal, "scan timeline %s: %v", rawPlanningID, err)
+	}
+
+	return &batchingv1.BookingEntry{
+		PlanningId: rawPlanningID,
+		Booking: &batchingv1.BookingDetail{
+			CarrierBookingId: carrierID,
+			DriverName:       bDriver,
+			DriverPhone:      bPhone,
+			LicensePlate:     bPlate,
+			Status:           bStatus,
+			BookedAt:         bookedAt.Format(time.RFC3339),
+			// CancelledAt/CancelReason chỉ set khi CANCELLED — current booking
+			// chưa bao giờ CANCELLED nên luôn rỗng (§3.4).
+		},
+		Timeline: timeline,
 	}, nil
 }
 

@@ -739,3 +739,253 @@ func TestCancelDeliveryBatch_ResultsAndIdempotent(t *testing.T) {
 		t.Fatalf("CANCELLED events = %d, want 1 (lần 2 không thêm)", n)
 	}
 }
+
+// ---------------------------------------------------------------------------
+// T6 — SearchBookingDetail: timeline advance idempotent (spec §3.4/§3.6)
+// ---------------------------------------------------------------------------
+
+// setClock — đồng bộ clock server + mock adapter (Detail stateless tính mốc
+// theo MockClient.Now — phải cùng thời gian với server.now khi assert advance).
+func setClock(t *testing.T, srv *DeliveryBatchServer, at time.Time) {
+	t.Helper()
+	srv.SetClock(func() time.Time { return at })
+	mock, ok := srv.nvc.(*ahamove.MockClient)
+	if !ok {
+		t.Fatalf("adapter %T không phải *ahamove.MockClient", srv.nvc)
+	}
+	mock.Now = func() time.Time { return at }
+}
+
+// timelineStatuses — status các event của 1 booking theo thứ tự DB.
+func timelineStatuses(t *testing.T, ctx context.Context, pool *pgxpool.Pool, carrierID string) []string {
+	t.Helper()
+	rows, err := pool.Query(ctx, `SELECT status FROM shipment_tracking_events
+		WHERE booking_id = (SELECT id FROM bookings WHERE carrier_booking_id = $1)
+		ORDER BY occurred_at, id`, carrierID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer rows.Close()
+	var out []string
+	for rows.Next() {
+		var s string
+		if err := rows.Scan(&s); err != nil {
+			t.Fatal(err)
+		}
+		out = append(out, s)
+	}
+	return out
+}
+
+func TestSearchBookingDetail_NotBookedAndInvalidPlanningIDs(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT6-NOBOOK", "30201", "HD-201", 1, 10, 0)
+	conf, err := srv.ConfirmPlanning(ctx, confirmReq("BT6-NOBOOK", "HD-201", "SGCN", "SGCN", 1))
+	if err != nil {
+		t.Fatalf("confirm: %v", err)
+	}
+	pid := conf.GetPlannings()[0].GetPlanningId()
+
+	resp, err := srv.SearchBookingDetail(ctx, &batchingv1.SearchBookingDetailRequest{PlanningIds: []string{pid}})
+	if err != nil {
+		t.Fatalf("SearchBookingDetail: %v", err)
+	}
+	if !resp.GetMeta().GetMock() {
+		t.Fatal("meta.mock = false, want true")
+	}
+	if got := len(resp.GetBookings()); got != 1 {
+		t.Fatalf("bookings = %d, want 1", got)
+	}
+	e := resp.GetBookings()[0]
+	if e.GetPlanningId() != pid || e.GetBooking() != nil || len(e.GetTimeline()) != 0 {
+		t.Fatalf("entry = %s booking=%v timeline=%d, want %s/nil/0 (chưa book)",
+			e.GetPlanningId(), e.GetBooking(), len(e.GetTimeline()), pid)
+	}
+
+	// planning_id không parse được → InvalidArgument.
+	_, err = srv.SearchBookingDetail(ctx, &batchingv1.SearchBookingDetailRequest{PlanningIds: []string{"abc"}})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("code = %v, want InvalidArgument (parse fail)", status.Code(err))
+	}
+	// planning không tồn tại → InvalidArgument (§3.6).
+	_, err = srv.SearchBookingDetail(ctx, &batchingv1.SearchBookingDetailRequest{PlanningIds: []string{"99999999"}})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("code = %v, want InvalidArgument (not found)", status.Code(err))
+	}
+	// rỗng → InvalidArgument.
+	_, err = srv.SearchBookingDetail(ctx, &batchingv1.SearchBookingDetailRequest{})
+	if status.Code(err) != codes.InvalidArgument {
+		t.Fatalf("code = %v, want InvalidArgument (empty)", status.Code(err))
+	}
+}
+
+func TestSearchBookingDetail_RightAfterBookTimelineAndNoDowngrade(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT6-FRESH", "30201", "HD-202", 1, 10, 500000)
+
+	base := time.Now()
+	pid := confirmAndBook(t, srv, ctx, "BT6-FRESH", "HD-202")
+
+	// Search ngay (clock = base+10s < bookedAt+1m): timeline có 2 event đầu từ
+	// CreateBooking; adapter Detail trả ORDER_CREATED (mốc DRIVER_FOUND +1m
+	// chưa đến) — sync forward-only KHÔNG lùi bookings.status về ORDER_CREATED.
+	setClock(t, srv, base.Add(10*time.Second))
+	resp, err := srv.SearchBookingDetail(ctx, &batchingv1.SearchBookingDetailRequest{PlanningIds: []string{pid}})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	e := resp.GetBookings()[0]
+	if e.GetBooking() == nil {
+		t.Fatal("booking = nil, want full detail")
+	}
+	b := e.GetBooking()
+	if len(b.GetCarrierBookingId()) < 5 || b.GetCarrierBookingId()[:5] != "MOCK-" {
+		t.Fatalf("carrier_booking_id = %s, want MOCK-*", b.GetCarrierBookingId())
+	}
+	if b.GetDriverName() == "" || b.GetLicensePlate() == "" {
+		t.Fatalf("driver snapshot thiếu: %+v", b)
+	}
+	if _, err := time.Parse(time.RFC3339, b.GetBookedAt()); err != nil {
+		t.Fatalf("booked_at %q không parse RFC3339: %v", b.GetBookedAt(), err)
+	}
+	if b.GetStatus() != "DRIVER_FOUND" {
+		t.Fatalf("status = %s, want DRIVER_FOUND (không bị lùi về ORDER_CREATED)", b.GetStatus())
+	}
+	if got := timelineStatuses(t, ctx, pool, b.GetCarrierBookingId()); len(got) != 2 ||
+		got[0] != "ORDER_CREATED" || got[1] != "DRIVER_FOUND" {
+		t.Fatalf("timeline = %v, want [ORDER_CREATED DRIVER_FOUND]", got)
+	}
+	// Timeline proto có source + occurred_at RFC3339.
+	ev := e.GetTimeline()[1]
+	if ev.GetSource() != "PARTNER" {
+		t.Fatalf("DRIVER_FOUND source = %s, want PARTNER", ev.GetSource())
+	}
+	if _, err := time.Parse(time.RFC3339, ev.GetOccurredAt()); err != nil {
+		t.Fatalf("occurred_at %q không parse RFC3339: %v", ev.GetOccurredAt(), err)
+	}
+}
+
+func TestSearchBookingDetail_AdvancesToDeliveringThenIdempotent(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT6-ADV", "30201", "HD-203", 1, 10, 0)
+
+	base := time.Now()
+	pid := confirmAndBook(t, srv, ctx, "BT6-ADV", "HD-203")
+
+	// Lùi thời điểm tra cứu quá mốc DELIVERING (bookedAt + 5m — §3.1 mock):
+	// clock = base + 6m ⇒ bookedAt (≈ now) + 5m đã qua → event DELIVERING.
+	setClock(t, srv, base.Add(6*time.Minute))
+	resp, err := srv.SearchBookingDetail(ctx, &batchingv1.SearchBookingDetailRequest{PlanningIds: []string{pid}})
+	if err != nil {
+		t.Fatalf("search advance: %v", err)
+	}
+	carrierID := resp.GetBookings()[0].GetBooking().GetCarrierBookingId()
+	if resp.GetBookings()[0].GetBooking().GetStatus() != "DELIVERING" {
+		t.Fatalf("status = %s, want DELIVERING (advance qua mốc +5m)",
+			resp.GetBookings()[0].GetBooking().GetStatus())
+	}
+	// bookings.status sync đúng trong DB.
+	var dbStatus string
+	if err := pool.QueryRow(ctx, `SELECT status FROM bookings WHERE carrier_booking_id = $1`,
+		carrierID).Scan(&dbStatus); err != nil {
+		t.Fatal(err)
+	}
+	if dbStatus != "DELIVERING" {
+		t.Fatalf("bookings.status = %s, want DELIVERING", dbStatus)
+	}
+	if got := timelineStatuses(t, ctx, pool, carrierID); len(got) != 3 ||
+		got[2] != "DELIVERING" {
+		t.Fatalf("timeline = %v, want [ORDER_CREATED DRIVER_FOUND DELIVERING]", got)
+	}
+
+	// Search lần 2 — idempotent: KHÔNG thêm event, status giữ nguyên.
+	resp2, err := srv.SearchBookingDetail(ctx, &batchingv1.SearchBookingDetailRequest{PlanningIds: []string{pid}})
+	if err != nil {
+		t.Fatalf("search lần 2: %v", err)
+	}
+	if got := timelineStatuses(t, ctx, pool, carrierID); len(got) != 3 {
+		t.Fatalf("timeline lần 2 = %d events, want 3 (idempotent)", len(got))
+	}
+	if resp2.GetBookings()[0].GetBooking().GetStatus() != "DELIVERING" {
+		t.Fatalf("lần 2 status = %s, want DELIVERING",
+			resp2.GetBookings()[0].GetBooking().GetStatus())
+	}
+}
+
+func TestSearchBookingDetail_FailedBranchViaAddressMarker(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT6-FAIL", "30201", "HD-204", 1, 10, 0)
+	// Contract có chủ đích (§3.1): address chứa substring "FAILED" → nhánh
+	// FAILED của mock Detail.
+	if _, err := pool.Exec(ctx, `UPDATE batch_items SET customer_address = 'Kho FAILED 12, Q1'
+		WHERE batch_code = 'BT6-FAIL'`); err != nil {
+		t.Fatal(err)
+	}
+
+	base := time.Now()
+	pid := confirmAndBook(t, srv, ctx, "BT6-FAIL", "HD-204")
+
+	// Clock quá mốc FAILED (+35m — mock thay COMPLETED bằng FAILED).
+	setClock(t, srv, base.Add(36*time.Minute))
+	resp, err := srv.SearchBookingDetail(ctx, &batchingv1.SearchBookingDetailRequest{PlanningIds: []string{pid}})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	b := resp.GetBookings()[0].GetBooking()
+	if b.GetStatus() != "FAILED" {
+		t.Fatalf("status = %s, want FAILED (address marker)", b.GetStatus())
+	}
+	if got := timelineStatuses(t, ctx, pool, b.GetCarrierBookingId()); len(got) != 4 ||
+		got[3] != "FAILED" {
+		t.Fatalf("timeline = %v, want [... FAILED]", got)
+	}
+	var dbStatus string
+	if err := pool.QueryRow(ctx, `SELECT status FROM bookings WHERE carrier_booking_id = $1`,
+		b.GetCarrierBookingId()).Scan(&dbStatus); err != nil {
+		t.Fatal(err)
+	}
+	if dbStatus != "FAILED" {
+		t.Fatalf("bookings.status = %s, want FAILED", dbStatus)
+	}
+}
+
+func TestSearchBookingDetail_CancelledBookingNoPartnerEvents(t *testing.T) {
+	srv, pool := nvcFixture(t)
+	ctx := context.Background()
+	insertBatch(t, ctx, pool, "BT6-CXL", "30201", "HD-205", 1, 10, 0)
+	pid := confirmAndBook(t, srv, ctx, "BT6-CXL", "HD-205")
+
+	if _, err := srv.CancelDeliveryOrder(ctx, &batchingv1.CancelDeliveryOrderRequest{
+		PlanningId: pid, Reason: "guard test",
+	}); err != nil {
+		t.Fatalf("cancel: %v", err)
+	}
+	var nBefore int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM shipment_tracking_events`).Scan(&nBefore); err != nil {
+		t.Fatal(err)
+	}
+
+	// Search sau hủy: booking CANCELLED bị loại khỏi current booking (§3.4
+	// guard) → entry booking=null, timeline=[] — KHÔNG event nào từ adapter.
+	setClock(t, srv, time.Now().Add(2*time.Hour))
+	resp, err := srv.SearchBookingDetail(ctx, &batchingv1.SearchBookingDetailRequest{PlanningIds: []string{pid}})
+	if err != nil {
+		t.Fatalf("search: %v", err)
+	}
+	e := resp.GetBookings()[0]
+	if e.GetBooking() != nil || len(e.GetTimeline()) != 0 {
+		t.Fatalf("entry booking=%v timeline=%d, want nil/0 (guard CANCELLED)",
+			e.GetBooking(), len(e.GetTimeline()))
+	}
+	var nAfter int
+	if err := pool.QueryRow(ctx, `SELECT count(*) FROM shipment_tracking_events`).Scan(&nAfter); err != nil {
+		t.Fatal(err)
+	}
+	if nAfter != nBefore {
+		t.Fatalf("events %d → %d, want không đổi (guard CANCELLED)", nBefore, nAfter)
+	}
+}
