@@ -1,4 +1,4 @@
-# SF-11 — docker-compose cấu hình MẪU chạy local (KHÔNG prod deploy).
+# FI-245 SF-1 — docker-compose cấu hình MẪU chạy local (KHÔNG prod deploy).
 # 4 service images (java/go/python/node) + nginx static shell/2 remotes
 # (publicPath prod theo SPIKE 1 verdict: remoteEntry ở dist root, chunks
 # import tương đối → mỗi remote phục vụ dưới /remotes/<name>/ với --base riêng).
@@ -6,42 +6,129 @@
 #   docker compose up --build
 #   → mở http://localhost:3000
 #
-# State in-memory + canonical-seed.json mount chung → dữ liệu như dev.
+# Persistence: postgres (2 DB: fulfillment + batching, initdb qua
+# docker/postgres/initdb/) ← migrate one-shot (orders-migrate Flyway SF-2,
+# batches-migrate golang-migrate SF-3) ← db-seed (scripts/seed-db.sh,
+# emptiness-gate) ← app services. Env contract: xem .env.example.
 name: hub-store
 
 services:
+  postgres:
+    image: postgres:16.4
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-hubstore}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env (local-only, xem .env.example)}
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+      - ./docker/postgres/initdb:/docker-entrypoint-initdb.d:ro
+    ports:
+      - "5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $${POSTGRES_USER} -d postgres"]
+      interval: 5s
+      timeout: 3s
+      retries: 12
+      start_period: 5s
+
+  # One-shot migrate — schema do SF-2/SF-3 sở hữu trong service dir; SF-1 chỉ wire.
+  orders-migrate: # Flyway CLI → DB fulfillment (SF-2: services/fulfillment-service/src/main/resources/db/migration)
+    image: flyway/flyway:10.20.1
+    command: >-
+      -url=jdbc:postgresql://postgres:5432/fulfillment
+      -user=${POSTGRES_USER:-hubstore}
+      -password=${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
+      -connectRetries=10
+      -locations=filesystem:/migrations
+      migrate
+    volumes:
+      - ./services/fulfillment-service/src/main/resources/db/migration:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  batches-migrate: # golang-migrate CLI → DB batching (SF-3: services/batching-service/migrations)
+    image: migrate/migrate:v4.17.1
+    command:
+      [
+        "-path", "/migrations",
+        "-database", "postgres://${POSTGRES_USER:-hubstore}:${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}@postgres:5432/batching?sslmode=disable",
+        "up",
+      ]
+    volumes:
+      - ./services/batching-service/migrations:/migrations:ro
+    depends_on:
+      postgres:
+        condition: service_healthy
+
+  # One-shot seed cả 2 DB — cùng script với standalone dev flow (scripts/seed-db.sh).
+  db-seed:
+    image: postgres:16.4
+    entrypoint: ["bash", "/scripts/seed-db.sh"]
+    environment:
+      PGHOST: postgres
+      PGUSER: ${POSTGRES_USER:-hubstore}
+      PGPASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
+      POSTGRES_USER: ${POSTGRES_USER:-hubstore}
+      SEED_JSON: /seed/canonical-seed.json
+    volumes:
+      - ./scripts/seed-db.sh:/scripts/seed-db.sh:ro
+      - ./api/seed:/seed:ro
+    depends_on:
+      orders-migrate:
+        condition: service_completed_successfully
+      batches-migrate:
+        condition: service_completed_successfully
+
+  keycloak: # OIDC provider — realm JSON thuộc SF-4 (docker/keycloak/), password literal dev-only trong realm (KHÔNG env-substitution)
+    image: quay.io/keycloak/keycloak:26.0
+    command: ["start-dev", "--import-realm"]
+    environment:
+      KC_HTTP_PORT: "8081"
+      KEYCLOAK_ADMIN: ${KEYCLOAK_ADMIN:-admin}
+      KEYCLOAK_ADMIN_PASSWORD: ${KEYCLOAK_ADMIN_PASSWORD:?set KEYCLOAK_ADMIN_PASSWORD in root .env}
+    ports:
+      - "8081:8081"
+    volumes:
+      - ./docker/keycloak:/opt/keycloak/data/import:ro
+      - keycloak-data:/opt/keycloak/data
+    expose: ["8081"]
+
   fulfillment-service: # Java 17 gRPC :50051 (SF-3) — context root (pom ../../api/proto/gen/java)
     build:
       context: .
       dockerfile: services/fulfillment-service/Dockerfile
     environment:
-      SEED_PATH: /seed/canonical-seed.json
-    volumes:
-      - ./api/seed:/seed:ro
+      FULFILLMENT_DB_HOST: postgres
+      FULFILLMENT_DB_PORT: "5432"
+      FULFILLMENT_DB_NAME: fulfillment
+      FULFILLMENT_DB_USER: ${POSTGRES_USER:-hubstore}
+      FULFILLMENT_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
+    depends_on:
+      db-seed:
+        condition: service_completed_successfully
     expose: ["50051"]
 
-  batching-service: # Go gRPC :50052 (SF-4)
+  batching-service: # Go gRPC :50052 (SF-4) — boot độc lập (KHÔNG depends fulfillment-service)
     build:
       context: .
       dockerfile: services/batching-service/Dockerfile
     environment:
-      CANONICAL_SEED_PATH: /seed/canonical-seed.json
+      BATCHING_DB_HOST: postgres
+      BATCHING_DB_PORT: "5432"
+      BATCHING_DB_NAME: batching
+      BATCHING_DB_USER: ${POSTGRES_USER:-hubstore}
+      BATCHING_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
       FULFILLMENT_ADDR: fulfillment-service:50051
       BATCHING_PORT: "50052"
-    volumes:
-      - ./api/seed:/seed:ro
     depends_on:
-      - fulfillment-service
+      db-seed:
+        condition: service_completed_successfully
     expose: ["50052"]
 
   print-service: # Python gRPC :50053 (SF-5) — context root (_proto.py parents[3])
     build:
       context: .
       dockerfile: services/print-service/Dockerfile
-    environment:
-      PRINT_SERVICE_SEED_PATH: /seed/canonical-seed.json
-    volumes:
-      - ./api/seed:/seed:ro
     expose: ["50053"]
 
   bff: # Node Fastify REST :8080 (SF-6)
@@ -54,6 +141,9 @@ services:
       GRPC_BATCHING: batching-service:50052
       GRPC_PRINT: print-service:50053
       BFF_CORS_ORIGINS: http://localhost:3000
+      OIDC_ISSUER: http://localhost:8081 # claim iss + browser redirect (public)
+      OIDC_AUDIENCE: hubstore-api
+      OIDC_JWKS_URL: http://keycloak:8081 # JWKS fetch trong network compose — URL riêng (gotcha Keycloak-in-Docker)
     depends_on:
       - fulfillment-service
       - batching-service
@@ -68,3 +158,8 @@ services:
       - "3000:3000"
     depends_on:
       - bff
+
+volumes:
+  pgdata:
+  keycloak-data:
+    name: keycloak-data # name tường minh — scripts/reset-db.sh xóa đúng volume
