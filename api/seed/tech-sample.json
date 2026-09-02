@@ -188,7 +188,7 @@
       "status": "NEW",
       "expectedTime": "2026-09-02T08:00:00+07:00",
       "timeline": [
-        { "action": "CREATE", "timestamp": "2026-09-02T07:00:00+07:00", "note": "Tạo đơn lắp máy giặt TD-0001" }
+        { "at": "2026-09-02T07:00:00+07:00", "status": "NEW", "note": "Tạo đơn lắp máy giặt TD-0001", "actor": "system" }
       ],
       "serviceFee": 200000,
       "feeAdjust": 0,
@@ -205,8 +205,8 @@
       "status": "CONFIRMED",
       "expectedTime": "2026-09-02T09:00:00+07:00",
       "timeline": [
-        { "action": "CREATE", "timestamp": "2026-09-02T07:30:00+07:00", "note": "Tạo đơn lắp TV TD-0002" },
-        { "action": "CONFIRM", "timestamp": "2026-09-02T08:00:00+07:00", "note": "Khách xác nhận lịch" }
+        { "at": "2026-09-02T07:30:00+07:00", "status": "NEW", "note": "Tạo đơn lắp TV TD-0002", "actor": "system" },
+        { "at": "2026-09-02T08:00:00+07:00", "status": "CONFIRMED", "note": "Khách xác nhận lịch", "actor": "system" }
       ],
       "serviceFee": 250000,
       "feeAdjust": 0,
@@ -223,8 +223,8 @@
       "status": "RESCHEDULED",
       "expectedTime": null,
       "timeline": [
-        { "action": "CREATE", "timestamp": "2026-09-02T06:45:00+07:00", "note": "Tạo đơn lắp loa TD-0003" },
-        { "action": "RESCHEDULE", "timestamp": "2026-09-02T07:15:00+07:00", "note": "Khách xin dời — chờ khách chọn lại lịch" }
+        { "at": "2026-09-02T06:45:00+07:00", "status": "NEW", "note": "Tạo đơn lắp loa TD-0003", "actor": "system" },
+        { "at": "2026-09-02T07:15:00+07:00", "status": "RESCHEDULED", "note": "Khách xin dời — chờ khách chọn lại lịch", "actor": "system" }
       ],
       "serviceFee": 150000,
       "feeAdjust": 0,
@@ -241,9 +241,9 @@
       "status": "PROCESSING",
       "expectedTime": "2026-09-02T10:00:00+07:00",
       "timeline": [
-        { "action": "CREATE", "timestamp": "2026-09-02T07:00:00+07:00", "note": "Tạo đơn lắp máy giặt TD-0004" },
-        { "action": "ASSIGN", "timestamp": "2026-09-02T07:20:00+07:00", "note": "Gán KTV-001", "technicianCode": "KTV-001" },
-        { "action": "ACCEPT", "timestamp": "2026-09-02T07:25:00+07:00", "note": "KTV-001 nhận việc", "technicianCode": "KTV-001" }
+        { "at": "2026-09-02T07:00:00+07:00", "status": "NEW", "note": "Tạo đơn lắp máy giặt TD-0004", "actor": "system" },
+        { "at": "2026-09-02T07:20:00+07:00", "status": "PROCESSING", "note": "Gán KTV-001", "actor": "KTV-001" },
+        { "at": "2026-09-02T07:25:00+07:00", "status": "PROCESSING", "note": "KTV-001 nhận việc", "actor": "KTV-001" }
       ],
       "serviceFee": 220000,
       "feeAdjust": 20000,
@@ -260,8 +260,8 @@
       "status": "SHIPPING",
       "expectedTime": "2026-09-02T11:00:00+07:00",
       "timeline": [
-        { "action": "CREATE", "timestamp": "2026-09-02T07:10:00+07:00", "note": "Tạo đơn lắp tủ lạnh TD-0005" },
-        { "action": "ASSIGN", "timestamp": "2026-09-02T07:30:00+07:00", "note": "Gán KTV-002", "technicianCode": "KTV-002" }
+        { "at": "2026-09-02T07:10:00+07:00", "status": "NEW", "note": "Tạo đơn lắp tủ lạnh TD-0005", "actor": "system" },
+        { "at": "2026-09-02T07:30:00+07:00", "status": "PROCESSING", "note": "Gán KTV-002", "actor": "KTV-002" }
       ],
       "serviceFee": 180000,
       "feeAdjust": 0,
@@ -278,9 +278,9 @@
       "status": "DELIVERED",
       "expectedTime": "2026-09-02T13:00:00+07:00",
       "timeline": [
-        { "action": "CREATE", "timestamp": "2026-09-02T08:00:00+07:00", "note": "Tạo đơn lắp TV TD-0006" },
-        { "action": "ASSIGN", "timestamp": "2026-09-02T08:10:00+07:00", "note": "Gán KTV-003", "technicianCode": "KTV-003" },
-        { "action": "COMPLETE", "timestamp": "2026-09-02T13:30:00+07:00", "note": "Hoàn tất lắp đặt", "technicianCode": "KTV-003" }
+        { "at": "2026-09-02T08:00:00+07:00", "status": "NEW", "note": "Tạo đơn lắp TV TD-0006", "actor": "system" },
+        { "at": "2026-09-02T08:10:00+07:00", "status": "PROCESSING", "note": "Gán KTV-003", "actor": "KTV-003" },
+        { "at": "2026-09-02T13:30:00+07:00", "status": "DELIVERED", "note": "Hoàn tất lắp đặt", "actor": "KTV-003" }
       ],
       "serviceFee": 260000,
       "feeAdjust": -20000,
@@ -297,9 +297,9 @@
       "status": "FAILED",
       "expectedTime": "2026-09-02T14:00:00+07:00",
       "timeline": [
-        { "action": "CREATE", "timestamp": "2026-09-02T08:30:00+07:00", "note": "Tạo đơn lắp máy giặt TD-0007" },
-        { "action": "ASSIGN", "timestamp": "2026-09-02T08:40:00+07:00", "note": "Gán CTV-001", "technicianCode": "CTV-001" },
-        { "action": "FAIL", "timestamp": "2026-09-02T14:20:00+07:00", "note": "Thiếu phụ kiện nước — thất bại", "technicianCode": "CTV-001" }
+        { "at": "2026-09-02T08:30:00+07:00", "status": "NEW", "note": "Tạo đơn lắp máy giặt TD-0007", "actor": "system" },
+        { "at": "2026-09-02T08:40:00+07:00", "status": "PROCESSING", "note": "Gán CTV-001", "actor": "CTV-001" },
+        { "at": "2026-09-02T14:20:00+07:00", "status": "FAILED", "note": "Thiếu phụ kiện nước — thất bại", "actor": "CTV-001" }
       ],
       "serviceFee": 200000,
       "feeAdjust": 0,
@@ -316,8 +316,8 @@
       "status": "REDELIVERY",
       "expectedTime": "2026-09-02T15:00:00+07:00",
       "timeline": [
-        { "action": "CREATE", "timestamp": "2026-09-02T09:00:00+07:00", "note": "Tạo đơn lắp loa TD-0008" },
-        { "action": "ASSIGN", "timestamp": "2026-09-02T09:10:00+07:00", "note": "Gán CTV-002", "technicianCode": "CTV-002" }
+        { "at": "2026-09-02T09:00:00+07:00", "status": "NEW", "note": "Tạo đơn lắp loa TD-0008", "actor": "system" },
+        { "at": "2026-09-02T09:10:00+07:00", "status": "PROCESSING", "note": "Gán CTV-002", "actor": "CTV-002" }
       ],
       "serviceFee": 140000,
       "feeAdjust": 0,

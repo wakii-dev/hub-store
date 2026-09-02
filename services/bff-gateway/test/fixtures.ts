@@ -82,7 +82,7 @@ export const fixtureTechInstallationOrder: ProtoInstallationOrder = {
   status: DeliveryStatus.DELIVERY_STATUS_CONFIRMED,
   expectedTime: '2026-09-03T08:00:00+07:00',
   timelineJson:
-    '[{"at":"2026-09-01T10:00:00+07:00","action":"ASSIGNED","by":"KTV-001"},{"at":"2026-09-01T11:00:00+07:00","action":"CONFIRMED","by":"KTV-001"}]',
+    '[{"at":"2026-09-01T10:00:00+07:00","status":"NEW","note":"Tạo đơn lắp đặt SO-0001","actor":"system"},{"at":"2026-09-01T11:00:00+07:00","status":"CONFIRMED","note":"KTV-001 nhận việc","actor":"KTV-001"}]',
   serviceFee: 150000,
   feeAdjust: 0,
   items: [

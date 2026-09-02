@@ -108,7 +108,13 @@ describe('SF-19 — POST /service-orders/filter', () => {
     expect(item.serviceOrderCode).toBe('SO-0001');
     expect(Array.isArray(item.timeline)).toBe(true);
     expect(item.timeline).toHaveLength(2);
-    expect(item.timeline[0].action).toBe('ASSIGNED');
+    // Spec §3.2: timeline = [{at, status, note, actor}].
+    expect(item.timeline[0]).toMatchObject({
+      at: '2026-09-01T10:00:00+07:00',
+      status: 'NEW',
+      note: 'Tạo đơn lắp đặt SO-0001',
+      actor: 'system',
+    });
   });
 
   it('timeline JSON lỗi → fallback raw string (không crash)', async () => {

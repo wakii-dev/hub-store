@@ -335,8 +335,10 @@ class PostgresTechOrderRepositoryIT {
     @Test
     void filterInstallation_dateFilterExcludesNullExpectedTimeParity() {
         // SO-0003 expectedTime NULL → bị loại khi có date filter (cả 2 impl).
-        LocalDate today = LocalDate.now();
-        var f = installationFilter(null, null, null, null, null, null, today, today, 1, 100);
+        // Seed expectedTime static 2026-09-02 → filter theo seed date (không LocalDate.now()
+        // — test sẽ vỡ sau ngày seed). Same pattern TechServiceLogicTest.
+        LocalDate d = LocalDate.parse("2026-09-02");
+        var f = installationFilter(null, null, null, null, null, null, d, d, 1, 100);
         var p = pg.filterInstallation(f);
         var m = mem.filterInstallation(f);
         assertThat(p.total()).isEqualTo(m.total()).isEqualTo(7L);
