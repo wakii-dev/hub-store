@@ -69,8 +69,8 @@ DAG: T1 → T2 → T3 → T6 → T7; T2 → T4 → T6; T2 → T5 → T7. T7 deps
 - Regen: `api/proto/gen/{ts,java,go}`
 
 **Steps:**
-- [ ] **Step 1: Verify free version** — `ls services/fulfillment-service/src/main/resources/db/migration/` → chỉ có V1__orders_schema.sql. Nếu đã có V5 (sibling SF merged) → STOP + escalate (collision).
-- [ ] **Step 2: Write V5__d2c_orders.sql:**
+- [x] **Step 1: Verify free version** — `ls services/fulfillment-service/src/main/resources/db/migration/` → chỉ có V1__orders_schema.sql. Nếu đã có V5 (sibling SF merged) → STOP + escalate (collision).
+- [x] **Step 2: Write V5__d2c_orders.sql:**
 
 ```sql
 -- SF-18 (FI-263): D2C/Dropship orders.
@@ -104,7 +104,7 @@ CREATE INDEX idx_d2c_push_time ON d2c_orders(push_time);
 CREATE INDEX idx_d2c_created_at ON d2c_orders(created_at);
 ```
 
-- [ ] **Step 3: Append proto messages + RPCs** (KHÔNG đổi message/RPC cũ — tìm section cuối service FulfillmentService và append):
+- [x] **Step 3: Append proto messages + RPCs** (KHÔNG đổi message/RPC cũ — tìm section cuối service FulfillmentService và append):
 
 ```protobuf
 // --- SF-18 D2C/Dropship (additive only) ---
@@ -169,9 +169,9 @@ Thêm vào `service FulfillmentService`:
 ```
 (imports: đảm bảo `google/protobuf/timestamp.proto` đã import — có sẵn trong file.)
 
-- [ ] **Step 4: Buf regen cả 3 ngôn ngữ** — tìm lệnh regen hiện có (`grep -rn "buf generate" api/proto/ Makefile* package.json scripts/ 2>/dev/null`; thường là `cd api/proto && buf generate`). Verify gen ts/java/go chứa D2cOrder.
-- [ ] **Step 5: Boot check migration** — `docker compose up -d postgres && cd services/fulfillment-service && mvn -q compile` rồi boot nhanh (hoặc chạy flyway migrate qua app boot) → bảng d2c_orders tồn tại: `docker compose exec postgres psql -U <user> -d fulfillment -c '\d d2c_orders'`.
-- [ ] **Step 6: Commit** `feat(fi245-sf18): d2c_orders schema V5 + additive proto FilterD2cOrders/UpdateD2cOrderNote`
+- [x] **Step 4: Buf regen cả 3 ngôn ngữ** — tìm lệnh regen hiện có (`grep -rn "buf generate" api/proto/ Makefile* package.json scripts/ 2>/dev/null`; thường là `cd api/proto && buf generate`). Verify gen ts/java/go chứa D2cOrder.
+- [x] **Step 5: Boot check migration** — `docker compose up -d postgres && cd services/fulfillment-service && mvn -q compile` rồi boot nhanh (hoặc chạy flyway migrate qua app boot) → bảng d2c_orders tồn tại: `docker compose exec postgres psql -U <user> -d fulfillment -c '\d d2c_orders'`.
+- [x] **Step 6: Commit** `feat(fi245-sf18): d2c_orders schema V5 + additive proto FilterD2cOrders/UpdateD2cOrderNote`
 
 ### Task 2: Java D2cOrderRepository + gRPC impl + tests
 

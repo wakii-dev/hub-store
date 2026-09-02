@@ -47,6 +47,10 @@ type FulfillmentServiceClient interface {
 	ListDistinctShops(ctx context.Context, in *ListDistinctShopsRequest, opts ...grpc.CallOption) (*ListDistinctShopsResponse, error)
 	// GET /order-promising/time-delivery — hint TG giao cạnh DatePicker (D4, D1b).
 	GetTimeDelivery(ctx context.Context, in *GetTimeDeliveryRequest, opts ...grpc.CallOption) (*GetTimeDeliveryResponse, error)
+	// SF-18: D2C/Dropship list — filter đa chiều + pagination.
+	FilterD2COrders(ctx context.Context, in *FilterD2COrdersRequest, opts ...grpc.CallOption) (*FilterD2COrdersResponse, error)
+	// SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
+	UpdateD2COrderNote(ctx context.Context, in *UpdateD2COrderNoteRequest, opts ...grpc.CallOption) (*UpdateD2COrderNoteResponse, error)
 }
 
 type fulfillmentServiceClient struct {
@@ -165,6 +169,24 @@ func (c *fulfillmentServiceClient) GetTimeDelivery(ctx context.Context, in *GetT
 	return out, nil
 }
 
+func (c *fulfillmentServiceClient) FilterD2COrders(ctx context.Context, in *FilterD2COrdersRequest, opts ...grpc.CallOption) (*FilterD2COrdersResponse, error) {
+	out := new(FilterD2COrdersResponse)
+	err := c.cc.Invoke(ctx, "/hubstore.fulfillment.v1.FulfillmentService/FilterD2cOrders", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) UpdateD2COrderNote(ctx context.Context, in *UpdateD2COrderNoteRequest, opts ...grpc.CallOption) (*UpdateD2COrderNoteResponse, error) {
+	out := new(UpdateD2COrderNoteResponse)
+	err := c.cc.Invoke(ctx, "/hubstore.fulfillment.v1.FulfillmentService/UpdateD2cOrderNote", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FulfillmentServiceServer is the server API for FulfillmentService service.
 // All implementations must embed UnimplementedFulfillmentServiceServer
 // for forward compatibility
@@ -194,6 +216,10 @@ type FulfillmentServiceServer interface {
 	ListDistinctShops(context.Context, *ListDistinctShopsRequest) (*ListDistinctShopsResponse, error)
 	// GET /order-promising/time-delivery — hint TG giao cạnh DatePicker (D4, D1b).
 	GetTimeDelivery(context.Context, *GetTimeDeliveryRequest) (*GetTimeDeliveryResponse, error)
+	// SF-18: D2C/Dropship list — filter đa chiều + pagination.
+	FilterD2COrders(context.Context, *FilterD2COrdersRequest) (*FilterD2COrdersResponse, error)
+	// SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
+	UpdateD2COrderNote(context.Context, *UpdateD2COrderNoteRequest) (*UpdateD2COrderNoteResponse, error)
 	mustEmbedUnimplementedFulfillmentServiceServer()
 }
 
@@ -236,6 +262,12 @@ func (UnimplementedFulfillmentServiceServer) ListDistinctShops(context.Context, 
 }
 func (UnimplementedFulfillmentServiceServer) GetTimeDelivery(context.Context, *GetTimeDeliveryRequest) (*GetTimeDeliveryResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method GetTimeDelivery not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) FilterD2COrders(context.Context, *FilterD2COrdersRequest) (*FilterD2COrdersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method FilterD2COrders not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) UpdateD2COrderNote(context.Context, *UpdateD2COrderNoteRequest) (*UpdateD2COrderNoteResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method UpdateD2COrderNote not implemented")
 }
 func (UnimplementedFulfillmentServiceServer) mustEmbedUnimplementedFulfillmentServiceServer() {}
 
@@ -466,6 +498,42 @@ func _FulfillmentService_GetTimeDelivery_Handler(srv interface{}, ctx context.Co
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FulfillmentService_FilterD2COrders_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(FilterD2COrdersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).FilterD2COrders(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/hubstore.fulfillment.v1.FulfillmentService/FilterD2cOrders",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).FilterD2COrders(ctx, req.(*FilterD2COrdersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_UpdateD2COrderNote_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(UpdateD2COrderNoteRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).UpdateD2COrderNote(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/hubstore.fulfillment.v1.FulfillmentService/UpdateD2cOrderNote",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).UpdateD2COrderNote(ctx, req.(*UpdateD2COrderNoteRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FulfillmentService_ServiceDesc is the grpc.ServiceDesc for FulfillmentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -520,6 +588,14 @@ var FulfillmentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "GetTimeDelivery",
 			Handler:    _FulfillmentService_GetTimeDelivery_Handler,
+		},
+		{
+			MethodName: "FilterD2cOrders",
+			Handler:    _FulfillmentService_FilterD2COrders_Handler,
+		},
+		{
+			MethodName: "UpdateD2cOrderNote",
+			Handler:    _FulfillmentService_UpdateD2COrderNote_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
