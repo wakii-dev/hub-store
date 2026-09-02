@@ -126,6 +126,9 @@ export function parseOrdersFile(filename: string, buffer: Buffer): ParseOrdersRe
   if (ext === 'csv') {
     matrix = buffer
       .toString('utf8')
+      // Excel-saved CSV có UTF-8 BOM — không strip thì header đầu thành
+      // "\uFEFFcustomerName" → mọi cột báo "Cột không hợp lệ" row 0.
+      .replace(/^\uFEFF/, '')
       .split(/\r?\n/)
       .filter((l, i, arr) => !(l === '' && i === arr.length - 1))
       .map(parseCsvLine);

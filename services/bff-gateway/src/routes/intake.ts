@@ -17,14 +17,14 @@
  * index placeholder và DROP resp.errors của các row đó (placeholder sinh ~4
  * validation errors rác/row — không lọc thì preview sai).
  */
-import type { FastifyInstance, FastifyReply } from 'fastify';
+import type { FastifyInstance } from 'fastify';
 import type { IntakeOrderDto } from '@hub-store/shared';
 import type { IntakeApi, FulfillmentApi, BatchingApi } from '../clients/index.js';
 import type { RawRow } from '../lib/parseOrdersFile.js';
 import { parseOrdersFile, templateCsv } from '../lib/parseOrdersFile.js';
 import { SERVICE_NAMES } from '../config.js';
 import { requireUser, requireRole } from '../plugins/auth.js';
-import { sendGrpcError, grpcError } from '../lib/grpc-error.js';
+import { sendGrpcError, sendBadRequest, grpcError } from '../lib/grpc-error.js';
 import { errorEnvelope } from '../lib/envelope.js';
 import { toProtoIntakeOrder, mapImportError, mapAuditEntry } from '../mappers/intake.js';
 import { mapOrderItem } from '../mappers/fulfillment.js';
@@ -33,14 +33,6 @@ export interface IntakeRouteDeps {
   intake: IntakeApi;
   fulfillment: FulfillmentApi;
   batching: BatchingApi;
-}
-
-function forbidden(reply: FastifyReply): void {
-  void reply.code(403).send(
-    errorEnvelope(403, 'Only WarehouseOps can perform this operation.', {
-      code: 'PERMISSION_DENIED',
-    }),
-  );
 }
 
 export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps): void {
@@ -144,9 +136,16 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
   app.post<{ Body: { orders: IntakeOrderDto[] } }>('/orders/import/confirm', async (request, reply) => {
     if (requireRole(request, reply, 'Coordinator') === null) return reply;
     const user = requireUser(request);
+    const orders = request.body?.orders;
+    if (!Array.isArray(orders) || orders.length === 0) {
+      // Thiếu/rỗng orders → 422, không confirm "im lặng" 200 [].
+      return sendBadRequest(reply, [
+        { field: 'orders', message: 'Danh sách đơn cần xác nhận là bắt buộc và phải khác rỗng.' },
+      ]);
+    }
     try {
       const resp = await intake.confirmImportOrders(
-        { orders: (request.body.orders ?? []).map(toProtoIntakeOrder) },
+        { orders: orders.map(toProtoIntakeOrder) },
         user.role,
         user.sub,
       );
@@ -177,11 +176,19 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     async (request, reply) => {
       if (requireRole(request, reply, 'WarehouseOps') === null) return reply;
       const user = requireUser(request);
+      // Validate reason tại BFF — thiếu/không phải int 0-3 → 422 (không để NaN
+      // rơi xuống gRPC serializer → 500).
+      const reason = Number(request.body?.reason);
+      if (!Number.isInteger(reason) || reason < 0 || reason > 3) {
+        return sendBadRequest(reply, [
+          { field: 'reason', message: 'reason là số nguyên 0-3 (lý do giao thất bại).' },
+        ]);
+      }
       try {
         await intake.markOrderFailed(
           {
             fulfillCode: request.params.code,
-            reason: Number(request.body.reason),
+            reason,
             note: request.body.note ?? '',
           },
           user.role,

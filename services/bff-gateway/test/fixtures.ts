@@ -55,7 +55,7 @@ export const fixtureOrder: HubStoreOrderFilterItem = {
   customerAddress: 'Số 1 Trịnh Văn Bô',
   distance: 4.2,
   note: '',
-  // SF-13 additive fields (proto fields 21+ — required strings).
+  // SF-13 additive fields (proto fields 16-20 — required strings).
   customerName: 'Nguyễn Văn A',
   customerPhone: '0912345678',
   failReason: '',
