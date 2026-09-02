@@ -22,3 +22,9 @@ fulfillment:
   # Nguồn dữ liệu duy nhất: api/seed/canonical-seed.json (SF-2 authored).
   # Rỗng = auto-resolve (README): SEED_PATH > ../../api/seed > ../api/seed > api/seed.
   seed-path: ${SEED_PATH:}
+
+payment:
+  verify:
+    # SF-17: chọn PaymentAccountVerifier — mock (default) | zalopay.
+    # zalopay yêu cầu env ZALOPAY_APP_ID/ZALOPAY_KEY1 (fail-loud lúc boot nếu thiếu).
+    provider: ${PAYMENT_VERIFY_PROVIDER:mock}

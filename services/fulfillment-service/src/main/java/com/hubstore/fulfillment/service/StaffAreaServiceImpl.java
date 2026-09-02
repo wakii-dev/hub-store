@@ -33,8 +33,8 @@ import java.util.regex.Pattern;
  * Validate (spec SF-17 §5): employee_code ^[A-Z0-9_-]{3,32}$; payment_account
  * ^\d{9,16}$; title non-blank ≤32; full_name non-blank; region_codes cap 100.
  *
- * VerifyPaymentAccount: bản task 2 dùng MOCK inline (match ^\d{9,16}$, message
- * tag [MOCK]); task 3 thay bằng adapter PaymentAccountVerifier dual-mode.
+ * VerifyPaymentAccount: delegate adapter PaymentAccountVerifier (dual-mode:
+ * mock mặc định, zalopay qua PAYMENT_VERIFY_PROVIDER — spec SF-17 §5).
  */
 @GrpcService
 public class StaffAreaServiceImpl extends StaffAreaServiceGrpc.StaffAreaServiceImplBase {
@@ -46,9 +46,12 @@ public class StaffAreaServiceImpl extends StaffAreaServiceGrpc.StaffAreaServiceI
     static final int MAX_REGIONS = 100;
 
     private final ServiceEmployeeRepository repo;
+    private final com.hubstore.fulfillment.payment.PaymentAccountVerifier paymentVerifier;
 
-    public StaffAreaServiceImpl(ServiceEmployeeRepository repo) {
+    public StaffAreaServiceImpl(ServiceEmployeeRepository repo,
+                                com.hubstore.fulfillment.payment.PaymentAccountVerifier paymentVerifier) {
         this.repo = repo;
+        this.paymentVerifier = paymentVerifier;
     }
 
     // ---------------- reads ----------------
@@ -165,13 +168,13 @@ public class StaffAreaServiceImpl extends StaffAreaServiceGrpc.StaffAreaServiceI
     public void verifyPaymentAccount(VerifyPaymentAccountRequest request,
                                      StreamObserver<VerifyPaymentAccountResponse> responseObserver) {
         try {
-            boolean valid = PAYMENT_ACCOUNT_PATTERN.matcher(request.getPaymentAccount()).matches();
+            // Delegate adapter dual-mode (mock default / zalopay qua env) — task 3.
+            com.hubstore.fulfillment.payment.PaymentAccountVerifier.VerifyResult r =
+                    paymentVerifier.verify(request.getPaymentAccount().trim());
             responseObserver.onNext(VerifyPaymentAccountResponse.newBuilder()
-                    .setValid(valid)
-                    .setSource("MOCK")
-                    .setMessage(valid
-                            ? "[MOCK] Số TK hợp lệ (9-16 chữ số)."
-                            : "[MOCK] Số TK không hợp lệ — phải có 9-16 chữ số.")
+                    .setValid(r.valid())
+                    .setSource(r.source() == null ? "" : r.source())
+                    .setMessage(r.message() == null ? "" : r.message())
                     .build());
             responseObserver.onCompleted();
         } catch (RuntimeException e) {
