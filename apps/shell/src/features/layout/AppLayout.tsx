@@ -37,7 +37,7 @@ function GradientLogo({ size }: { size: number }) {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        color: '#FFFFFF',
+        color: DESIGN_TOKENS.color.bgWhite,
         fontWeight: 700,
         fontSize: size * 0.42,
         flexShrink: 0,
@@ -143,7 +143,7 @@ export default function AppLayout(props: {
                 height: 28,
                 borderRadius: '50%',
                 background: DESIGN_TOKENS.color.primaryGradient,
-                color: '#FFFFFF',
+                color: DESIGN_TOKENS.color.bgWhite,
                 fontSize: 11,
                 fontWeight: 700,
                 display: 'inline-flex',
@@ -199,7 +199,7 @@ export default function AppLayout(props: {
                     borderRadius: DESIGN_TOKENS.radius.lg,
                     fontSize: 17,
                     textDecoration: 'none',
-                    color: active ? '#FFFFFF' : DESIGN_TOKENS.color.textFaint,
+                    color: active ? DESIGN_TOKENS.color.bgWhite : DESIGN_TOKENS.color.textFaint,
                   }}
                   data-testid={`nav-${item.labelKey.split('.')[1]}`}
                 >

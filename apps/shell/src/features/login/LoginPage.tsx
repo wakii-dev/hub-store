@@ -56,7 +56,7 @@ export default function LoginPage() {
               display: 'flex',
               alignItems: 'center',
               justifyContent: 'center',
-              color: '#FFFFFF',
+              color: DESIGN_TOKENS.color.bgWhite,
               fontWeight: 700,
               fontSize: 17,
             }}
