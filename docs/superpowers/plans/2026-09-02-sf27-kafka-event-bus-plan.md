@@ -33,8 +33,12 @@ Mutation order/batch không observable — không thể build realtime/notificat
 Approach A (spec) — dual-listener KRaft, profile `kafka`, best-effort producers, conditional beans. Chi tiết + edge cases: xem spec §2-§9 (8 design decisions, gồm deviation #6 KHÔNG depends_on).
 
 ## 5. Implementation outline
-Tasks 1-7 (DAG): T1 infra → T2 envelope → T3 Java / T4 Go / T5 BFF (song song được sau T2) → T6 e2e → T7 acceptance verify.
-Testing: unit per-language + e2e skip-mode + manual runbook (§7 spec).
+Tasks 1-7, DAG 4 tiers (plan-critic: T1/T2 disjoint — parallel tier 1):
+- Tier 1: T1 compose-infra ∥ T2 envelope
+- Tier 2: T3 java ∥ T4 go ∥ T5 bff (deps T2; T3 thêm cần T1 cho integration verify ở T7)
+- Tier 3: T6 e2e (deps T1+T3+T4+T5)
+- Tier 4: T7 acceptance verify (deps T6)
+Testing: unit per-language + e2e skip-mode + enabled runbook (§7 spec) + chaos.
 
 ## 6. Risks & unknowns
 - kafka-go v0.4.47 go 1.15 ✓ (verified raw go.mod)
@@ -159,14 +163,13 @@ KAFKA_BOOTSTRAP_SERVERS=localhost:9092
 - [ ] **Step 4: verify config + commit**
 
 ```bash
-docker/kafka/init-topics.sh || true  # chmod +x trước
 chmod +x docker/kafka/init-topics.sh
 docker compose config --quiet && echo "compose OK"
 git add docker-compose.yml .env.example docker/kafka/init-topics.sh
 git commit -m "feat(fi245-sf27): compose kafka KRaft dual-listener + kafka-ui + topics init + env wiring"
 ```
 
-Expected: `docker compose config` không lỗi; 3 services mới có `profiles: ["kafka"]`.
+Expected: `docker compose config` không lỗi; 3 services mới có `profiles: ["kafka"]`. (Verify topics THẬT ở T7 — script trỏ kafka:29092 chỉ resolve trong compose network.)
 
 ### Task 2: Event envelope — TS canonical + fixture + copy Java/Go
 
@@ -207,7 +210,7 @@ export function topicFor(type: EventType): string {
 }
 ```
 
-- [ ] **Step 2: fixture (dùng chung cho Java/Go golden tests)**
+- [ ] **Step 2: fixture (canonical — Go golden test so khớp toàn vẹn; Java test build envelope riêng nhưng cùng shape)**
 
 `packages/shared/src/events/envelope.fixture.json`:
 ```json
@@ -358,14 +361,22 @@ public class KafkaEventPublisher implements OrderEventPublisher {
         String topic = type.startsWith("batch.") ? "batch-events" : "order-events";
         String json = EventEnvelope.of(type, payload).toJson();
         try {
-            template.send(topic, key, json).get(5, TimeUnit.SECONDS);
+            // Fire-and-forget — KHÔNG .get(): mutateOrderStatus publish per-order
+            // trên success path; .get() với kafka chết = N×timeout block RPC → vỡ
+            // chaos acceptance. Producer props (delivery.timeout.ms=5000) đã bound.
+            template.send(topic, key, json).whenComplete((meta, ex) -> {
+                if (ex != null) {
+                    log.warn("fulfillment: kafka publish {} key={} failed (best-effort): {}",
+                            type, key, ex.getMessage());
+                }
+            });
         } catch (Exception e) {
             log.warn("fulfillment: kafka publish {} key={} failed (best-effort): {}", type, key, e.getMessage());
         }
     }
 }
 ```
-(Lưu ý: `.get(5s)` để bounded — cùng tác dụng delivery.timeout 5s, không treo thread vô hạn.)
+(Import `java.util.concurrent.TimeUnit` KHÔNG cần nữa.)
 
 `events/NoopEventPublisher.java`:
 ```java
@@ -439,6 +450,13 @@ Hook 2 — trong `mutateOrderStatus`, trong vòng lặp `for (SeedModels.OrderSe
                 }
                 // target 1 (PREPARING) không publish — đủ bởi batch.created (Go).
 ```
+Empty-result branch (spec-critic carry-in): trong `mutateOrderStatus`, sau vòng lặp (hoặc ngay trước), nếu `updated.isEmpty() && !codes.isEmpty()`:
+```java
+            if (updated.isEmpty() && !codes.isEmpty()) {
+                log.warn("fulfillment: mutateOrderStatus updated none of {} codes — skip publish", codes.size());
+            }
+```
+(fulfillment-service dùng `@Slf4j`? — kiểm tra: class hiện có logger không; nếu không thêm `private static final Logger log = LoggerFactory.getLogger(FulfillmentServiceImpl.class);`)
 
 Update mọi test/constructor call `new FulfillmentServiceImpl(repo)` → `new FulfillmentServiceImpl(repo, new NoopEventPublisher())` (grep tìm).
 
@@ -668,27 +686,32 @@ import (
 )
 
 func TestEnvelopeGoldenShape(t *testing.T) {
-	// Fixture canonical: packages/shared/src/events/envelope.fixture.json
+	// Fixture canonical: packages/shared/src/events/envelope.fixture.json —
+	// payload ĐẦY ĐỜ (gồm targetShop) để DeepEqual có nghĩa.
 	fixture := []byte(`{"eventId":"0e1c1bb2-3f4a-4c5d-8e6f-010203040506","type":"order.assigned","occurredAt":"2026-09-02T10:00:00Z","source":"fulfillment","payload":{"fulfillCode":"ORD-3001","targetShop":{"code":"SHOP01","name":"Kho CN Q1","address":"1 Lê Lợi"}}}`)
 	var want map[string]interface{}
 	if err := json.Unmarshal(fixture, &want); err != nil {
 		t.Fatal(err)
 	}
-	got := Envelope{EventID: "0e1c1bb2-3f4a-4c5d-8e6f-010203040506", Type: "order.assigned",
-		OccurredAt: "2026-09-02T10:00:00Z", Source: "fulfillment",
-		Payload: map[string]interface{}{"fulfillCode": "ORD-3001"}}
+	got := Envelope{
+		EventID:    "0e1c1bb2-3f4a-4c5d-8e6f-010203040506",
+		Type:       "order.assigned",
+		OccurredAt: "2026-09-02T10:00:00Z",
+		Source:     "fulfillment",
+		Payload: map[string]interface{}{
+			"fulfillCode": "ORD-3001",
+			"targetShop": map[string]interface{}{
+				"code": "SHOP01", "name": "Kho CN Q1", "address": "1 Lê Lợi",
+			},
+		},
+	}
 	b, _ := json.Marshal(got)
 	var gotMap map[string]interface{}
 	if err := json.Unmarshal(b, &gotMap); err != nil {
 		t.Fatal(err)
 	}
-	for _, k := range []string{"eventId", "type", "occurredAt", "source", "payload"} {
-		if _, ok := gotMap[k]; !ok {
-			t.Fatalf("missing key %s in envelope", k)
-		}
-	}
-	if !reflect.DeepEqual(gotMap["payload"], want["payload"]) {
-		t.Fatalf("payload shape drift vs canonical fixture")
+	if !reflect.DeepEqual(gotMap, want) {
+		t.Fatalf("envelope drift vs canonical fixture:\n got  %v\n want %v", gotMap, want)
 	}
 }
 
@@ -778,7 +801,7 @@ const TOPICS = ['order-events', 'batch-events'];
 export async function startKafkaConsumer(
   bootstrapServers: string,
   onEvent: (m: KafkaEventMessage) => void,
-): Promise<void> {
+): Promise<() => Promise<void>> {
   const kafka = new Kafka({
     clientId: 'bff-realtime',
     brokers: bootstrapServers.split(',').map((s) => s.trim()),
@@ -804,6 +827,7 @@ export async function startKafkaConsumer(
   } catch (err) {
     console.warn('[kafka] consumer unavailable (side-channel, BFF vẫn chạy):', (err as Error).message);
   }
+  return () => consumer.disconnect();
 }
 ```
 
@@ -814,9 +838,13 @@ export async function startKafkaConsumer(
 import { bffEvents } from './kafka/events.js';
 import { startKafkaConsumer } from './kafka/consumer.js';
 // ...
+let kafkaConsumerStop: (() => Promise<void>) | null = null;
 if (config.kafka.enabled) {
-  void startKafkaConsumer(config.kafka.bootstrapServers, (m) => bffEvents.emit('kafka:event', m));
+  void startKafkaConsumer(config.kafka.bootstrapServers, (m) => bffEvents.emit('kafka:event', m))
+    .then((stop) => { kafkaConsumerStop = stop; });
 }
+// trong graceful shutdown path hiện có (nếu có onClose/addHook) thêm:
+//   await kafkaConsumerStop?.();
 ```
 (không crash process — startKafkaConsumer tự catch.)
 
@@ -857,7 +885,8 @@ import { expect, test } from '@playwright/test';
 /**
  * SF-27 — Kafka event bus E2E (enabled-mode only).
  * Runbook (spec §7): (1) docker compose --profile kafka up -d kafka kafka-init kafka-ui
- * (2) .env KAFKA_ENABLED=true + boot-all.sh (shell export bổ sung cho Java/BFF)
+ * (2) .env KAFKA_ENABLED=true + boot-all.sh (shell export chỉ cần cho Java —
+ * BFF tự đọc root .env qua dotenv; Go run.sh source .env set -a)
  * (3) KAFKA_ENABLED=true pnpm --filter e2e test
  * Skip rule truthy thống nhất '1'|'true' (như Go/BFF).
  */
@@ -993,6 +1022,12 @@ open http://localhost:8085   # kafka-ui: 3 topics thấy
 # D1b: tạo batch + hủy batch → batch.created + batch.transitioned + order.cancelled
 ```
 Screenshots kafka-ui (topics + messages) lưu evidence.
+
+**P1-critic — e2e enabled-run THẬT (trước khi tắt):**
+```bash
+KAFKA_ENABLED=true pnpm --filter e2e test 05-kafka
+```
+Lần chạy đầu của `05-kafka.spec.ts` — nếu kafka-ui REST shape khác (`m.value?.content`) → SỬA parser tại chỗ theo response thật (log `res.json()` sample) rồi chạy lại tới xanh. KHÔNG merge khi spec này chưa từng chạy enabled.
 
 - [ ] **Step 3: chaos — stop kafka giữa chừng**
 
