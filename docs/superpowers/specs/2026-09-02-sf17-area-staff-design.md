@@ -38,7 +38,7 @@ CREATE TABLE service_employee_regions (
 );
 ```
 
-Lưu ý: unique employee_code + cascade regions khi xóa NV. Toggle active = UPDATE is_active (không xóa).
+Lưu ý: unique employee_code + FK cascade (phòng dọn DB trực tiếp; API KHÔNG có delete — off-switch là toggle active). `employee_code` format `^[A-Z0-9_-]{3,32}$` (validate cả BE); `title_code` BE chỉ check non-blank ≤32 (list chặt ở FE dropdown tĩnh). V4 bỏ số V2/V3 là CHỦ Ý (epic reserve SF-7=V2, SF-14=V3 — tránh merge collision).
 
 ## 4. Proto — `api/proto/hubstore/staffarea/v1/staffarea.proto` (file MỚI, additive)
 
@@ -54,23 +54,24 @@ service StaffAreaService {
 message ServiceEmployee {
   string employee_code; string full_name; string title_code;
   string payment_account; bool is_active;
-  repeated string region_codes;          // gộp province + ward
+  repeated string region_codes;          // flat: node tỉnh CHỌN TOÀN TỈNH hoặc node phường lẻ
   string created_at; string updated_at;  // ISO-8601
 }
 message VerifyPaymentAccountResponse {
   bool valid; string source;   // "MOCK" | "ZALOPAY"
-  string message;              // mock: tag [MOCK] + mô tả; real: Zalopay trả gì giữ nguyên ngữ nghĩa
+  string message;              // mock: tag [MOCK] + mô tả; real: ánh xạ Zalopay error_code==1 + is_verified → valid
 }
-// List filters: title_code, query (employee_code/full_name contains), region_code, include_inactive
+// List filters: title_code, query (employee_code/full_name contains), region_code.
+// List LUÔN trả cả inactive (FE dim client-side) — acceptance "toggle off → row mờ" yêu cầu row vẫn thấy.
 ```
 
-Regen: `protoc` (java_out → `api/proto/gen/java`) + `ts-proto` 2.7.7 (→ `api/proto/gen/ts`). Go/python KHÔNG regen (không consumer). Không sửa file proto cũ → `breaking: FILE` safe.
+Regen: `protoc` (java_out → `api/proto/gen/java`) + `ts-proto` 2.7.7 (→ `api/proto/gen/ts`). Go/python KHÔNG regen (không consumer). Không sửa file proto cũ → `breaking: FILE` safe. (Proto sketch ở trên là shorthand — file thật phải đủ field numbers chuẩn protoc.)
 
 ## 5. BE — fulfillment-service (Java 17 / Spring gRPC)
 
-- `store/ServiceEmployeeRepository.java` (interface) + `store/PostgresServiceEmployeeRepository.java` — pattern `PostgresOrderRepository`: `JdbcTemplate` + RowMapper, `@Transactional` mutate. List query: WHERE động (title/query/region/active) + join `service_employee_regions`.
-- `service/StaffAreaServiceImpl.java` — `@GrpcService`, validate input cơ bản (code format, format TK), map sang proto. KHÔNG enforce role ở Java (services trust BFF — hiện trạng chung).
-- Zalopay adapter: `payment/PaymentAccountVerifier.java` (interface) + `MockPaymentAccountVerifier` (mặc định, match `^\d{9,16}$`, message tag `[MOCK]`) + `ZalopayPaymentAccountVerifier` (chọn bằng `@ConditionalOnProperty(name="payment.verify.provider", havingValue="zalopay")` + env `ZALOPAY_APP_ID/KEY1` có mặt → bật qua Spring profile/property wiring trong `application.yml`, mặc định mock).
+- `store/ServiceEmployeeRepository.java` (interface) + `store/PostgresServiceEmployeeRepository.java` — pattern `PostgresOrderRepository`: `JdbcTemplate` + RowMapper, `@Transactional` mutate. List query: WHERE động (title/query/region) — LUÔN gồm inactive. Update = **full replace** trong 1 transaction (mọi field trừ `employee_code` — immutable; `service_employee_regions` delete-all + insert lại).
+- `service/StaffAreaServiceImpl.java` — `@GrpcService`, validate input (employee_code `^[A-Z0-9_-]{3,32}$`, payment_account `^\d{9,16}$`, title non-blank), map sang proto. KHÔNG enforce role ở Java (services trust BFF — hiện trạng chung).
+- Zalopay adapter: `payment/PaymentAccountVerifier.java` (interface) + `MockPaymentAccountVerifier` (mặc định, match `^\d{9,16}$`, message tag `[MOCK]`) + `ZalopayPaymentAccountVerifier`. **Cơ chế chọn — MỘT cơ chế duy nhất**: property `payment.verify.provider` (`application.yml`: `${PAYMENT_VERIFY_PROVIDER:mock}`); khi = `zalopay` → bean real + yêu cầu `ZALOPAY_APP_ID`/`ZALOPAY_KEY1` fail-loud lúc boot nếu thiếu. Real-mode contract (intent, chưa test được không có creds): gọi Zalopay account-verify open API (endpoint từ docs Zalopay khi có credentials), HMAC key1; `error_code==1` + account verified → `valid=true`, giữ message gốc; lỗi mạng/creds → `valid=false` + message lỗi, KHÔNG crash.
 - Flyway V4 tự áp migrate-on-boot (`spring.flyway.enabled` có sẵn).
 
 ## 6. BFF — bff-gateway (Fastify)
@@ -85,7 +86,8 @@ Regen: `protoc` (java_out → `api/proto/gen/java`) + `ts-proto` 2.7.7 (→ `api
   | PUT | /service-employees/:code/active | **Admin** |
   | POST | /service-employees/payment-account/verify | **Admin** |
 - Admin gate: helper mới `requireRole(request, 'Admin')` → fail trả `errorEnvelope(403, …, code 'FORBIDDEN')` (envelope lib có sẵn). Đây là per-route role check ĐẦU TIÊN của BFF — pattern dùng lại được cho SF sau.
-- `src/plugins/auth.ts`: `KNOWN_ROLES` += `'Admin'`.
+- `src/plugins/auth.ts`: `KNOWN_ROLES` += `'Admin'` (admin user có đúng 1 role → single-role pick không đổi behavior user cũ).
+- Master data cho FE: dùng sẵn `GET /master-data/regions` (bff `routes/fulfillment.ts`, gRPC ListRegions → `SELECT … FROM regions`) — V4 INSERT tự lộ qua đây; FE KHÔNG hardcode list vùng, KHÔNG tạo route /regions mới. Group tỉnh→phường build từ `parent_code`; V4 rows sort sau 11 rows seed (không giả định thứ tự seed).
 - `src/clients/` thêm staff-area client (pattern `fulfillment.ts`); x-user-role metadata tự mang theo.
 
 ## 7. Role Admin — đồng bộ 4 lớp
@@ -98,20 +100,19 @@ Regen: `protoc` (java_out → `api/proto/gen/java`) + `ts-proto` 2.7.7 (→ `api
 ## 8. FE — apps/shell (shell-local, antd4 + SF-6 tokens)
 
 - Nav: `nav.ts` thêm `{ path: '/area-staff', labelKey: 'nav.areaStaff', permission: 'areastaff.view' }` + icon + i18n vi/en.
-- `/area-staff` — list: antd Table (STT/mã NV/tên/chức danh/TK/vùng/active-tag), FilterBar: chức danh (Select), NV (TextSearch), vùng (Select provinces). `expand row` → danh sách phường/xã đã chọn (group theo tỉnh). Toggle `Switch` active chỉ render khi `can('areastaff.manage')`; off → row mờ + tag "Ngừng hoạt động". Nút "Tạo định nghĩa" → `/area-staff/new` (chỉ Admin).
+- `/area-staff` — list: antd Table (STT/mã NV/tên/chức danh/TK/vùng/active-tag), FilterBar: chức danh (Select), NV (TextSearch), vùng (Select provinces). List luôn gồm inactive (dim client-side). `expand row` → danh sách phường/xã (resolve từ region_codes qua master data: tỉnh chọn → liệt kê wards con; phường chọn → chính nó; group theo tỉnh). Toggle `Switch` active chỉ render khi `can('areastaff.manage')`; off → row mờ + tag "Ngừng hoạt động". Nút "Tạo định nghĩa" → `/area-staff/new` (chỉ Admin).
 - `/area-staff/new` + `/area-staff/:code/edit` — form cùng component:
-  1. Khu vực chính (Select multiple tỉnh) → lọc options phường
-  2. Chức danh (Select từ list tĩnh)
-  3. NV: mã + họ tên (nhập tay — không HR)
-  4. TK nhận tiền: input + nút "Kiểm tra" → gọi verify → badge nguồn (`[MOCK]`/Zalopay) + valid/invalid
-  5. Khu vực phụ trách: `TreeSelect` multiple (cây tỉnh → phường), `maxCount` giới hạn (vd 50) — vượt → message cảnh báo, không cho chọn thêm
+  1. Chức danh (Select từ list tĩnh: SHIPPER/WAREHOUSE/CSKH/KTV)
+  2. NV: mã + họ tên (nhập tay — không HR)
+  3. TK nhận tiền: input + nút "Kiểm tra" → gọi verify → badge nguồn (`[MOCK]`/Zalopay) + valid/invalid
+  4. **Khu vực phụ trách — MỘT TreeSelect duy nhất** (cây tỉnh → phường từ master-data): chọn **node tỉnh** = phụ trách toàn tỉnh (lưu code tỉnh); chọn **node phường** = phụ trách phường đó (lưu code phường). "2 vùng" ở acceptance = 2 node tỉnh. Giới hạn số lựa chọn (cap 100 region_codes) tự chặn trong `onSelect` — vượt → message cảnh báo, không chọn thêm (antd4 TreeSelect không có maxCount). KHÔNG có surface "khu vực chính" riêng — tree là nguồn sự thật duy nhất.
 - Route guard: `<RequirePermission permission="areastaff.view">` (manage check trong trang form/toggle — non-Admin vào /new → 403 Result).
 - Testids: `area-list`, `area-create-btn`, `area-row-<code>`, `area-expand-<code>`, `area-active-toggle-<code>`, `area-verify-result`, `area-form-*`.
 
 ## 9. E2E — `e2e/tests/05-area.spec.ts`
 
 - storageState `.auth/admin.json`: tạo definition (2 tỉnh + ward, 1 NV, verify mock xanh) → thấy trong list → expand thấy wards → toggle off → mờ/tag ngừng.
-- storageState `.auth/coordinator.json`: KHÔNG thấy nút tạo; gọi trực tiếp `POST /service-employees` qua `request` (token coordinator) → 403.
+- storageState `.auth/coordinator.json`: KHÔNG thấy nút tạo; gọi trực tiếp `POST /service-employees` qua `request` (token coordinator) → 403. (Coordinator là representative non-Admin; Manager/WarehouseOps cùng matrix view-only — known gap: không E2E riêng từng role, phủ bằng role-matrix pattern nếu rẻ.)
 - Spec cũ 01–04 phải vẫn xanh (auth.setup thêm user không phá storageState cũ; serial prefix giữ).
 
 ## 10. Testing strategy
