@@ -16,3 +16,9 @@
 - **Where:** orca orchestration CLI.
 - **Impact:** coordinator phải enforce dispatch order thủ công (flat task list, tự theo dõi DAG trong plan) — sai lệch một bước là worker chạy thiếu dependency.
 - **Suggested change:** thêm `orca orchestration task-update --id <id> --add-deps '["<taskId>"]'` (hoặc `task-deps add`).
+
+## 2026-09-02 — FI-258 (SF-13) — activity_log V5 collision thực tế (SF-7 merge-before)
+- **What:** SF-7 đã tạo `V5__activity_log.sql` (epic shape `target_type`/`target_id` NOT NULL, IF NOT EXISTS coexist) TRƯỚC khi SF-13 merge — đảo ngược giả định cũ của spec D9 ("SF-13 V2 canonical, SF-7 drop V2"). DB dev chung bị reset giữa chừng → V5 áp trước, `activity_log` không có cột `target` → V2 cũ `CREATE TABLE` chết.
+- **Resolution:** V2 viết lại IDEMPOTENT 2 chiều (CREATE TABLE IF NOT EXISTS + ALTER ADD COLUMN IF NOT EXISTS `target` + index tên riêng `idx_activity_log_target_code` tránh trùng tên index V5). Cả 2 thứ tự apply (V2-first / V5-first) cho shape coexist. SF-13 chỉ ghi/đọc cột `target` — deprecated ở tầng converge (đúng comment phối hợp trong V5 của SF-7).
+- **Bài học cross-SF:** merge rule dạng "A canonical, B phải drop" dễ vỡ khi 2 SF merge-before song song. Migration bảng chia sẻ giữa 2 SF nên idempotent từ đầu (IF NOT EXISTS + ADD COLUMN IF NOT EXISTS + index namespaced).
+- **Ghi đè entry cũ:** "V2 canonical, SF-7 drop V2__activity_log.sql + renumber" — KHÔNG còn đúng; giữ làm audit trail.
