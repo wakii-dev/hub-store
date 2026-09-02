@@ -55,6 +55,12 @@ export function mapOrderItem(item: ProtoOrderItem): HubStoreOrderFilterItem {
     isDebtSplittingOrder: item.isDebtSplittingOrder,
     customerAddress: item.customerAddress,
     distance: item.distance ?? undefined,
+    // SF-13 additive fields (proto 16-20): fail fields NULL → empty string → undefined.
+    customerName: item.customerName || undefined,
+    customerPhone: item.customerPhone || undefined,
+    failReason: item.failReason || undefined,
+    failNote: item.failNote || undefined,
+    oldFulfillCode: item.oldFulfillCode || undefined,
   };
 }
 
