@@ -14,7 +14,7 @@ echo "=== K8s preflight (hub-store minikube) ==="
 if ! command -v minikube >/dev/null 2>&1; then
   fail "minikube chưa cài. Cài: brew install minikube (macOS) — https://minikube.sigs.k8s.io/docs/start/"
 else
-  ok "minikube $(minikube version --output=text 2>/dev/null | grep -o 'v[0-9.]*' | head -1)"
+  ok "minikube $(minikube version 2>/dev/null | grep -o 'v[0-9][0-9.]*' | head -1)"
 fi
 
 # 2. kubectl installed?
@@ -37,10 +37,13 @@ if command -v minikube >/dev/null 2>&1; then
 fi
 
 # 4. profile hiện tại + resource khuyến nghị
+# NOTE: KHÔNG pipe minikube trực tiếp vào grep -q dưới `pipefail` — grep -q thoát sớm
+# → minikube nhận SIGPIPE → exit 141 → điều kiện if sai (bug thật lần chạy đầu).
+PROFILES="$(minikube profile list 2>/dev/null || true)"
 if [ -n "$DRIVER" ]; then
-  if minikube profile list 2>/dev/null | grep -q minikube; then
-    MEM=$(minikube profile list -o json 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin)['valid'][0]['Memory'])" 2>/dev/null || echo "?")
-    CPU=$(minikube profile list -o json 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin)['valid'][0]['CPUs'])" 2>/dev/null || echo "?")
+  if echo "$PROFILES" | grep -q minikube; then
+    MEM=$(minikube profile list -o json 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin)['valid'][0]['Config']['Memory'])" 2>/dev/null || echo "?")
+    CPU=$(minikube profile list -o json 2>/dev/null | python3 -c "import sys,json;print(json.load(sys.stdin)['valid'][0]['Config']['CPUs'])" 2>/dev/null || echo "?")
     echo "→ profile 'minikube' tồn tại: memory=${MEM}MB cpus=${CPU}"
     if [ "$MEM" != "?" ] && [ "$MEM" -lt 6000 ]; then
       echo "⚠ memory ${MEM}MB < khuyến nghị 6g — stack Java+Keycloak+Kafka dễ OOM."
@@ -53,8 +56,9 @@ if [ -n "$DRIVER" ]; then
 fi
 
 # 5. addon ingress (cần ở SF-4 — báo trước, không fail)
-if command -v minikube >/dev/null 2>&1 && minikube profile list 2>/dev/null | grep -q minikube; then
-  if [ "$(minikube addons list 2>/dev/null | awk '$1=="ingress"{print $3}')" = "enabled" ]; then
+if command -v minikube >/dev/null 2>&1 && echo "$PROFILES" | grep -q minikube; then
+  ADDONS="$(minikube addons list 2>/dev/null || true)"
+  if echo "$ADDONS" | grep -E '^\| *ingress' | grep -q enabled; then
     ok "addon ingress: enabled"
   else
     echo "⚠ addon ingress chưa bật (SF-4 cần): minikube addons enable ingress"
