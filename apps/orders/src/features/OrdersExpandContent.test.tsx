@@ -49,4 +49,33 @@ describe("OrdersExpandContent — COD format + items[]", () => {
     expect(screen.getByTestId("expand-ORD-3001").textContent).toContain("Tổng SL: 3");
     expect(screen.getByTestId("cod-ORD-3001").textContent).toContain("15.000.000đ");
   });
+
+  it("SF-13 — khách/SĐT + oldFulfillCode hiện khi có (Đơn gốc link copyable)", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <OrdersExpandContent
+          order={{
+            ...order,
+            customerName: "Nguyễn Văn A",
+            customerPhone: "0901234567",
+            oldFulfillCode: "ORD-2000",
+          }}
+        />
+      </I18nextProvider>,
+    );
+    expect(screen.getByTestId("customer-ORD-3001").textContent).toContain(
+      "Khách: Nguyễn Văn A · 0901234567",
+    );
+    expect(screen.getByTestId("old-order-link").textContent).toContain("Đơn gốc: ORD-2000");
+  });
+
+  it("SF-13 — ẩn Khách + Đơn gốc khi field rỗng (seed cũ NULL)", () => {
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <OrdersExpandContent order={order} />
+      </I18nextProvider>,
+    );
+    expect(screen.queryByTestId("customer-ORD-3001")).toBeNull();
+    expect(screen.queryByTestId("old-order-link")).toBeNull();
+  });
 });

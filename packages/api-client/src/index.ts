@@ -24,6 +24,7 @@ export { createAppStore, type AppStore, type AppDispatch, type RootState } from 
 import './slices/fulfillment';
 import './slices/batches';
 import './slices/masterData';
+import './slices/intake';
 
 // Re-export the stub hooks for convenience (remotes can deep-import the slice
 // files directly too).
@@ -34,3 +35,8 @@ export {
   useGetShopsQuery,
   useGetDeliveryStaffQuery,
 } from './slices/masterData';
+export {
+  usePreviewImportMutation,
+  useConfirmImportMutation,
+  useCreateManualOrderMutation,
+} from './slices/intake';
