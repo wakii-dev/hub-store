@@ -7,7 +7,7 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
-ROOT="$(cd .. && pwd)"
+ROOT="$(cd ../.. && pwd)"
 if [[ -f "$ROOT/.env" ]]; then set -a; . "$ROOT/.env"; set +a; fi
 : "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD trong root .env (xem .env.example)}"
 

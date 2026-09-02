@@ -38,11 +38,28 @@ func envOr(key, def string) string {
 	return def
 }
 
-const testDBName = "batching_test"
+// testDBName — DB test RIÊNG theo test binary (go test chạy các package
+// thành process song song: store.test vs server.test cùng TRUNCATE/seed một
+// DB sẽ cài nhau → duplicate key). Trong 1 package tests chạy tuần tự nên
+// 1 DB/package là đủ isolation.
+func testDBName() string {
+	base := strings.TrimSuffix(filepath.Base(os.Args[0]), ".test")
+	var sb strings.Builder
+	for _, r := range base {
+		if r >= 'a' && r <= 'z' || r >= '0' && r <= '9' {
+			sb.WriteRune(r)
+		}
+	}
+	name := sb.String()
+	if name == "" || len(name) > 40 {
+		name = "pkg"
+	}
+	return "batching_test_" + name
+}
 
-// DSN trả connection string tới batching_test (PostgresStore tests dùng
-// chung với Pool).
-func DSN() string { return dsn(testDBName) }
+// DSN trả connection string tới test DB của package hiện tại (PostgresStore
+// tests dùng chung với Pool).
+func DSN() string { return dsn(testDBName()) }
 
 // Pool returns a connected pool to batching_test with migrations applied,
 // tables truncated, and the canonical seed fixture loaded. Skips the test
@@ -57,9 +74,9 @@ func Pool(t *testing.T) *pgxpool.Pool {
 
 	createTestDB(t, ctx)
 
-	pool, err := pgxpool.New(ctx, dsn(testDBName))
+	pool, err := pgxpool.New(ctx, dsn(testDBName()))
 	if err != nil {
-		t.Fatalf("connect %s: %v", testDBName, err)
+		t.Fatalf("connect %s: %v", testDBName(), err)
 	}
 	t.Cleanup(pool.Close)
 	if err := pool.Ping(ctx); err != nil {
@@ -79,18 +96,46 @@ func createTestDB(t *testing.T, ctx context.Context) {
 		t.Skipf("postgres unreachable — skip integration test: %v", err)
 	}
 	defer maint.Close(ctx)
-	if _, err := maint.Exec(ctx, "CREATE DATABASE "+testDBName); err != nil {
+	if _, err := maint.Exec(ctx, "CREATE DATABASE "+testDBName()); err != nil {
 		// 42P04 duplicate_database = đã có → dùng lại.
 		if pgErr := err.Error(); !strings.Contains(pgErr, "42P04") && !strings.Contains(pgErr, "already exists") {
-			t.Fatalf("create %s: %v", testDBName, err)
+			t.Fatalf("create %s: %v", testDBName(), err)
 		}
 	}
 }
 
 // applyMigrations đọc services/batching-service/migrations/*.up.sql (sorted)
-// và exec — tests không cần golang-migrate binary/lib.
+// và exec — tests không cần golang-migrate binary/lib. Idempotent giữa các
+// test run: tracking bảng testdb_migrations (DB test persist giữa các run —
+// re-apply sẽ lỗi "already exists").
 func applyMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	t.Helper()
+	if _, err := pool.Exec(ctx,
+		`CREATE TABLE IF NOT EXISTS testdb_migrations (name text PRIMARY KEY)`); err != nil {
+		t.Fatalf("create testdb_migrations: %v", err)
+	}
+	applied := map[string]bool{}
+	rows, err := pool.Query(ctx, `SELECT name FROM testdb_migrations`)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for rows.Next() {
+		var n string
+		if err := rows.Scan(&n); err != nil {
+			t.Fatal(err)
+		}
+		applied[n] = true
+	}
+	rows.Close()
+
+	// Baseline: DB test tồn tại từ trước khi có bảng tracking (schema cũ đã
+	// apply) → đánh dấu applied, KHÔNG re-apply (lỗi 42P07 already exists).
+	var schemaPresent bool
+	if err := pool.QueryRow(ctx,
+		`SELECT to_regclass('public.batches') IS NOT NULL`).Scan(&schemaPresent); err != nil {
+		t.Fatal(err)
+	}
+
 	wd, err := os.Getwd()
 	if err != nil {
 		t.Fatal(err)
@@ -109,12 +154,27 @@ func applyMigrations(t *testing.T, ctx context.Context, pool *pgxpool.Pool) {
 	}
 	sort.Strings(ups)
 	for _, up := range ups {
+		if applied[up] {
+			continue
+		}
+		if schemaPresent {
+			// legacy DB — schema đã tồn tại, chỉ ghi tracking.
+			if _, err := pool.Exec(ctx,
+				`INSERT INTO testdb_migrations (name) VALUES ($1)`, up); err != nil {
+				t.Fatal(err)
+			}
+			continue
+		}
 		sql, err := os.ReadFile(filepath.Join(mdir, up))
 		if err != nil {
 			t.Fatal(err)
 		}
 		if _, err := pool.Exec(ctx, string(sql)); err != nil {
 			t.Fatalf("apply migration %s: %v", up, err)
+		}
+		if _, err := pool.Exec(ctx,
+			`INSERT INTO testdb_migrations (name) VALUES ($1)`, up); err != nil {
+			t.Fatal(err)
 		}
 	}
 }
