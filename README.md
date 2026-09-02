@@ -45,6 +45,19 @@ docker compose up --build
 
 Compose là cấu hình **mẫu chạy local** (KHÔNG prod deploy): postgres (2 DB: `fulfillment` + `batching`) → migrate one-shot (Flyway `orders-migrate`, golang-migrate `batches-migrate`) → `db-seed` → app services + keycloak + nginx phục vụ shell/2 remotes static (publicPath theo SPIKE 1) và proxy `/api` → BFF.
 
+**Từ máy sạch (FI-245 SF-5 ACCEPTANCE):** chỉ cần Docker + file `.env` (xem "Postgres infra + seed") — `docker compose up --build` tự chạy đủ chuỗi migrate + seed + boot 7 service. Đăng nhập Keycloak bằng user mẫu (mục "OIDC auth") → D1/D1b/D2/D3 dùng được trên data Postgres thật. Dữ liệu persist qua volume `pgdata` — `docker compose restart` KHÔNG mất phiếu đã tạo; xoá volume (`docker compose down -v`) = quay về state seed.
+
+### E2E Playwright (FI-245 SF-5)
+
+```bash
+cd e2e && pnpm exec playwright test          # webServer = boot-all.sh, tự boot toàn hệ thống
+E2E=1 bash ../scripts/boot-all.sh            # boot thủ công với reset DB + keycloak volume trước
+```
+
+- `boot-all.sh` luôn `docker compose up -d postgres` + chờ DB ready + chờ Keycloak realm `hubstore` import xong trước khi boot service host-run.
+- `E2E=1`: chạy `scripts/reset-db.sh` (TRUNCATE 2 DB + xoá keycloak volume + reseed) **TRƯỚC** `compose up keycloak` — đảm bảo state seed sạch + realm re-import cho auth.setup.
+- Auth: `auth.setup.ts` login 3 user qua hosted UI → storageState `.auth/<user>.json`.
+
 ### Postgres infra + seed (FI-245 SF-1)
 
 ```bash
@@ -157,6 +170,38 @@ curl -s -X POST http://127.0.0.1:18080/keycloak/realms/hub-store/protocol/openid
 - Users mẫu (dev-only, password literal trong realm JSON): `coordinator` / `warehouse` / `manager` — password `Password123!`.
 - Shell login PKCE (public client `hubstore-web`) — env `VITE_OIDC_*` trong `.env`; silent renew qua refresh token; logout → Keycloak end-session.
 - BFF verify JWKS RS256 (`OIDC_ISSUER`/`OIDC_AUDIENCE`/`OIDC_JWKS_URL`), role từ claim `realm_access.roles` → gRPC metadata `x-user-role`.
+
+## Backup / Restore (pg_dump) — FI-245 SF-5
+
+```bash
+# Backup cả 2 DB (postgres container phải đang chạy)
+docker compose exec -T postgres pg_dump -U hubstore -d fulfillment > backup-fulfillment-$(date +%F).sql
+docker compose exec -T postgres pg_dump -U hubstore -d batching    > backup-batching-$(date +%F).sql
+
+# Restore vào DB sạch (drop trước nếu cần — DEV ONLY)
+docker compose exec -T postgres psql -U hubstore -d fulfillment -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+docker compose exec -T postgres psql -U hubstore -d fulfillment < backup-fulfillment-YYYY-MM-DD.sql
+docker compose exec -T postgres psql -U hubstore -d batching -c "DROP SCHEMA public CASCADE; CREATE SCHEMA public;"
+docker compose exec -T postgres psql -U hubstore -d batching < backup-batching-YYYY-MM-DD.sql
+# Sau restore chạy lại migrate để đảm bảo flyway/golang-migrate schema_history khớp:
+docker compose up orders-migrate batches-migrate
+```
+
+Lưu ý: backup KHÔNG chứa volume keycloak-data (users/passwords nằm trong realm JSON dev — re-import khi up lại). Production thật: backup theo lịch (pg_dump cron) + đừng dùng `--import-realm`/dev password literals.
+
+## Tạo / đổi user Keycloak (SF-5 deploy guide)
+
+Realm import chỉ chạy khi volume `keycloak-data` rỗng/mới. Đổi realm JSON hoặc thêm user mẫu:
+
+```bash
+# 1. Sửa docker/keycloak/hubstore-realm.json (users[].username/credentials)
+# 2. Reset volume → realm re-import sạch lần up sau
+bash scripts/reset-db.sh          # đã gồm xoá keycloak volume
+docker compose up -d keycloak
+# 3. Chờ realm ready: curl -sf http://localhost:8081/realms/hubstore
+```
+
+User tạo tay qua Admin Console (`http://localhost:8081`, admin/$KEYCLOAK_ADMIN_PASSWORD) cũng được nhưng KHÔNG persist vào realm JSON — container volume mới sẽ mất.
 
 ## Forgot password (DEV-ONLY)
 

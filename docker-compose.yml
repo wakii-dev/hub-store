@@ -187,6 +187,8 @@ services:
     build:
       context: .
       dockerfile: services/print-service/Dockerfile
+    volumes:
+      - ./api/seed:/seed:ro # printers registry load từ canonical seed (fail-fast nếu thiếu)
     expose: ["50053"]
 
   bff: # Node Fastify REST :8080 (SF-6)

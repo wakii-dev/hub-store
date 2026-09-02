@@ -16,6 +16,31 @@ import (
 	"hubstore/batching-service/internal/testdb"
 )
 
+// SF-5 convergence regression: Java OffsetDateTime.toString() bỏ giây khi =0
+// ("2026-09-03T01:00Z") — layout RFC3339 thuần fail → delivery_time NULL
+// (D2 render NaN). ParseTime phải chấp nhận cả hai dạng.
+func TestParseTime(t *testing.T) {
+	cases := []struct {
+		name string
+		in   string
+		want time.Time
+	}{
+		{"rfc3339 đủ giây", "2026-09-03T01:00:00Z", time.Date(2026, 9, 3, 1, 0, 0, 0, time.UTC)},
+		{"rfc3339 offset", "2026-09-03T08:00:00+07:00", time.Date(2026, 9, 3, 8, 0, 0, 0, time.FixedZone("", 7*3600))},
+		{"không giây Z (Java)", "2026-09-03T01:00Z", time.Date(2026, 9, 3, 1, 0, 0, 0, time.UTC)},
+		{"không giây offset (Java)", "2026-09-03T08:00+07:00", time.Date(2026, 9, 3, 8, 0, 0, 0, time.FixedZone("", 7*3600))},
+		{"rỗng → zero", "", time.Time{}},
+		{"rác → zero", "not-a-time", time.Time{}},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := ParseTime(c.in); !got.Equal(c.want) {
+				t.Fatalf("ParseTime(%q) = %v, want %v", c.in, got, c.want)
+			}
+		})
+	}
+}
+
 func newStore(t *testing.T) *PostgresStore {
 	t.Helper()
 	testdb.Pool(t) // setup DB + seed fixture (skip khi không có Postgres)

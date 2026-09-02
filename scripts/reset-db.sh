@@ -35,7 +35,12 @@ BEGIN
      OR to_regclass('public.delivery_staff') IS NULL THEN
     RAISE EXCEPTION 'fulfillment: thiếu bảng — %', 'chạy migration trước — see SF-2/SF-3';
   END IF;
-  TRUNCATE public.orders, public.shop_assignment_history, public.regions, public.delivery_staff RESTART IDENTITY;
+  -- service_employee_regions refs regions + service_employees — phải nằm cùng
+  -- lệnh TRUNCATE (FK constraint). SF-5 convergence fix: bảng này sinh sau SF-1
+  -- (master-data) — script cũ TRUNCATE thiếu → FK violation, E2E=1 fail.
+  TRUNCATE public.orders, public.shop_assignment_history, public.regions,
+    public.delivery_staff, public.service_employees, public.service_employee_regions
+    RESTART IDENTITY;
 END
 $reset$;
 SQL
