@@ -1,5 +1,6 @@
 /**
- * CreateBatchingModal — D1b "Tạo phiếu soạn" (REQUIREMENTS §3 D1b, modal 1310×918).
+ * CreateBatchingModal — D1b "Tạo phiếu soạn" (SF-6 §2.3 — sectioned stepper,
+ * modal 1240; E2E-safe: content KHÔNG bao giờ ẩn — Deviation D1).
  * SF-8 thay placeholder SF-7 — lắp tại D1Page (import + truyền selection).
  *
  * - Danh sách đơn đã chọn: rows nhận qua PROPS từ D1 selection (interface pin —
@@ -12,10 +13,9 @@
  * - TG giao: DatePicker + hint slot từ GET /order-promising/time-delivery (D4).
  * - Tạo phiếu: POST /fulfillment/batches/create (rule 1 validate server-side Go);
  *   reject → AntD message từ error envelope details[], modal GIỮ state;
- *   success → đóng + invalidate Fulfillment LIST (cross-remote D2 thấy nhờ
- *   refetchOnMountOrArgChange mặc định của api-client — không code thêm).
+ *   success → micro-interaction "✓" 800ms → đóng + invalidate Fulfillment LIST.
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, DatePicker, Empty, Modal, Select, Space, Tag, Tooltip, Typography, message } from "antd";
 import {
   SortableContainer,
@@ -29,6 +29,7 @@ import arrayMove from "array-move";
 import moment from "moment";
 import { useTranslation } from "react-i18next";
 import {
+  DESIGN_TOKENS,
   StatusTag,
   formatPeriodOfTime,
   formatVnd,
@@ -128,6 +129,18 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
   const [groups, setGroups] = useState<PackingGroup[] | null>(null);
   const [shipperId, setShipperId] = useState<string | undefined>(undefined);
   const [deliveryTime, setDeliveryTime] = useState<TimeRange | null>(null);
+  // SF-6 §2.3 stepper — NON-BLOCKING (Deviation D1): content không bao giờ ẩn,
+  // activeSection chỉ điều khiển highlight + scroll-to khi bấm node/Tiếp tục.
+  const [activeSection, setActiveSection] = useState<1 | 2 | 3>(1);
+  const [created, setCreated] = useState(false); // micro-interaction "✓" 800ms
+  const section2Ref = useRef<HTMLDivElement | null>(null);
+  const section3Ref = useRef<HTMLDivElement | null>(null);
+
+  const scrollToSection = (s: 1 | 2 | 3) => {
+    setActiveSection(s);
+    if (s === 2) section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (s === 3) section3Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+  };
 
   useEffect(() => {
     if (open) {
@@ -135,6 +148,8 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
       setGroups(null);
       setShipperId(undefined);
       setDeliveryTime(null);
+      setActiveSection(1);
+      setCreated(false);
     }
     // Chỉ sync khi mở — selection D1 refetch giữa lúc mở không reset state đang sửa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -230,7 +245,9 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
         deliveryTime,
       }).unwrap();
       message.success(t("createBatch.success"));
-      onClose(); // invalidatesTags Fulfillment/LIST tự refetch D1
+      // SF-6 §3 micro-interaction: label "✓" 800ms trước khi đóng.
+      setCreated(true);
+      setTimeout(onClose, 800); // invalidatesTags Fulfillment/LIST tự refetch D1
     } catch (err) {
       // Error UX: backend reject (khác kho / đơn ≠0) → message, modal GIỮ state.
       message.error(extractRejectMessages(err, t("createBatch.error")).join("; "));
@@ -252,16 +269,76 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
     setRows((prev) => arrayMove(prev, oldIndex, newIndex));
   };
 
+  // SF-6 §2.3 — stepper + sumbar + review derived values
+  const totalQuantity = rows.reduce((s, r) => s + (r.totalQuantity ?? 0), 0);
+  const totalDistance = rows.reduce((s, r) => s + (r.distance ?? 0), 0);
+  const totalCod = rows.reduce((s, r) => s + (r.codAmount ?? 0), 0);
+  const shipperLabel = staffOptions.find((o) => o.value === shipperId)?.label ?? "—";
+  const step1Done = rows.length > 0;
+  const step2Done = !!shipperId && deliveryTime !== null;
+  const steps: Array<{ n: 1 | 2 | 3; label: string; done: boolean }> = [
+    { n: 1, label: "Danh sách đơn & thứ tự giao", done: step1Done },
+    { n: 2, label: "Shipper & thời gian giao", done: step2Done },
+    { n: 3, label: "Xác nhận tạo phiếu", done: false },
+  ];
+
   return (
     <Modal
-      title={t("createBatch.title")}
+      title={
+        <div>
+          <div style={{ fontSize: 17, fontWeight: 700, color: DESIGN_TOKENS.color.textStrong }}>
+            {t("createBatch.title")}
+          </div>
+          <div style={{ fontSize: 12.5, fontWeight: 400, color: DESIGN_TOKENS.color.textMuted }}>
+            {rows.length} đơn đã chọn
+            {shopCode ? ` · Kho ${shopCode}` : ""}
+          </div>
+        </div>
+      }
       open={open}
       onCancel={onClose}
       footer={null}
-      width={1310}
-      className="create-batching-modal"
+      width={1240}
+      className="create-batching-modal sf6-modal-animation"
       destroyOnClose
     >
+      {/* Stepper — §2.3 (non-blocking, Deviation D1) */}
+      <div className="sf6-stepper" role="tablist">
+        {steps.map((s, i) => {
+          const state = s.n === activeSection ? "cur" : s.done ? "done" : "upcoming";
+          return (
+            <div key={s.n} className="sf6-step-wrap">
+              {i > 0 && (
+                <span
+                  className="sf6-step-line"
+                  style={{
+                    background: steps[i - 1].done ? DESIGN_TOKENS.color.primaryBorder : DESIGN_TOKENS.color.dividerSoft,
+                  }}
+                />
+              )}
+              <a
+                className={`sf6-step-node sf6-step-${state}`}
+                role="tab"
+                aria-selected={s.n === activeSection}
+                onClick={() => scrollToSection(s.n)}
+              >
+                {state === "done" ? "✓" : s.n}
+              </a>
+              <span
+                className="sf6-step-label"
+                style={{
+                  fontWeight: s.n === activeSection ? 600 : 500,
+                  color: s.n === activeSection ? DESIGN_TOKENS.color.textStrong : DESIGN_TOKENS.color.textMuted,
+                }}
+              >
+                {s.label}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+
+      {/* ─── Section 1: danh sách đơn & thứ tự giao ─── */}
       <div className="batch-toolbar">
         <Button data-testid="batch-packing-suggest" loading={suggesting} onClick={() => void handlePackingSuggest()}>
           {t("createBatch.packingSuggest")}
@@ -327,20 +404,24 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
         )}
       </div>
 
-      <div className="batch-form">
+      {/* ─── Section 2: shipper & thời gian giao + sumbar ─── */}
+      <div className="batch-form" ref={section2Ref}>
         <div className="batch-form-row">
-          <div>
+          <div className="sf6-form-card">
             <Typography.Text strong>{t("createBatch.shipper")}</Typography.Text>
             <Select
-              style={{ width: 280, display: "block", marginTop: 4 }}
+              style={{ width: "100%", display: "block", marginTop: 4, height: 40 }}
               placeholder={t("createBatch.shipperPlaceholder")}
               options={staffOptions}
               value={shipperId}
               onChange={setShipperId}
               data-testid="batch-shipper-select"
             />
+            <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 6, display: "block" }}>
+              Danh sách lọc theo kho của phiếu
+            </Typography.Text>
           </div>
-          <div>
+          <div className="sf6-form-card">
             <Typography.Text strong>{t("createBatch.deliveryTimeLabel")}</Typography.Text>
             <div style={{ marginTop: 4 }}>
               <DatePicker
@@ -362,7 +443,11 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
                     <Tag
                       className="batch-hint-chip"
                       color={pickedFromHint && deliveryTime?.from === slot.from ? "gold" : "default"}
-                      onClick={() => setDeliveryTime({ from: slot.from, to: slot.to })}
+                      onClick={(e) => {
+                        setDeliveryTime({ from: slot.from, to: slot.to });
+                        setActiveSection((cur) => (cur === 1 ? 2 : cur));
+                        void e;
+                      }}
                       data-testid={`batch-time-hint-${i}`}
                     >
                       {moment(slot.from).format("DD/MM")}
@@ -373,18 +458,90 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
             )}
           </div>
         </div>
+
+        {/* Sumbar — §2.3: 4 ô Số đơn / Sản phẩm / Quãng đường / Tổng COD */}
+        <div className="sf6-sumbar">
+          <div className="sf6-sum-cell">
+            <span className="sf6-sum-key">Số đơn</span>
+            <span className="sf6-sum-val">{rows.length}</span>
+          </div>
+          <div className="sf6-sum-cell">
+            <span className="sf6-sum-key">Sản phẩm</span>
+            <span className="sf6-sum-val">{totalQuantity}</span>
+          </div>
+          <div className="sf6-sum-cell">
+            <span className="sf6-sum-key">Quãng đường</span>
+            <span className="sf6-sum-val">{totalDistance > 0 ? `${totalDistance.toFixed(1)} km` : "—"}</span>
+          </div>
+          <div className="sf6-sum-cell">
+            <span className="sf6-sum-key">Tổng COD</span>
+            <span className="sf6-sum-val">{formatVnd(totalCod)}</span>
+          </div>
+        </div>
+
+        {/* ─── Section 3: review + note banner ─── */}
+        <div className="sf6-review" ref={section3Ref}>
+          <div className="sf6-review-row">
+            <span className="sf6-review-key">Kho xuất</span>
+            <span className="sf6-review-val">{rows[0]?.shopAssignment.shopName ?? "—"}{shopCode ? ` (${shopCode})` : ""}</span>
+          </div>
+          <div className="sf6-review-row">
+            <span className="sf6-review-key">Số đơn — thứ tự giao</span>
+            <span className="sf6-review-val">{rows.map((r) => r.fulfillCode).join(" → ") || "—"}</span>
+          </div>
+          <div className="sf6-review-row">
+            <span className="sf6-review-key">Shipper</span>
+            <span className="sf6-review-val">{shipperLabel}</span>
+          </div>
+          <div className="sf6-review-row">
+            <span className="sf6-review-key">Thời gian giao</span>
+            <span className="sf6-review-val">
+              {deliveryTime ? formatPeriodOfTime(deliveryTime.from, deliveryTime.to) : "—"}
+            </span>
+          </div>
+          <div className="sf6-review-row">
+            <span className="sf6-review-key">Tổng COD</span>
+            <span className="sf6-review-val">{formatVnd(totalCod)}</span>
+          </div>
+          <div className="sf6-review-row">
+            <span className="sf6-review-key">Ghi chú</span>
+            <span className="sf6-review-val">—</span>
+          </div>
+          <div className="sf6-note-banner">
+            <span className="sf6-note-icon" aria-hidden="true">i</span>
+            <span>
+              Khi tạo phiếu, trạng thái soạn của {rows.length} đơn chuyển thành{" "}
+              <b>Đang soạn</b> và mã phiếu <b>BATCH-xxxx</b> được sinh tự động.
+            </span>
+          </div>
+        </div>
+
         <div className="batch-footer">
+          <span className="sf6-footer-hint">
+            Bước {activeSection}/3 —{" "}
+            {activeSection === 1
+              ? "Kéo thả để sắp thứ tự giao"
+              : activeSection === 2
+                ? "Chọn shipper và thời gian giao"
+                : "Kiểm tra lại thông tin trước khi tạo"}
+          </span>
+          <span style={{ flex: 1 }} />
           <Button data-testid="batch-close" onClick={onClose}>
             {t("createBatch.close")}
           </Button>
+          {activeSection < 3 && (
+            <Button onClick={() => scrollToSection((activeSection + 1) as 2 | 3)}>
+              Tiếp tục →
+            </Button>
+          )}
           <Button
             type="primary"
-            disabled={!canSubmit}
+            disabled={!canSubmit || created}
             loading={creating}
             onClick={() => void handleCreate()}
             data-testid="batch-submit"
           >
-            {t("createBatch.create")}
+            {created ? "✓ Đã tạo phiếu" : activeSection === 3 ? "✓ Tạo phiếu soạn hàng" : t("createBatch.create")}
           </Button>
         </div>
       </div>
