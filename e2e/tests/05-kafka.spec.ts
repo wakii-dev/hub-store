@@ -11,10 +11,11 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
  *      export hoặc run.sh) + boot-all.sh
  *   3) KAFKA_ENABLED=true pnpm --filter e2e test 05-kafka
  *
- * Skip rule thống nhất '1'|'true' (như Go/BFF).
+ * Skip rule: KAFKA_ENABLED='true' đúng chữ — thống nhất cả 3 stack (Go/Java
+ * chỉ nhận 'true'; BFF/e2e cũng vậy, review SF-27 đã align).
  */
 test.skip(
-  !(process.env.KAFKA_ENABLED === "1" || process.env.KAFKA_ENABLED === "true"),
+  process.env.KAFKA_ENABLED !== "true",
   "KAFKA_ENABLED not enabled — kafka spec skipped",
 );
 

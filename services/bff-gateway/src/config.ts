@@ -133,7 +133,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
     },
     devResetPassword: env.ENABLE_DEV_RESET_PASSWORD === '1',
     kafka: {
-      enabled: env.KAFKA_ENABLED === '1' || env.KAFKA_ENABLED === 'true',
+      enabled: env.KAFKA_ENABLED === 'true', // 'true' duy nhất — thống nhất Go/Java/e2e (review SF-27)
       bootstrapServers: env.KAFKA_BOOTSTRAP_SERVERS ?? 'localhost:9092',
     },
   };

@@ -45,7 +45,7 @@ describe('bffEvents bridge (SF-27)', () => {
 });
 
 describe('kafka config flag (SF-27)', () => {
-  it('enabled chỉ khi KAFKA_ENABLED=1|true; mặc định localhost:9092', async () => {
+  it("enabled chỉ khi KAFKA_ENABLED='true' đúng chữ (thống nhất Go/Java/e2e); mặc định localhost:9092", async () => {
     const { loadConfig } = await import('../src/config.js');
     const base = { OIDC_ISSUER: 'http://localhost:8081' };
     expect(loadConfig(base).kafka).toEqual({
@@ -53,7 +53,7 @@ describe('kafka config flag (SF-27)', () => {
       bootstrapServers: 'localhost:9092',
     });
     expect(loadConfig({ ...base, KAFKA_ENABLED: 'true' }).kafka.enabled).toBe(true);
-    expect(loadConfig({ ...base, KAFKA_ENABLED: '1' }).kafka.enabled).toBe(true);
+    expect(loadConfig({ ...base, KAFKA_ENABLED: '1' }).kafka.enabled).toBe(false);
     expect(loadConfig({ ...base, KAFKA_ENABLED: 'false' }).kafka.enabled).toBe(false);
     expect(
       loadConfig({ ...base, KAFKA_ENABLED: 'true', KAFKA_BOOTSTRAP_SERVERS: 'kafka:29092' })

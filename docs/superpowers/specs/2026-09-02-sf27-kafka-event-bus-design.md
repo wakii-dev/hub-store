@@ -114,7 +114,7 @@ Chung: publish SAU khi mutation thành công (post-persist); lỗi publish → `
 - `go.mod`: `github.com/segmentio/kafka-go v0.4.47` (**verify go.mod của pin này hỗ trợ go 1.19** trước khi add; nếu không — lùi v0.4.46/45).
 - `internal/kafka/publisher.go`: interface `BatchEventPublisher { BatchCreated(ctx, batchCode, itemCount); BatchTransitioned(ctx, batchCode, from, to, reason) }`:
   - `KafkaPublisher` — `kafka.Writer` SINGLETON (tạo 1 lần trong main.go, không per-publish), brokers từ env, balancer hash key để per-batchCode ordering, marshal Envelope, try/catch log warn, `WriteMessages` với context timeout 2s (không treo response).
-  - `NoopPublisher` — khi `KAFKA_ENABLED` không phải `1`/`true`.
+  - `NoopPublisher` — khi `KAFKA_ENABLED` không phải đúng chữ `true` (flag thống nhất 'true' duy nhất — errata review SF-27, Go/Java chỉ nhận 'true').
   - Tạo trong `cmd/server/main.go` theo pattern `env()` hiện có (`KAFKA_ENABLED`, `KAFKA_BOOTSTRAP_SERVERS` default `localhost:9092`), inject `BatchingServer` qua field mới (mock-able cho test — pattern như `fulfill.Client`).
 - Hooks trong `internal/server/batching_server.go` (post-success):
   - `CreateBatch` (sau `store.CreateBatch` + mutate orders PREPARING thành công) → `batch.created` `{batchCode, itemCount, shopCode?}`.
@@ -125,7 +125,7 @@ Chung: publish SAU khi mutation thành công (post-persist); lỗi publish → `
 ## 5. Consumer BFF — `bff-realtime` group
 
 - `services/bff-gateway/package.json`: thêm `kafkajs` (^2.2.4).
-- `src/config.ts`: thêm `kafka: { enabled, bootstrapServers }` — `KAFKA_ENABLED` truthy (`1`/`true`), `KAFKA_BOOTSTRAP_SERVERS` default `localhost:9092`.
+- `src/config.ts`: thêm `kafka: { enabled, bootstrapServers }` — `KAFKA_ENABLED === 'true'` đúng chữ (errata review SF-27: thống nhất cả stack, không nhận `1`), `KAFKA_BOOTSTRAP_SERVERS` default `localhost:9092`.
 - `src/kafka/events.ts`: `EventEmitter` singleton export (`bffEvents`) — giao diện sạch cho SF-10 (subscribe `kafka:event` nhận `{topic, envelope}`).
 - `src/kafka/consumer.ts`: `startKafkaConsumer(bffEvents)` — chỉ gọi khi enabled; `kafkajs.Kafka` consumer group `bff-realtime`, subscribe `order-events` + `batch-events`, mỗi message parse JSON envelope (lỗi parse → log warn + skip, không crash), emit qua `bffEvents`. Mất kết nối kafka → kafkajs auto-reconnect mặc định; lỗi fatal log error, consumer chết im (không raise crash BFF).
 - `src/server.ts`: sau listen → `startKafkaConsumer` fire-and-forget (await catch log); graceful stop onClose.
