@@ -10,3 +10,9 @@
 ## 2026-09-02 — FI-245 SF-13 (FI-258)
 - **Flyway V2 collision với SF-7**: SF-13 tạo `V2__intake_schema.sql` (cột intake trên orders + bảng `activity_log` contract SF-7: id BIGSERIAL PK, actor, action, target, detail JSONB, created_at). **Rule merge chốt: V2 này canonical cho activity_log — khi SF-7 merge, file `V2__activity_log.sql` của SF-7 phải DROP (bảng đã tồn tại, DDL trùng contract) và SF-7 renumber sang version kế tiếp.** Không drop → Flyway fail boot "found more than one migration with version 2".
 - **Field-number reservation `HubStoreOrderFilterItem`**: SF-13 dùng 16-20 (customer_name/customer_phone/fail_reason/fail_note/old_fulfill_code). SF khác thêm field message này phải lấy 21+ — tránh wire-number collision khi merge branch song song.
+
+## 2026-09-02 — FI-258 (SF-13) — orca task deps post-create gap
+- **What:** `orca orchestration task-create` hỗ trợ `--deps` lúc tạo, nhưng không có lệnh thêm deps SAU khi task đã tạo (không có `task-update --add-deps`).
+- **Where:** orca orchestration CLI.
+- **Impact:** coordinator phải enforce dispatch order thủ công (flat task list, tự theo dõi DAG trong plan) — sai lệch một bước là worker chạy thiếu dependency.
+- **Suggested change:** thêm `orca orchestration task-update --id <id> --add-deps '["<taskId>"]'` (hoặc `task-deps add`).
