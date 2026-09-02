@@ -16,13 +16,16 @@ export const NAV_ROUTES: NavRoute[] = [
   { path: '/hub-store-order/order', labelKey: 'nav.orders', permission: 'orders.view' },
   { path: '/hub-store-order/batch', labelKey: 'nav.batch', permission: 'fulfillment.view' },
   { path: '/hub-store-order/batch/print', labelKey: 'nav.print', permission: 'fulfillment.print' },
+  // SF-18 — đặt CUỐI mảng: firstPathForRole lấy entry ĐẦU TIÊN role được phép,
+  // d2c cuối để không đổi landing path của Coordinator/Manager/WarehouseOps.
+  { path: '/hub-store-order/d2c', labelKey: 'nav.d2c', permission: 'd2c.view' },
 ];
 
 /** Path đầu tiên mà role này được phép xem (dùng sau login). */
 export function firstPathForRole(role: Role): string {
   const perms = PERMISSION_MATRIX[role] as readonly Permission[];
   const first = NAV_ROUTES.find((item) => perms.includes(item.permission));
-  // Mọi role đều có fulfillment.print → không bao giờ rơi vào đây.
+  // WarehouseEmployee → /hub-store-order/d2c; còn lại đều có fulfillment.print.
   return first?.path ?? NAV_ROUTES[2].path;
 }
 

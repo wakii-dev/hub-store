@@ -93,6 +93,16 @@ describe("App (shell)", () => {
     expect(screen.getByTestId("nav-print")).toBeTruthy();
   });
 
+  it("WarehouseEmployee (SF-18) sees ONLY the d2c nav item", async () => {
+    setCurrentUser("warehouse-emp", "WarehouseEmployee");
+    renderApp("/hub-store-order/d2c");
+    await waitFor(() => expect(screen.getByTestId("app-sidebar")).toBeTruthy());
+    expect(screen.getByTestId("nav-d2c")).toBeTruthy();
+    expect(screen.queryByTestId("nav-orders")).toBeNull();
+    expect(screen.queryByTestId("nav-batch")).toBeNull();
+    expect(screen.queryByTestId("nav-print")).toBeNull();
+  });
+
   it("renders remote-unavailable fallback instead of a white page", async () => {
     setCurrentUser("dev-user", "Coordinator");
     renderApp("/hub-store-order/batch/print");

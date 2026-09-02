@@ -15,15 +15,37 @@ afterEach(() => {
   setRole(null); // reset module store giữa các test
 });
 
-/** Matrix kỳ vọng — transcribe TRỰC TIẾP từ REQUIREMENTS §2. */
+/** Matrix kỳ vọng — transcribe TRỰC TIẾP từ REQUIREMENTS §2 (+ SF-18 d2c.view). */
 const EXPECTED: Record<Role, Record<Permission, boolean>> = {
-  Coordinator: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true },
-  WarehouseOps: { 'orders.view': false, 'fulfillment.view': true, 'fulfillment.print': true },
-  Manager: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true },
+  Coordinator: {
+    'orders.view': true,
+    'fulfillment.view': true,
+    'fulfillment.print': true,
+    'd2c.view': false,
+  },
+  WarehouseOps: {
+    'orders.view': false,
+    'fulfillment.view': true,
+    'fulfillment.print': true,
+    'd2c.view': true,
+  },
+  Manager: {
+    'orders.view': true,
+    'fulfillment.view': true,
+    'fulfillment.print': true,
+    'd2c.view': true,
+  },
+  // SF-18: WarehouseEmployee CHỈ có d2c.view — không D1/D2/Print.
+  WarehouseEmployee: {
+    'orders.view': false,
+    'fulfillment.view': false,
+    'fulfillment.print': false,
+    'd2c.view': true,
+  },
 };
 
 describe('usePermissions — role matrix §2 (exhaustive)', () => {
-  it('matrix const khớp bảng §2 cho đủ 3 roles × 3 permissions', () => {
+  it('matrix const khớp bảng §2 cho đủ 4 roles × 4 permissions', () => {
     for (const role of ROLES) {
       expect([...PERMISSION_MATRIX[role]].sort()).toEqual(
         PERMISSIONS.filter((p) => EXPECTED[role][p]).sort(),
@@ -42,6 +64,15 @@ describe('usePermissions — role matrix §2 (exhaustive)', () => {
         );
       }
     }
+  });
+
+  it('WarehouseEmployee (SF-18) CHỈ có d2c.view — không orders/fulfillment/print', () => {
+    setRole('WarehouseEmployee');
+    const { result } = renderHook(() => usePermissions());
+    expect(result.current.can('d2c.view')).toBe(true);
+    expect(result.current.can('orders.view')).toBe(false);
+    expect(result.current.can('fulfillment.view')).toBe(false);
+    expect(result.current.can('fulfillment.print')).toBe(false);
   });
 
   it('deny-by-default: chưa set role → can() false mọi permission', () => {

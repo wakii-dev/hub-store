@@ -4,18 +4,21 @@ import { chromium, type FullConfig } from "@playwright/test";
 
 /**
  * SF-4 — globalSetup: login THẬT qua Keycloak hosted UI (Authorization Code +
- * PKCE) cho 3 user mẫu của realm import (coordinator/warehouse/manager —
- * password dev `Password123!`) → storageState `.auth/<user>.json`. Các spec
- * dùng lại storageState (default coordinator) — KHÔNG login lại mỗi test.
+ * PKCE) cho các user mẫu của realm import (coordinator/warehouse/manager —
+ * password dev `Password123!`; SF-18 thêm warehouse-emp) → storageState
+ * `.auth/<user>.json`. Các spec dùng lại storageState (default coordinator)
+ * — KHÔNG login lại mỗi test.
  *
  * oidc-client-ts persist user ở window.localStorage (oidc.ts userStore) nên
  * storageState giữ nguyên session; reload sau đó loadCurrentUser đọc lại từ
  * localStorage → đăng nhập không cần đi qua /callback.
  *
  * Chạy sau khi webServer (boot-all.sh) đã keycloak :8081 + shell :3000 lên.
+ * NOTE SF-18: warehouse-emp chỉ tồn tại sau khi Keycloak re-import realm JSON
+ * (clean boot — verify ở Task 7).
  */
 
-const USERS = ["coordinator", "warehouse", "manager"] as const;
+const USERS = ["coordinator", "warehouse", "manager", "warehouse-emp"] as const;
 const PASSWORD = "Password123!"; // dev-only literal — realm JSON import
 const AUTH_DIR = path.join(__dirname, ".auth");
 
@@ -35,7 +38,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       await page.locator("#password").fill(PASSWORD);
       await page.locator("#kc-login").click();
       // Về /callback → app navigate firstPathForRole (coordinator/manager
-      // → /order, warehouse → /batch)
+      // → /order, warehouse → /batch, warehouse-emp → /d2c — SF-18)
       await page.waitForURL("**/hub-store-order/**");
       // AppLayout render = session đã persist localStorage — storageState đủ.
       await page.getByTestId("lang-toggle").waitFor();

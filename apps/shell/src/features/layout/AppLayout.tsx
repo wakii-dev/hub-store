@@ -6,6 +6,7 @@ import {
   ProfileOutlined,
   SolutionOutlined,
   PrinterOutlined,
+  SendOutlined,
   LogoutOutlined,
 } from '@ant-design/icons';
 import { usePermissions, sharedCssVariables } from '@hub-store/shared';
@@ -21,6 +22,7 @@ const NAV_ICONS: Record<string, ReactNode> = {
   '/hub-store-order/order': <ProfileOutlined />,
   '/hub-store-order/batch': <SolutionOutlined />,
   '/hub-store-order/batch/print': <PrinterOutlined />,
+  '/hub-store-order/d2c': <SendOutlined />,
 };
 
 /**

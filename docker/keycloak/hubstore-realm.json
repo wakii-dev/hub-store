@@ -15,6 +15,9 @@
       },
       {
         "name": "Manager"
+      },
+      {
+        "name": "WarehouseEmployee"
       }
     ]
   },
@@ -127,6 +130,24 @@
         }
       ],
       "email": "manager@hubstore.dev"
+    },
+    {
+      "username": "warehouse-emp",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Warehouse",
+      "lastName": "Employee",
+      "realmRoles": [
+        "WarehouseEmployee"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "email": "warehouse-emp@hubstore.dev"
     }
   ],
   "clientScopes": [

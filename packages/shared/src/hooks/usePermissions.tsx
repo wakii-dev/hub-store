@@ -1,11 +1,13 @@
 /**
  * usePermissions — role matrix REQUIREMENTS §2 (authoritative).
  *
- * Roles production (SSO claim): Coordinator / WarehouseOps / Manager.
+ * Roles production (SSO claim): Coordinator / WarehouseOps / Manager /
+ * WarehouseEmployee.
  * Permission keys ↔ screens (mapping D-screens):
  *   - 'orders.view'       → D1 Danh sách đơn hàng (/hub-store-order/order)
  *   - 'fulfillment.view'  → D2 Danh sách phiếu soạn (/hub-store-order/batch)
  *   - 'fulfillment.print' → D3 Print Shipment (/hub-store-order/batch/print)
+ *   - 'd2c.view'          → D2C/Dropship (/hub-store-order/d2c) — SF-18
  *
  * Role source: module-level store (setRole) HOẶC RoleProvider (context
  * — context wins nếu có). SF-6 role switcher drive bằng 1 trong 2 cách.
@@ -19,17 +21,26 @@ import {
   type ReactNode,
 } from 'react';
 
-export const ROLES = ['Coordinator', 'WarehouseOps', 'Manager'] as const;
+export const ROLES = ['Coordinator', 'WarehouseOps', 'Manager', 'WarehouseEmployee'] as const;
 export type Role = (typeof ROLES)[number];
 
-export const PERMISSIONS = ['orders.view', 'fulfillment.view', 'fulfillment.print'] as const;
+export const PERMISSIONS = [
+  'orders.view',
+  'fulfillment.view',
+  'fulfillment.print',
+  'd2c.view',
+] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
-/** §2: Coordinator → D1+D2+Print; WarehouseOps → D2+Print (KHÔNG D1); Manager → all. */
+/**
+ * §2: Coordinator → D1+D2+Print; WarehouseOps → D2+Print (KHÔNG D1);
+ * Manager → all; WarehouseEmployee → chỉ d2c.view (SF-18 — KHÔNG D1/D2/Print).
+ */
 export const PERMISSION_MATRIX = {
   Coordinator: ['orders.view', 'fulfillment.view', 'fulfillment.print'],
-  WarehouseOps: ['fulfillment.view', 'fulfillment.print'],
-  Manager: ['orders.view', 'fulfillment.view', 'fulfillment.print'],
+  WarehouseOps: ['fulfillment.view', 'fulfillment.print', 'd2c.view'],
+  Manager: ['orders.view', 'fulfillment.view', 'fulfillment.print', 'd2c.view'],
+  WarehouseEmployee: ['d2c.view'],
 } as const satisfies Record<Role, readonly Permission[]>;
 
 // --- module-level role store (lite, không cần Redux) ---
