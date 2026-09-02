@@ -248,11 +248,11 @@ export function exportRangeDays(from: string, to: string): number {
 - Modify: `scripts/seed-db.sh` (section D2C), `scripts/reset-db.sh` (TRUNCATE d2c_orders + gate)
 
 **Steps:**
-- [ ] **Step 1: d2c-sample.json** — top-level `{ "d2cOrders": [...] }`, camelCase keys khớp cột. Phủ: ≥3 carrier (GHN/GHTK/ViettelPost), ≥3 shop, 2 export employees, ≥2 product category + type, đủ 4 status, isDebtSplitting true/false, push_time trải ≥3 khung giờ khác nhau (VD `2026-08-15T08:30:00+07:00` vs `14:45` vs `20:10`) và nhiều ngày, note một số dòng có dấu tiếng Việt + dấu phẩy (test CSV escape). created_at trải ~30 ngày để export 31 ngày có data.
-- [ ] **Step 2: seed-db.sh section D2C** — mirror section orders: biến `SEED_D2C_JSON` (default `$(dirname)/../api/seed/d2c-sample.json`); gate bảng `to_regclass('public.d2c_orders')` NULL → fail-loud "chạy migration trước (V5)"; emptiness-gate: đã có rows → skip; INSERT qua `jsonb_array_elements` (pattern có sẵn); map timestamp + boolean + text cột đúng tên.
-- [ ] **Step 3: reset-db.sh** — thêm `d2c_orders` vào mảng TRUNCATE ... RESTART IDENTITY CASCADE + gate to_regclass (chỉ khi bảng tồn tại).
-- [ ] **Step 4: Verify thực** — DB sống: `bash scripts/seed-db.sh` → psql count = 12; chạy lần 2 → skip; `bash scripts/reset-db.sh` → count = 0; seed lại OK.
-- [ ] **Step 5: Commit** `feat(fi245-sf18): d2c-sample seed + seed-db section + reset-db d2c_orders`
+- [x] **Step 1: d2c-sample.json** — top-level `{ "d2cOrders": [...] }`, camelCase keys khớp cột. Phủ: ≥3 carrier (GHN/GHTK/ViettelPost), ≥3 shop, 2 export employees, ≥2 product category + type, đủ 4 status, isDebtSplitting true/false, push_time trải ≥3 khung giờ khác nhau (VD `2026-08-15T08:30:00+07:00` vs `14:45` vs `20:10`) và nhiều ngày, note một số dòng có dấu tiếng Việt + dấu phẩy (test CSV escape). created_at trải ~30 ngày để export 31 ngày có data.
+- [x] **Step 2: seed-db.sh section D2C** — mirror section orders: biến `SEED_D2C_JSON` (default `$(dirname)/../api/seed/d2c-sample.json`); gate bảng `to_regclass('public.d2c_orders')` NULL → fail-loud "chạy migration trước (V5)"; emptiness-gate: đã có rows → skip; INSERT qua `jsonb_array_elements` (pattern có sẵn); map timestamp + boolean + text cột đúng tên.
+- [x] **Step 3: reset-db.sh** — thêm `d2c_orders` vào mảng TRUNCATE ... RESTART IDENTITY CASCADE + gate to_regclass (chỉ khi bảng tồn tại).
+- [x] **Step 4: Verify thực** — DB sống: `bash scripts/seed-db.sh` → psql count = 12; chạy lần 2 → skip; `bash scripts/reset-db.sh` → count = 0; seed lại OK.
+- [x] **Step 5: Commit** `feat(fi245-sf18): d2c-sample seed + seed-db section + reset-db d2c_orders`
 
 ### Task 6: FE D2CPage (list + filter + expand + note modal + export UI)
 
