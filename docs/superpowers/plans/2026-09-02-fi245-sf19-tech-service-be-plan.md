@@ -417,7 +417,7 @@ git commit -m "feat(fi245-sf19): Flyway V6 tech service schema (4 bảng)"
 - Create: `src/main/java/com/hubstore/fulfillment/store/InMemoryTechOrderRepository.java`
 - Test: `src/test/java/com/hubstore/fulfillment/TechServiceLogicTest.java`
 
-- [ ] **Step 1: TechModels.java** — records + flags matrix + suggest logic (pure, testable). Status trong models = string THÔNG THƯỜNG ("NEW"...) — proto enum map ở TechServiceImpl (Task 5).
+- [x] **Step 1: TechModels.java** — records + flags matrix + suggest logic (pure, testable). Status trong models = string THÔNG THƯỜNG ("NEW"...) — proto enum map ở TechServiceImpl (Task 5).
 
 ```java
 package com.hubstore.fulfillment.store;
@@ -490,7 +490,7 @@ public final class TechModels {
 }
 ```
 
-- [ ] **Step 2: TechOrderRepository.java**
+- [x] **Step 2: TechOrderRepository.java**
 
 ```java
 package com.hubstore.fulfillment.store;
@@ -510,11 +510,11 @@ public interface TechOrderRepository {
 }
 ```
 
-- [ ] **Step 3: InMemoryTechOrderRepository.java** — constructor nhận seed lists (test nạp từ tech-sample.json qua Jackson); logic filter/suggest/assign giữ đúng semantics (suggest: activeCount theo ACTIVE_EXCLUDED, sort activeCount asc rồi seq asc — InMemory giữ list order làm seq proxy; assign: kiểm findInstallation + findTechnician + assignableStatus, replace technician, append history).
+- [x] **Step 3: InMemoryTechOrderRepository.java** — constructor nhận seed lists (test nạp từ tech-sample.json qua Jackson); logic filter/suggest/assign giữ đúng semantics (suggest: activeCount theo ACTIVE_EXCLUDED, sort activeCount asc rồi seq asc — InMemory giữ list order làm seq proxy; assign: kiểm findInstallation + findTechnician + assignableStatus, replace technician, append history).
 
 Viết đủ ~150 lines theo interface; filter: status/date/region/province/driver ILIKE contains/category contains trong items — mọi filter null/empty = bỏ qua; page 1-based, pageSize default 10, total trước paginate.
 
-- [ ] **Step 4: Failing tests trước** (`TechServiceLogicTest.java`) — load `../../api/seed/tech-sample.json` (Jackson → TechModels records; deliveryDate field hỗ trợ placeholder resolved ở seed script, unit test đọc trực tiếp giá trị TODAY sẽ fail → TechSeedLoader helper trong main `seed/TechSeedLoader.java` resolve TODAY/TODAY-N theo LocalDate.now() — dùng chung cho test):
+- [x] **Step 4: Failing tests trước** (`TechServiceLogicTest.java`) — load `../../api/seed/tech-sample.json` (Jackson → TechModels records; deliveryDate field hỗ trợ placeholder resolved ở seed script, unit test đọc trực tiếp giá trị TODAY sẽ fail → TechSeedLoader helper trong main `seed/TechSeedLoader.java` resolve TODAY/TODAY-N theo LocalDate.now() — dùng chung cho test):
 
 Test cases (AssertJ, pattern FilterAndHydrationTest + CollectingObserver):
 1. `filterDelivery_noDates_defaultsToToday` — filter không date → thấy đúng các đơn seed TODAY (resolve = today)
@@ -528,8 +528,8 @@ Test cases (AssertJ, pattern FilterAndHydrationTest + CollectingObserver):
 9. `assignTechnician_wrong_status_throws` — status DELIVERED → IllegalStateException
 10. `suggest_by_region_workload_asc` — KTV vùng X có ít đơn active đứng trước; đơn DELIVERED/CANCELLED không tính
 
-- [ ] **Step 5: Chạy `mvn test`** — InMemory impl pass; Postgres repo chưa có → config phải chưa wire (chưa tạo TechRepositoryConfig — để Task 4).
-- [ ] **Step 6: Commit** `feat(fi245-sf19): tech domain models + in-memory repo + flags/suggest/assign logic + tests`
+- [x] **Step 5: Chạy `mvn test`** — InMemory impl pass; Postgres repo chưa có → config phải chưa wire (chưa tạo TechRepositoryConfig — để Task 4).
+- [x] **Step 6: Commit** `feat(fi245-sf19): tech domain models + in-memory repo + flags/suggest/assign logic + tests`
 
 ### Task 4: PostgresTechOrderRepository + IT
 
