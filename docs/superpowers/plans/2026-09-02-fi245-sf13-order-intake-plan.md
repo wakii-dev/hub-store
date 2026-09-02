@@ -360,9 +360,9 @@ public final class IntakeValidator {
 - Modify: `services/bff-gateway/test/bff.contract.test.ts` hoặc tạo `test/intake.route.test.ts` (MỚI, dùng harness)
 
 Steps:
-- [ ] `pnpm --filter bff-gateway add @fastify/multipart@8 xlsx@0.18.5` (đúng registry/pnpm workspace).
-- [ ] `clients/intake.ts` — clone pattern `clients/fulfillment.ts`: `IntakeServiceClient` từ gen ts, interface `IntakeApi` 6 method, `callUnary(c.method.bind(c), req, role, deadlineMs)` — VÀ truyền thêm `x-user-name`: kiểm tra `callUnary` signature trong `clients/grpc.ts`; nếu chỉ nhận role → mở rộng optional param `actor?: string` (additive, các call cũ không vỡ) để metadata có `{ x-user-role: role, x-user-name: actor }`.
-- [ ] `lib/parseOrdersFile.ts`:
+- [x] `pnpm --filter bff-gateway add @fastify/multipart@8 xlsx@0.18.5` (đúng registry/pnpm workspace).
+- [x] `clients/intake.ts` — clone pattern `clients/fulfillment.ts`: `IntakeServiceClient` từ gen ts, interface `IntakeApi` 6 method, `callUnary(c.method.bind(c), req, role, deadlineMs)` — VÀ truyền thêm `x-user-name`: kiểm tra `callUnary` signature trong `clients/grpc.ts`; nếu chỉ nhận role → mở rộng optional param `actor?: string` (additive, các call cũ không vỡ) để metadata có `{ x-user-role: role, x-user-name: actor }`.
+- [x] `lib/parseOrdersFile.ts`:
 ```ts
 export const TEMPLATE_HEADERS = ["customerName","customerPhone","customerAddress","items","quantity","codAmount","shopHint"] as const;
 export function templateCsv(): string {
@@ -375,7 +375,7 @@ export function parseOrdersFile(filename: string, buffer: Buffer): { rows: RawRo
 }
 // items cell "SKU1:Sản A:2;SKU2:Sản B:1" → Product[]; cell items sai format → lỗi cột items
 ```
-- [ ] Routes `routes/intake.ts` (đăng ký trong app.ts sau fulfillment):
+- [x] Routes `routes/intake.ts` (đăng ký trong app.ts sau fulfillment):
   - `GET /orders/import/template` — role: Coordinator; `reply.type('text/csv').header('Content-Disposition','attachment; filename="order-import-template.csv"').send(templateCsv())`.
   - `POST /orders/import/preview` — Coordinator; `request.file()` (multipart) → parseOrdersFile → gRPC validateImportOrders(orders) → errors = resp.errors (response body) + parse errors gộp → `{ valid, errors }` (ImportPreviewResponse). **Row indexing: row parse-fail vẫn giữ vị trí bằng cách gửi IntakeOrder placeholder rỗng vào request — giữ 1-based indexing; BFF PHẢI track các index placeholder và DROP resp.errors của các row đó (placeholder rỗng sẽ sinh ~4 validation errors rác mỗi row — không lọc thì preview sai). Contract test thêm case mixed parse+validation errors.**
   - `POST /orders/import/confirm` — Coordinator; body `{orders: IntakeOrderDto[]}` → gRPC confirmImportOrders → `{ fulfillCodes }`; service trả INVALID_ARGUMENT khi re-validate fail → sendGrpcError tự map 422 (đã có sẵn, không đổi grpc-error.ts).
@@ -384,9 +384,9 @@ export function parseOrdersFile(filename: string, buffer: Buffer): { rows: RawRo
   - `POST /orders/:code/redeliver` — WarehouseOps → redeliverOrder → `{ fulfillCode }` 201.
   - `GET /orders/:code/audit` — mọi role → getOrderAudit → `{ items: AuditEntryDto[] }` (detail JSON.parse an toàn — parse fail → null).
   - Role check helper: tạo `requireRole(request, ...roles)` trong route file hoặc plugins/auth.ts (additive export).
-- [ ] Contract tests (harness hiện có — fake gRPC server stub per test như bff.contract.test.ts): template headers đúng; preview map lỗi; confirm 422 khi service INVALID_ARGUMENT; POST /orders 201; fail sai role 403; redeliver 201; audit envelope. Mỗi test assert pagination/envelope pattern như test cũ.
-- [ ] `cd services/bff-gateway && pnpm build && pnpm test` → xanh.
-- [ ] Commit: `feat(fi245-sf13): BFF intake routes — template/preview/confirm/manual/fail/redeliver/audit + csv/xlsx parse`
+- [x] Contract tests (harness hiện có — fake gRPC server stub per test như bff.contract.test.ts): template headers đúng; preview map lỗi; confirm 422 khi service INVALID_ARGUMENT; POST /orders 201; fail sai role 403; redeliver 201; audit envelope. Mỗi test assert pagination/envelope pattern như test cũ.
+- [x] `cd services/bff-gateway && pnpm build && pnpm test` → xanh.
+- [x] Commit: `feat(fi245-sf13): BFF intake routes — template/preview/confirm/manual/fail/redeliver/audit + csv/xlsx parse`
 
 ### Task 7 — FE D1 (apps/orders): Tạo đơn + Nhập đơn + expand retry-link
 **Depends:** Task 6 (routes sống)
