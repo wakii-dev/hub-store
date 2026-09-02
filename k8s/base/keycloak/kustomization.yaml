@@ -11,3 +11,14 @@ namespace: hub-store
 resources:
   - deployment.yaml
   - service.yaml
+
+# Realm JSON dev-only → Secret (không ConfigMap — chứa credentials, dù là dev).
+# disableNameSuffixHash: giữ tên ổn định `keycloak-realm-hub-store`.
+# FLAG FI-245: file realm-hub-store.json này sẽ được THAY bằng artifact đầy đủ
+# của FI-245 SF-4 (SF-5 ghi hướng chính thức trong wiring doc).
+secretGenerator:
+  - name: keycloak-realm-hub-store
+    files:
+      - realm-hub-store.json
+    options:
+      disableNameSuffixHash: true

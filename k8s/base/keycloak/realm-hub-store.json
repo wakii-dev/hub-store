@@ -1,0 +1,56 @@
+{
+  "realm": "hub-store",
+  "displayName": "Hub Store (DEV-ONLY)",
+  "enabled": true,
+  "clients": [
+    {
+      "clientId": "hub-store-app",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "directAccessGrantsEnabled": true,
+      "standardFlowEnabled": true,
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["http://localhost:3000"]
+    }
+  ],
+  "roles": {
+    "realm": [
+      { "name": "Coordinator" },
+      { "name": "WarehouseOps" },
+      { "name": "Manager" }
+    ]
+  },
+  "users": [
+    {
+      "username": "coordinator-dev",
+      "enabled": true,
+      "email": "coordinator-dev@hub-store.local",
+      "emailVerified": true,
+      "realmRoles": ["Coordinator"],
+      "credentials": [
+        { "type": "password", "value": "coordinator-dev-pass", "temporary": false }
+      ]
+    },
+    {
+      "username": "warehouseops-dev",
+      "enabled": true,
+      "email": "warehouseops-dev@hub-store.local",
+      "emailVerified": true,
+      "realmRoles": ["WarehouseOps"],
+      "credentials": [
+        { "type": "password", "value": "warehouseops-dev-pass", "temporary": false }
+      ]
+    },
+    {
+      "username": "manager-dev",
+      "enabled": true,
+      "email": "manager-dev@hub-store.local",
+      "emailVerified": true,
+      "realmRoles": ["Manager"],
+      "credentials": [
+        { "type": "password", "value": "manager-dev-pass", "temporary": false }
+      ]
+    }
+  ]
+}

@@ -59,6 +59,10 @@ spec:
                 secretKeyRef:
                   name: keycloak-admin
                   key: KEYCLOAK_ADMIN_PASSWORD
+          volumeMounts:
+            - name: realm-import
+              mountPath: /opt/keycloak/data/import
+              readOnly: true
           resources:
             requests:
               memory: 512Mi
@@ -66,3 +70,7 @@ spec:
             limits:
               memory: 1536Mi
               cpu: "1"
+      volumes:
+        - name: realm-import
+          secret:
+            secretName: keycloak-realm-hub-store
