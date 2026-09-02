@@ -75,4 +75,5 @@
 - R2: `xlsx` lib thêm vào bff (dependency mới) → pin version, chỉ parse, không render.
 - R3: multipart trong Fastify cần `@fastify/multipart` (dependency mới, pin).
 - R4: proto regen 4 languages — Java gen qua pom context `../../api/proto/gen/java` (checked-in) → regen bằng buf/protoc local, commit gen artifacts (pattern SF-2). Cần xác nhận buf/protoc có sẵn trên máy; nếu không, viết gen script dùng docker `bufbuild/buf`.
-- R5: seed E2E mutation — specs 05/06 chạy sau 01-04 (tiền tố số), DB in-memory/compose reset mỗi boot (reuseExistingServer:false) — ổn.
+- R5 (RESOLVED — xem §4 E2E determinism): DB Postgres persist giữa các run, boot-all KHÔNG reset → specs 05/06 dùng relative assertions; Java chạy Postgres impl thật dưới boot-all → V2 + advisory-lock có coverage.
+- R7 (P2): link retry→đơn cũ hiển thị ở **OrdersExpandContent** (expand row D1 — nơi chính xác để thêm info intake mới, không đụng bảng/cột D1 cũ). Đơn retry cũng để `note` = "Giao lại từ ORD-xxxx" cho thấy nhanh trong list mà không thêm cột.
