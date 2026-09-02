@@ -1,5 +1,6 @@
 import type { CSSProperties } from "react";
-import { DESIGN_TOKENS, type BatchStatus } from "@hub-store/shared";
+import { useTranslation } from "react-i18next";
+import { BATCH_STATUS, DESIGN_TOKENS } from "@hub-store/shared";
 import type { HubStoreOrderFilterItem } from "@hub-store/shared";
 
 /**
@@ -10,20 +11,11 @@ import type { HubStoreOrderFilterItem } from "@hub-store/shared";
  * có aggregate — số liệu tính từ items TRANG HIỆN TẠI, sub-label ghi rõ.
  * REQUIREMENT-GAP đã comment lên FI-245 đề xuất aggregate API.
  */
-export function StatStrip({
-  items,
-  isLoading,
-}: {
-  items: HubStoreOrderFilterItem[];
-  isLoading: boolean;
-}) {
-  if (isLoading) {
-    return null; // skeleton do parent render (StatStripSkeleton cùng shared)
-  }
-  const count = (s: BatchStatus) =>
-    items.filter((o) => o.batchStatus === s).length;
+export function StatStrip({ items }: { items: HubStoreOrderFilterItem[] }) {
+  const { t } = useTranslation("orders");
+  const count = (s: number) => items.filter((o) => o.batchStatus === s).length;
   const codPending = items
-    .filter((o) => o.batchStatus === 0)
+    .filter((o) => o.batchStatus === BATCH_STATUS.NOT_PREPARED)
     .reduce((sum, o) => sum + (o.codAmount ?? 0), 0);
 
   const cardStyle = (accent: boolean): CSSProperties => ({
@@ -55,23 +47,23 @@ export function StatStrip({
   return (
     <div style={{ display: "flex", gap: 10, marginBottom: 18 }}>
       <div className="sf6-stat-card" style={cardStyle(true)}>
-        <span style={keyStyle}>Chưa soạn</span>
-        <span style={valueStyle(true)}>{count(0)}</span>
+        <span style={keyStyle}>{t("stat.notPrepared")}</span>
+        <span style={valueStyle(true)}>{count(BATCH_STATUS.NOT_PREPARED)}</span>
       </div>
       <div className="sf6-stat-card" style={cardStyle(false)}>
-        <span style={keyStyle}>Đang soạn</span>
-        <span style={valueStyle(false)}>{count(1)}</span>
+        <span style={keyStyle}>{t("stat.preparing")}</span>
+        <span style={valueStyle(false)}>{count(BATCH_STATUS.PREPARING)}</span>
       </div>
       <div className="sf6-stat-card" style={cardStyle(false)}>
-        <span style={keyStyle}>Đã soạn</span>
-        <span style={valueStyle(false)}>{count(2)}</span>
+        <span style={keyStyle}>{t("stat.prepared")}</span>
+        <span style={valueStyle(false)}>{count(BATCH_STATUS.PREPARED)}</span>
       </div>
       <div className="sf6-stat-card" style={cardStyle(false)}>
-        <span style={keyStyle}>Lỗi vượt trọng lượng</span>
-        <span style={valueStyle(false)}>{count(3)}</span>
+        <span style={keyStyle}>{t("stat.weightExceeded")}</span>
+        <span style={valueStyle(false)}>{count(BATCH_STATUS.WEIGHT_EXCEEDED)}</span>
       </div>
       <div className="sf6-stat-card" style={cardStyle(false)}>
-        <span style={keyStyle}>Tổng COD chờ giao (VND)</span>
+        <span style={keyStyle}>{t("stat.codPending")}</span>
         <span style={valueStyle(false)}>
           {codPending.toLocaleString("vi-VN")}
         </span>

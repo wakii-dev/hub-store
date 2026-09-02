@@ -115,12 +115,24 @@ export default function AppLayout(props: {
               {t('header.title')}
             </strong>
             <span style={{ fontSize: 11, color: DESIGN_TOKENS.color.textMuted }}>
-              Hub Store Order · Điều phối vận hành
+              {t('header.subtitle')}
             </span>
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          <span style={{ ...langPillStyle }} onClick={props.onToggleLanguage} data-testid="lang-toggle" role="button" tabIndex={0}>
+          <span
+            style={{ ...langPillStyle }}
+            onClick={props.onToggleLanguage}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' || e.key === ' ') {
+                e.preventDefault();
+                props.onToggleLanguage();
+              }
+            }}
+            data-testid="lang-toggle"
+            role="button"
+            tabIndex={0}
+          >
             {props.lang.startsWith('vi') ? 'VI' : 'EN'}
           </span>
           <span

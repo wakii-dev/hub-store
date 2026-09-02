@@ -265,14 +265,14 @@ function D1Content() {
             {t("page.title")}
           </h1>
           <div style={{ fontSize: 13, color: DESIGN_TOKENS.color.textMuted, marginTop: 4 }}>
-            {total} đơn hàng
+            {t("page.subtitle", { total })}
           </div>
         </div>
-        <Button onClick={() => void refetch()}>Làm mới</Button>
+        <Button onClick={() => void refetch()}>{t("action.refresh")}</Button>
       </div>
 
       {/* Stat-strip — SF-6 §2.2 (page-scoped, Deviation D2) */}
-      {isLoading ? <StatStripSkeleton /> : <StatStrip items={rows} isLoading={false} />}
+      {isLoading ? <StatStripSkeleton /> : <StatStrip items={rows} />}
 
       <FilterBar
         onSearch={() => setFilter({})}
@@ -399,9 +399,9 @@ function D1Content() {
           locale={{
             emptyText: (
               <EmptyState
-                title="Không có đơn hàng nào"
-                sub="Thử xóa bộ lọc hoặc chọn khoảng thời gian khác"
-                actionLabel="Xóa bộ lọc"
+                title={t("empty.title")}
+                sub={t("empty.sub")}
+                actionLabel={t("empty.clear")}
                 onAction={handleReset}
               />
             ),

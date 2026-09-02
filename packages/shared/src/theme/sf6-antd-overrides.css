@@ -45,13 +45,13 @@
   background: #eaecf0;
 }
 
-/* Danger: solid @error-color */
-.ant-btn-danger {
+/* Danger: solid @error-color (antd 4.24 phát class .ant-btn-dangerous) */
+.ant-btn-dangerous {
   background: #d92d20; /* status.error */
   border: none;
   box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05);
 }
-.ant-btn-danger:not([disabled]):hover {
+.ant-btn-dangerous:not([disabled]):hover {
   background: #b42318;
 }
 

@@ -27,7 +27,7 @@ import {
 import type { ComponentClass } from "react";
 import arrayMove from "array-move";
 import moment from "moment";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import {
   DESIGN_TOKENS,
   StatusTag,
@@ -135,6 +135,15 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
   const [created, setCreated] = useState(false); // micro-interaction "✓" 800ms
   const section2Ref = useRef<HTMLDivElement | null>(null);
   const section3Ref = useRef<HTMLDivElement | null>(null);
+  // Reviewer-sf6 P1: timer đóng sau micro-interaction phải clear được —
+  // không thì đóng nhầm modal MỞ LẠI trong window 800ms + fire sau unmount.
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const clearCloseTimer = () => {
+    if (closeTimerRef.current !== null) {
+      clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = null;
+    }
+  };
 
   const scrollToSection = (s: 1 | 2 | 3) => {
     setActiveSection(s);
@@ -144,6 +153,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
 
   useEffect(() => {
     if (open) {
+      clearCloseTimer(); // P1: hủy timer version trước trước khi reset state
       setRows(orders);
       setGroups(null);
       setShipperId(undefined);
@@ -154,6 +164,9 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
     // Chỉ sync khi mở — selection D1 refetch giữa lúc mở không reset state đang sửa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // P1: unmount (navigate/destroyOnClose) → không fire onClose sau khi chết.
+  useEffect(() => () => clearCloseTimer(), []);
 
   const shopCode = rows[0]?.shopAssignment.shopCode ?? "";
 
@@ -247,7 +260,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
       message.success(t("createBatch.success"));
       // SF-6 §3 micro-interaction: label "✓" 800ms trước khi đóng.
       setCreated(true);
-      setTimeout(onClose, 800); // invalidatesTags Fulfillment/LIST tự refetch D1
+      closeTimerRef.current = setTimeout(onClose, 800); // ref để clear (P1 review)
     } catch (err) {
       // Error UX: backend reject (khác kho / đơn ≠0) → message, modal GIỮ state.
       message.error(extractRejectMessages(err, t("createBatch.error")).join("; "));
@@ -277,9 +290,9 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
   const step1Done = rows.length > 0;
   const step2Done = !!shipperId && deliveryTime !== null;
   const steps: Array<{ n: 1 | 2 | 3; label: string; done: boolean }> = [
-    { n: 1, label: "Danh sách đơn & thứ tự giao", done: step1Done },
-    { n: 2, label: "Shipper & thời gian giao", done: step2Done },
-    { n: 3, label: "Xác nhận tạo phiếu", done: false },
+    { n: 1, label: t("createBatch.step1"), done: step1Done },
+    { n: 2, label: t("createBatch.step2"), done: step2Done },
+    { n: 3, label: t("createBatch.step3"), done: false },
   ];
 
   return (
@@ -290,8 +303,8 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
             {t("createBatch.title")}
           </div>
           <div style={{ fontSize: 12.5, fontWeight: 400, color: DESIGN_TOKENS.color.textMuted }}>
-            {rows.length} đơn đã chọn
-            {shopCode ? ` · Kho ${shopCode}` : ""}
+            {t("createBatch.selectedCount", { count: rows.length })}
+            {shopCode ? ` · ${t("createBatch.shopLabel", { code: shopCode })}` : ""}
           </div>
         </div>
       }
@@ -418,7 +431,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
               data-testid="batch-shipper-select"
             />
             <Typography.Text type="secondary" style={{ fontSize: 12, marginTop: 6, display: "block" }}>
-              Danh sách lọc theo kho của phiếu
+              {t("createBatch.staffFilterHint")}
             </Typography.Text>
           </div>
           <div className="sf6-form-card">
@@ -462,19 +475,19 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
         {/* Sumbar — §2.3: 4 ô Số đơn / Sản phẩm / Quãng đường / Tổng COD */}
         <div className="sf6-sumbar">
           <div className="sf6-sum-cell">
-            <span className="sf6-sum-key">Số đơn</span>
+            <span className="sf6-sum-key">{t("createBatch.sum.orders")}</span>
             <span className="sf6-sum-val">{rows.length}</span>
           </div>
           <div className="sf6-sum-cell">
-            <span className="sf6-sum-key">Sản phẩm</span>
+            <span className="sf6-sum-key">{t("createBatch.sum.products")}</span>
             <span className="sf6-sum-val">{totalQuantity}</span>
           </div>
           <div className="sf6-sum-cell">
-            <span className="sf6-sum-key">Quãng đường</span>
+            <span className="sf6-sum-key">{t("createBatch.sum.distance")}</span>
             <span className="sf6-sum-val">{totalDistance > 0 ? `${totalDistance.toFixed(1)} km` : "—"}</span>
           </div>
           <div className="sf6-sum-cell">
-            <span className="sf6-sum-key">Tổng COD</span>
+            <span className="sf6-sum-key">{t("createBatch.sum.cod")}</span>
             <span className="sf6-sum-val">{formatVnd(totalCod)}</span>
           </div>
         </div>
@@ -482,48 +495,52 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
         {/* ─── Section 3: review + note banner ─── */}
         <div className="sf6-review" ref={section3Ref}>
           <div className="sf6-review-row">
-            <span className="sf6-review-key">Kho xuất</span>
+            <span className="sf6-review-key">{t("createBatch.review.shop")}</span>
             <span className="sf6-review-val">{rows[0]?.shopAssignment.shopName ?? "—"}{shopCode ? ` (${shopCode})` : ""}</span>
           </div>
           <div className="sf6-review-row">
-            <span className="sf6-review-key">Số đơn — thứ tự giao</span>
+            <span className="sf6-review-key">{t("createBatch.review.sequence")}</span>
             <span className="sf6-review-val">{rows.map((r) => r.fulfillCode).join(" → ") || "—"}</span>
           </div>
           <div className="sf6-review-row">
-            <span className="sf6-review-key">Shipper</span>
+            <span className="sf6-review-key">{t("createBatch.review.shipper")}</span>
             <span className="sf6-review-val">{shipperLabel}</span>
           </div>
           <div className="sf6-review-row">
-            <span className="sf6-review-key">Thời gian giao</span>
+            <span className="sf6-review-key">{t("createBatch.review.deliveryTime")}</span>
             <span className="sf6-review-val">
               {deliveryTime ? formatPeriodOfTime(deliveryTime.from, deliveryTime.to) : "—"}
             </span>
           </div>
           <div className="sf6-review-row">
-            <span className="sf6-review-key">Tổng COD</span>
+            <span className="sf6-review-key">{t("createBatch.review.cod")}</span>
             <span className="sf6-review-val">{formatVnd(totalCod)}</span>
           </div>
           <div className="sf6-review-row">
-            <span className="sf6-review-key">Ghi chú</span>
+            <span className="sf6-review-key">{t("createBatch.review.note")}</span>
             <span className="sf6-review-val">—</span>
           </div>
           <div className="sf6-note-banner">
             <span className="sf6-note-icon" aria-hidden="true">i</span>
             <span>
-              Khi tạo phiếu, trạng thái soạn của {rows.length} đơn chuyển thành{" "}
-              <b>Đang soạn</b> và mã phiếu <b>BATCH-xxxx</b> được sinh tự động.
+              <Trans
+                t={t}
+                i18nKey="createBatch.note"
+                values={{ count: rows.length }}
+                components={{ b: <b /> }}
+              />
             </span>
           </div>
         </div>
 
         <div className="batch-footer">
           <span className="sf6-footer-hint">
-            Bước {activeSection}/3 —{" "}
+            {t("createBatch.footer.step", { step: activeSection })} —{" "}
             {activeSection === 1
-              ? "Kéo thả để sắp thứ tự giao"
+              ? t("createBatch.footer.hint1")
               : activeSection === 2
-                ? "Chọn shipper và thời gian giao"
-                : "Kiểm tra lại thông tin trước khi tạo"}
+                ? t("createBatch.footer.hint2")
+                : t("createBatch.footer.hint3")}
           </span>
           <span style={{ flex: 1 }} />
           <Button data-testid="batch-close" onClick={onClose}>
@@ -531,7 +548,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
           </Button>
           {activeSection < 3 && (
             <Button onClick={() => scrollToSection((activeSection + 1) as 2 | 3)}>
-              Tiếp tục →
+              {t("createBatch.continue")}
             </Button>
           )}
           <Button
@@ -541,7 +558,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
             onClick={() => void handleCreate()}
             data-testid="batch-submit"
           >
-            {created ? "✓ Đã tạo phiếu" : activeSection === 3 ? "✓ Tạo phiếu soạn hàng" : t("createBatch.create")}
+            {created ? t("createBatch.created") : activeSection === 3 ? `✓ ${t("createBatch.create")}` : t("createBatch.create")}
           </Button>
         </div>
       </div>
