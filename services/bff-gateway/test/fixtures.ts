@@ -28,6 +28,22 @@ import type {
   ListPrintersResponse,
   PrintResponse,
 } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
+import type {
+  ListServiceEmployeesResponse,
+  ServiceEmployee,
+} from '../../../api/proto/gen/ts/hubstore/staffarea/v1/staffarea';
+
+/** SF-17 — fixture NV phụ trách khu vực (shape PROTO staffarea/v1). */
+export const fixtureServiceEmployee: ServiceEmployee = {
+  employeeCode: 'NV-001',
+  fullName: 'Nguyễn Nhân Viên',
+  titleCode: 'SHIPPER',
+  paymentAccount: '1234567890',
+  isActive: true,
+  regionCodes: ['HNI'],
+  createdAt: '2026-09-01T09:00:00+07:00',
+  updatedAt: '2026-09-01T09:00:00+07:00',
+};
 
 export const PDF_BYTES = new TextEncoder().encode('%PDF-1.4 hub-store contract-test\n');
 
@@ -136,4 +152,17 @@ export const printResponses = {
     printers: [{ id: 'P-30201-01', name: 'Printer Tầng 2', shopCode: '30201' }],
   } as ListPrintersResponse,
   print: { pdfContent: PDF_BYTES } as PrintResponse,
+};
+
+/** SF-17 StaffArea responses — mock default cho happy-path handlers. */
+export const staffAreaResponses = {
+  listServiceEmployees: {
+    items: [fixtureServiceEmployee],
+    total: 1,
+  } as ListServiceEmployeesResponse,
+  getServiceEmployee: { employee: fixtureServiceEmployee },
+  createServiceEmployee: { employee: fixtureServiceEmployee },
+  updateServiceEmployee: { employee: fixtureServiceEmployee },
+  setServiceEmployeeActive: { employee: { ...fixtureServiceEmployee, isActive: false } },
+  verifyPaymentAccount: { valid: true, source: 'MOCK', message: '[MOCK] Số TK hợp lệ.' },
 };

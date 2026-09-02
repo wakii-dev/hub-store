@@ -15,6 +15,9 @@
       },
       {
         "name": "Manager"
+      },
+      {
+        "name": "Admin"
       }
     ]
   },
@@ -127,6 +130,24 @@
         }
       ],
       "email": "manager@hubstore.dev"
+    },
+    {
+      "username": "admin",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Admin",
+      "lastName": "Demo",
+      "realmRoles": [
+        "Admin"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "email": "admin@hubstore.dev"
     }
   ],
   "clientScopes": [

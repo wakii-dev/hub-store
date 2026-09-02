@@ -20,10 +20,11 @@ import { createServer } from 'node:http';
 type RsaPrivateKey = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 import { buildApp } from '../src/app.js';
 import type { BffConfig } from '../src/config.js';
-import { fulfillmentResponses, batchingResponses, printResponses } from './fixtures.js';
+import { fulfillmentResponses, batchingResponses, printResponses, staffAreaResponses } from './fixtures.js';
 import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import { BatchingServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/batching';
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
+import { StaffAreaServiceService } from '../../../api/proto/gen/ts/hubstore/staffarea/v1/staffarea';
 
 export const TEST_ISSUER = 'https://keycloak.test/realms/hubstore';
 export const TEST_AUDIENCE = 'hubstore-api';
@@ -109,10 +110,18 @@ type UnaryHandler = (call: ServerUnaryCall<any, any>, cb: sendUnaryData<any>) =>
 function startMockServer(
   definition: Parameters<Server['addService']>[0],
   defaults: Record<string, UnaryHandler>,
+  /** SF-17: services extra sống CÙNG server (StaffArea cùng addr fulfillment
+   *  như production — buildApp trỏ staffArea client vào grpc.fulfillment). */
+  extraServices: Array<{
+    definition: Parameters<Server['addService']>[0];
+    defaults: Record<string, UnaryHandler>;
+  }> = [],
 ): Promise<MockUpstream> {
   // Delegation indirection — addService copy handler vào internal map, nên
-  // override phải swap qua `current` (server vẫn thấy handler mới).
+  // override phải swap qua `current` (server vẫn thấy handler mới). Tên handler
+  // fulfillment × staffarea không trùng → 1 map chung cho override được.
   const current: Record<string, UnaryHandler> = { ...defaults };
+  for (const extra of extraServices) Object.assign(current, extra.defaults);
   const delegating: UntypedServiceImplementation = {};
   for (const name of Object.keys(current)) {
     delegating[name] = ((call: ServerUnaryCall<any, any>, cb: sendUnaryData<any>) =>
@@ -120,6 +129,7 @@ function startMockServer(
   }
   const server = new Server();
   server.addService(definition, delegating);
+  for (const extra of extraServices) server.addService(extra.definition, delegating);
   return new Promise((resolve, reject) => {
     server.bindAsync('127.0.0.1:0', ServerCredentials.createInsecure(), (err, port) => {
       if (err) {
@@ -209,10 +219,26 @@ export interface HarnessOptions {
 export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> {
   const identity = await startTestIdentity();
   currentIdentity = identity;
-  const fulfillment = await startMockServer(FulfillmentServiceService, {
-    ...fulfillmentDefaults,
-    ...opts.fulfillmentHandlers,
-  });
+  const fulfillment = await startMockServer(
+    FulfillmentServiceService,
+    {
+      ...fulfillmentDefaults,
+      ...opts.fulfillmentHandlers,
+    },
+    [
+      {
+        definition: StaffAreaServiceService,
+        defaults: {
+          listServiceEmployees: (_c, cb) => cb(null, staffAreaResponses.listServiceEmployees),
+          getServiceEmployee: (_c, cb) => cb(null, staffAreaResponses.getServiceEmployee),
+          createServiceEmployee: (_c, cb) => cb(null, staffAreaResponses.createServiceEmployee),
+          updateServiceEmployee: (_c, cb) => cb(null, staffAreaResponses.updateServiceEmployee),
+          setServiceEmployeeActive: (_c, cb) => cb(null, staffAreaResponses.setServiceEmployeeActive),
+          verifyPaymentAccount: (_c, cb) => cb(null, staffAreaResponses.verifyPaymentAccount),
+        },
+      },
+    ],
+  );
   const batching = await startMockServer(BatchingServiceService, {
     ...batchingDefaults,
     ...opts.batchingHandlers,

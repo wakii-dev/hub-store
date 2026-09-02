@@ -14,8 +14,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ErrorEnvelope } from '@hub-store/shared';
 import type { BffOidcConfig } from '../config.js';
 
-/** Roles mà app nhận — khớp role matrix shell (nav.ts / PERMISSION_MATRIX). */
-export const KNOWN_ROLES = ['Coordinator', 'WarehouseOps', 'Manager'] as const;
+/** Roles mà app nhận — khớp role matrix shell (nav.ts / PERMISSION_MATRIX).
+ *  Admin (SF-17): role write của StaffArea — gate per-route qua requireRole. */
+export const KNOWN_ROLES = ['Coordinator', 'WarehouseOps', 'Manager', 'Admin'] as const;
 
 export interface RequestUser {
   sub: string;
@@ -82,4 +83,25 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
 export function requireUser(request: FastifyRequest): RequestUser {
   // Guard onRequest đảm bảo user luôn set cho route không public.
   return request.user as RequestUser;
+}
+
+/**
+ * Per-route role check (SF-17 — pattern đầu tiên, SF sau dùng lại). Route gọi
+ * ngay đầu handler: sai role → tự send 403 error envelope + return false để
+ * route dừng (`if (!requireRole(request, 'Admin')) return reply;`).
+ */
+export function requireRole(
+  request: FastifyRequest,
+  reply: { code(c: number): { send(b: unknown): unknown } },
+  role: RequestUser['role'],
+): boolean {
+  const user = requireUser(request);
+  if (user.role === role) return true;
+  const body: ErrorEnvelope = {
+    statusCode: 403,
+    message: `Role ${role} is required for this operation.`,
+    code: 'FORBIDDEN',
+  };
+  void reply.code(403).send(body);
+  return false;
 }

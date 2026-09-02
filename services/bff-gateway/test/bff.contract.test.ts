@@ -8,6 +8,7 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SignJWT } from 'jose';
 import { startHarness, signTestToken, invalidArgument, mockGrpcError, generateSecondIdentity, TEST_ISSUER, TEST_AUDIENCE } from './harness.js';
 import type { Harness } from './harness.js';
+import { staffAreaResponses } from './fixtures.js';
 
 let h: Harness;
 
@@ -349,5 +350,101 @@ describe('Task 7 — semantics + print PDF bytes', () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(after.statusCode).toBe(200);
+  });
+});
+
+describe('SF-17 Task 7 — Admin role gate trên 4 write routes /service-employees', () => {
+  const WRITE_ROUTES = [
+    {
+      method: 'POST' as const,
+      url: '/service-employees',
+      payload: {
+        employeeCode: 'NV-403',
+        fullName: 'Nguyễn Bị Chặn',
+        titleCode: 'SHIPPER',
+        paymentAccount: '1234567890',
+      },
+    },
+    {
+      method: 'PUT' as const,
+      url: '/service-employees/NV-001',
+      payload: { fullName: 'Sửa', titleCode: 'SHIPPER', paymentAccount: '1234567890' },
+    },
+    {
+      method: 'PUT' as const,
+      url: '/service-employees/NV-001/active',
+      payload: { active: false },
+    },
+    {
+      method: 'POST' as const,
+      url: '/service-employees/payment-account/verify',
+      payload: { paymentAccount: '1234567890' },
+    },
+  ];
+
+  it('Coordinator gọi 4 write routes → 403 error envelope code FORBIDDEN (không chạm gRPC)', async () => {
+    for (const route of WRITE_ROUTES) {
+      const res = await h.app.inject({
+        method: route.method,
+        url: route.url,
+        payload: route.payload,
+        headers: { authorization: `Bearer ${await signTestToken('Coordinator')}` },
+      });
+      expect(res.statusCode, route.url).toBe(403);
+      const body = res.json();
+      expect(body.statusCode).toBe(403);
+      expect(body.code).toBe('FORBIDDEN');
+      expect(typeof body.message).toBe('string');
+    }
+  });
+
+  it('Admin pass-through: POST create chạm mock gRPC + metadata x-user-role Admin', async () => {
+    let capturedRole: string | undefined;
+    let capturedCode: string | undefined;
+    h.fulfillment.override({
+      createServiceEmployee: (call, cb) => {
+        capturedRole = call.metadata.get('x-user-role')[0] as string;
+        capturedCode = (call.request as { employee?: { employeeCode?: string } }).employee
+          ?.employeeCode;
+        cb(null, staffAreaResponses.createServiceEmployee);
+      },
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/service-employees',
+      payload: {
+        employeeCode: 'NV-001',
+        fullName: 'Nguyễn Nhân Viên',
+        titleCode: 'SHIPPER',
+        paymentAccount: '1234567890',
+        regionCodes: ['HNI'],
+      },
+      headers: { authorization: `Bearer ${await signTestToken('Admin', 'admin-tester')}` },
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toMatchObject({ employeeCode: 'NV-001', isActive: true });
+    expect(capturedRole).toBe('Admin');
+    expect(capturedCode).toBe('NV-001');
+  });
+
+  it('Admin verify TK 200 + GET list với Coordinator vẫn 200 (read any-authenticated)', async () => {
+    const verify = await h.app.inject({
+      method: 'POST',
+      url: '/service-employees/payment-account/verify',
+      payload: { paymentAccount: '1234567890' },
+      headers: { authorization: `Bearer ${await signTestToken('Admin')}` },
+    });
+    expect(verify.statusCode).toBe(200);
+    expect(verify.json()).toEqual({ valid: true, source: 'MOCK', message: '[MOCK] Số TK hợp lệ.' });
+
+    const list = await h.app.inject({
+      method: 'GET',
+      url: '/service-employees',
+      headers: { authorization: `Bearer ${await signTestToken('Coordinator')}` },
+    });
+    expect(list.statusCode).toBe(200);
+    const body = list.json();
+    expect(Object.keys(body).sort()).toEqual(['items', 'page', 'pageSize', 'total']);
+    expect(body.items[0]).toMatchObject({ employeeCode: 'NV-001', fullName: 'Nguyễn Nhân Viên' });
   });
 });

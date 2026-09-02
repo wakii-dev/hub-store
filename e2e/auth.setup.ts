@@ -4,7 +4,7 @@ import { chromium, type FullConfig } from "@playwright/test";
 
 /**
  * SF-4 — globalSetup: login THẬT qua Keycloak hosted UI (Authorization Code +
- * PKCE) cho 3 user mẫu của realm import (coordinator/warehouse/manager —
+ * PKCE) cho 4 user mẫu của realm import (coordinator/warehouse/manager/admin —
  * password dev `Password123!`) → storageState `.auth/<user>.json`. Các spec
  * dùng lại storageState (default coordinator) — KHÔNG login lại mỗi test.
  *
@@ -15,7 +15,7 @@ import { chromium, type FullConfig } from "@playwright/test";
  * Chạy sau khi webServer (boot-all.sh) đã keycloak :8081 + shell :3000 lên.
  */
 
-const USERS = ["coordinator", "warehouse", "manager"] as const;
+const USERS = ["coordinator", "warehouse", "manager", "admin"] as const;
 const PASSWORD = "Password123!"; // dev-only literal — realm JSON import
 const AUTH_DIR = path.join(__dirname, ".auth");
 

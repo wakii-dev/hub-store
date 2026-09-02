@@ -2,19 +2,19 @@
  * StaffArea REST routes (SF-17 — spec §6):
  *   GET  /service-employees                      — bất kỳ role đã đăng nhập
  *   GET  /service-employees/:code                — bất kỳ
- *   POST /service-employees                      — Admin (gate ở task 7 — pass-through)
- *   PUT  /service-employees/:code                — Admin (gate ở task 7 — pass-through)
- *   PUT  /service-employees/:code/active         — Admin (gate ở task 7 — pass-through)
- *   POST /service-employees/payment-account/verify — Admin (gate ở task 7 — pass-through)
+ *   POST /service-employees                      — Admin (requireRole → 403 FORBIDDEN)
+ *   PUT  /service-employees/:code                — Admin
+ *   PUT  /service-employees/:code/active         — Admin
+ *   POST /service-employees/payment-account/verify — Admin
  * Error mapping một chỗ: sendGrpcError. Role từ JWT guard, truyền xuống gRPC
- * qua metadata x-user-role. Write routes CHƯA gate role — requireRole('Admin')
- * thêm ở task role-guard (đồng bộ 1 lần với realm/e2e).
+ * qua metadata x-user-role. Write routes gate server-side requireRole('Admin')
+ * — không chỉ ẩn nút FE (spec §4 non-functional).
  */
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import type { FastifyInstance } from 'fastify';
 import type { StaffAreaApi } from '../clients/staffArea.js';
 import { SERVICE_NAMES } from '../config.js';
-import { requireUser } from '../plugins/auth.js';
+import { requireUser, requireRole } from '../plugins/auth.js';
 import { paginated } from '../lib/envelope.js';
 import { sendGrpcError, grpcError } from '../lib/grpc-error.js';
 import {
@@ -78,6 +78,7 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
 
   // Create — validation (format code/account, cap 100) ở upstream gRPC (BFF pass-through).
   app.post<{ Body: ServiceEmployeeBody }>('/service-employees', async (request, reply) => {
+    if (!requireRole(request, reply, 'Admin')) return reply;
     const { role } = requireUser(request);
     const b = request.body;
     try {
@@ -113,6 +114,7 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
   app.put<{ Params: { code: string }; Body: ServiceEmployeeBody }>(
     '/service-employees/:code',
     async (request, reply) => {
+      if (!requireRole(request, reply, 'Admin')) return reply;
       const { role } = requireUser(request);
       const b = request.body;
       try {
@@ -150,6 +152,7 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
   app.put<{ Params: { code: string }; Body: { active?: boolean } }>(
     '/service-employees/:code/active',
     async (request, reply) => {
+      if (!requireRole(request, reply, 'Admin')) return reply;
       const { role } = requireUser(request);
       try {
         const resp = await s.setServiceEmployeeActive(
@@ -174,6 +177,7 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
   app.post<{ Body: { paymentAccount?: string } }>(
     '/service-employees/payment-account/verify',
     async (request, reply) => {
+      if (!requireRole(request, reply, 'Admin')) return reply;
       const { role } = requireUser(request);
       try {
         const resp = await s.verifyPaymentAccount(
