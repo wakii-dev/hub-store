@@ -181,7 +181,7 @@ Thêm vào `service FulfillmentService`:
 - Test: `src/test/java/.../D2cFilterAndNoteTest.java` (unit, in-memory list impl inline), `src/test/java/.../PostgresD2cRepositoryIT.java` (skip-when-no-DB)
 
 **Steps:**
-- [ ] **Step 1: Interface + records** — mirror pattern OrderRepository:
+- [x] **Step 1: Interface + records** — mirror pattern OrderRepository:
 ```java
 public interface D2cOrderRepository {
     D2cFilterResult filter(D2cOrderFilter filter);
@@ -190,12 +190,12 @@ public interface D2cOrderRepository {
 }
 ```
 D2cOrderRecord = Java record 19 fields khớp proto D2cOrder. D2cOrderFilter = record (search, statuses, carriers, shops, exportEmployees, productCategory, productType, createdFrom/To, pushFrom/To Instant, pushSlotFrom/To String, page, pageSize) + normalize defaults (page<1→1, pageSize<=0→10, cap pageSize≤500).
-- [ ] **Step 2: Postgres impl** — copy pattern `PostgresOrderRepository.filter()` (PostgresOrderRepository.java:51-127): dynamic WHERE + `COUNT(*) OVER()` 1 statement + LATERAL OFFSET/LIMIT; **ORDER BY id ASC**; LIKE escape helper y hệt (escape `\ % _`). Slot filter: `AND (push_time AT TIME ZONE 'Asia/Ho_Chi_Minh')::time >= ?::time` / `<= ?::time` (chỉ áp khi push_time IS NOT NULL — NULL không match slot). updateNote: `UPDATE d2c_orders SET note=? WHERE order_code=? RETURNING *`.
-- [ ] **Step 3: gRPC impl** — FulfillmentServiceImpl thêm 2 method: map proto ↔ record (Timestamp helpers có sẵn trong file), FilterD2cOrders → repo.filter → response; UpdateD2cOrderNote → repo.updateNote, không thấy → GrpcErrors INVALID_ARGUMENT "Không tìm thấy đơn D2C <code>" (pattern GrpcErrors.java).
-- [ ] **Step 4: Unit test (TDD — viết trước)**: D2cFilterAndNoteTest dùng in-memory List impl (inline class trong test, sort id ASC): filter carrier single/multi, slot from/to (timestamp có +07 offset), search LIKE escaped (input `100%_` match literal), empty-page total (page 99), note update found/not-found.
-- [ ] **Step 5: IT**: PostgresD2cRepositoryIT — skip-when-no-DB (assumptions, pattern PostgresOrderRepositoryIT), parity vs in-memory trên filter case, insert fixture rows trong @BeforeEach + cleanup @AfterEach.
-- [ ] **Step 6: Run** `mvn -q test` (unit xanh; IT: `mvn test -Dtest=PostgresD2cRepositoryIT` khi DB sống).
-- [ ] **Step 7: Commit** `feat(fi245-sf18): D2cOrderRepository postgres + gRPC filter/note + tests`
+- [x] **Step 2: Postgres impl** — copy pattern `PostgresOrderRepository.filter()` (PostgresOrderRepository.java:51-127): dynamic WHERE + `COUNT(*) OVER()` 1 statement + LATERAL OFFSET/LIMIT; **ORDER BY id ASC**; LIKE escape helper y hệt (escape `\ % _`). Slot filter: `AND (push_time AT TIME ZONE 'Asia/Ho_Chi_Minh')::time >= ?::time` / `<= ?::time` (chỉ áp khi push_time IS NOT NULL — NULL không match slot). updateNote: `UPDATE d2c_orders SET note=? WHERE order_code=? RETURNING *`.
+- [x] **Step 3: gRPC impl** — FulfillmentServiceImpl thêm 2 method: map proto ↔ record (Timestamp helpers có sẵn trong file), FilterD2cOrders → repo.filter → response; UpdateD2cOrderNote → repo.updateNote, không thấy → GrpcErrors INVALID_ARGUMENT "Không tìm thấy đơn D2C <code>" (pattern GrpcErrors.java).
+- [x] **Step 4: Unit test (TDD — viết trước)**: D2cFilterAndNoteTest dùng in-memory List impl (inline class trong test, sort id ASC): filter carrier single/multi, slot from/to (timestamp có +07 offset), search LIKE escaped (input `100%_` match literal), empty-page total (page 99), note update found/not-found.
+- [x] **Step 5: IT**: PostgresD2cRepositoryIT — skip-when-no-DB (assumptions, pattern PostgresOrderRepositoryIT), parity vs in-memory trên filter case, insert fixture rows trong @BeforeEach + cleanup @AfterEach.
+- [x] **Step 6: Run** `mvn -q test` (unit xanh; IT: `mvn test -Dtest=PostgresD2cRepositoryIT` khi DB sống).
+- [x] **Step 7: Commit** `feat(fi245-sf18): D2cOrderRepository postgres + gRPC filter/note + tests`
 
 ### Task 3: BFF route /d2c-orders + export + vitest
 
