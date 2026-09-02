@@ -2,12 +2,13 @@
 # SF-4 deploy — minikube local. BUILD = scripts/k8s-build-images.sh (SF-1, ENTRY POINT
 # DUY NHẤT — script này CALL, không duplicate build logic). APPLY overlay + đợi rollout.
 # Idempotent: chạy lại sạch (kubectl apply + rollout status đều an toàn re-run).
+# Tag luôn = dev — overlay k8s/overlays/minikube pins newTag: dev. Đổi tag khác
+# phải sửa overlay images newTag (IMAGE_TAG env sẽ build tag đó nhưng apply vẫn :dev).
 #   bash scripts/k8s-deploy.sh           # build + deploy + đợi Ready
-#   IMAGE_TAG=v2 bash scripts/k8s-deploy.sh   # tag khác (khớp overlay images newTag)
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
-IMAGE_TAG="${IMAGE_TAG:-dev}"
+IMAGE_TAG="dev"
 
 # 1. Build 5 images vào minikube (script SF-1 — preflight minikube status bên trong).
 IMAGE_TAG="$IMAGE_TAG" bash scripts/k8s-build-images.sh

@@ -1,7 +1,11 @@
 # Ingress SF-4 — 2 resources vì nginx rewrite-target là annotation MỨC INGRESS
-# (một value cho mọi path): route strip-prefix (/api, /keycloak) cần rewrite /$2,
-# route root (/) KHÔNG được rewrite (/$2 rỗng sẽ hỏng serving shell).
-# /keycloak → keycloak:8080 (KC_HTTP_RELATIVE_PATH=/keycloak do SF-3 đặt — contract).
+# (một value cho mọi path): route strip-prefix (/api) cần rewrite /$2,
+# route KHÔNG strip (/ và /keycloak) phải nằm ở ingress riêng.
+#
+# /keycloak KHÔNG strip: SF-3 đặt KC_HTTP_RELATIVE_PATH=/keycloak → keycloak TỰ
+# phục vụ dưới prefix /keycloak (backend phải nhận /keycloak/... nguyên vẹn;
+# strip sẽ 404 hoặc loop redirect 302).
+#
 # LƯU Ý: SF-3 đang chạy song song — nếu service keycloak chưa tồn tại, nginx ingress
 # chỉ trả 503 cho prefix đó, các route còn lại hoạt động bình thường.
 apiVersion: networking.k8s.io/v1
@@ -23,13 +27,6 @@ spec:
                 name: bff
                 port:
                   number: 8080
-          - path: /keycloak(/|$)(.*)
-            pathType: ImplementationSpecific
-            backend:
-              service:
-                name: keycloak
-                port:
-                  number: 8080
 ---
 apiVersion: networking.k8s.io/v1
 kind: Ingress
@@ -47,3 +44,10 @@ spec:
                 name: web
                 port:
                   number: 3000
+          - path: /keycloak
+            pathType: Prefix
+            backend:
+              service:
+                name: keycloak
+                port:
+                  number: 8080
