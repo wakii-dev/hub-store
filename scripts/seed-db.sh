@@ -207,6 +207,9 @@ if [[ -f "$SEED_TECH_JSON" ]]; then
 echo "seed-db: nạp tech service ← $(basename "$SEED_TECH_JSON") ..."
 psql_cmd -d fulfillment -v ON_ERROR_STOP=1 \
   -v tech_json="$(cat "$SEED_TECH_JSON")" <<'SQL'
+-- Pin TZ = app-side hikari connection-init-sql (spec §6.1) — TODAY placeholder
+-- phải resolve cùng 'hôm nay' với today-default của app (review P1, 2026-09-02).
+SET timezone='Asia/Ho_Chi_Minh';
 SELECT to_regclass('public.technicians') IS NULL
     OR to_regclass('public.delivery_orders') IS NULL
     OR to_regclass('public.installation_orders') IS NULL AS missing \gset

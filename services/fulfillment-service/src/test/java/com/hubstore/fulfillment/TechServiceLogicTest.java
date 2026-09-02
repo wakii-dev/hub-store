@@ -79,6 +79,24 @@ class TechServiceLogicTest {
     }
 
     @Test
+    void filterDelivery_oneSidedDateFrom_only() {
+        // Review P1: dateFrom-only không được NPE — from=today loại TODAY-1 → 9 đơn.
+        TechModels.DeliveryPage resp = repo.filterDelivery(deliveryFilter(
+                List.of(), null, List.of(), List.of(), null, null, LocalDate.now(), null));
+        assertThat(resp.total()).isEqualTo(9);
+        assertThat(resp.items()).allSatisfy(
+                o -> assertThat(o.deliveryDate()).isEqualTo(LocalDate.now()));
+    }
+
+    @Test
+    void filterDelivery_oneSidedDateTo_only() {
+        // dateTo-only: to=today bao cả TODAY-1 → đủ 10 đơn (parity Postgres one-sided).
+        TechModels.DeliveryPage resp = repo.filterDelivery(deliveryFilter(
+                List.of(), null, List.of(), List.of(), null, null, null, LocalDate.now()));
+        assertThat(resp.total()).isEqualTo(10);
+    }
+
+    @Test
     void filterDelivery_byStatus_and_dateRange() {
         TechModels.DeliveryPage resp = repo.filterDelivery(deliveryFilter(
                 List.of("SHIPPING"), null, List.of(), List.of(), null, null,

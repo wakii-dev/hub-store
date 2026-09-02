@@ -152,7 +152,11 @@ public class InMemoryTechOrderRepository implements TechOrderRepository {
         if (isNotBlank(f.province()) && !f.province().equals(o.province())) {
             return false;
         }
-        return !o.deliveryDate().isBefore(from) && !o.deliveryDate().isAfter(to);
+        // One-sided range: chỉ 1 trong from/to được set → null-side không chặn (parity Postgres).
+        if (from != null && o.deliveryDate().isBefore(from)) {
+            return false;
+        }
+        return to == null || !o.deliveryDate().isAfter(to);
     }
 
     private boolean matchesInstallation(TechModels.InstallationOrder o, TechModels.InstallationFilter f,
