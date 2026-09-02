@@ -143,6 +143,13 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 ### 3.21 Print expansion + platform polish (SF-21, deps SF-15+SF-6)
 - In mở rộng 5 loại chứng từ (bill, vận đơn, handover_receipt, goods_handover, installation_acceptance); printer management (bảng printers + chọn theo shop, bill vs A4); print errors per-đơn; preview; "in tất cả".
 - Platform: hotkeys (F4 save/F6 create/F8 cancel), empty-states dùng chung.
+- Platform polish (từ app gốc): avatar upload (crop, JPG/PNG <5MB, persist); font-size slider header (12–20, persist localStorage); hotkey helper modal (bảng phím tắt + search); fullscreen toggle (F11); version badge + check-version prompt reload.
+
+### 3.28 D1 order ops — chuyển kho CN + delivery time + criteria (SF-28, deps SF-2+SF-13, Tier 3)
+- **Chuyển kho CN** (gate quyền): chọn đúng 1 đơn (chặn đơn tách nợ) → modal đề xuất kho đích (suggest endpoint, debounce search) → tạo yêu cầu chuyển kho + **lịch sử ticket chuyển kho** (modal bảng: ticket #, trạng thái duyệt, kho đích, lý do, người/thời gian xác nhận).
+- **Điều chỉnh thời gian dự kiến giao** per-order: DatePicker + slot giờ từ API time-delivery, chặn ngày quá khứ; audit log.
+- **Criteria presets tạo phiếu** (step 1 wizard D1b): endpoint trả presets tiêu chí tối ưu; wizard chọn preset → kế hoạch soạn (route stops) như hiện có; KHÔNG đổi flow DnD step 2.
+- GHI CHÚ: "kho ghi chú" (order note update) nếu rebuild chưa có → thêm endpoint note per-order (audit log).
 
 ### 3.22 i18n vi/en toàn app (SF-22, deps SF-6)
 - Khung i18next (hoặc tương đương nhẹ) + namespace theo module; bản VI đầy đủ (mặc định) + EN cho toàn bộ screens; language switcher trong shell; persist localStorage.
@@ -171,7 +178,7 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - **Env**: `KAFKA_BOOTSTRAP_SERVERS` + `KAFKA_ENABLED` (false → producer/consumer no-op không lỗi — tương thích môi trường không Kafka, E2E cũ không vỡ).
 - KHÔNG đổi gRPC contract; KHÔNG đổi flow nghiệp vụ đồng bộ hiện có; KHÔNG event-sourcing.
 
-### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14+SF-16+SF-20+SF-21+SF-22..26 — CUỐI, Tier 6)
+### 3.12 Product completion — Production hardening (SF-12, deps SF-5+SF-11+SF-14+SF-16+SF-20+SF-21+SF-22..26+SF-28 — CUỐI, Tier 6)
 - **M-3 resolved**: s2s auth — token passthrough (BFF forward access token, services verify JWKS) HOẶC mTLS nội mạng compose — SF-12 chọn 1, ghi rationale.
 - Secrets: `.env` ra khỏi git (gitignore + rotate credentials), compose đọc từ env file local.
 - Monitoring: healthcheck endpoints mọi service + uptime checks compose; logs structured.

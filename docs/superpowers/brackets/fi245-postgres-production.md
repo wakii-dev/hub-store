@@ -91,7 +91,7 @@ Tasks: audit-viewer-screen / export-ui / mobile-responsive / design-harmonize-sc
 Tier: 6
 linear: FI-257
 What: M-3 resolved (token passthrough HOẶC mTLS s2s — chọn 1 + rationale); .env ra khỏi git + rotate credentials + compose env-file local; healthcheck endpoints mọi service + logs structured; CI GitHub Actions (lint + unit + E2E E2E=1 + docker build mỗi PR); backup cron pg_dump 2 DB + restore doc
-Depends on: SF-5, SF-11, SF-14, SF-16, SF-20, SF-21, SF-22, SF-23, SF-24, SF-25, SF-26
+Depends on: SF-5, SF-11, SF-14, SF-16, SF-20, SF-21, SF-22, SF-23, SF-24, SF-25, SF-26, SF-28
 Tasks: s2s-token-passthrough-or-mtls / secrets-out-of-git / rotate-credentials / healthchecks-all / structured-logs / ci-pipeline / e2e-in-ci / backup-cron / restore-doc / security-final-audit
 
 ## SF-13 Order intake + delivery exceptions
@@ -153,9 +153,16 @@ Tasks: fe-3-tabs / filters-url-persist / assign-modal-suggest / ktv-ctv-detail /
 ## SF-21 Print expansion + platform polish
 Tier: 4
 linear: FI-266
-What: in 5 loại chứng từ (bill/delivery/handover_receipt/goods_handover/installation_acceptance); printer management (bảng printers + chọn theo shop, bill vs A4); print errors per-đơn; preview; "in tất cả"; hotkeys F4/F6/F8; empty-states dùng chung
+What: in 5 loại chứng từ (bill/delivery/handover_receipt/goods_handover/installation_acceptance); printer management (bảng printers + chọn theo shop, bill vs A4); print errors per-đơn; preview; "in tất cả"; hotkeys F4/F6/F8; empty-states dùng chung; platform polish từ app gốc — avatar upload crop + font-size slider (12-20 persist) + hotkey helper modal + fullscreen F11 + version check prompt reload
 Depends on: SF-15, SF-6
-Tasks: print-types-5 / printer-management / print-errors / preview-improve / print-all / hotkeys / empty-states-shared / e2e-print-expansion
+Tasks: print-types-5 / printer-management / print-errors / preview-improve / print-all / hotkeys / empty-states-shared / avatar-upload / font-size-slider / hotkey-helper-modal / fullscreen-version-check / e2e-print-expansion
+
+## SF-28 D1 order ops — chuyển kho CN + delivery time + criteria
+Tier: 3
+linear: FI-279
+What: chuyển kho CN (chọn 1 đơn chặn tách nợ → suggest kho đích debounce → tạo yêu cầu + lịch sử ticket chuyển kho modal); điều chỉnh thời gian dự kiến giao per-order (DatePicker + slot time-delivery, chặn ngày quá khứ, audit); criteria presets step 1 wizard D1b (endpoint presets, KHÔNG đổi flow DnD); order note per-order endpoint nếu chưa có (audit)
+Depends on: SF-2, SF-13
+Tasks: transfer-hub-api / transfer-hub-modal / transfer-ticket-history / delivery-time-adjust-api / delivery-time-slots / criteria-presets-api / wizard-step1-preset / order-note-endpoint / e2e-order-ops
 
 ## SF-22 i18n vi/en toàn app
 Tier: 4
