@@ -284,7 +284,8 @@ public class PostgresOrderRepository implements OrderRepository {
             shop_code, shop_name, shop_address, original_time_from, original_time_to,
             delivery_time_from, delivery_time_to, order_status, items::text AS items,
             cod_amount, total_quantity, is_debt_splitting_order, customer_address,
-            distance, note""";
+            distance, note, customer_name, customer_phone, old_fulfill_code,
+            fail_reason, fail_note, failed_at, created_time""";
 
     /** Row + surrogate id — mutations UPDATE theo id (chính xác hơn dual-match). */
     private record OrderRow(long id, SeedModels.OrderSeed order) {
@@ -315,8 +316,14 @@ public class PostgresOrderRepository implements OrderRepository {
                 (Double) rs.getObject("distance"),
                 rs.getString("note"),
                 List.of(),
-                // SF-13 intake columns — wire ở Task 4 (Postgres impl method mới).
-                null, null, null, null, null, null, null);
+                // SF-13 intake columns.
+                rs.getString("customer_name"),
+                rs.getString("customer_phone"),
+                rs.getString("old_fulfill_code"),
+                rs.getString("fail_reason"),
+                rs.getString("fail_note"),
+                instant(ts(rs, "failed_at")),
+                instant(ts(rs, "created_time")));
     }
 
     /** items JSONB → List<ProductSeed>; cả from+to NULL → range null
@@ -411,6 +418,11 @@ public class PostgresOrderRepository implements OrderRepository {
         return dt == null ? null : dt.toString();
     }
 
+    /** OffsetDateTime → Instant (null-safe) — failed_at/created_time OrderSeed là Instant. */
+    private static Instant instant(OffsetDateTime dt) {
+        return dt == null ? null : dt.toInstant();
+    }
+
     /** Escape % _ \ cho ILIKE literal-substring (ESCAPE '\'). */
     private static String escapeLike(String s) {
         return s.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_");
@@ -420,40 +432,110 @@ public class PostgresOrderRepository implements OrderRepository {
         return String.join(", ", Collections.nCopies(n, "?"));
     }
 
-    // ---------------- SF-13 intake — stub, Task 4 wire Postgres thật ----------------
+    // ---------------- SF-13 intake ----------------
 
+    /**
+     * Codegen atomic: pg_advisory_xact_lock('fulfill_code_gen') chặn 2 tx lấy
+     * cùng dải (lock giữ đến hết tx); MAX substring bỏ qua code không ORD-n
+     * (retry code NG-*, test code IT-* không đẩy max). Baseline 3000 ≡ seed.
+     */
     @Override
+    @Transactional
     public List<String> nextFulfillCodes(int n) {
-        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+        jdbc.execute("SELECT pg_advisory_xact_lock(hashtext('fulfill_code_gen'))");
+        Integer max = jdbc.queryForObject(
+                "SELECT COALESCE(MAX((substring(fulfill_code FROM 5))::INT), 3000) "
+                        + "FROM orders WHERE fulfill_code ~ '^ORD-[0-9]+$'", Integer.class);
+        List<String> codes = new ArrayList<>(n);
+        for (int i = 1; i <= n; i++) {
+            codes.add(String.format("ORD-%04d", max + i));
+        }
+        return codes;
     }
 
+    /** Insert batch (đã gán codes, đã validate) — @Transactional all-or-nothing. */
     @Override
+    @Transactional
     public List<SeedModels.OrderSeed> insertOrders(List<SeedModels.OrderSeed> orders) {
-        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+        List<SeedModels.OrderSeed> out = new ArrayList<>();
+        for (SeedModels.OrderSeed o : orders) {
+            jdbc.update("INSERT INTO orders (fulfill_code, order_code, status_code, batch_status, batch_code, "
+                            + "shop_code, shop_name, shop_address, original_time_from, original_time_to, "
+                            + "delivery_time_from, delivery_time_to, order_status, items, cod_amount, total_quantity, "
+                            + "is_debt_splitting_order, customer_address, distance, note, "
+                            + "customer_name, customer_phone, old_fulfill_code, created_time) "
+                            // items là cột JSONB — text param cast tường minh (vị trí 14/24).
+                            + "VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,CAST(? AS jsonb),?,?,?,?,?,?,?,?,?,?)",
+                    o.fulfillCode(), o.orderCode(), o.statusCode(), o.batchStatus(), o.batchCode(),
+                    o.shopAssignment() == null ? null : o.shopAssignment().shopCode(),
+                    o.shopAssignment() == null ? null : o.shopAssignment().shopName(),
+                    o.shopAssignment() == null ? null : o.shopAssignment().address(),
+                    toTs(o.originalTime() == null ? null : o.originalTime().from()),
+                    toTs(o.originalTime() == null ? null : o.originalTime().to()),
+                    toTs(o.deliveryTime() == null ? null : o.deliveryTime().from()),
+                    toTs(o.deliveryTime() == null ? null : o.deliveryTime().to()),
+                    o.orderStatus(), toJson(o.items()), o.codAmount(), o.totalQuantity(),
+                    o.isDebtSplittingOrder(), o.customerAddress(), o.distance(), o.note(),
+                    o.customerName(), o.customerPhone(), o.oldFulfillCode(),
+                    o.createdTime() == null ? null : OffsetDateTime.ofInstant(o.createdTime(), ZoneOffset.UTC));
+            out.add(findByExactFulfillCode(o.fulfillCode()).orElseThrow());
+        }
+        return out;
     }
 
+    /** Mark-fail: phải tồn tại + chưa FAILED (service validate thêm — repo chặn double). */
     @Override
+    @Transactional
     public SeedModels.OrderSeed markFailed(String fulfillCode, String reason, String note, Instant at) {
-        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+        OrderRow row = requireOrder(fulfillCode);
+        if (row.order().failReason() != null) {
+            throw new IllegalArgumentException("Đơn đã FAILED: " + fulfillCode);
+        }
+        jdbc.update("UPDATE orders SET fail_reason = ?, fail_note = ?, failed_at = ? WHERE id = ?",
+                reason, note, OffsetDateTime.ofInstant(at, ZoneOffset.UTC), row.id());
+        return row.order().withFail(reason, note, at);
     }
 
     @Override
     public boolean hasRetry(String fulfillCode) {
-        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+        Long c = jdbc.queryForObject(
+                "SELECT count(*) FROM orders WHERE old_fulfill_code = ?", Long.class, fulfillCode);
+        return c != null && c > 0;
     }
 
+    /** Chỉ match fulfill_code — KHÔNG dual-match orderCode (lookup old code chính xác). */
     @Override
     public Optional<SeedModels.OrderSeed> findByExactFulfillCode(String fulfillCode) {
-        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+        return jdbc.query("SELECT " + ORDER_COLS + " FROM orders WHERE fulfill_code = ? ORDER BY id ASC LIMIT 1",
+                        ORDER_ROW_MAPPER, fulfillCode).stream().findFirst()
+                .map(OrderRow::order);
     }
 
     @Override
+    @Transactional
     public void appendAudit(String actor, String action, String target, String detailJson) {
-        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+        // detail là cột JSONB — text param phải cast tường minh.
+        jdbc.update("INSERT INTO activity_log (actor, action, target, detail, created_at) "
+                        + "VALUES (?, ?, ?, CAST(? AS jsonb), now())",
+                actor, action, target, detailJson);
     }
 
     @Override
     public List<AuditEntry> getAudit(String fulfillCode) {
-        throw new UnsupportedOperationException("SF-13 Task 4: Postgres impl");
+        return jdbc.query("SELECT actor, action, target, detail::text AS detail, created_at FROM activity_log "
+                        + "WHERE target = ? ORDER BY id ASC",
+                (rs, n) -> new AuditEntry(rs.getString("actor"), rs.getString("action"),
+                        rs.getString("target"), rs.getString("detail"),
+                        instant(rs.getObject("created_at", OffsetDateTime.class))),
+                fulfillCode);
+    }
+
+    /** items List<ProductSeed> → JSON string cho cột JSONB. */
+    private static String toJson(List<SeedModels.ProductSeed> items) {
+        try {
+            return OBJECT_MAPPER.writeValueAsString(items == null ? List.of() : items);
+        } catch (Exception e) {
+            throw new IllegalStateException("fulfillment: serialize items thất bại — " + e.getMessage(), e);
+        }
     }
 }
