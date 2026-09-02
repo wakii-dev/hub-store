@@ -5,9 +5,22 @@
  */
 import { buildApp } from './app.js';
 import { loadConfig } from './config.js';
+import { bffEvents } from './kafka/events.js';
+import { startKafkaConsumer } from './kafka/consumer.js';
 
 const config = loadConfig();
 const app = buildApp(config);
+
+// SF-27 — Kafka side-channel consumer (KAFKA_ENABLED=true mới chạy; lỗi kafka
+// chỉ log, không crash BFF).
+let kafkaConsumerStop: (() => Promise<void>) | null = null;
+if (config.kafka.enabled) {
+  void startKafkaConsumer(config.kafka.bootstrapServers, (m) =>
+    bffEvents.emit('kafka:event', m),
+  ).then((stop) => {
+    kafkaConsumerStop = stop;
+  });
+}
 
 app.listen({ port: config.port, host: '0.0.0.0' }).then(
   (address) => {
@@ -21,6 +34,9 @@ app.listen({ port: config.port, host: '0.0.0.0' }).then(
 
 for (const signal of ['SIGINT', 'SIGTERM'] as const) {
   process.on(signal, () => {
-    void app.close().then(() => process.exit(0));
+    void app
+      .close()
+      .then(() => kafkaConsumerStop?.())
+      .then(() => process.exit(0));
   });
 }

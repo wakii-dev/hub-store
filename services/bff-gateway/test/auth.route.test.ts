@@ -75,6 +75,7 @@ function buildTestApp(opts: { devResetPassword?: boolean } = {}): ReturnType<typ
       deadlineMs: 2000,
     },
     devResetPassword: opts.devResetPassword ?? true,
+    kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 — off trong test
   };
   return buildApp(config);
 }

@@ -250,6 +250,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       deadlineMs: opts.deadlineMs ?? 2000,
     },
     devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
+    kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 side-channel — off trong test
   };
   const app = buildApp(config);
 

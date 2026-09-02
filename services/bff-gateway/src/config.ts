@@ -63,6 +63,14 @@ export interface BffConfig {
    * không set flag thì endpoint KHÔNG tồn tại (404), không phụ thuộc README.
    */
   devResetPassword: boolean;
+  /** SF-27 — Kafka side-channel consumer. */
+  kafka: BffKafkaConfig;
+}
+
+export interface BffKafkaConfig {
+  /** false → consumer KHÔNG start (mặc định — side-channel opt-in). */
+  enabled: boolean;
+  bootstrapServers: string;
 }
 
 function stripSlash(url: string): string {
@@ -124,5 +132,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       deadlineMs: Number(env.BFF_GRPC_DEADLINE_MS ?? 5000),
     },
     devResetPassword: env.ENABLE_DEV_RESET_PASSWORD === '1',
+    kafka: {
+      enabled: env.KAFKA_ENABLED === '1' || env.KAFKA_ENABLED === 'true',
+      bootstrapServers: env.KAFKA_BOOTSTRAP_SERVERS ?? 'localhost:9092',
+    },
   };
 }
