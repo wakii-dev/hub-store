@@ -107,4 +107,15 @@ cd e2e && pnpm exec playwright test
 
 ## Roles dev stub
 
-Login page cho chọn 1 trong 3 role (JWT giả, OIDC production): **Coordinator** (D1+D2+D3), **WarehouseOps** (D2+D3), **Manager** (tất cả).
+**(SF-4 đã thay bằng OIDC thật)** Role đến từ Keycloak realm role: **Coordinator** (D1+D2+D3), **WarehouseOps** (D2+D3), **Manager** (tất cả). Role switcher dev đã bỏ — đổi role = đăng nhập bằng user khác.
+
+## OIDC auth (Keycloak) — SF-4
+
+- Bật Keycloak + realm import tự động: `docker compose up -d keycloak` (realm JSON: `docker/keycloak/hubstore-realm.json`; `--import-realm` skip nếu realm đã tồn tại — đổi realm/user phải `docker compose down -v` reset volume keycloak-data).
+- Users mẫu (dev-only, password literal trong realm JSON): `coordinator` / `warehouse` / `manager` — password `Password123!`.
+- Shell login PKCE (public client `hubstore-web`) — env `VITE_OIDC_*` trong `.env`; silent renew qua refresh token; logout → Keycloak end-session.
+- BFF verify JWKS RS256 (`OIDC_ISSUER`/`OIDC_AUDIENCE`/`OIDC_JWKS_URL`), role từ claim `realm_access.roles` → gRPC metadata `x-user-role`.
+
+## Forgot password (DEV-ONLY)
+
+Trang "Quên mật khẩu" trên shell + endpoint `POST /auth/reset-password` đặt lại password trực tiếp qua Keycloak Admin API — **KHÔNG có bước xác minh danh tính** (không email, không OTP). Chỉ dùng cho dev/local; production bắt buộc thay bằng OTP email hoặc Keycloak built-in forgot-password flow.

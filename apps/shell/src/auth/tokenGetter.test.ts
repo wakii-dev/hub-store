@@ -1,70 +1,128 @@
 // @vitest-environment node
-// Node env — lý do xem session.test.ts (jose realm). localStorage stub giống hệt.
-import { afterEach, describe, expect, it, vi } from "vitest";
-import { getAxiosInstance, setTokenGetter } from "@hub-store/api-client";
-import { getSessionToken, signIn, signOut } from "./session";
+// Node env — oidc-client-ts UserManager được mock; các helper auth thuần
+// (mapRole/token mirror/401 interceptor) test được ở node. Redirect/callback
+// flow thật là integration với Keycloak — phủ bởi E2E auth.setup (login UI).
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { getAxiosInstance, setTokenGetter } from '@hub-store/api-client';
+import {
+  getAccessToken,
+  installUnauthorizedInterceptor,
+  loadCurrentUser,
+  mapRole,
+  registerTokenGetter,
+  sessionFromUser,
+} from './oidc';
 
-const store = new Map<string, string>();
-const localStorageStub: Storage = {
-  get length() {
-    return store.size;
-  },
-  clear: () => store.clear(),
-  getItem: (k: string) => store.get(k) ?? null,
-  key: (i: number) => [...store.keys()][i] ?? null,
-  removeItem: (k: string) => void store.delete(k),
-  setItem: (k: string, v: string) => void store.set(k, v),
-};
-Object.defineProperty(globalThis, "localStorage", {
-  value: localStorageStub,
-  configurable: true,
-  writable: true,
+const { mockSigninRedirect } = vi.hoisted(() => ({ mockSigninRedirect: vi.fn() }));
+
+vi.mock('oidc-client-ts', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('oidc-client-ts')>();
+  const users = new Map<string, unknown>();
+  class FakeUserManager {
+    events = {
+      addUserLoaded(_cb: (u: unknown) => void) {},
+      addUserUnloaded(_cb: () => void) {},
+    };
+    async getUser() {
+      return users.get('current') ?? null;
+    }
+    async signinRedirect() {
+      mockSigninRedirect();
+    }
+    static __setUser(profile: unknown) {
+      users.set('current', { profile, access_token: 'kc-access-token' });
+    }
+    static __clear() {
+      users.clear();
+    }
+  }
+  return {
+    ...actual,
+    UserManager: FakeUserManager,
+    // node realm không có localStorage — stub vô hại (FakeUserManager không dùng).
+    WebStorageStateStore: class {},
+  };
 });
 
-/** Token-getter registration (spec §2 SF-6): shell đăng ký lúc init — request
- * axios/RTK-Query tự mang Bearer token, KHÔNG context xuyên MF boundary. */
-describe("setTokenGetter + session", () => {
-  afterEach(() => {
-    setTokenGetter(() => null);
-    signOut();
-    vi.restoreAllMocks();
+import { UserManager } from 'oidc-client-ts';
+
+function setUserManagerUser(profile: unknown) {
+  (UserManager as unknown as { __setUser: (p: unknown) => void }).__setUser(profile);
+}
+
+// Node test env không có VITE_OIDC_* — import.meta.env per-module nên set qua
+// process.env (shared cross-module; oidc.readEnv merge với precedence meta).
+beforeEach(() => {
+  process.env.VITE_OIDC_AUTHORITY = 'https://keycloak.test';
+  process.env.VITE_OIDC_CLIENT_ID = 'hubstore-web';
+  process.env.VITE_OIDC_REDIRECT_URI = 'http://localhost:3000/callback';
+});
+
+afterEach(() => {
+  (UserManager as unknown as { __clear: () => void }).__clear();
+  setTokenGetter(() => null);
+  vi.clearAllMocks();
+  delete process.env.VITE_OIDC_AUTHORITY;
+  delete process.env.VITE_OIDC_CLIENT_ID;
+  delete process.env.VITE_OIDC_REDIRECT_URI;
+});
+
+describe('mapRole — realm_access.roles ∩ KNOWN ROLES', () => {
+  it('lấy role đầu tiên khớp role matrix', () => {
+    expect(mapRole({ realm_access: { roles: ['default-roles-hubstore', 'Manager', 'Coordinator'] } })).toBe('Manager');
+    expect(mapRole({ realm_access: { roles: ['Coordinator'] } })).toBe('Coordinator');
+    expect(mapRole({ realm_access: { roles: ['default-roles-hubstore'] } })).toBeNull();
+    expect(mapRole(null)).toBeNull();
   });
+});
 
-  it("interceptor attaches Bearer token from the session to every request", async () => {
-    const { token } = await signIn("dev-user", "Coordinator");
-    // Đăng ký CHÍNH getter mà main.tsx dùng lúc init — test đúng wiring thật.
-    setTokenGetter(() => getSessionToken());
+describe('registerTokenGetter + getAccessToken (SF-4)', () => {
+  it('getter trả access token sau loadCurrentUser, null khi chưa login', async () => {
+    registerTokenGetter();
+    expect(getAccessToken()).toBeNull();
+    setUserManagerUser({ preferred_username: 'coordinator', realm_access: { roles: ['Coordinator'] } });
+    const user = await loadCurrentUser();
+    expect(user).not.toBeNull();
+    expect(getAccessToken()).toBe('kc-access-token');
+    expect(sessionFromUser(user!)).toEqual({ sub: 'coordinator', role: 'Coordinator' });
+  });
+});
 
-    const instance = getAxiosInstance();
-    const adapter = vi.fn((config: { headers: { get: (k: string) => string } }) => {
-      void config;
-      return Promise.resolve({ data: {}, status: 200, statusText: "OK", headers: {}, config });
+describe('installUnauthorizedInterceptor — 401 → signinRedirect', () => {
+  it('response 401 kích signinRedirect đúng 1 lần (chống lặp)', async () => {
+    installUnauthorizedInterceptor();
+    const axios = getAxiosInstance();
+    let callCount = 0;
+    const id = axios.interceptors.response.use(undefined, (error) => {
+      callCount += 1;
+      return Promise.reject(error);
     });
-    // @ts-expect-error — test-only adapter override
-    instance.defaults.adapter = adapter;
-
-    await instance.get("/fulfillment/filter");
-    expect(adapter).toHaveBeenCalledTimes(1);
-    const sentConfig = adapter.mock.calls[0][0] as {
-      headers: { get: (k: string) => string | string[] };
-    };
-    const auth = sentConfig.headers.get("Authorization");
-    expect(String(auth)).toBe(`Bearer ${token}`);
+    try {
+      await axios.request({
+        url: 'http://localhost:9999/never',
+        adapter: () => Promise.reject({ response: { status: 401 }, config: {} }),
+      });
+      expect.unreachable('expected rejection');
+    } catch {
+      // rejected như kỳ vọng
+    }
+    axios.interceptors.response.eject(id);
+    expect(callCount).toBe(1);
+    expect(mockSigninRedirect).toHaveBeenCalledTimes(1);
   });
 
-  it("no session → no Authorization header", async () => {
-    signOut();
-    setTokenGetter(() => null);
-    const instance = getAxiosInstance();
-    const adapter = vi.fn((config: unknown) =>
-      Promise.resolve({ data: {}, status: 200, statusText: "OK", headers: {}, config }),
-    );
-    // @ts-expect-error — test-only adapter override
-    instance.defaults.adapter = adapter;
-    await instance.get("/healthz");
-    const sentConfig = adapter.mock.calls[0][0] as {
-      headers: { get: (k: string) => string | string[] | undefined };
-    };
-    expect(sentConfig.headers.get("Authorization")).toBeUndefined();
+  it('lỗi non-401 KHÔNG kích signinRedirect', async () => {
+    installUnauthorizedInterceptor();
+    const axios = getAxiosInstance();
+    try {
+      await axios.request({
+        url: 'http://localhost:9999/never',
+        adapter: () => Promise.reject({ response: { status: 500 }, config: {} }),
+      });
+      expect.unreachable('expected rejection');
+    } catch {
+      // rejected như kỳ vọng
+    }
+    expect(mockSigninRedirect).not.toHaveBeenCalled();
   });
 });
