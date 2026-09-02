@@ -5,16 +5,10 @@ import { expect, test, type Page } from "@playwright/test";
  * 5 screens: D1, D1b, D1c, D2, D3) + COD format audit
  * (VI `15.000.000đ` / EN `15,000,000 ₫`) + formatPeriodOfTime nhất quán.
  * Chạy sau 01-main-flow (dùng BATCH-0001 seed + batch vừa tạo).
+ * SF-4: storageState coordinator (auth.setup) — không login stub.
  */
 
 const MISSING_KEY = /missingKey|i18next::|The .* key.*missing/i;
-
-async function login(page: Page) {
-  await page.goto("/hub-store-order/order");
-  await page.getByTestId("login-page").waitFor();
-  await page.getByTestId("login-submit").click();
-  await page.waitForURL("**/hub-store-order/**");
-}
 
 async function visitAllScreens(page: Page) {
   // D1 + filters render
@@ -66,7 +60,6 @@ test("i18n binary: VI+EN qua 5 screens — zero missing-key warning", async ({ p
     if (MISSING_KEY.test(err.message)) warnings.push(`[pageerror] ${err.message}`);
   });
 
-  await login(page);
   await visitAllScreens(page);
 
   // Toggle EN (lang-toggle hiển thị ngược locale hiện tại) + đi lại toàn bộ
@@ -79,7 +72,6 @@ test("i18n binary: VI+EN qua 5 screens — zero missing-key warning", async ({ p
 });
 
 test("COD format: VI '1.850.000đ' → EN '1,850,000 ₫' + formatPeriodOfTime nhất quán", async ({ page }) => {
-  await login(page);
   const periodRe = /\d{2}:\d{2} \d{2}\/\d{2}\/\d{4} – \d{2}:\d{2} \d{2}\/\d{2}\/\d{4}/;
   const codVn = /^\d{1,3}(\.\d{3})+đ$/;
   const codEn = /^\d{1,3}(,\d{3})+ ₫$/;

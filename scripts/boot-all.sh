@@ -3,7 +3,7 @@
 # toàn hệ thống, KHÔNG boot tay 7 process). Cũng dùng được standalone:
 #   bash scripts/boot-all.sh          # boot + block (Ctrl-C dừng tất cả)
 #   BOOT_ONLY=1 bash scripts/boot-all.sh   # boot rồi thoát (processes vẫn sống)
-# Ports: 50051 java · 50052 go · 50053 python · 8080 bff · 3000 shell · 3001 orders · 3002 fulfillment
+# Ports: 8081 keycloak (docker) · 50051 java · 50052 go · 50053 python · 8080 bff · 3000 shell · 3001 orders · 3002 fulfillment
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 LOG_DIR="${LOG_DIR:-/tmp/story/fi233}"
@@ -30,6 +30,13 @@ wait_port() {
   echo "[boot-all] TIMEOUT chờ $name :$port — log: $LOG_DIR" >&2
   return 1
 }
+
+# SF-4 — Keycloak :8081 TRƯỚC BFF (BFF verify JWKS khi request đầu vào).
+# 8081 là port docker-managed — KHÔNG đưa vào PORTS kill-list (kill sẽ giết
+# docker-proxy). compose up idempotent — realm đã có thì --import-realm skip.
+echo "[boot-all] boot keycloak (:8081, docker compose)..."
+(cd "$ROOT" && docker compose up -d keycloak) >"$LOG_DIR/e2e-keycloak.log" 2>&1
+wait_port keycloak 8081 || exit 1
 
 echo "[boot-all] boot fulfillment-service (Java :50051)..."
 (cd "$ROOT/services/fulfillment-service" && exec ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
@@ -60,7 +67,7 @@ echo "[boot-all] boot shell (:3000)..."
 (cd "$ROOT/apps/shell" && exec pnpm dev) >"$LOG_DIR/e2e-shell.log" 2>&1 &
 wait_port shell 3000 || exit 1
 
-echo "[boot-all] HỆ THỐNG SẴN — 7/7 ports lên"
+echo "[boot-all] HỆ THỐNG SẴN — keycloak + 7/7 ports lên"
 if [ "${BOOT_ONLY:-0}" = "1" ]; then exit 0; fi
 # Block giữ process sống (Playwright webServer contract) — TERM/INT kill tất cả.
 trap 'kill $(jobs -p) 2>/dev/null; exit 0' TERM INT

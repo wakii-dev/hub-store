@@ -16,6 +16,8 @@ packages/*/src/**/*.d.ts
 # SF-11 E2E artifacts (Playwright)
 e2e/test-results/
 e2e/playwright-report/
+# SF-4 — storageState do auth.setup tạo mỗi lần chạy (session Keycloak dev)
+e2e/.auth/
 __pycache__/
 
 # Claude Code local settings

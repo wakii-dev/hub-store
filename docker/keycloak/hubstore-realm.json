@@ -7,9 +7,15 @@
   "accessTokenLifespan": 3600,
   "roles": {
     "realm": [
-      { "name": "Coordinator" },
-      { "name": "WarehouseOps" },
-      { "name": "Manager" }
+      {
+        "name": "Coordinator"
+      },
+      {
+        "name": "WarehouseOps"
+      },
+      {
+        "name": "Manager"
+      }
     ]
   },
   "clients": [
@@ -22,12 +28,21 @@
       "standardFlowEnabled": true,
       "directAccessGrantsEnabled": false,
       "rootUrl": "http://localhost:3000",
-      "redirectUris": ["http://localhost:3000/*"],
-      "webOrigins": ["+"],
+      "redirectUris": [
+        "http://localhost:3000/*"
+      ],
+      "webOrigins": [
+        "+"
+      ],
       "attributes": {
         "pkce.code.challenge.method": "S256"
       },
-      "defaultClientScopes": ["profile", "email", "roles", "web-origins"],
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "web-origins"
+      ],
       "protocolMappers": [
         {
           "name": "hubstore-api audience",
@@ -64,10 +79,17 @@
       "emailVerified": true,
       "firstName": "Coordinator",
       "lastName": "Demo",
-      "realmRoles": ["Coordinator"],
+      "realmRoles": [
+        "Coordinator"
+      ],
       "credentials": [
-        { "type": "password", "value": "Password123!", "temporary": false }
-      ]
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "email": "coordinator@hubstore.dev"
     },
     {
       "username": "warehouse",
@@ -75,10 +97,17 @@
       "emailVerified": true,
       "firstName": "Warehouse",
       "lastName": "Demo",
-      "realmRoles": ["WarehouseOps"],
+      "realmRoles": [
+        "WarehouseOps"
+      ],
       "credentials": [
-        { "type": "password", "value": "Password123!", "temporary": false }
-      ]
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "email": "warehouse@hubstore.dev"
     },
     {
       "username": "manager",
@@ -86,9 +115,71 @@
       "emailVerified": true,
       "firstName": "Manager",
       "lastName": "Demo",
-      "realmRoles": ["Manager"],
+      "realmRoles": [
+        "Manager"
+      ],
       "credentials": [
-        { "type": "password", "value": "Password123!", "temporary": false }
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "email": "manager@hubstore.dev"
+    }
+  ],
+  "clientScopes": [
+    {
+      "name": "roles",
+      "description": "OpenID Connect scope for add user roles to the access token (explicit: id.token.claim true — import mặc định bỏ setting này nên ID token thiếu realm_access)",
+      "protocol": "openid-connect",
+      "attributes": {
+        "include.in.token.scope": "false",
+        "display.on.consent.screen": "false"
+      },
+      "protocolMappers": [
+        {
+          "name": "realm roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-realm-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "foo",
+            "introspection.token.claim": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "realm_access.roles",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        },
+        {
+          "name": "client roles",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-client-role-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "foo",
+            "introspection.token.claim": "true",
+            "access.token.claim": "true",
+            "id.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "claim.name": "resource_access.${client_id}.roles",
+            "jsonType.label": "String",
+            "multivalued": "true"
+          }
+        },
+        {
+          "name": "audience resolve",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-resolve-mapper",
+          "consentRequired": false,
+          "config": {
+            "introspection.token.claim": "true",
+            "access.token.claim": "true"
+          }
+        }
       ]
     }
   ]

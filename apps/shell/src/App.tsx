@@ -65,7 +65,10 @@ function CallbackPage(props: { onSignedIn: (session: ShellSession) => void }) {
         props.onSignedIn(session);
         navigate(firstPathForRole(session.role), { replace: true });
       })
-      .catch(() => setError(true));
+      .catch((err: unknown) => {
+        console.error("[shell] signinCallback failed:", err);
+        setError(true);
+      });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
@@ -136,6 +139,10 @@ export default function App() {
     return (
       <ConfigProvider locale={lang.startsWith("vi") ? viVN : enUS}>
         <Routes>
+          {/* /callback PHẢI mount khi session còn null — redirect Keycloak về
+              đây LÚC CHƯA login; để ở nhánh đã-login thì CallbackPage không
+              bao giờ chạy (PKCE exchange chết tĩnh, màn hình kẹt LoginPage). */}
+          <Route path="/callback" element={<CallbackPage onSignedIn={setSession} />} />
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="*" element={<LoginPage />} />
         </Routes>
@@ -146,7 +153,6 @@ export default function App() {
   return (
     <ConfigProvider locale={lang.startsWith("vi") ? viVN : enUS}>
       <Routes>
-        <Route path="/callback" element={<CallbackPage onSignedIn={setSession} />} />
         <Route
           path="*"
           element={

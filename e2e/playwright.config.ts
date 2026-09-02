@@ -6,9 +6,14 @@ import { defineConfig } from "@playwright/test";
  * reuseExistingServer: false — state in-memory cần seed sạch.
  * Serial + workers 1: specs mutate store (main-flow chạy trước role-matrix/audit
  * — thứ tự ép bằng tiền tố 01/02/03 trong tên file).
+ *
+ * SF-4 — auth thật Keycloak: globalSetup login 3 user mẫu qua hosted UI →
+ * storageState `.auth/<user>.json`; default coordinator (specs 01/03/04).
+ * Spec 02 override per-test (`test.use({ storageState })`) theo role.
  */
 export default defineConfig({
   testDir: "./tests",
+  globalSetup: "./auth.setup",
   timeout: 120_000,
   expect: { timeout: 15_000 },
   fullyParallel: false,
@@ -17,6 +22,7 @@ export default defineConfig({
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
     baseURL: "http://localhost:3000",
+    storageState: ".auth/coordinator.json",
     viewport: { width: 1440, height: 900 },
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
