@@ -63,6 +63,28 @@ spec:
             - name: realm-import
               mountPath: /opt/keycloak/data/import
               readOnly: true
+          # KC 26 health endpoints trên management port 9000 (KC_HTTP_RELATIVE_PATH
+          # chỉ áp port 8080 — probe path là /health/... root). Keycloak boot chậm →
+          # startupProbe failureThreshold rộng (30 × 5s = 150s budget) trước khi
+          # readiness/liveness nhảy vào.
+          startupProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 5
+            failureThreshold: 30
+          readinessProbe:
+            httpGet:
+              path: /health/ready
+              port: management
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /health/live
+              port: management
+            periodSeconds: 20
+            timeoutSeconds: 5
           resources:
             requests:
               memory: 512Mi
