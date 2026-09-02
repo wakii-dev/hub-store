@@ -14,8 +14,9 @@ import type { FastifyInstance, FastifyRequest } from 'fastify';
 import type { ErrorEnvelope } from '@hub-store/shared';
 import type { BffOidcConfig } from '../config.js';
 
-/** Roles mà app nhận — khớp role matrix shell (nav.ts / PERMISSION_MATRIX). */
-export const KNOWN_ROLES = ['Coordinator', 'WarehouseOps', 'Manager'] as const;
+/** Roles mà app nhận — khớp role matrix shell (nav.ts / PERMISSION_MATRIX).
+ *  Admin (SF-17): role write của StaffArea — gate per-route qua requireRole. */
+export const KNOWN_ROLES = ['Coordinator', 'WarehouseOps', 'Manager', 'Admin'] as const;
 
 export interface RequestUser {
   sub: string;
@@ -85,8 +86,11 @@ export function requireUser(request: FastifyRequest): RequestUser {
 }
 
 /**
- * Role gate (SF-13 intake): user có 1 trong `roles` → user; ngược lại send 403
- * envelope PERMISSION_DENIED và trả null — route `if (!user) return reply;`.
+ * Role gate — per-route check dùng chung (SF-13 intake + SF-17 serviceEmployees).
+ * User có 1 trong `roles` → trả user (truthy); ngược lại send 403 envelope
+ * PERMISSION_DENIED và trả null. Cả 2 style gọi đều hoạt động:
+ *   - `if (requireRole(request, reply, 'Coordinator') === null) return reply;`
+ *   - `if (!requireRole(request, reply, 'Admin')) return reply;`
  */
 export function requireRole(
   request: FastifyRequest,

@@ -27,6 +27,7 @@ import {
   deliveryBatchResponses,
   techResponses,
   intakeResponses,
+  staffAreaResponses,
 } from './fixtures.js';
 import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import { TechServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
@@ -34,6 +35,7 @@ import { BatchingServiceService } from '../../../api/proto/gen/ts/hubstore/batch
 import { DeliveryBatchServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/delivery_batch';
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
 import { IntakeServiceService } from '../../../api/proto/gen/ts/hubstore/intake/v1/intake';
+import { StaffAreaServiceService } from '../../../api/proto/gen/ts/hubstore/staffarea/v1/staffarea';
 
 export const TEST_ISSUER = 'https://keycloak.test/realms/hubstore';
 export const TEST_AUDIENCE = 'hubstore-api';
@@ -119,15 +121,18 @@ type UnaryHandler = (call: ServerUnaryCall<any, any>, cb: sendUnaryData<any>) =>
 function startMockServer(
   definition: Parameters<Server['addService']>[0],
   defaults: Record<string, UnaryHandler>,
-  /** Service phụ cùng server/addr (SF-19: TechService sống cùng fulfillment). */
-  extraServices: Array<{ definition: Parameters<Server['addService']>[0]; defaults: Record<string, UnaryHandler> }> = [],
+  /** Services phụ cùng server/addr (SF-19: TechService, SF-17: StaffArea —
+   *  đều sống cùng fulfillment-service → chung mock server/addr như prod). */
+  extraServices: Array<{
+    definition: Parameters<Server['addService']>[0];
+    defaults: Record<string, UnaryHandler>;
+  }> = [],
 ): Promise<MockUpstream> {
   // Delegation indirection — addService copy handler vào internal map, nên
-  // override phải swap qua `current` (server vẫn thấy handler mới).
-  const current: Record<string, UnaryHandler> = {
-    ...defaults,
-    ...Object.assign({}, ...extraServices.map((s) => s.defaults)),
-  };
+  // override phải swap qua `current` (server vẫn thấy handler mới). Tên handler
+  // fulfillment × tech × staffarea không trùng → 1 map chung cho override được.
+  const current: Record<string, UnaryHandler> = { ...defaults };
+  for (const extra of extraServices) Object.assign(current, extra.defaults);
   const delegating: UntypedServiceImplementation = {};
   for (const name of Object.keys(current)) {
     delegating[name] = ((call: ServerUnaryCall<any, any>, cb: sendUnaryData<any>) =>
@@ -371,6 +376,17 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       {
         definition: TechServiceService,
         defaults: { ...techDefaults, ...opts.techHandlers },
+      },
+      {
+        definition: StaffAreaServiceService,
+        defaults: {
+          listServiceEmployees: (_c, cb) => cb(null, staffAreaResponses.listServiceEmployees),
+          getServiceEmployee: (_c, cb) => cb(null, staffAreaResponses.getServiceEmployee),
+          createServiceEmployee: (_c, cb) => cb(null, staffAreaResponses.createServiceEmployee),
+          updateServiceEmployee: (_c, cb) => cb(null, staffAreaResponses.updateServiceEmployee),
+          setServiceEmployeeActive: (_c, cb) => cb(null, staffAreaResponses.setServiceEmployeeActive),
+          verifyPaymentAccount: (_c, cb) => cb(null, staffAreaResponses.verifyPaymentAccount),
+        },
       },
     ],
   );

@@ -75,6 +75,15 @@ END
 $reset$;
 SQL
 
+# SF-17 (FI-262): V4 master regions chỉ INSERT lúc migrate — sau TRUNCATE
+# regions phải nạp lại (ON CONFLICT DO NOTHING → idempotent, không đụng seed).
+V4_FILE="$ROOT/services/fulfillment-service/src/main/resources/db/migration/V4__area_staff_schema.sql"
+if [[ -f "$V4_FILE" ]]; then
+  awk '/^INSERT INTO regions/,/;/' "$V4_FILE" \
+    | psql_cmd -d fulfillment -v ON_ERROR_STOP=1 \
+    && echo "reset-db: đã nạp lại master regions từ V4"
+fi
+
 # Xóa keycloak volume — realm import chỉ chạy lần đầu, volume mới = re-import sạch.
 # Volume đặt name tường minh "keycloak-data" trong compose để script trỏ đúng.
 if [[ -z "${PGHOST:-}" ]]; then

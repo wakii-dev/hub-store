@@ -19,6 +19,7 @@ export const NAV_ROUTES: NavRoute[] = [
   { path: '/hub-store-order/batch/print', labelKey: 'nav.print', permission: 'fulfillment.print' },
   { path: '/hub-store-order/tech', labelKey: 'nav.tech', permission: 'orders.view' },
   { path: '/users', labelKey: 'nav.users', permission: 'users.manage' }, // SF-8 — append CUỐI (NAV_ROUTES[2] là fallback hardcode)
+  { path: '/area-staff', labelKey: 'nav.areaStaff', permission: 'areastaff.view' },
 ];
 
 // Fallback theo permission (KHÔNG hard-code index — mảng có thể thêm entry đầu).

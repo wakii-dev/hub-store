@@ -18,6 +18,7 @@ import {
   createDeliveryBatchClient,
   createTechClient,
   createIntakeClient,
+  createStaffAreaClient,
 } from './clients/index.js';
 import { registerFulfillmentRoutes } from './routes/fulfillment.js';
 import { registerTechRoutes } from './routes/tech.js';
@@ -25,6 +26,7 @@ import { registerIntakeRoutes } from './routes/intake.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
 import { registerDeliveryBatchRoutes } from './routes/deliverybatch.js';
+import { registerServiceEmployeesRoutes } from './routes/serviceEmployees.js';
 import { registerAuthRoutes } from './routes/auth.js';
 import { registerUsersRoutes } from './routes/users.js';
 import { KcAdminClient } from './kc-admin.js';
@@ -66,6 +68,7 @@ export function buildApp(config: BffConfig): FastifyInstance {
   app.get('/healthz', async () => ({ status: 'ok' }));
 
   // gRPC clients — insecure nội bộ (spec §2); close dọn sạch khi shutdown.
+  // StaffArea (SF-17) sống trong cùng process fulfillment-service → cùng addr.
   const fulfillment = createFulfillmentClient(config.grpc.fulfillment, config.grpc.deadlineMs);
   // TechService (SF-19) sống cùng fulfillment-service — chung addr.
   const tech = createTechClient(config.grpc.fulfillment, config.grpc.deadlineMs);
@@ -73,6 +76,7 @@ export function buildApp(config: BffConfig): FastifyInstance {
   const deliveryBatch = createDeliveryBatchClient(config.grpc.deliverybatch, config.grpc.deadlineMs);
   const print = createPrintClient(config.grpc.print, config.grpc.deadlineMs);
   const intake = createIntakeClient(config.grpc.intake, config.grpc.deadlineMs);
+  const staffArea = createStaffAreaClient(config.grpc.fulfillment, config.grpc.deadlineMs);
   app.addHook('onClose', async () => {
     fulfillment.close();
     tech.close();
@@ -80,6 +84,7 @@ export function buildApp(config: BffConfig): FastifyInstance {
     deliveryBatch.close();
     print.close();
     intake.close();
+    staffArea.close();
   });
 
   registerFulfillmentRoutes(app, { fulfillment, batching });
@@ -89,6 +94,7 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerBatchRoutes(app, batching);
   registerPrintRoutes(app, { batching, print });
   registerDeliveryBatchRoutes(app, deliveryBatch);
+  registerServiceEmployeesRoutes(app, { staffArea });
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });

@@ -5,3 +5,4 @@ export * from './batching.js';
 export * from './print.js';
 export * from './deliverybatch.js';
 export * from './intake.js';
+export * from './staffArea.js';

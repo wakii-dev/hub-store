@@ -45,3 +45,9 @@ fulfillment:
 kafka:
   # SF-27 — event bus flag (env KAFKA_ENABLED; false → NoopEventPublisher).
   enabled: ${KAFKA_ENABLED:false}
+
+payment:
+  verify:
+    # SF-17: chọn PaymentAccountVerifier — mock (default) | zalopay.
+    # zalopay yêu cầu env ZALOPAY_APP_ID/ZALOPAY_KEY1 (fail-loud lúc boot nếu thiếu).
+    provider: ${PAYMENT_VERIFY_PROVIDER:mock}
