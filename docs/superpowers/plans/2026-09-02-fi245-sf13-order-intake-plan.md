@@ -50,7 +50,7 @@ Chốt trong spec §3 (D1-D11) + §4. Điểm mấu chốt cho executor:
 - Modify: `packages/shared/src/types/index.ts`, `packages/shared/src/api-contracts/index.ts`
 
 Steps:
-- [ ] Viết `intake.proto` — package `hubstore.intake.v1`, `import "hubstore/fulfillment/v1/fulfillment.proto"`, go_package `hubstore/gen/go/hubstore/intake/v1;intakev1`, java_package `com.hubstore.intake.v1`, java_multiple_files. Content:
+- [x] Viết `intake.proto` — package `hubstore.intake.v1`, `import "hubstore/fulfillment/v1/fulfillment.proto"`, go_package `hubstore/gen/go/hubstore/intake/v1;intakev1`, java_package `com.hubstore.intake.v1`, java_multiple_files. Content:
 ```proto
 package hubstore.intake.v1;
 
@@ -127,7 +127,7 @@ service IntakeService {
   rpc GetOrderAudit(GetOrderAuditRequest) returns (GetOrderAuditResponse);
 }
 ```
-- [ ] `fulfillment.proto` — thêm vào `HubStoreOrderFilterItem` (fields 16-20, RESERVED cho SF-13 — ghi comment):
+- [x] `fulfillment.proto` — thêm vào `HubStoreOrderFilterItem` (fields 16-20, RESERVED cho SF-13 — ghi comment):
 ```proto
   // --- SF-13 intake/exception (additive, wire-safe; fields 21+ dành cho SF khác) ---
   string customer_name = 16;      // MỚI SF-13 — seed orders NULL → rỗng
@@ -139,7 +139,7 @@ service IntakeService {
   // Đơn retry link về đơn gốc (đơn retry có giá trị; đơn gốc rỗng)
   string old_fulfill_code = 20;
 ```
-- [ ] Regen TS (BFF README pattern):
+- [x] Regen TS (BFF README pattern):
 ```bash
 protoc -I api/proto \
   --plugin=protoc-gen-ts_proto=./node_modules/.bin/protoc-gen-ts_proto \
@@ -154,9 +154,9 @@ protoc -I api/proto --java_out=api/proto/gen/java --plugin=protoc-gen-grpc-java=
 protoc -I api/proto --java_out=api/proto/gen/java api/proto/hubstore/fulfillment/v1/fulfillment.proto
 ```
 KHÔNG regen go/python (Go batching không import intake.proto; print standalone). Verify buf lint: `cd api/proto && npx @bufbuild/buf lint` → PASS.
-- [ ] Shared TS: `enums.ts` thêm `export const DELIVERY_FAIL_REASON = { KHACH_VANG: 0, SAI_DIA_CHI: 1, KHACH_TU_CHOI: 2, KHAC: 3 } as const; export type DeliveryFailReason = 0|1|2|3;` + labels VI/EN (KHACH_VANG→"Khách vắng"/"Customer absent", SAI_DIA_CHI→"Sai địa chỉ"/"Wrong address", KHACH_TU_CHOI→"Khách từ chối"/"Customer refused", KHAC→"Khác"/"Other") trong STATUS_TAG_LABELS pattern nếu phù hợp, else export riêng `DELIVERY_FAIL_REASON_LABELS`.
-- [ ] `types/order.ts` — HubStoreOrderFilterItem thêm optional: `customerName?: string; customerPhone?: string; failReason?: string; failNote?: string; oldFulfillCode?: string;`
-- [ ] `api-contracts/intake.ts` (MỚI):
+- [x] Shared TS: `enums.ts` thêm `export const DELIVERY_FAIL_REASON = { KHACH_VANG: 0, SAI_DIA_CHI: 1, KHACH_TU_CHOI: 2, KHAC: 3 } as const; export type DeliveryFailReason = 0|1|2|3;` + labels VI/EN (KHACH_VANG→"Khách vắng"/"Customer absent", SAI_DIA_CHI→"Sai địa chỉ"/"Wrong address", KHACH_TU_CHOI→"Khách từ chối"/"Customer refused", KHAC→"Khác"/"Other") trong STATUS_TAG_LABELS pattern nếu phù hợp, else export riêng `DELIVERY_FAIL_REASON_LABELS`.
+- [x] `types/order.ts` — HubStoreOrderFilterItem thêm optional: `customerName?: string; customerPhone?: string; failReason?: string; failNote?: string; oldFulfillCode?: string;`
+- [x] `api-contracts/intake.ts` (MỚI):
 ```ts
 import type { Product } from '../types';
 export interface IntakeOrderDto {
@@ -169,8 +169,8 @@ export interface ImportConfirmRequest { orders: IntakeOrderDto[]; }
 export interface ImportConfirmResponse { fulfillCodes: string[]; }
 export interface AuditEntryDto { actor: string; action: string; target: string; detail: Record<string, unknown> | null; createdAt: string; }
 ```
-- [ ] Build + test: `pnpm --filter @hub-store/shared test && pnpm --filter @hub-store/shared build` → PASS.
-- [ ] Commit: `feat(fi245-sf13): proto intake additive + codegen ts/java + shared types`
+- [x] Build + test: `pnpm --filter @hub-store/shared test && pnpm --filter @hub-store/shared build` → PASS.
+- [x] Commit: `feat(fi245-sf13): proto intake additive + codegen ts/java + shared types`
 
 ### Task 2 — Flyway V2 migration (orders columns + activity_log)
 **Depends:** — (chạy song song Task 1 được, khác file)
