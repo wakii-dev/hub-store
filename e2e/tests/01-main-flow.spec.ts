@@ -104,7 +104,12 @@ async function openBatchOfOrder(page: Page, orderCode: string): Promise<string> 
   const search = page.getByPlaceholder("Số phiếu / Số đơn");
   await search.fill(orderCode);
   await page.getByRole("button", { name: "Tìm kiếm" }).click();
-  const actions = page.locator('[data-testid^="batch-actions-"]').first();
+  // Đơn đã từng thuộc phiếu ĐÃ HỦY vẫn match search — lấy phiếu còn hoạt động
+  // (status tag khác "Đã hủy") mới có nút Hủy/Hoàn tất/In.
+  const actions = page
+    .locator('[data-testid^="batch-actions-"]')
+    .filter({ hasNotText: "Đã hủy" })
+    .first();
   await expect(actions).toBeVisible();
   const testid = await actions.getAttribute("data-testid");
   return testid!.replace("batch-actions-", "");
@@ -209,8 +214,9 @@ test("luồng §8: tạo lại → In D3 PDF → hoàn tất soạn", async ({ p
   await page.locator(".ant-select").filter({ hasText: "Chọn máy in" }).click();
   await openOptions(page).first().click();
 
-  // In 1 phiếu → feedback
-  await page.getByRole("button", { name: "In", exact: true }).click();
+  // In 1 phiếu → feedback (accessible name "printer In" — icon + text; /In$/
+  // khớp nút In đơn, loại "In tất cả")
+  await page.getByRole("button", { name: /In$/ }).click();
   await expect(page.locator(".ant-message")).toContainText(/Đã gửi lệnh in|In thất bại/);
 
   // In tất cả — 5 call tuần tự + progress
