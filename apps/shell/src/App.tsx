@@ -19,6 +19,7 @@ import AppLayout from "./features/layout/AppLayout";
 import LoginPage from "./features/login/LoginPage";
 import ForgotPasswordPage from "./features/login/ForgotPasswordPage";
 import AreaListPage from "./pages/area-staff/AreaListPage";
+import AreaFormPage from "./pages/area-staff/AreaFormPage";
 import RemoteBoundary from "./RemoteBoundary";
 
 // Federation lazy imports — exposes contract ĐÃ PIN (spec §2.7)
@@ -200,12 +201,28 @@ export default function App() {
                     </RequirePermission>
                   }
                 />
-                {/* SF-17 — shell-local page (KHÔNG qua Module Federation). */}
+                {/* SF-17 — shell-local pages (KHÔNG qua Module Federation). */}
                 <Route
                   path="/area-staff"
                   element={
                     <RequirePermission permission="areastaff.view">
                       <AreaListPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/area-staff/new"
+                  element={
+                    <RequirePermission permission="areastaff.manage">
+                      <AreaFormPage />
+                    </RequirePermission>
+                  }
+                />
+                <Route
+                  path="/area-staff/:code/edit"
+                  element={
+                    <RequirePermission permission="areastaff.manage">
+                      <AreaFormPage />
                     </RequirePermission>
                   }
                 />

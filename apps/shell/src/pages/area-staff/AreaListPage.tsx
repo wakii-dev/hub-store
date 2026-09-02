@@ -212,14 +212,17 @@ export default function AreaListPage() {
               </div>
             );
           },
-          expandIcon: ({ expanded, onExpand, record }) => (
+          expandIcon: ({ expanded, record }) => (
             <Button
               type="text"
               size="small"
               icon={expanded ? <UpOutlined /> : <DownOutlined />}
               onClick={(e) => {
                 e.stopPropagation();
-                onExpand(record, !expanded);
+                const code = record.employeeCode;
+                setExpandedRowKeys((keys) =>
+                  keys.includes(code) ? keys.filter((k) => k !== code) : [...keys, code],
+                );
               }}
               data-testid={`area-expand-${record.employeeCode}`}
             />
