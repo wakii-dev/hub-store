@@ -444,6 +444,35 @@ export interface GetTimeDeliveryResponse {
   suggestedTime: TimeRange | undefined;
 }
 
+/**
+ * --- Dashboard (SF-9, FI-245) — aggregate thuần fulfillment DB. TZ cố định
+ * Asia/Ho_Chi_Minh cho date grouping; window 30 ngày cố định, không param.
+ */
+export interface GetDashboardStatsRequest {
+}
+
+export interface DayCount {
+  /** YYYY-MM-DD (TZ Asia/Ho_Chi_Minh) */
+  date: string;
+  count: number;
+}
+
+export interface BatchOrderCount {
+  batchCode: string;
+  count: number;
+}
+
+export interface GetDashboardStatsResponse {
+  /** Đủ 30 ô cũ→mới (ngày thiếu = 0), nhóm theo original_time_from. */
+  ordersPerDay: DayCount[];
+  /** Đơn original_time_from trong hôm nay (TZ Asia/Ho_Chi_Minh). */
+  totalToday: number;
+  /** order_status = ORDER_STATUS_PENDING_APPROVAL. */
+  pendingApproval: number;
+  /** Đơn ĐÃ vào phiếu: GROUP BY batch_code (batch_code ≠ ''). */
+  ordersPerBatch: BatchOrderCount[];
+}
+
 function createBaseTimeRange(): TimeRange {
   return { from: "", to: "" };
 }
@@ -3292,6 +3321,313 @@ export const GetTimeDeliveryResponse: MessageFns<GetTimeDeliveryResponse> = {
   },
 };
 
+function createBaseGetDashboardStatsRequest(): GetDashboardStatsRequest {
+  return {};
+}
+
+export const GetDashboardStatsRequest: MessageFns<GetDashboardStatsRequest> = {
+  encode(_: GetDashboardStatsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetDashboardStatsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetDashboardStatsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): GetDashboardStatsRequest {
+    return {};
+  },
+
+  toJSON(_: GetDashboardStatsRequest): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetDashboardStatsRequest>, I>>(base?: I): GetDashboardStatsRequest {
+    return GetDashboardStatsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetDashboardStatsRequest>, I>>(_: I): GetDashboardStatsRequest {
+    const message = createBaseGetDashboardStatsRequest();
+    return message;
+  },
+};
+
+function createBaseDayCount(): DayCount {
+  return { date: "", count: 0 };
+}
+
+export const DayCount: MessageFns<DayCount> = {
+  encode(message: DayCount, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.date !== "") {
+      writer.uint32(10).string(message.date);
+    }
+    if (message.count !== 0) {
+      writer.uint32(16).int32(message.count);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): DayCount {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseDayCount();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.date = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.count = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): DayCount {
+    return {
+      date: isSet(object.date) ? globalThis.String(object.date) : "",
+      count: isSet(object.count) ? globalThis.Number(object.count) : 0,
+    };
+  },
+
+  toJSON(message: DayCount): unknown {
+    const obj: any = {};
+    if (message.date !== "") {
+      obj.date = message.date;
+    }
+    if (message.count !== 0) {
+      obj.count = Math.round(message.count);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<DayCount>, I>>(base?: I): DayCount {
+    return DayCount.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<DayCount>, I>>(object: I): DayCount {
+    const message = createBaseDayCount();
+    message.date = object.date ?? "";
+    message.count = object.count ?? 0;
+    return message;
+  },
+};
+
+function createBaseBatchOrderCount(): BatchOrderCount {
+  return { batchCode: "", count: 0 };
+}
+
+export const BatchOrderCount: MessageFns<BatchOrderCount> = {
+  encode(message: BatchOrderCount, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.batchCode !== "") {
+      writer.uint32(10).string(message.batchCode);
+    }
+    if (message.count !== 0) {
+      writer.uint32(16).int32(message.count);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): BatchOrderCount {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseBatchOrderCount();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.batchCode = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.count = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): BatchOrderCount {
+    return {
+      batchCode: isSet(object.batchCode) ? globalThis.String(object.batchCode) : "",
+      count: isSet(object.count) ? globalThis.Number(object.count) : 0,
+    };
+  },
+
+  toJSON(message: BatchOrderCount): unknown {
+    const obj: any = {};
+    if (message.batchCode !== "") {
+      obj.batchCode = message.batchCode;
+    }
+    if (message.count !== 0) {
+      obj.count = Math.round(message.count);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<BatchOrderCount>, I>>(base?: I): BatchOrderCount {
+    return BatchOrderCount.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<BatchOrderCount>, I>>(object: I): BatchOrderCount {
+    const message = createBaseBatchOrderCount();
+    message.batchCode = object.batchCode ?? "";
+    message.count = object.count ?? 0;
+    return message;
+  },
+};
+
+function createBaseGetDashboardStatsResponse(): GetDashboardStatsResponse {
+  return { ordersPerDay: [], totalToday: 0, pendingApproval: 0, ordersPerBatch: [] };
+}
+
+export const GetDashboardStatsResponse: MessageFns<GetDashboardStatsResponse> = {
+  encode(message: GetDashboardStatsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.ordersPerDay) {
+      DayCount.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.totalToday !== 0) {
+      writer.uint32(16).int32(message.totalToday);
+    }
+    if (message.pendingApproval !== 0) {
+      writer.uint32(24).int32(message.pendingApproval);
+    }
+    for (const v of message.ordersPerBatch) {
+      BatchOrderCount.encode(v!, writer.uint32(34).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetDashboardStatsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetDashboardStatsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.ordersPerDay.push(DayCount.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.totalToday = reader.int32();
+          continue;
+        }
+        case 3: {
+          if (tag !== 24) {
+            break;
+          }
+
+          message.pendingApproval = reader.int32();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.ordersPerBatch.push(BatchOrderCount.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetDashboardStatsResponse {
+    return {
+      ordersPerDay: globalThis.Array.isArray(object?.ordersPerDay)
+        ? object.ordersPerDay.map((e: any) => DayCount.fromJSON(e))
+        : [],
+      totalToday: isSet(object.totalToday) ? globalThis.Number(object.totalToday) : 0,
+      pendingApproval: isSet(object.pendingApproval) ? globalThis.Number(object.pendingApproval) : 0,
+      ordersPerBatch: globalThis.Array.isArray(object?.ordersPerBatch)
+        ? object.ordersPerBatch.map((e: any) => BatchOrderCount.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetDashboardStatsResponse): unknown {
+    const obj: any = {};
+    if (message.ordersPerDay?.length) {
+      obj.ordersPerDay = message.ordersPerDay.map((e) => DayCount.toJSON(e));
+    }
+    if (message.totalToday !== 0) {
+      obj.totalToday = Math.round(message.totalToday);
+    }
+    if (message.pendingApproval !== 0) {
+      obj.pendingApproval = Math.round(message.pendingApproval);
+    }
+    if (message.ordersPerBatch?.length) {
+      obj.ordersPerBatch = message.ordersPerBatch.map((e) => BatchOrderCount.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetDashboardStatsResponse>, I>>(base?: I): GetDashboardStatsResponse {
+    return GetDashboardStatsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetDashboardStatsResponse>, I>>(object: I): GetDashboardStatsResponse {
+    const message = createBaseGetDashboardStatsResponse();
+    message.ordersPerDay = object.ordersPerDay?.map((e) => DayCount.fromPartial(e)) || [];
+    message.totalToday = object.totalToday ?? 0;
+    message.pendingApproval = object.pendingApproval ?? 0;
+    message.ordersPerBatch = object.ordersPerBatch?.map((e) => BatchOrderCount.fromPartial(e)) || [];
+    return message;
+  },
+};
+
 export type FulfillmentServiceService = typeof FulfillmentServiceService;
 export const FulfillmentServiceService = {
   /** D1 list — filter + pagination. exclude_fulfill_codes = extension pin v1. */
@@ -3435,6 +3771,18 @@ export const FulfillmentServiceService = {
       Buffer.from(GetTimeDeliveryResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): GetTimeDeliveryResponse => GetTimeDeliveryResponse.decode(value),
   },
+  /** GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay. */
+  getDashboardStats: {
+    path: "/hubstore.fulfillment.v1.FulfillmentService/GetDashboardStats",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: GetDashboardStatsRequest): Buffer =>
+      Buffer.from(GetDashboardStatsRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): GetDashboardStatsRequest => GetDashboardStatsRequest.decode(value),
+    responseSerialize: (value: GetDashboardStatsResponse): Buffer =>
+      Buffer.from(GetDashboardStatsResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): GetDashboardStatsResponse => GetDashboardStatsResponse.decode(value),
+  },
 } as const;
 
 export interface FulfillmentServiceServer extends UntypedServiceImplementation {
@@ -3465,6 +3813,8 @@ export interface FulfillmentServiceServer extends UntypedServiceImplementation {
   listDistinctShops: handleUnaryCall<ListDistinctShopsRequest, ListDistinctShopsResponse>;
   /** GET /order-promising/time-delivery — hint TG giao cạnh DatePicker (D4, D1b). */
   getTimeDelivery: handleUnaryCall<GetTimeDeliveryRequest, GetTimeDeliveryResponse>;
+  /** GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay. */
+  getDashboardStats: handleUnaryCall<GetDashboardStatsRequest, GetDashboardStatsResponse>;
 }
 
 export interface FulfillmentServiceClient extends Client {
@@ -3662,6 +4012,22 @@ export interface FulfillmentServiceClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: GetTimeDeliveryResponse) => void,
+  ): ClientUnaryCall;
+  /** GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay. */
+  getDashboardStats(
+    request: GetDashboardStatsRequest,
+    callback: (error: ServiceError | null, response: GetDashboardStatsResponse) => void,
+  ): ClientUnaryCall;
+  getDashboardStats(
+    request: GetDashboardStatsRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: GetDashboardStatsResponse) => void,
+  ): ClientUnaryCall;
+  getDashboardStats(
+    request: GetDashboardStatsRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: GetDashboardStatsResponse) => void,
   ): ClientUnaryCall;
 }
 

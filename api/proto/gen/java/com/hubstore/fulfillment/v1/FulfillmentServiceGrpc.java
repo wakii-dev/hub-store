@@ -387,6 +387,37 @@ public final class FulfillmentServiceGrpc {
     return getGetTimeDeliveryMethod;
   }
 
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetDashboardStatsRequest,
+      com.hubstore.fulfillment.v1.GetDashboardStatsResponse> getGetDashboardStatsMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "GetDashboardStats",
+      requestType = com.hubstore.fulfillment.v1.GetDashboardStatsRequest.class,
+      responseType = com.hubstore.fulfillment.v1.GetDashboardStatsResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetDashboardStatsRequest,
+      com.hubstore.fulfillment.v1.GetDashboardStatsResponse> getGetDashboardStatsMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetDashboardStatsRequest, com.hubstore.fulfillment.v1.GetDashboardStatsResponse> getGetDashboardStatsMethod;
+    if ((getGetDashboardStatsMethod = FulfillmentServiceGrpc.getGetDashboardStatsMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getGetDashboardStatsMethod = FulfillmentServiceGrpc.getGetDashboardStatsMethod) == null) {
+          FulfillmentServiceGrpc.getGetDashboardStatsMethod = getGetDashboardStatsMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.GetDashboardStatsRequest, com.hubstore.fulfillment.v1.GetDashboardStatsResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "GetDashboardStats"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetDashboardStatsRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetDashboardStatsResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("GetDashboardStats"))
+              .build();
+        }
+      }
+    }
+    return getGetDashboardStatsMethod;
+  }
+
   /**
    * Creates a new async stub that supports all call types for the service
    */
@@ -555,6 +586,16 @@ public final class FulfillmentServiceGrpc {
         io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetTimeDeliveryResponse> responseObserver) {
       io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getGetTimeDeliveryMethod(), responseObserver);
     }
+
+    /**
+     * <pre>
+     * GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay.
+     * </pre>
+     */
+    default void getDashboardStats(com.hubstore.fulfillment.v1.GetDashboardStatsRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetDashboardStatsResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getGetDashboardStatsMethod(), responseObserver);
+    }
   }
 
   /**
@@ -716,6 +757,17 @@ public final class FulfillmentServiceGrpc {
       io.grpc.stub.ClientCalls.asyncUnaryCall(
           getChannel().newCall(getGetTimeDeliveryMethod(), getCallOptions()), request, responseObserver);
     }
+
+    /**
+     * <pre>
+     * GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay.
+     * </pre>
+     */
+    public void getDashboardStats(com.hubstore.fulfillment.v1.GetDashboardStatsRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetDashboardStatsResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getGetDashboardStatsMethod(), getCallOptions()), request, responseObserver);
+    }
   }
 
   /**
@@ -853,6 +905,16 @@ public final class FulfillmentServiceGrpc {
     public com.hubstore.fulfillment.v1.GetTimeDeliveryResponse getTimeDelivery(com.hubstore.fulfillment.v1.GetTimeDeliveryRequest request) {
       return io.grpc.stub.ClientCalls.blockingUnaryCall(
           getChannel(), getGetTimeDeliveryMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay.
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.GetDashboardStatsResponse getDashboardStats(com.hubstore.fulfillment.v1.GetDashboardStatsRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getGetDashboardStatsMethod(), getCallOptions(), request);
     }
   }
 
@@ -1004,6 +1066,17 @@ public final class FulfillmentServiceGrpc {
       return io.grpc.stub.ClientCalls.futureUnaryCall(
           getChannel().newCall(getGetTimeDeliveryMethod(), getCallOptions()), request);
     }
+
+    /**
+     * <pre>
+     * GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay.
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.GetDashboardStatsResponse> getDashboardStats(
+        com.hubstore.fulfillment.v1.GetDashboardStatsRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getGetDashboardStatsMethod(), getCallOptions()), request);
+    }
   }
 
   private static final int METHODID_FILTER_ORDERS = 0;
@@ -1018,6 +1091,7 @@ public final class FulfillmentServiceGrpc {
   private static final int METHODID_LIST_DELIVERY_STAFF = 9;
   private static final int METHODID_LIST_DISTINCT_SHOPS = 10;
   private static final int METHODID_GET_TIME_DELIVERY = 11;
+  private static final int METHODID_GET_DASHBOARD_STATS = 12;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -1083,6 +1157,10 @@ public final class FulfillmentServiceGrpc {
         case METHODID_GET_TIME_DELIVERY:
           serviceImpl.getTimeDelivery((com.hubstore.fulfillment.v1.GetTimeDeliveryRequest) request,
               (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetTimeDeliveryResponse>) responseObserver);
+          break;
+        case METHODID_GET_DASHBOARD_STATS:
+          serviceImpl.getDashboardStats((com.hubstore.fulfillment.v1.GetDashboardStatsRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetDashboardStatsResponse>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -1186,6 +1264,13 @@ public final class FulfillmentServiceGrpc {
               com.hubstore.fulfillment.v1.GetTimeDeliveryRequest,
               com.hubstore.fulfillment.v1.GetTimeDeliveryResponse>(
                 service, METHODID_GET_TIME_DELIVERY)))
+        .addMethod(
+          getGetDashboardStatsMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.GetDashboardStatsRequest,
+              com.hubstore.fulfillment.v1.GetDashboardStatsResponse>(
+                service, METHODID_GET_DASHBOARD_STATS)))
         .build();
   }
 
@@ -1246,6 +1331,7 @@ public final class FulfillmentServiceGrpc {
               .addMethod(getListDeliveryStaffMethod())
               .addMethod(getListDistinctShopsMethod())
               .addMethod(getGetTimeDeliveryMethod())
+              .addMethod(getGetDashboardStatsMethod())
               .build();
         }
       }

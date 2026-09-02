@@ -190,6 +190,26 @@ public final class Fulfillment {
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_hubstore_fulfillment_v1_GetTimeDeliveryResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_GetDashboardStatsRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_GetDashboardStatsRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_DayCount_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_DayCount_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_BatchOrderCount_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_BatchOrderCount_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_GetDashboardStatsResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_GetDashboardStatsResponse_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -292,56 +312,67 @@ public final class Fulfillment {
       "etTimeDeliveryRequest\022\021\n\tshop_code\030\001 \001(\t" +
       "\022\030\n\020customer_address\030\002 \001(\t\"U\n\027GetTimeDel" +
       "iveryResponse\022:\n\016suggested_time\030\001 \001(\0132\"." +
-      "hubstore.fulfillment.v1.TimeRange*\205\001\n\013Ba" +
-      "tchStatus\022\035\n\031BATCH_STATUS_NOT_PREPARED\020\000" +
-      "\022\032\n\026BATCH_STATUS_PREPARING\020\001\022\031\n\025BATCH_ST" +
-      "ATUS_PREPARED\020\002\022 \n\034BATCH_STATUS_WEIGHT_E" +
-      "XCEEDED\020\003*f\n\013OrderStatus\022!\n\035ORDER_STATUS" +
-      "_PENDING_APPROVAL\020\000\022\031\n\025ORDER_STATUS_APPR" +
-      "OVED\020\001\022\031\n\025ORDER_STATUS_REJECTED\020\002*}\n\022Coo" +
-      "rdinationStatus\022\037\n\033COORDINATION_STATUS_P" +
-      "ENDING\020\000\022#\n\037COORDINATION_STATUS_IN_PROGR" +
-      "ESS\020\001\022!\n\035COORDINATION_STATUS_COMPLETED\020\002" +
-      "*<\n\nRegionType\022\030\n\024REGION_TYPE_PROVINCE\020\000" +
-      "\022\024\n\020REGION_TYPE_WARD\020\0012\220\013\n\022FulfillmentSe" +
-      "rvice\022k\n\014FilterOrders\022,.hubstore.fulfill" +
-      "ment.v1.FilterOrdersRequest\032-.hubstore.f" +
-      "ulfillment.v1.FilterOrdersResponse\022q\n\016Ge" +
-      "tOrderDetail\022..hubstore.fulfillment.v1.G" +
-      "etOrderDetailRequest\032/.hubstore.fulfillm" +
-      "ent.v1.GetOrderDetailResponse\022z\n\021MutateO" +
-      "rderStatus\0221.hubstore.fulfillment.v1.Mut" +
-      "ateOrderStatusRequest\0322.hubstore.fulfill" +
-      "ment.v1.MutateOrderStatusResponse\022w\n\020Get" +
-      "OrdersByCodes\0220.hubstore.fulfillment.v1." +
-      "GetOrdersByCodesRequest\0321.hubstore.fulfi" +
-      "llment.v1.GetOrdersByCodesResponse\022n\n\rAs" +
-      "signShopHub\022-.hubstore.fulfillment.v1.As" +
-      "signShopHubRequest\032..hubstore.fulfillmen" +
-      "t.v1.AssignShopHubResponse\022w\n\020GetAssignH" +
-      "istory\0220.hubstore.fulfillment.v1.GetAssi" +
-      "gnHistoryRequest\0321.hubstore.fulfillment." +
-      "v1.GetAssignHistoryResponse\022}\n\022UpdateDel" +
-      "iveryTime\0222.hubstore.fulfillment.v1.Upda" +
-      "teDeliveryTimeRequest\0323.hubstore.fulfill" +
-      "ment.v1.UpdateDeliveryTimeResponse\022e\n\nUp" +
-      "dateNote\022*.hubstore.fulfillment.v1.Updat" +
-      "eNoteRequest\032+.hubstore.fulfillment.v1.U" +
-      "pdateNoteResponse\022h\n\013ListRegions\022+.hubst" +
-      "ore.fulfillment.v1.ListRegionsRequest\032,." +
-      "hubstore.fulfillment.v1.ListRegionsRespo" +
-      "nse\022z\n\021ListDeliveryStaff\0221.hubstore.fulf" +
-      "illment.v1.ListDeliveryStaffRequest\0322.hu" +
-      "bstore.fulfillment.v1.ListDeliveryStaffR" +
-      "esponse\022z\n\021ListDistinctShops\0221.hubstore." +
-      "fulfillment.v1.ListDistinctShopsRequest\032" +
-      "2.hubstore.fulfillment.v1.ListDistinctSh" +
-      "opsResponse\022t\n\017GetTimeDelivery\022/.hubstor" +
-      "e.fulfillment.v1.GetTimeDeliveryRequest\032" +
-      "0.hubstore.fulfillment.v1.GetTimeDeliver" +
-      "yResponseBV\n\033com.hubstore.fulfillment.v1" +
-      "P\001Z5hubstore/gen/go/hubstore/fulfillment" +
-      "/v1;fulfillmentv1b\006proto3"
+      "hubstore.fulfillment.v1.TimeRange\"\032\n\030Get" +
+      "DashboardStatsRequest\"\'\n\010DayCount\022\014\n\004dat" +
+      "e\030\001 \001(\t\022\r\n\005count\030\002 \001(\005\"4\n\017BatchOrderCoun" +
+      "t\022\022\n\nbatch_code\030\001 \001(\t\022\r\n\005count\030\002 \001(\005\"\311\001\n" +
+      "\031GetDashboardStatsResponse\0229\n\016orders_per" +
+      "_day\030\001 \003(\0132!.hubstore.fulfillment.v1.Day" +
+      "Count\022\023\n\013total_today\030\002 \001(\005\022\030\n\020pending_ap" +
+      "proval\030\003 \001(\005\022B\n\020orders_per_batch\030\004 \003(\0132(" +
+      ".hubstore.fulfillment.v1.BatchOrderCount" +
+      "*\205\001\n\013BatchStatus\022\035\n\031BATCH_STATUS_NOT_PRE" +
+      "PARED\020\000\022\032\n\026BATCH_STATUS_PREPARING\020\001\022\031\n\025B" +
+      "ATCH_STATUS_PREPARED\020\002\022 \n\034BATCH_STATUS_W" +
+      "EIGHT_EXCEEDED\020\003*f\n\013OrderStatus\022!\n\035ORDER" +
+      "_STATUS_PENDING_APPROVAL\020\000\022\031\n\025ORDER_STAT" +
+      "US_APPROVED\020\001\022\031\n\025ORDER_STATUS_REJECTED\020\002" +
+      "*}\n\022CoordinationStatus\022\037\n\033COORDINATION_S" +
+      "TATUS_PENDING\020\000\022#\n\037COORDINATION_STATUS_I" +
+      "N_PROGRESS\020\001\022!\n\035COORDINATION_STATUS_COMP" +
+      "LETED\020\002*<\n\nRegionType\022\030\n\024REGION_TYPE_PRO" +
+      "VINCE\020\000\022\024\n\020REGION_TYPE_WARD\020\0012\214\014\n\022Fulfil" +
+      "lmentService\022k\n\014FilterOrders\022,.hubstore." +
+      "fulfillment.v1.FilterOrdersRequest\032-.hub" +
+      "store.fulfillment.v1.FilterOrdersRespons" +
+      "e\022q\n\016GetOrderDetail\022..hubstore.fulfillme" +
+      "nt.v1.GetOrderDetailRequest\032/.hubstore.f" +
+      "ulfillment.v1.GetOrderDetailResponse\022z\n\021" +
+      "MutateOrderStatus\0221.hubstore.fulfillment" +
+      ".v1.MutateOrderStatusRequest\0322.hubstore." +
+      "fulfillment.v1.MutateOrderStatusResponse" +
+      "\022w\n\020GetOrdersByCodes\0220.hubstore.fulfillm" +
+      "ent.v1.GetOrdersByCodesRequest\0321.hubstor" +
+      "e.fulfillment.v1.GetOrdersByCodesRespons" +
+      "e\022n\n\rAssignShopHub\022-.hubstore.fulfillmen" +
+      "t.v1.AssignShopHubRequest\032..hubstore.ful" +
+      "fillment.v1.AssignShopHubResponse\022w\n\020Get" +
+      "AssignHistory\0220.hubstore.fulfillment.v1." +
+      "GetAssignHistoryRequest\0321.hubstore.fulfi" +
+      "llment.v1.GetAssignHistoryResponse\022}\n\022Up" +
+      "dateDeliveryTime\0222.hubstore.fulfillment." +
+      "v1.UpdateDeliveryTimeRequest\0323.hubstore." +
+      "fulfillment.v1.UpdateDeliveryTimeRespons" +
+      "e\022e\n\nUpdateNote\022*.hubstore.fulfillment.v" +
+      "1.UpdateNoteRequest\032+.hubstore.fulfillme" +
+      "nt.v1.UpdateNoteResponse\022h\n\013ListRegions\022" +
+      "+.hubstore.fulfillment.v1.ListRegionsReq" +
+      "uest\032,.hubstore.fulfillment.v1.ListRegio" +
+      "nsResponse\022z\n\021ListDeliveryStaff\0221.hubsto" +
+      "re.fulfillment.v1.ListDeliveryStaffReque" +
+      "st\0322.hubstore.fulfillment.v1.ListDeliver" +
+      "yStaffResponse\022z\n\021ListDistinctShops\0221.hu" +
+      "bstore.fulfillment.v1.ListDistinctShopsR" +
+      "equest\0322.hubstore.fulfillment.v1.ListDis" +
+      "tinctShopsResponse\022t\n\017GetTimeDelivery\022/." +
+      "hubstore.fulfillment.v1.GetTimeDeliveryR" +
+      "equest\0320.hubstore.fulfillment.v1.GetTime" +
+      "DeliveryResponse\022z\n\021GetDashboardStats\0221." +
+      "hubstore.fulfillment.v1.GetDashboardStat" +
+      "sRequest\0322.hubstore.fulfillment.v1.GetDa" +
+      "shboardStatsResponseBV\n\033com.hubstore.ful" +
+      "fillment.v1P\001Z5hubstore/gen/go/hubstore/" +
+      "fulfillment/v1;fulfillmentv1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -545,6 +576,30 @@ public final class Fulfillment {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_hubstore_fulfillment_v1_GetTimeDeliveryResponse_descriptor,
         new java.lang.String[] { "SuggestedTime", });
+    internal_static_hubstore_fulfillment_v1_GetDashboardStatsRequest_descriptor =
+      getDescriptor().getMessageTypes().get(33);
+    internal_static_hubstore_fulfillment_v1_GetDashboardStatsRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_GetDashboardStatsRequest_descriptor,
+        new java.lang.String[] { });
+    internal_static_hubstore_fulfillment_v1_DayCount_descriptor =
+      getDescriptor().getMessageTypes().get(34);
+    internal_static_hubstore_fulfillment_v1_DayCount_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_DayCount_descriptor,
+        new java.lang.String[] { "Date", "Count", });
+    internal_static_hubstore_fulfillment_v1_BatchOrderCount_descriptor =
+      getDescriptor().getMessageTypes().get(35);
+    internal_static_hubstore_fulfillment_v1_BatchOrderCount_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_BatchOrderCount_descriptor,
+        new java.lang.String[] { "BatchCode", "Count", });
+    internal_static_hubstore_fulfillment_v1_GetDashboardStatsResponse_descriptor =
+      getDescriptor().getMessageTypes().get(36);
+    internal_static_hubstore_fulfillment_v1_GetDashboardStatsResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_GetDashboardStatsResponse_descriptor,
+        new java.lang.String[] { "OrdersPerDay", "TotalToday", "PendingApproval", "OrdersPerBatch", });
     descriptor.resolveAllFeaturesImmutable();
   }
 

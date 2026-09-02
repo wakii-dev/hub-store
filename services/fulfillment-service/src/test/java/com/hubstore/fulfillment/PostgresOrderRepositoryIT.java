@@ -2,6 +2,7 @@ package com.hubstore.fulfillment;
 
 import com.hubstore.fulfillment.seed.SeedLoader;
 import com.hubstore.fulfillment.seed.SeedModels;
+import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.store.OrderFilter;
 import com.hubstore.fulfillment.store.PostgresOrderRepository;
@@ -14,8 +15,11 @@ import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
 import java.nio.file.Path;
 import java.time.Instant;
+import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneId;
 import java.util.Comparator;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -456,5 +460,52 @@ class PostgresOrderRepositoryIT {
         assertThat(p.total()).isEqualTo(m.total());
         assertThat(p.total()).isGreaterThan(0);
         assertThat(codes(p.items())).containsExactlyElementsOf(codes(m.items()));
+    }
+
+    // ---------------- dashboard (SF-9) ----------------
+
+    @Test
+    void dashboardStatsParityWithInMemoryAndSeedDerived() {
+        ZoneId zone = ZoneId.of("Asia/Ho_Chi_Minh");
+        LocalDate today = LocalDate.now(zone);
+        var p = pg.dashboardStats(today, zone);
+        var m = mem.dashboardStats(today, zone);
+
+        // Cấu trúc: đủ 30 ô cũ→mới, parity từng ô với in-memory.
+        assertThat(p.ordersPerDay()).hasSize(30);
+        assertThat(p.ordersPerDay()).containsExactlyElementsOf(m.ordersPerDay());
+
+        // Seed-derived per cell (originalTime.from → +07 date) — khớp bất kể ngày chạy.
+        Map<String, Integer> seedByDay = new HashMap<>();
+        for (SeedModels.OrderSeed o : seed.orders()) {
+            if (o.originalTime() == null || o.originalTime().from() == null) {
+                continue;
+            }
+            String date = OffsetDateTime.parse(o.originalTime().from())
+                    .atZoneSameInstant(zone).toLocalDate().toString();
+            seedByDay.merge(date, 1, Integer::sum);
+        }
+        for (DashboardStatsData.DayCount d : p.ordersPerDay()) {
+            assertThat(d.count()).isEqualTo(seedByDay.getOrDefault(d.date(), 0));
+        }
+
+        // Pending = đơn order_status 0 (seed canonical: 5).
+        assertThat(p.pendingApproval()).isEqualTo(m.pendingApproval());
+        assertThat(p.pendingApproval())
+                .isEqualTo((int) seed.orders().stream().filter(o -> o.orderStatus() == 0).count())
+                .isEqualTo(5);
+
+        // Per-batch: tổng = số đơn seed CÓ batch_code (canonical: 9), sort theo code.
+        assertThat(p.ordersPerBatch()).containsExactlyElementsOf(m.ordersPerBatch());
+        assertThat(p.ordersPerBatch().stream().mapToInt(DashboardStatsData.BatchCount::count).sum())
+                .isEqualTo((int) seed.orders().stream()
+                        .filter(o -> o.batchCode() != null && !o.batchCode().isBlank()).count())
+                .isEqualTo(9);
+        assertThat(p.ordersPerBatch()).extracting(DashboardStatsData.BatchCount::batchCode)
+                .isSorted();
+
+        // totalToday parity (seed tất cả đơn 2026-09-03 → 0 trừ khi chạy đúng hôm đó).
+        assertThat(p.totalToday()).isEqualTo(m.totalToday())
+                .isEqualTo(seedByDay.getOrDefault(today.toString(), 0));
     }
 }

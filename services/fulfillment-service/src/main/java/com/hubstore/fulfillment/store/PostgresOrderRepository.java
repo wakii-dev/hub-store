@@ -277,6 +277,45 @@ public class PostgresOrderRepository implements OrderRepository {
                 (rs, n) -> new SeedModels.ShopSeed(rs.getString(1), rs.getString(2), rs.getString(3)));
     }
 
+    /**
+     * Dashboard aggregate (SF-9) — 4 statement gộp (KHÔNG N+1): per-day GROUP BY
+     * to_char(original_time_from AT TIME ZONE zone), fill 30 ô cũ→mới ngày thiếu=0;
+     * totalToday; pendingApproval (order_status=0); per-batch (batch_code ≠ '',
+     * ORDER BY batch_code ASC — khớp in-memory sort). Đơn original_time_from NULL
+     * tự nhiên rơi khỏi window count (in-memory: parse lỗi → skip).
+     */
+    @Override
+    public DashboardStatsData dashboardStats(java.time.LocalDate today, java.time.ZoneId zone) {
+        String zoneId = zone.getId();
+        java.time.LocalDate start = today.minusDays(29);
+        Instant from = start.atStartOfDay(zone).toInstant();
+        Instant to = today.plusDays(1).atStartOfDay(zone).toInstant();
+        Map<String, Integer> byDay = new java.util.HashMap<>();
+        jdbc.query("""
+                SELECT to_char(original_time_from AT TIME ZONE ?, 'YYYY-MM-DD') AS d, COUNT(*) AS c
+                FROM orders WHERE original_time_from >= ? AND original_time_from < ?
+                GROUP BY 1 ORDER BY 1""",
+            rs -> { byDay.put(rs.getString(1), rs.getInt(2)); }, zoneId,
+            OffsetDateTime.ofInstant(from, zone), OffsetDateTime.ofInstant(to, zone));
+        List<DashboardStatsData.DayCount> days = new ArrayList<>();
+        for (java.time.LocalDate d = start; !d.isAfter(today); d = d.plusDays(1)) {
+            days.add(new DashboardStatsData.DayCount(d.toString(), byDay.getOrDefault(d.toString(), 0)));
+        }
+        Integer totalToday = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM orders WHERE original_time_from >= ? AND original_time_from < ?",
+            Integer.class, OffsetDateTime.ofInstant(from, zone), OffsetDateTime.ofInstant(to, zone));
+        Integer pending = jdbc.queryForObject(
+            "SELECT COUNT(*) FROM orders WHERE order_status = 0", Integer.class);
+        List<DashboardStatsData.BatchCount> perBatch = jdbc.query(
+            "SELECT batch_code, COUNT(*) AS c FROM orders WHERE batch_code IS NOT NULL AND batch_code <> '' "
+                + "GROUP BY batch_code ORDER BY batch_code ASC",
+            (rs, n) -> new DashboardStatsData.BatchCount(rs.getString(1), rs.getInt(2)));
+        return new DashboardStatsData(days,
+                totalToday == null ? 0 : totalToday,
+                pending == null ? 0 : pending,
+                perBatch);
+    }
+
     // ---------------- helpers ----------------
 
     private static final String ORDER_COLS = """
