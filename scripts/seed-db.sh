@@ -199,4 +199,72 @@ SELECT setval('public.batches_code_seq',
 \endif
 SQL
 
-echo "seed-db: HOÀN TẤT (fulfillment + batching). Emptiness-gate: KHÔNG upsert — seed file đổi thì bash scripts/reset-db.sh."
+# --- SF-19 (FI-264) — seed tech service (delivery/installation/technicians) ---
+# Additive block — KHÔNG đụng block cũ ở trên. Emptiness-gate PER-TABLE: mỗi bảng
+# rỗng mới nạp (reset từng bảng → chỉ bảng rỗng đó được seed lại).
+SEED_TECH_JSON="${SEED_TECH_JSON:-$ROOT/api/seed/tech-sample.json}"
+if [[ -f "$SEED_TECH_JSON" ]]; then
+echo "seed-db: nạp tech service ← $(basename "$SEED_TECH_JSON") ..."
+psql_cmd -d fulfillment -v ON_ERROR_STOP=1 \
+  -v tech_json="$(cat "$SEED_TECH_JSON")" <<'SQL'
+SELECT to_regclass('public.technicians') IS NULL
+    OR to_regclass('public.delivery_orders') IS NULL
+    OR to_regclass('public.installation_orders') IS NULL AS missing \gset
+\if :missing
+DO $err$ BEGIN
+  RAISE EXCEPTION 'fulfillment: thiếu bảng tech (technicians/delivery_orders/installation_orders) — chạy migration trước (Flyway V6)';
+END $err$;
+\endif
+SELECT NOT EXISTS (SELECT 1 FROM public.technicians) AS need_tech \gset
+\if :need_tech
+INSERT INTO public.technicians (seq, code, name, type, region_code)
+SELECT (t->>'seq')::bigint, t->>'code', t->>'name', t->>'type', t->>'regionCode'
+FROM jsonb_array_elements(:'tech_json'::jsonb->'technicians') AS t;
+\echo 'tech: seeded technicians'
+\else
+\echo 'tech: technicians đã có data — bỏ qua (emptiness-gate)'
+\endif
+SELECT NOT EXISTS (SELECT 1 FROM public.delivery_orders) AS need_del \gset
+\if :need_del
+INSERT INTO public.delivery_orders (
+  code, status, driver_name, driver_phone,
+  receiver_name, receiver_phone, receiver_lat, receiver_long,
+  sender_name, sender_phone, sender_lat, sender_long,
+  fee, tip, items, region_code, province, coordination, delivery_date)
+SELECT
+  o->>'code', o->>'status', o->>'driverName', o->>'driverPhone',
+  o->'receiver'->>'name', o->'receiver'->>'phone',
+  (o->'receiver'->>'lat')::double precision, (o->'receiver'->>'long')::double precision,
+  o->'sender'->>'name', o->'sender'->>'phone',
+  (o->'sender'->>'lat')::double precision, (o->'sender'->>'long')::double precision,
+  (o->>'fee')::double precision, (o->>'tip')::double precision,
+  o->'items', o->>'regionCode', o->>'province', o->'coordination',
+  CASE o->>'deliveryDate'
+    WHEN 'TODAY' THEN CURRENT_DATE
+    WHEN 'TODAY-1' THEN CURRENT_DATE - 1
+    ELSE (o->>'deliveryDate')::date END
+FROM jsonb_array_elements(:'tech_json'::jsonb->'deliveryOrders') AS o;
+\echo 'tech: seeded delivery_orders (deliveryDate TODAY → CURRENT_DATE)'
+\else
+\echo 'tech: delivery_orders đã có data — bỏ qua'
+\endif
+SELECT NOT EXISTS (SELECT 1 FROM public.installation_orders) AS need_ins \gset
+\if :need_ins
+INSERT INTO public.installation_orders (
+  service_order_code, delivery_order_code, technician_code, status,
+  expected_time, timeline, service_fee, fee_adjust, items, region_code, province)
+SELECT
+  i->>'serviceOrderCode', i->>'deliveryOrderCode', i->>'technicianCode', i->>'status',
+  NULLIF(i->>'expectedTime','')::timestamptz,
+  i->'timeline',
+  (i->>'serviceFee')::double precision, (i->>'feeAdjust')::double precision,
+  i->'items', i->>'regionCode', i->>'province'
+FROM jsonb_array_elements(:'tech_json'::jsonb->'installationOrders') AS i;
+\echo 'tech: seeded installation_orders'
+\else
+\echo 'tech: installation_orders đã có data — bỏ qua'
+\endif
+SQL
+fi
+
+echo "seed-db: HOÀN TẤT (fulfillment + batching + tech). Emptiness-gate: KHÔNG upsert — seed file đổi thì bash scripts/reset-db.sh."

@@ -1,0 +1,331 @@
+{
+  "technicians": [
+    { "seq": 1, "code": "KTV-001", "name": "Nguyễn Văn An", "type": "KTV", "regionCode": "R1" },
+    { "seq": 2, "code": "KTV-002", "name": "Trần Văn Bình", "type": "KTV", "regionCode": "R1" },
+    { "seq": 3, "code": "KTV-003", "name": "Lê Văn Cường", "type": "KTV", "regionCode": "R1" },
+    { "seq": 4, "code": "KTV-004", "name": "Phạm Văn Dũng", "type": "KTV", "regionCode": "R1" },
+    { "seq": 5, "code": "CTV-001", "name": "Hoàng Văn Em", "type": "CTV", "regionCode": "R2" },
+    { "seq": 6, "code": "CTV-002", "name": "Vũ Văn Phong", "type": "CTV", "regionCode": "R2" }
+  ],
+  "deliveryOrders": [
+    {
+      "code": "TD-0001",
+      "status": "NEW",
+      "driverName": "Trương Đình Hiếu",
+      "driverPhone": "0901234501",
+      "receiver": { "name": "Ngô Thị Giang", "phone": "0912000001", "lat": 10.7721, "long": 106.6912 },
+      "sender": { "name": "Kho Tân Bình", "phone": "0913000001", "lat": 10.8053, "long": 106.6519 },
+      "fee": 35000,
+      "tip": 0,
+      "items": [
+        { "code": "SP-1001", "name": "Máy giặt LG 10kg", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Máy giặt" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": { "note": "Gọi trước 15 phút, nhà 3 tầng hẻo" },
+      "deliveryDate": "TODAY"
+    },
+    {
+      "code": "TD-0002",
+      "status": "CONFIRMED",
+      "driverName": "Đặng Văn Hoàng",
+      "driverPhone": "0901234502",
+      "receiver": { "name": "Bùi Thị Hạnh", "phone": "0912000002", "lat": 10.7834, "long": 106.7045 },
+      "sender": { "name": "Kho Bình Thạnh", "phone": "0913000002", "lat": 10.8008, "long": 106.6894 },
+      "fee": 42000,
+      "tip": 5000,
+      "items": [
+        { "code": "SP-1002", "name": "Tủ lạnh Samsung 400L", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Tủ lạnh" },
+        { "code": "SP-1003", "name": "TV Sony 55 inch", "quantity": 1, "categoryL1": "Điện tử", "categoryL2": "TV" }
+      ],
+      "regionCode": "R2",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": {},
+      "deliveryDate": "TODAY"
+    },
+    {
+      "code": "TD-0003",
+      "status": "PROCESSING",
+      "driverName": "Nguyễn Thành Trung",
+      "driverPhone": "0901234503",
+      "receiver": { "name": "Đỗ Minh Khoa", "phone": "0912000003", "lat": 10.7592, "long": 106.6801 },
+      "sender": { "name": "Kho Quận 1", "phone": "0913000003", "lat": 10.7758, "long": 106.7008 },
+      "fee": 30000,
+      "tip": 0,
+      "items": [
+        { "code": "SP-1004", "name": "Loa JBL PartyBox", "quantity": 1, "categoryL1": "Điện tử", "categoryL2": "Loa" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": {},
+      "deliveryDate": "TODAY"
+    },
+    {
+      "code": "TD-0004",
+      "status": "SHIPPING",
+      "driverName": "Lý Quốc Bảo",
+      "driverPhone": "0901234504",
+      "receiver": { "name": "Phan Thị Lan", "phone": "0912000004", "lat": 10.7945, "long": 106.6723 },
+      "sender": { "name": "Kho Tân Bình", "phone": "0913000001", "lat": 10.8053, "long": 106.6519 },
+      "fee": 38000,
+      "tip": 10000,
+      "items": [
+        { "code": "SP-1005", "name": "Máy giặt Aqua 8kg", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Máy giặt" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": { "note": "Cầu thang hẹp — 2 người khiêng" },
+      "deliveryDate": "TODAY"
+    },
+    {
+      "code": "TD-0005",
+      "status": "DELIVERED",
+      "driverName": "Trương Đình Hiếu",
+      "driverPhone": "0901234501",
+      "receiver": { "name": "Võ Thanh Hùng", "phone": "0912000005", "lat": 10.7654, "long": 106.7123 },
+      "sender": { "name": "Kho Quận 1", "phone": "0913000003", "lat": 10.7758, "long": 106.7008 },
+      "fee": 40000,
+      "tip": 0,
+      "items": [
+        { "code": "SP-1006", "name": "Tủ lạnh Panasonic 350L", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Tủ lạnh" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": {},
+      "deliveryDate": "TODAY"
+    },
+    {
+      "code": "TD-0006",
+      "status": "FAILED",
+      "driverName": "Đặng Văn Hoàng",
+      "driverPhone": "0901234502",
+      "receiver": { "name": "Lâm Chí Cường", "phone": "0912000006", "lat": 10.7503, "long": 106.6985 },
+      "sender": { "name": "Kho Bình Thạnh", "phone": "0913000002", "lat": 10.8008, "long": 106.6894 },
+      "fee": 36000,
+      "tip": 0,
+      "items": [
+        { "code": "SP-1007", "name": "TV LG 50 inch", "quantity": 1, "categoryL1": "Điện tử", "categoryL2": "TV" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": { "note": "Khách không nghe máy — giao lại sáng mai" },
+      "deliveryDate": "TODAY"
+    },
+    {
+      "code": "TD-0007",
+      "status": "REDELIVERY",
+      "driverName": "Lý Quốc Bảo",
+      "driverPhone": "0901234504",
+      "receiver": { "name": "Trịnh Thị Mai", "phone": "0912000007", "lat": 10.7398, "long": 106.6890 },
+      "sender": { "name": "Kho Quận 7", "phone": "0913000004", "lat": 10.7331, "long": 106.7193 },
+      "fee": 45000,
+      "tip": 0,
+      "items": [
+        { "code": "SP-1008", "name": "Máy giặt Electrolux 9kg", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Máy giặt" }
+      ],
+      "regionCode": "R2",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": {},
+      "deliveryDate": "TODAY"
+    },
+    {
+      "code": "TD-0008",
+      "status": "RESCHEDULED",
+      "driverName": "Nguyễn Thành Trung",
+      "driverPhone": "0901234503",
+      "receiver": { "name": "Hà Văn Nam", "phone": "0912000008", "lat": 10.7477, "long": 106.7042 },
+      "sender": { "name": "Kho Quận 7", "phone": "0913000004", "lat": 10.7331, "long": 106.7193 },
+      "fee": 33000,
+      "tip": 5000,
+      "items": [
+        { "code": "SP-1009", "name": "Loa Bose Soundbar", "quantity": 1, "categoryL1": "Điện tử", "categoryL2": "Loa" }
+      ],
+      "regionCode": "R2",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": {},
+      "deliveryDate": "TODAY"
+    },
+    {
+      "code": "TD-0009",
+      "status": "CANCELLED",
+      "driverName": "Trương Đình Hiếu",
+      "driverPhone": "0901234501",
+      "receiver": { "name": "Đinh Thị Ngọc", "phone": "0912000009", "lat": 10.7801, "long": 106.6355 },
+      "sender": { "name": "Kho Tân Bình", "phone": "0913000001", "lat": 10.8053, "long": 106.6519 },
+      "fee": 28000,
+      "tip": 0,
+      "items": [
+        { "code": "SP-1010", "name": "TV Samsung 43 inch", "quantity": 1, "categoryL1": "Điện tử", "categoryL2": "TV" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": {},
+      "deliveryDate": "TODAY-1"
+    },
+    {
+      "code": "TD-0010",
+      "status": "RETURNED",
+      "driverName": "Đặng Văn Hoàng",
+      "driverPhone": "0901234502",
+      "receiver": { "name": "Cao Văn Thành", "phone": "0912000010", "lat": 10.8156, "long": 106.6728 },
+      "sender": { "name": "Kho Bình Thạnh", "phone": "0913000002", "lat": 10.8008, "long": 106.6894 },
+      "fee": 39000,
+      "tip": 0,
+      "items": [
+        { "code": "SP-1011", "name": "Tủ lạnh Sharp 300L", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Tủ lạnh" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh",
+      "coordination": { "note": "Khách trả hàng — hoàn kho" },
+      "deliveryDate": "TODAY"
+    }
+  ],
+  "installationOrders": [
+    {
+      "serviceOrderCode": "SO-0001",
+      "deliveryOrderCode": "TD-0001",
+      "technicianCode": null,
+      "status": "NEW",
+      "expectedTime": "2026-09-02T08:00:00+07:00",
+      "timeline": [
+        { "action": "CREATE", "timestamp": "2026-09-02T07:00:00+07:00", "note": "Tạo đơn lắp máy giặt TD-0001" }
+      ],
+      "serviceFee": 200000,
+      "feeAdjust": 0,
+      "items": [
+        { "code": "SP-1001", "name": "Máy giặt LG 10kg", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Máy giặt" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh"
+    },
+    {
+      "serviceOrderCode": "SO-0002",
+      "deliveryOrderCode": "TD-0002",
+      "technicianCode": null,
+      "status": "CONFIRMED",
+      "expectedTime": "2026-09-02T09:00:00+07:00",
+      "timeline": [
+        { "action": "CREATE", "timestamp": "2026-09-02T07:30:00+07:00", "note": "Tạo đơn lắp TV TD-0002" },
+        { "action": "CONFIRM", "timestamp": "2026-09-02T08:00:00+07:00", "note": "Khách xác nhận lịch" }
+      ],
+      "serviceFee": 250000,
+      "feeAdjust": 0,
+      "items": [
+        { "code": "SP-1003", "name": "TV Sony 55 inch", "quantity": 1, "categoryL1": "Điện tử", "categoryL2": "TV" }
+      ],
+      "regionCode": "R2",
+      "province": "TP. Hồ Chí Minh"
+    },
+    {
+      "serviceOrderCode": "SO-0003",
+      "deliveryOrderCode": "TD-0003",
+      "technicianCode": null,
+      "status": "RESCHEDULED",
+      "expectedTime": null,
+      "timeline": [
+        { "action": "CREATE", "timestamp": "2026-09-02T06:45:00+07:00", "note": "Tạo đơn lắp loa TD-0003" },
+        { "action": "RESCHEDULE", "timestamp": "2026-09-02T07:15:00+07:00", "note": "Khách xin dời — chờ khách chọn lại lịch" }
+      ],
+      "serviceFee": 150000,
+      "feeAdjust": 0,
+      "items": [
+        { "code": "SP-1004", "name": "Loa JBL PartyBox", "quantity": 1, "categoryL1": "Điện tử", "categoryL2": "Loa" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh"
+    },
+    {
+      "serviceOrderCode": "SO-0004",
+      "deliveryOrderCode": "TD-0004",
+      "technicianCode": "KTV-001",
+      "status": "PROCESSING",
+      "expectedTime": "2026-09-02T10:00:00+07:00",
+      "timeline": [
+        { "action": "CREATE", "timestamp": "2026-09-02T07:00:00+07:00", "note": "Tạo đơn lắp máy giặt TD-0004" },
+        { "action": "ASSIGN", "timestamp": "2026-09-02T07:20:00+07:00", "note": "Gán KTV-001", "technicianCode": "KTV-001" },
+        { "action": "ACCEPT", "timestamp": "2026-09-02T07:25:00+07:00", "note": "KTV-001 nhận việc", "technicianCode": "KTV-001" }
+      ],
+      "serviceFee": 220000,
+      "feeAdjust": 20000,
+      "items": [
+        { "code": "SP-1005", "name": "Máy giặt Aqua 8kg", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Máy giặt" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh"
+    },
+    {
+      "serviceOrderCode": "SO-0005",
+      "deliveryOrderCode": "TD-0005",
+      "technicianCode": "KTV-002",
+      "status": "SHIPPING",
+      "expectedTime": "2026-09-02T11:00:00+07:00",
+      "timeline": [
+        { "action": "CREATE", "timestamp": "2026-09-02T07:10:00+07:00", "note": "Tạo đơn lắp tủ lạnh TD-0005" },
+        { "action": "ASSIGN", "timestamp": "2026-09-02T07:30:00+07:00", "note": "Gán KTV-002", "technicianCode": "KTV-002" }
+      ],
+      "serviceFee": 180000,
+      "feeAdjust": 0,
+      "items": [
+        { "code": "SP-1006", "name": "Tủ lạnh Panasonic 350L", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Tủ lạnh" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh"
+    },
+    {
+      "serviceOrderCode": "SO-0006",
+      "deliveryOrderCode": "TD-0006",
+      "technicianCode": "KTV-003",
+      "status": "DELIVERED",
+      "expectedTime": "2026-09-02T13:00:00+07:00",
+      "timeline": [
+        { "action": "CREATE", "timestamp": "2026-09-02T08:00:00+07:00", "note": "Tạo đơn lắp TV TD-0006" },
+        { "action": "ASSIGN", "timestamp": "2026-09-02T08:10:00+07:00", "note": "Gán KTV-003", "technicianCode": "KTV-003" },
+        { "action": "COMPLETE", "timestamp": "2026-09-02T13:30:00+07:00", "note": "Hoàn tất lắp đặt", "technicianCode": "KTV-003" }
+      ],
+      "serviceFee": 260000,
+      "feeAdjust": -20000,
+      "items": [
+        { "code": "SP-1007", "name": "TV LG 50 inch", "quantity": 1, "categoryL1": "Điện tử", "categoryL2": "TV" }
+      ],
+      "regionCode": "R1",
+      "province": "TP. Hồ Chí Minh"
+    },
+    {
+      "serviceOrderCode": "SO-0007",
+      "deliveryOrderCode": "TD-0007",
+      "technicianCode": "CTV-001",
+      "status": "FAILED",
+      "expectedTime": "2026-09-02T14:00:00+07:00",
+      "timeline": [
+        { "action": "CREATE", "timestamp": "2026-09-02T08:30:00+07:00", "note": "Tạo đơn lắp máy giặt TD-0007" },
+        { "action": "ASSIGN", "timestamp": "2026-09-02T08:40:00+07:00", "note": "Gán CTV-001", "technicianCode": "CTV-001" },
+        { "action": "FAIL", "timestamp": "2026-09-02T14:20:00+07:00", "note": "Thiếu phụ kiện nước — thất bại", "technicianCode": "CTV-001" }
+      ],
+      "serviceFee": 200000,
+      "feeAdjust": 0,
+      "items": [
+        { "code": "SP-1008", "name": "Máy giặt Electrolux 9kg", "quantity": 1, "categoryL1": "Điện máy", "categoryL2": "Máy giặt" }
+      ],
+      "regionCode": "R2",
+      "province": "TP. Hồ Chí Minh"
+    },
+    {
+      "serviceOrderCode": "SO-0008",
+      "deliveryOrderCode": "TD-0008",
+      "technicianCode": "CTV-002",
+      "status": "REDELIVERY",
+      "expectedTime": "2026-09-02T15:00:00+07:00",
+      "timeline": [
+        { "action": "CREATE", "timestamp": "2026-09-02T09:00:00+07:00", "note": "Tạo đơn lắp loa TD-0008" },
+        { "action": "ASSIGN", "timestamp": "2026-09-02T09:10:00+07:00", "note": "Gán CTV-002", "technicianCode": "CTV-002" }
+      ],
+      "serviceFee": 140000,
+      "feeAdjust": 0,
+      "items": [
+        { "code": "SP-1009", "name": "Loa Bose Soundbar", "quantity": 1, "categoryL1": "Điện tử", "categoryL2": "Loa" }
+      ],
+      "regionCode": "R2",
+      "province": "TP. Hồ Chí Minh"
+    }
+  ]
+}
