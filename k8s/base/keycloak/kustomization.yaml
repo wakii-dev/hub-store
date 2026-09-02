@@ -1,8 +1,13 @@
-# PLACEHOLDER — SF-3 thay dir này bằng manifests Keycloak thật (SF-4 cho apps/*).
+# SF-3 (FI-276) Keycloak manifests.
 # KHÔNG sửa k8s/base/kustomization.yaml (composition contract).
+# FLAG FI-245: realm ở đây là bản MINIMAL dev-only (smoke password grant).
+# Khi FI-245 SF-4 merge, realm JSON có thể thay bằng artifact đầy đủ của FI-245 —
+# SF-5 ghi hướng thay chính thức trong wiring doc (xem README section K8s).
 apiVersion: kustomize.config.k8s.io/v1beta1
 kind: Kustomization
 
 namespace: hub-store
 
-resources: []
+resources:
+  - deployment.yaml
+  - service.yaml
