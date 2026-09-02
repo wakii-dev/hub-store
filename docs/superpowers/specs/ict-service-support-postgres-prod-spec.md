@@ -170,6 +170,7 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Monitoring: healthcheck endpoints mọi service + uptime checks compose; logs structured.
 - CI/CD: GitHub Actions — lint + unit test + E2E (E2E=1) + docker build mỗi PR.
 - Backup: cron `pg_dump` cả 2 DB + restore doc.
+- **Reconciliation job**: định kỳ quét đơn PREPARING không có batch tương ứng (mồ côi do network partition giữa Go compensate + Java mutate) → revert về NOT_PREPARED + audit log; chạy trong Go/Java service hoặc cron compose.
 
 ## 4. ACCEPTANCE (user-visible)
 1. `docker compose up --build` trên máy sạch → mở :3000 → đăng nhập username/password thật → D1 lọc đơn → D1b tạo phiếu (DnD + suggest + shipper) → D2 hủy/hoàn tất → D3 in PDF — toàn bộ hoạt động.
