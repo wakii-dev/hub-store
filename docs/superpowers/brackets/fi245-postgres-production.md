@@ -26,9 +26,9 @@ Tasks: batchstore-interface / golang-migrate-batches-schema / pgx-impl-store / t
 ## SF-4 OIDC auth thật (Keycloak)
 Tier: 1
 linear: FI-249
-What: Keycloak realm import (roles Coordinator/WarehouseOps/Manager + users mẫu password literal dev-only trong realm JSON — KHÔNG env-substitution), shell login PKCE + silent renew + logout (pin oidc-client-ts), BFF verify JWKS (refresh unknown kid) + map realm_access.roles → x-user-role, loại fake-JWT khỏi runtime path, E2E login helper storageState
+What: Keycloak realm import (roles Coordinator/WarehouseOps/Manager + users mẫu password literal dev-only trong realm JSON — KHÔNG env-substitution), shell login PKCE + silent renew + logout (pin oidc-client-ts), BFF verify JWKS (refresh unknown kid) + map realm_access.roles → x-user-role, loại fake-JWT khỏi runtime path, E2E login helper storageState, forgot-password C1 (custom page + BFF → Keycloak Admin API set password — dev-only, ghi rõ README/comment)
 Depends on: SF-1
-Tasks: keycloak-realm-import / roles-users-seed / shell-login-pkce / silent-renew-logout / bff-jwks-verify / roles-claim-map / remove-fakejwt-runtime / e2e-login-helper / e2e-specs-pass-auth
+Tasks: keycloak-realm-import / roles-users-seed / shell-login-pkce / silent-renew-logout / bff-jwks-verify / roles-claim-map / remove-fakejwt-runtime / forgot-password-page / bff-reset-password-admin-api / e2e-login-helper / e2e-specs-pass-auth
 
 ## SF-5 Convergence — production compose + E2E + deploy docs
 Tier: 2

@@ -64,6 +64,7 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Shell login: redirect PKCE qua `VITE_OIDC_AUTHORITY/CLIENT_ID/REDIRECT_URI` (env đã có, uncomment + wire); logout; **silent renew** access token (oidc-client-ts); 401 → redirect login.
 - BFF: verify access token qua **JWKS** (không còn HS256 shared secret cho user flow); **JWKS cache refresh khi gặp unknown `kid`** (Keycloak rotate/restart giữa run); map roles claim (`realm_access.roles` — SF-4 làm cả 2 phía, tự nhất quán) → `x-user-role` gửi xuống gRPC services (services KHÔNG đổi — vẫn nhận x-user-role, M-3 ghi note để sau).
 - Fake-JWT dev-stub: loại khỏi runtime path; GIỮ code path test-only (unit test mock).
+- **Forgot-password C1 (dev-only)**: FE custom page "Forgot password" (user nhập username + password mới trực tiếp, KHÔNG email) → BFF endpoint gọi Keycloak Admin API set password. KHÔNG có bước xác minh danh tính → CHỈ an toàn local-dev — bắt buộc ghi rõ dev-only trong README + code comment; production thật cần OTP email hoặc bật forgot-password Keycloak (để sau).
 - E2E login helper: **Playwright global-setup login UI 1 lần → storageState reuse** cho cả 13 specs (không login lại mỗi spec; không ROPC); nếu token hết hạn giữa run → helper re-login. Specs không đổi business assertions.
 - Pin versions: Keycloak image, oidc-client-ts, Flyway, golang-migrate, pgx v5.
 
