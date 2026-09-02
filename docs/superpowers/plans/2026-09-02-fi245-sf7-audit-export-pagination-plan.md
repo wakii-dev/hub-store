@@ -52,7 +52,7 @@ Thiếu nền tảng BE cho audit viewer + export UI (SF-11): không có bảng/
 
 ## 5. Implementation outline
 
-Tasks: T1 V2+audit-lib → T2 audit-hooks → T3 audit-query → T4 export-csv → T5 go-pagination → T6 compat+tests (T2 phụ thuộc T1; T3, T4, T5 chạy song song sau T1/T2; T6 cuối).
+Tasks: T1 V2+audit-lib+env-wiring → T2 audit-hooks → T3 audit-query → T4 export-csv → T6 compat+tests; T5 go-pagination chạy TIER 1 song song T1 (plan-critic: T3+T4 cùng file `fulfillment.ts` → serialize T3→T4; T5 false-dep T2 đã bỏ; T6 chờ T3,T4,T5).
 File structure: BFF lib `src/lib/{audit,csv}.ts` + route additions trong `fulfillment.ts`/`batches.ts` (theo convention hiện có — không tạo route file mới); Go method trong `store.go` + test `store_test.go`.
 Testing: vitest pure (date/where-builder/CSV escape + route với pg stub); Go testdb (skip-when-no-DB); Java chỉ cần `mvn test` xanh (V2 không đổi logic Java — verify Flyway apply khi chạy stack ở T6/Phase 5).
 
@@ -199,8 +199,21 @@ export function normalizeAuditPage(q: AuditQuery): { page: number; pageSize: num
 ```
 
 - [ ] **Step 4: test `test/audit.lib.test.ts`** — parseDateBound (bare date UTC bounds from/to; full ISO; invalid → null), buildAuditWhere (mỗi filter, combo, escape `%`), normalizeAuditPage (cap 100, default 20, page<1→1). Vitest thuần, không mock DB.
-- [ ] **Step 5: Run** `cd services/bff-gateway && npx vitest run test/audit.lib.test.ts` → PASS. Chạy thêm `npx vitest run` toàn bộ → cũ vẫn xanh (chưa đụng route).
-- [ ] **Step 6: Commit** `feat(fi245-sf7): activity_log Flyway V2 + BFF audit lib (pg pool fail-open + query builder)`
+- [ ] **Step 5: Wire env cho BFF (plan-critic P0#2 — additive compose edit):** `docker-compose.yml` service `bff` CHƯA có `FULFILLMENT_DB_*` (chỉ fulfillment-service có) → thêm block env additive vào bff (KHÔNG đụng phần khác của SF-1):
+
+```yaml
+    environment:
+      FULFILLMENT_DB_HOST: postgres            # đã có host name — đối chiếu fulfillment-service env
+      FULFILLMENT_DB_PORT: 5432
+      FULFILLMENT_DB_NAME: fulfillment
+      FULFILLMENT_DB_USER: ${POSTGRES_USER}
+      FULFILLMENT_DB_PASSWORD: ${POSTGRES_PASSWORD}
+```
+
++ `.env.example` ghi chú BFF audit dùng chung credentials. Ghi chú boundary deviation: additive-only, cần cho ACCEPTANCE #1. `docker compose config` để verify YAML.
+- [ ] **Step 6: Validate V2 trên DB thật (fail sớm — P1):** nếu dev Postgres chạy (`docker compose ps postgres`): `docker compose exec -T postgres psql -U $POSTGRES_USER -d fulfillment -c "\d activity_log"` SAU khi boot fulfillment-service 1 lần (Flyway apply on boot), HOẶC apply tay file V2 bằng psql để bắt syntax. Không có DB → ghi rõ deferred sang Phase 5.
+- [ ] **Step 7: Run** `cd services/bff-gateway && npx vitest run test/audit.lib.test.ts` → PASS. Chạy thêm `npx vitest run` toàn bộ → cũ vẫn xanh (chưa đụng route).
+- [ ] **Step 8: Commit** `feat(fi245-sf7): activity_log Flyway V2 + BFF audit lib (pg pool fail-open + query builder) + bff env wiring`
 
 ### Task 2: Audit hooks tại mọi mutation route BFF + test fail-open
 
@@ -235,7 +248,7 @@ Mapping đầy đủ: `order.assign_shop` (detail `{toShopCode}`) · `order.upda
 - Modify: `services/bff-gateway/src/routes/fulfillment.ts` (route ĐẶT TRƯỚC `/fulfillment/:fulfillCode` — route order!)
 - Create: `services/bff-gateway/test/audit.route.test.ts`
 
-- [ ] **Step 1: Route** (đặt ngay trên comment "D1 detail"):
+- [ ] **Step 1: Route** (đặt cạnh các route static; Fastify find-my-way ưu tiên static `/fulfillment/audit` over parametric `/:fulfillCode` bất kể thứ tự — giữ mọi route trong 1 file theo convention):
 
 ```typescript
 // Audit viewer (SF-7) — Manager-only (bracket SF-11). Route order: TRƯỚC
@@ -304,12 +317,16 @@ export const EXPORT_COLUMNS = [
 ] as const;
 ```
 
-- [ ] **Step 2: Route export** — GET querystring mirror list body: `fulfillCode`, `batchStatus` (comma list → number[]), `regionCodes`, `shopCodes`, `orderStatus` (comma lists), `createdAt` (YYYY-MM-DD → `dayToTimeRange`-style wrap `T00:00:00.000Z`/`T23:59:59.999Z`). requireUser (mọi role — D1 list role-open). Loop `f.filterOrders` page=1.. pageSize=500 theo `total` page đầu (dừng khi items rỗng hoặc đủ total); map qua `mapOrderItem`; buffer rows. LỖI gRPC bất kỳ page → `sendGrpcError` TRƯỚC khi send (buffer-then-send). Thành công:
+- [ ] **Step 2: Route export** — GET querystring mirror list body: `fulfillCode`, `batchStatus` (comma list → number[]), `regionCodes`, `shopCodes`, `orderStatus` (comma lists), `createdAt` (YYYY-MM-DD → `dayToTimeRange`-style wrap `T00:00:00.000Z`/`T23:59:59.999Z`). requireUser (mọi role — D1 list role-open). Loop `f.filterOrders` page=1.. pageSize=500 theo `total` page đầu (dừng khi items rỗng hoặc đủ total). **Map từ RAW proto items (KHÔNG qua `mapOrderItem`)** — plan-critic P0#1: DTO không có `orderCode` (GAP documented, KHÔNG đổi proto) → cột xuất rỗng; `note` có trên proto (field 15) nhưng mapOrderItem không map; shop fields lồng trong `shopAssignment`. LỖI gRPC bất kỳ page → `sendGrpcError` TRƯỚC khi send (buffer-then-send). Thành công:
 
 ```typescript
-const lines = [csvRow(EXPORT_COLUMNS), ...rows.map((o) => csvRow([
-  o.fulfillCode, o.orderCode, o.batchStatus, o.shopCode ?? '', o.shopName ?? '',
-  o.shopAddress ?? '', o.deliveryTime?.from ?? '', o.deliveryTime?.to ?? '', o.note ?? '',
+// raw proto item fields (ts-proto camelCase): fulfillCode, batchStatus,
+// shopAssignment{shopCode,shopName,address}, deliveryTime{from,to}, note.
+// orderCode: GAP proto — xuất rỗng (pattern GAP đã document ở mappers).
+const lines = [csvRow(EXPORT_COLUMNS), ...resp.items.map((o) => csvRow([
+  o.fulfillCode, '', o.batchStatus, o.shopAssignment?.shopCode ?? '',
+  o.shopAssignment?.shopName ?? '', o.shopAssignment?.address ?? '',
+  o.deliveryTime?.from ?? '', o.deliveryTime?.to ?? '', o.note ?? '',
 ]))];
 const ts = new Date().toISOString().replace(/[-:T]/g, '').slice(0, 15); // yyyyMMdd-HHmmss không dấu gạch
 reply.type('text/csv; charset=utf-8');
@@ -347,7 +364,7 @@ type BatchFilter struct {
 func (s *PostgresStore) Filter(ctx context.Context, f BatchFilter) ([]*batchingv1.Batch, int64, error)
 ```
 
-WHERE build bằng strings.Builder + params slice: search → `batch_code ILIKE '%'||$n||'%'` (hoặc semantics đúng từ Step 1 — nếu in-memory khớp shop/shipper thì port theo); statuses → `status = ANY($n)`; created → `created_at >= / < $n` (pgx nhận *time.Time). Page normalize: `<1→1`, `<=0→10` pageSize. Sau query: `attachItems(ctx, out, codes)`.
+WHERE build bằng strings.Builder + params slice: search → `batch_code ILIKE '%'||$n||'%'` **OR EXISTS (SELECT 1 FROM batch_items bi WHERE bi.batch_code = batches.batch_code AND bi.order_code ILIKE '%'||$n||'%')** — in-memory `matchesSearch` khớp CẢ order codes của items (batching_server.go:241-249), thiếu EXISTS = âm thầm đổi behavior UI search; statuses → `status = ANY($n)`; created → `created_at >= / < $n` (pgx nhận *time.Time). Page normalize: `<1→1`, `<=0→10` pageSize. Sau query: `attachItems(ctx, out, codes)`.
 - [ ] **Step 3: Server** — `FilterBatches` build BatchFilter từ request (TimeRange proto → *time.Time qua parse hiện có), gọi `st.Filter` (guard type-assert chỉ khi PostgresStore; InMemory/fake store khác → giữ fallback List+slice như cũ để tests server cũ không vỡ — hoặc thêm Filter vào fake store, chọn theo đọc code thực tế, ghi rationale vào commit body).
 - [ ] **Step 4: Tests (testdb pattern, skip-when-no-DB)** — `TestFilter_PaginationTraversal`: seed >pageSize batches, duyệt page 1..N nhận đủ, không trùng/l thiếu; `TestFilter_OrderingCreatedAtThenCode`: giữ semantics List; `TestFilter_StatusesAndSearch`: combo filter; `TestFilter_TotalBeyondLastPage`: page 99 → items rỗng, total đúng.
 - [ ] **Step 5: Run** `go test ./...` (từ services/batching-service, POSTGRES_PASSWORD set nếu DB chạy) → PASS + `TestList_OrderingCreatedAtThenCode` vẫn xanh. **Commit** `feat(fi245-sf7): batches FilterBatches SQL pagination — PostgresStore.Filter giữ sort semantics, List() bất biến`
