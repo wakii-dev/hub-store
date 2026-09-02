@@ -556,14 +556,14 @@ Test cases (AssertJ, pattern FilterAndHydrationTest + CollectingObserver):
 - Create: `src/main/java/com/hubstore/fulfillment/service/TechServiceImpl.java`
 - Test: `src/test/java/com/hubstore/fulfillment/TechGrpcValidationTest.java`
 
-- [ ] **Step 1: TechServiceImpl** — `@GrpcService extends TechServiceGrpc.TechServiceImplBase`, constructor inject TechOrderRepository + ObjectMapper. Mapping proto ↔ models:
+- [x] **Step 1: TechServiceImpl** — `@GrpcService extends TechServiceGrpc.TechServiceImplBase`, constructor inject TechOrderRepository + ObjectMapper. Mapping proto ↔ models:
   - `filterDeliveryOrders`: request → DeliveryFilter (statuses enum→name, dates parse LocalDate hoặc null, defaults page/pageSize như FulfillmentServiceImpl); today-default áp REPO-side khi date_from+date_to null (repo nhận null/null → CURRENT_DATE); response items map + `TechModels.deliveryButtons`
   - `filterInstallationOrders`: tương tự + timelineJson passthrough
   - `assignTechnician`: SO blank hoặc technician blank → `GrpcErrors.invalidArgument`; catch IllegalStateException → `Status.FAILED_PRECONDITION.withDescription(...)`; repo not found → `GrpcErrors.notFound("serviceOrderCode", code)`; response = order + installationButtons re-computed
   - `suggestTechnicians`: region blank → invalidArgument; map SuggestedTechnician
   - Error pattern: try/catch StatusRuntimeException → onError; RuntimeException → INTERNAL (copy FulfillmentServiceImpl)
-- [ ] **Step 2: Tests** — CollectingObserver pattern: invalidArgument cho blank params; FAILED_PRECONDITION cho assign sai trạng thái (InMemory repo seeded); NOT_FOUND cho SO lạ; happy-path assign response flags đúng.
-- [ ] **Step 3: `mvn test` PASS; `mvn -q compile` sau codegen (Task 1) — TechServiceGrpc class có mặt; commit** `feat(fi245-sf19): TechServiceImpl gRPC + validation + tests`
+- [x] **Step 2: Tests** — CollectingObserver pattern: invalidArgument cho blank params; FAILED_PRECONDITION cho assign sai trạng thái (InMemory repo seeded); NOT_FOUND cho SO lạ; happy-path assign response flags đúng.
+- [x] **Step 3: `mvn test` PASS; `mvn -q compile` sau codegen (Task 1) — TechServiceGrpc class có mặt; commit** `feat(fi245-sf19): TechServiceImpl gRPC + validation + tests`
 
 ### Task 6: Seed tech-sample.json + pipeline additive
 
