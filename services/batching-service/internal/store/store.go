@@ -1,261 +1,528 @@
-// Package store — in-memory batches store owned by batching-service (spec §3.3).
+// Package store — batches store (FI-245 SF-3): Postgres qua pgx v5.
 //
-// Seed: deserialized from the canonical fixture api/seed/canonical-seed.json
-// at boot (ONE source — no private seeding, context pack rule). Seed
-// validation enforces the context-pack contract:
-//   - batches cover all 3 BatchEntityStatus values,
-//   - every items[].orderCode resolves to an orderCode in the orders seed.
+// Data batches do seed pipeline SF-1 nạp sẵn vào DB (scripts/seed-db.sh,
+// emptiness-gate) — Go chỉ migrate schema rồi đọc DB (LoadSeedFile đã bỏ).
+// gRPC Batch message GIỮ NGUYÊN (hydration payload shape không đổi).
 package store
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
-	"os"
-	"sort"
-	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
 	fulfillmentv1 "hubstore/gen/go/hubstore/fulfillment/v1"
 
-	"google.golang.org/protobuf/proto"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
-// seedFile mirrors api/seed/canonical-seed.json top-level shape. Only the
-// parts this service consumes are modeled; orders are kept raw because the
-// orders store belongs to Java (SF-3) — Go only cross-checks orderCode keys.
-type seedFile struct {
-	Orders  []seedOrder `json:"orders"`
-	Batches []seedBatch `json:"batches"`
+// BatchStore là surface server dùng cho batches. Method có ctx + error vì
+// Postgres là I/O thật; CAS miss (Transition) trả (nil, nil) — caller phân
+// biệt not-found vs wrong-status qua Get (giữ nguyên hợp đồng cũ).
+type BatchStore interface {
+	// List — snapshot batches sort createdAt → batchCode (ORDER BY tường minh).
+	List(ctx context.Context) ([]*batchingv1.Batch, error)
+	// Get — (nil, nil) nếu không thấy.
+	Get(ctx context.Context, batchCode string) (*batchingv1.Batch, error)
+	// Put — upsert batch + thay toàn bộ items (dùng chủ yếu trong tests).
+	Put(ctx context.Context, b *batchingv1.Batch) error
+	// Delete — compensation path của CreateBatch (mutate Java fail → hoàn tác).
+	Delete(ctx context.Context, batchCode string) error
+	// CreateWithNextCode — cấp code từ sequence (atomic) + insert trong MỘT
+	// transaction; build nhận code vừa cấp. (nil, false, nil) nếu trùng code.
+	CreateWithNextCode(ctx context.Context, build func(ctx context.Context, code string) *batchingv1.Batch) (*batchingv1.Batch, bool, error)
+	// Transition — CAS UPDATE ... WHERE status=$from; rowsAffected=0 → (nil, nil).
+	Transition(ctx context.Context, batchCode string, from, to batchingv1.BatchEntityStatus) (*batchingv1.Batch, error)
+	// NextBatchCode — preview code kế tiếp (KHÔNG tiêu thụ sequence).
+	NextBatchCode(ctx context.Context) (string, error)
 }
 
-type seedOrder struct {
-	FulfillCode string `json:"fulfillCode"` // ORD-xxxx
-	OrderCode   string `json:"orderCode"`   // RSA-7xxxxx (BatchingItem.order_code)
-	BatchStatus int32  `json:"batchStatus"`
+// PostgresStore implements BatchStore trên DB `batching` (schema V1 —
+// services/batching-service/migrations, column contract scripts/seed-db.sh).
+type PostgresStore struct {
+	pool *pgxpool.Pool
 }
 
-type seedBatch struct {
-	BatchCode    string          `json:"batchCode"`
-	ShopCode     string          `json:"shopCode"`
-	ShipperID    string          `json:"shipperId"`
-	DeliveryTime seedTimeRange   `json:"deliveryTime"`
-	Status       int32           `json:"status"`
-	Items        []seedBatchItem `json:"items"`
-	CreatedAt    string          `json:"createdAt"`
+// OpenPostgres kết nối pool + bootstrap sequence: setval = max numeric suffix
+// của batchCode hiện có (seed nạp BATCH-0001..0007 sau khi migrate → lần boot
+// đầu tiên bump sequence lên 7; bảng rỗng → setval 1,is_called=false → create
+// đầu = BATCH-0001). Idempotent với setval phía seed pipeline (SF-1).
+func OpenPostgres(ctx context.Context, dsn string) (*PostgresStore, error) {
+	cfg, err := pgxpool.ParseConfig(dsn)
+	if err != nil {
+		return nil, fmt.Errorf("parse batching DB DSN: %w", err)
+	}
+	pool, err := pgxpool.NewWithConfig(ctx, cfg)
+	if err != nil {
+		return nil, fmt.Errorf("connect batching DB: %w", err)
+	}
+	if err := pool.Ping(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("ping batching DB: %w", err)
+	}
+	s := &PostgresStore{pool: pool}
+	if err := s.bootstrapSequence(ctx); err != nil {
+		pool.Close()
+		return nil, fmt.Errorf("bootstrap batches_code_seq: %w", err)
+	}
+	return s, nil
 }
 
-type seedTimeRange struct {
-	From string `json:"from"`
-	To   string `json:"to"`
+func (s *PostgresStore) bootstrapSequence(ctx context.Context) error {
+	var maxCode int
+	if err := s.pool.QueryRow(ctx,
+		`SELECT COALESCE(max(substring(batch_code from '[0-9]+$')::int), 0) FROM batches`,
+	).Scan(&maxCode); err != nil {
+		return err
+	}
+	if maxCode == 0 {
+		_, err := s.pool.Exec(ctx, `SELECT setval('batches_code_seq', 1, false)`)
+		return err
+	}
+	_, err := s.pool.Exec(ctx, `SELECT setval('batches_code_seq', $1, true)`, maxCode)
+	return err
 }
 
-type seedBatchItem struct {
-	BatchCode        string        `json:"batchCode"`
-	StopOrder        int32         `json:"stopOrder"`
-	OrderCode        string        `json:"orderCode"`
-	CustomerAddress  string        `json:"customerAddress"`
-	Distance         float64       `json:"distance"`
-	FromDeliveryTime string        `json:"fromDeliveryTime"`
-	ToDeliveryTime   string        `json:"toDeliveryTime"`
-	OrderStatus      int32         `json:"orderStatus"`
-	OrderType        int32         `json:"orderType"`
-	Items            []seedProduct `json:"items"`
-	TotalQuantity    int32         `json:"totalQuantity"`
-	CodAmount        int64         `json:"codAmount"`
+// Close giải phóng pool.
+func (s *PostgresStore) Close() { s.pool.Close() }
+
+// ---------------------------------------------------------------------------
+// Reads
+// ---------------------------------------------------------------------------
+
+func (s *PostgresStore) List(ctx context.Context) ([]*batchingv1.Batch, error) {
+	rows, err := s.pool.Query(ctx, `SELECT batch_code, shop_code, shipper_id,
+		delivery_time_from, delivery_time_to, status, created_at
+		FROM batches ORDER BY created_at ASC, batch_code ASC`)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+	var out []*batchingv1.Batch
+	var codes []string
+	for rows.Next() {
+		b, err := scanBatch(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, b)
+		codes = append(codes, b.BatchCode)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := s.attachItems(ctx, out, codes); err != nil {
+		return nil, err
+	}
+	return out, nil
 }
 
-type seedProduct struct {
+// BatchFilter — tham số FilterBatches (SF-7). Zero-value = không filter;
+// Page <1 → 1, PageSize <=0 → 10 (normalize trong Filter — khớp server cũ).
+type BatchFilter struct {
+	Search                 string
+	Statuses               []batchingv1.BatchEntityStatus
+	CreatedFrom, CreatedTo *time.Time
+	Page, PageSize         int
+}
+
+// Filter — pagination SQL giữ sort semantics của List (created_at →
+// batch_code), KHÔNG đụng List(). Count = scalar subquery với CÙNG WHERE +
+// LEFT JOIN LATERAL anchor (pattern SF-2 PostgresOrderRepository — 1 statement
+// = 1 snapshot; page vượt last page → items rỗng nhưng total vẫn đúng).
+// Search khớp batch_code HOẶC order_code của items (EXISTS batch_items —
+// port matchesSearch in-memory batching_server.go). CreatedTo loại-trừ (<) —
+// BFF wrap ngày hết 23:59:59.999 nên tương đương semantics in-memory.
+func (s *PostgresStore) Filter(ctx context.Context, f BatchFilter) ([]*batchingv1.Batch, int64, error) {
+	var where strings.Builder
+	where.WriteString(" WHERE TRUE")
+	var params []any
+	if search := strings.TrimSpace(f.Search); search != "" {
+		params = append(params, "%"+escapeLike(search)+"%")
+		n := len(params)
+		fmt.Fprintf(&where, " AND (batch_code ILIKE $%d ESCAPE '\\' OR EXISTS"+
+			" (SELECT 1 FROM batch_items bi WHERE bi.batch_code = batches.batch_code"+
+			" AND bi.order_code ILIKE $%d ESCAPE '\\'))", n, n)
+	}
+	if len(f.Statuses) > 0 {
+		sts := make([]int, 0, len(f.Statuses))
+		for _, st := range f.Statuses {
+			sts = append(sts, int(st))
+		}
+		params = append(params, sts)
+		fmt.Fprintf(&where, " AND status = ANY($%d)", len(params))
+	}
+	if f.CreatedFrom != nil {
+		params = append(params, *f.CreatedFrom)
+		fmt.Fprintf(&where, " AND created_at >= $%d", len(params))
+	}
+	if f.CreatedTo != nil {
+		params = append(params, *f.CreatedTo)
+		fmt.Fprintf(&where, " AND created_at < $%d", len(params))
+	}
+	page := f.Page
+	if page < 1 {
+		page = 1
+	}
+	pageSize := f.PageSize
+	if pageSize <= 0 {
+		pageSize = 10
+	}
+
+	// pgx dùng placeholder ordinal — CÙNG $n tái sử dụng được nhiều lần trong
+	// 1 statement nên params KHÔNG nhân đôi như JDBC '?' (khác pattern SF-2);
+	// OFFSET/LIMIT là 2 ordinal cuối.
+	whereSql := where.String()
+	sql := `SELECT c.total_all, b.batch_code, b.shop_code, b.shipper_id,
+		b.delivery_time_from, b.delivery_time_to, b.status, b.created_at
+		FROM (SELECT count(*) AS total_all FROM batches` + whereSql + `) c
+		LEFT JOIN LATERAL (SELECT batch_code, shop_code, shipper_id,
+			delivery_time_from, delivery_time_to, status, created_at
+			FROM batches` + whereSql + ` ORDER BY created_at ASC, batch_code ASC
+			OFFSET $` + fmt.Sprint(len(params)+1) + ` LIMIT $` + fmt.Sprint(len(params)+2) + `) b ON TRUE`
+	args := append(params, (page-1)*pageSize, pageSize)
+
+	rows, err := s.pool.Query(ctx, sql, args...)
+	if err != nil {
+		return nil, 0, err
+	}
+	defer rows.Close()
+	var total int64
+	var out []*batchingv1.Batch
+	var codes []string
+	for rows.Next() {
+		// Lateral nullable: page vượt last page → chỉ anchor row (b.* NULL).
+		var t int64
+		var code, shop, shipper *string
+		var status *int32
+		var fromT, toT, createdAt *time.Time
+		if err := rows.Scan(&t, &code, &shop, &shipper,
+			&fromT, &toT, &status, &createdAt); err != nil {
+			return nil, 0, err
+		}
+		total = t // anchor row luôn có ≥1 row — total đồng nhất mọi page
+		if code == nil {
+			continue
+		}
+		b := &batchingv1.Batch{BatchCode: *code}
+		if shop != nil {
+			b.ShopCode = *shop
+		}
+		if shipper != nil {
+			b.ShipperId = *shipper
+		}
+		if status != nil {
+			b.Status = batchingv1.BatchEntityStatus(*status)
+		}
+		mapBatchTimes(b, fromT, toT, createdAt)
+		out = append(out, b)
+		codes = append(codes, b.BatchCode)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, 0, err
+	}
+	if err := s.attachItems(ctx, out, codes); err != nil {
+		return nil, 0, err
+	}
+	return out, total, nil
+}
+
+func (s *PostgresStore) Get(ctx context.Context, batchCode string) (*batchingv1.Batch, error) {
+	row := s.pool.QueryRow(ctx, `SELECT batch_code, shop_code, shipper_id,
+		delivery_time_from, delivery_time_to, status, created_at
+		FROM batches WHERE batch_code = $1`, batchCode)
+	b, err := scanBatch(row)
+	if err == pgx.ErrNoRows {
+		return nil, nil
+	}
+	if err != nil {
+		return nil, err
+	}
+	if err := s.attachItems(ctx, []*batchingv1.Batch{b}, []string{batchCode}); err != nil {
+		return nil, err
+	}
+	return b, nil
+}
+
+// attachItems nạp batch_items cho danh sách codes (1 query — không N+1) rồi
+// gắn vào từng batch theo thứ tự stop_order.
+func (s *PostgresStore) attachItems(ctx context.Context, batches []*batchingv1.Batch, codes []string) error {
+	if len(codes) == 0 {
+		return nil
+	}
+	rows, err := s.pool.Query(ctx, `SELECT batch_code, stop_order, order_code,
+		customer_address, distance, from_delivery_time, to_delivery_time,
+		order_status, order_type, items, total_quantity, cod_amount
+		FROM batch_items WHERE batch_code = ANY($1) ORDER BY batch_code ASC, stop_order ASC`, codes)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	byCode := make(map[string]*batchingv1.Batch, len(batches))
+	for _, b := range batches {
+		byCode[b.BatchCode] = b
+	}
+	for rows.Next() {
+		var code string
+		it := &batchingv1.BatchingItem{}
+		var fromT, toT *time.Time
+		var itemsJSON []byte
+		if err := rows.Scan(&code, &it.StopOrder, &it.OrderCode, &it.CustomerAddress,
+			&it.Distance, &fromT, &toT, &it.OrderStatus, &it.OrderType,
+			&itemsJSON, &it.TotalQuantity, &it.CodAmount); err != nil {
+			return err
+		}
+		it.BatchCode = code
+		if fromT != nil {
+			it.FromDeliveryTime = fromT.UTC().Format(time.RFC3339)
+		}
+		if toT != nil {
+			it.ToDeliveryTime = toT.UTC().Format(time.RFC3339)
+		}
+		products, err := unmarshalProducts(itemsJSON)
+		if err != nil {
+			return fmt.Errorf("batch %s stop %d items: %w", code, it.StopOrder, err)
+		}
+		it.Items = products
+		if b := byCode[code]; b != nil {
+			b.Items = append(b.Items, it)
+		}
+	}
+	return rows.Err()
+}
+
+type productJSON struct {
 	ProductCode string `json:"productCode"`
 	ProductName string `json:"productName"`
 	Quantity    int32  `json:"quantity"`
 }
 
-// Store is a mutex-guarded in-memory batches store. Keyed by batchCode.
-type Store struct {
-	mu      sync.RWMutex
-	batches map[string]*batchingv1.Batch
-}
-
-// New returns an empty store.
-func New() *Store {
-	return &Store{batches: map[string]*batchingv1.Batch{}}
-}
-
-// LoadSeedFile reads the canonical seed fixture from path and populates the
-// store, validating the context-pack seed contract.
-func LoadSeedFile(path string) (*Store, error) {
-	data, err := os.ReadFile(path)
-	if err != nil {
-		return nil, fmt.Errorf("read canonical seed %s: %w", path, err)
+// unmarshalProducts — items jsonb shape [{productCode, productName, quantity}]
+// (canonical-seed.json — trùng JSON shape của fulfillmentv1.Product).
+func unmarshalProducts(data []byte) ([]*fulfillmentv1.Product, error) {
+	if len(data) == 0 {
+		return nil, nil
 	}
-	var f seedFile
-	if err := json.Unmarshal(data, &f); err != nil {
-		return nil, fmt.Errorf("parse canonical seed %s: %w", path, err)
+	var ps []productJSON
+	if err := json.Unmarshal(data, &ps); err != nil {
+		return nil, err
 	}
-	orderCodes := make(map[string]bool, len(f.Orders))
-	for _, o := range f.Orders {
-		orderCodes[o.OrderCode] = true
-	}
-
-	s := New()
-	seenStatus := map[batchingv1.BatchEntityStatus]bool{}
-	for i := range f.Batches {
-		b := f.Batches[i]
-		status := batchingv1.BatchEntityStatus(b.Status)
-		if _, ok := batchingv1.BatchEntityStatus_name[int32(status)]; !ok {
-			return nil, fmt.Errorf("seed batch %s: unknown status %d", b.BatchCode, b.Status)
-		}
-		seenStatus[status] = true
-		pb := &batchingv1.Batch{
-			BatchCode: b.BatchCode,
-			ShopCode:  b.ShopCode,
-			ShipperId: b.ShipperID,
-			DeliveryTime: &fulfillmentv1.TimeRange{
-				From: b.DeliveryTime.From,
-				To:   b.DeliveryTime.To,
-			},
-			Status:    status,
-			CreatedAt: b.CreatedAt,
-		}
-		for _, it := range b.Items {
-			if !orderCodes[it.OrderCode] {
-				return nil, fmt.Errorf("seed batch %s: item orderCode %s not in orders seed", b.BatchCode, it.OrderCode)
-			}
-			pb.Items = append(pb.Items, mapSeedItem(&b, &it))
-		}
-		s.batches[b.BatchCode] = pb
-	}
-	// Contract: phiếu đủ 3 trạng thái (context pack spec slice §2).
-	for st := batchingv1.BatchEntityStatus(0); st <= 2; st++ {
-		if !seenStatus[st] {
-			return nil, fmt.Errorf("seed batches missing status %s", st)
-		}
-	}
-	return s, nil
-}
-
-func mapSeedItem(b *seedBatch, it *seedBatchItem) *batchingv1.BatchingItem {
-	items := make([]*fulfillmentv1.Product, 0, len(it.Items))
-	for _, p := range it.Items {
-		items = append(items, &fulfillmentv1.Product{
+	out := make([]*fulfillmentv1.Product, 0, len(ps))
+	for _, p := range ps {
+		out = append(out, &fulfillmentv1.Product{
 			ProductCode: p.ProductCode,
 			ProductName: p.ProductName,
 			Quantity:    p.Quantity,
 		})
 	}
-	return &batchingv1.BatchingItem{
-		BatchCode:        b.BatchCode,
-		StopOrder:        it.StopOrder,
-		OrderCode:        it.OrderCode,
-		CustomerAddress:  it.CustomerAddress,
-		Distance:         it.Distance,
-		FromDeliveryTime: it.FromDeliveryTime,
-		ToDeliveryTime:   it.ToDeliveryTime,
-		OrderStatus:      fulfillmentv1.OrderStatus(it.OrderStatus),
-		OrderType:        it.OrderType,
-		Items:            items,
-		TotalQuantity:    it.TotalQuantity,
-		CodAmount:        it.CodAmount,
-	}
+	return out, nil
 }
 
-// List returns a snapshot (deep copies) of all batches sorted by createdAt
-// then batchCode — callers có thể tự do mutate phần tử trả về.
-func (s *Store) List() []*batchingv1.Batch {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	out := make([]*batchingv1.Batch, 0, len(s.batches))
-	for _, b := range s.batches {
-		out = append(out, proto.Clone(b).(*batchingv1.Batch))
+// ---------------------------------------------------------------------------
+// Writes
+// ---------------------------------------------------------------------------
+
+func (s *PostgresStore) Put(ctx context.Context, b *batchingv1.Batch) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
 	}
-	sort.Slice(out, func(i, j int) bool {
-		if out[i].CreatedAt != out[j].CreatedAt {
-			return out[i].CreatedAt < out[j].CreatedAt
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if err := upsertBatch(ctx, tx, b); err != nil {
+		return err
+	}
+	if err := replaceItems(ctx, tx, b); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostgresStore) Delete(ctx context.Context, batchCode string) error {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	if _, err := tx.Exec(ctx, `DELETE FROM batch_items WHERE batch_code = $1`, batchCode); err != nil {
+		return err
+	}
+	if _, err := tx.Exec(ctx, `DELETE FROM batches WHERE batch_code = $1`, batchCode); err != nil {
+		return err
+	}
+	return tx.Commit(ctx)
+}
+
+func (s *PostgresStore) CreateWithNextCode(ctx context.Context, build func(ctx context.Context, code string) *batchingv1.Batch) (*batchingv1.Batch, bool, error) {
+	tx, err := s.pool.Begin(ctx)
+	if err != nil {
+		return nil, false, err
+	}
+	defer tx.Rollback(ctx) //nolint:errcheck
+	var n int64
+	if err := tx.QueryRow(ctx, `SELECT nextval('batches_code_seq')`).Scan(&n); err != nil {
+		return nil, false, err
+	}
+	code := fmt.Sprintf("BATCH-%04d", n)
+	b := build(ctx, code)
+	b.BatchCode = code
+	if err := insertBatch(ctx, tx, b); err != nil {
+		return nil, false, err
+	}
+	if err := replaceItems(ctx, tx, b); err != nil {
+		return nil, false, err
+	}
+	if err := tx.Commit(ctx); err != nil {
+		return nil, false, err
+	}
+	return b, true, nil
+}
+
+func (s *PostgresStore) Transition(ctx context.Context, batchCode string, from, to batchingv1.BatchEntityStatus) (*batchingv1.Batch, error) {
+	tag, err := s.pool.Exec(ctx,
+		`UPDATE batches SET status = $1 WHERE batch_code = $2 AND status = $3`,
+		int(to), batchCode, int(from))
+	if err != nil {
+		return nil, err
+	}
+	if tag.RowsAffected() == 0 {
+		return nil, nil // CAS miss: không thấy code HOẶC status hiện ≠ from
+	}
+	return s.Get(ctx, batchCode)
+}
+
+func (s *PostgresStore) NextBatchCode(ctx context.Context) (string, error) {
+	var maxNum int
+	if err := s.pool.QueryRow(ctx, `SELECT GREATEST(
+			COALESCE((SELECT max(substring(batch_code from '[0-9]+$')::int) FROM batches), 0),
+			CASE WHEN is_called THEN last_value ELSE 0 END
+		) FROM batches_code_seq`).Scan(&maxNum); err != nil {
+		return "", err
+	}
+	return fmt.Sprintf("BATCH-%04d", maxNum+1), nil
+}
+
+// ---------------------------------------------------------------------------
+// row mapping + insert helpers
+// ---------------------------------------------------------------------------
+
+type row interface {
+	Scan(dest ...any) error
+}
+
+func scanBatch(r row) (*batchingv1.Batch, error) {
+	b := &batchingv1.Batch{}
+	var fromT, toT, createdAt *time.Time
+	if err := r.Scan(&b.BatchCode, &b.ShopCode, &b.ShipperId, &fromT, &toT, &b.Status, &createdAt); err != nil {
+		return nil, err
+	}
+	mapBatchTimes(b, fromT, toT, createdAt)
+	return b, nil
+}
+
+// mapBatchTimes — mapping timestamptz nullable → proto (dùng chung scanBatch + Filter).
+func mapBatchTimes(b *batchingv1.Batch, fromT, toT, createdAt *time.Time) {
+	if fromT != nil {
+		b.DeliveryTime = &fulfillmentv1.TimeRange{From: fromT.UTC().Format(time.RFC3339)}
+	}
+	if toT != nil {
+		if b.DeliveryTime == nil {
+			b.DeliveryTime = &fulfillmentv1.TimeRange{}
 		}
-		return out[i].BatchCode < out[j].BatchCode
-	})
-	return out
+		b.DeliveryTime.To = toT.UTC().Format(time.RFC3339)
+	}
+	if createdAt != nil {
+		b.CreatedAt = createdAt.UTC().Format(time.RFC3339)
+	}
 }
 
-// Get returns a deep copy of the batch with the given code (nil if absent) —
-// proto messages embed a lock; callers may mutate the returned value freely.
-func (s *Store) Get(batchCode string) *batchingv1.Batch {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	b, ok := s.batches[batchCode]
-	if !ok {
+// escapeLike vô hiệu hoá wildcard user (\ % _) — in-memory strings.Contains
+// match literal nên ILIKE cần ESCAPE để tương đương semantics cũ (SF-7).
+func escapeLike(s string) string {
+	return strings.NewReplacer(`\`, `\\`, `%`, `\%`, `_`, `\_`).Replace(s)
+}
+
+func insertBatch(ctx context.Context, tx pgx.Tx, b *batchingv1.Batch) error {
+	_, err := tx.Exec(ctx, `INSERT INTO batches
+		(batch_code, shop_code, shipper_id, delivery_time_from, delivery_time_to, status, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)`,
+		b.BatchCode, b.ShopCode, b.ShipperId,
+		timePtr(b.GetDeliveryTime().GetFrom()), timePtr(b.GetDeliveryTime().GetTo()),
+		int(b.GetStatus()), tsOrNow(b.GetCreatedAt()))
+	return err
+}
+
+func upsertBatch(ctx context.Context, tx pgx.Tx, b *batchingv1.Batch) error {
+	_, err := tx.Exec(ctx, `INSERT INTO batches
+		(batch_code, shop_code, shipper_id, delivery_time_from, delivery_time_to, status, created_at)
+		VALUES ($1,$2,$3,$4,$5,$6,$7)
+		ON CONFLICT (batch_code) DO UPDATE SET
+			shop_code = EXCLUDED.shop_code, shipper_id = EXCLUDED.shipper_id,
+			delivery_time_from = EXCLUDED.delivery_time_from, delivery_time_to = EXCLUDED.delivery_time_to,
+			status = EXCLUDED.status, created_at = EXCLUDED.created_at`,
+		b.BatchCode, b.ShopCode, b.ShipperId,
+		timePtr(b.GetDeliveryTime().GetFrom()), timePtr(b.GetDeliveryTime().GetTo()),
+		int(b.GetStatus()), tsOrNow(b.GetCreatedAt()))
+	return err
+}
+
+// replaceItems —xoá items cũ rồi insert lại theo stop_order (trong tx caller).
+func replaceItems(ctx context.Context, tx pgx.Tx, b *batchingv1.Batch) error {
+	if _, err := tx.Exec(ctx, `DELETE FROM batch_items WHERE batch_code = $1`, b.BatchCode); err != nil {
+		return err
+	}
+	for _, it := range b.GetItems() {
+		itemsJSON, err := marshalProducts(it.GetItems())
+		if err != nil {
+			return err
+		}
+		if _, err := tx.Exec(ctx, `INSERT INTO batch_items
+			(batch_code, stop_order, order_code, customer_address, distance,
+			 from_delivery_time, to_delivery_time, order_status, order_type,
+			 items, total_quantity, cod_amount)
+			VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`,
+			b.BatchCode, it.GetStopOrder(), it.GetOrderCode(), it.GetCustomerAddress(),
+			it.GetDistance(), timePtr(it.GetFromDeliveryTime()), timePtr(it.GetToDeliveryTime()),
+			int(it.GetOrderStatus()), int(it.GetOrderType()), itemsJSON,
+			it.GetTotalQuantity(), it.GetCodAmount()); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+
+func marshalProducts(items []*fulfillmentv1.Product) (string, error) {
+	ps := make([]productJSON, 0, len(items))
+	for _, p := range items {
+		ps = append(ps, productJSON{ProductCode: p.GetProductCode(), ProductName: p.GetProductName(), Quantity: p.GetQuantity()})
+	}
+	data, err := json.Marshal(ps)
+	if err != nil {
+		return "", err
+	}
+	return string(data), nil
+}
+
+func timePtr(s string) *time.Time {
+	t := ParseTime(s)
+	if t.IsZero() {
 		return nil
 	}
-	return proto.Clone(b).(*batchingv1.Batch)
+	return &t
 }
 
-// Put stores a batch.
-func (s *Store) Put(b *batchingv1.Batch) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	s.batches[b.BatchCode] = b
-}
-
-// Delete removes a batch (compensation when the Java mutation fails).
-func (s *Store) Delete(batchCode string) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	delete(s.batches, batchCode)
-}
-
-// CreateWithNextCode atomically derives the next BATCH-NNNN code and inserts
-// the built batch under ONE lock (loại race hai create cùng cướp một code).
-// build nhận code vừa derive. Trả (batch, true); false nếu code đã tồn tại.
-func (s *Store) CreateWithNextCode(build func(code string) *batchingv1.Batch) (*batchingv1.Batch, bool) {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	code := s.nextBatchCodeLocked()
-	if _, exists := s.batches[code]; exists {
-		return nil, false
+func tsOrNow(s string) time.Time {
+	t := ParseTime(s)
+	if t.IsZero() {
+		return time.Now()
 	}
-	b := build(code)
-	s.batches[code] = b
-	return b, true
+	return t
 }
 
-// Transition atomically flips status from→to (CAS trên status). Trả batch
-// ĐÃ cập nhật (clone), nil nếu không thấy code HOẶC status hiện ≠ from
-// (caller phân biệt qua Get).
-func (s *Store) Transition(batchCode string, from, to batchingv1.BatchEntityStatus) *batchingv1.Batch {
-	s.mu.Lock()
-	defer s.mu.Unlock()
-	b, ok := s.batches[batchCode]
-	if !ok || b.GetStatus() != from {
-		return nil
-	}
-	b.Status = to
-	return proto.Clone(b).(*batchingv1.Batch)
-}
-
-// NextBatchCode derives BATCH-%04d from the max numeric suffix in the store.
-func (s *Store) NextBatchCode() string {
-	s.mu.RLock()
-	defer s.mu.RUnlock()
-	return s.nextBatchCodeLocked()
-}
-
-func (s *Store) nextBatchCodeLocked() string {
-	max := 0
-	for code := range s.batches {
-		if !strings.HasPrefix(code, "BATCH-") {
-			continue
-		}
-		if n, err := strconv.Atoi(strings.TrimPrefix(code, "BATCH-")); err == nil && n > max {
-			max = n
-		}
-	}
-	return fmt.Sprintf("BATCH-%04d", max+1)
-}
-
-// ParseTime parses an ISO-8601 datetime from the seed/contract; zero time on
+// ParseTime parses an ISO-8601 datetime from the contract; zero time on
 // failure (callers decide whether that is fatal).
 func ParseTime(s string) time.Time {
 	t, _ := time.Parse(time.RFC3339, s)

@@ -1,6 +1,6 @@
 /**
  * BFF app factory (Task 5): Fastify + CORS whitelist + JWT guard + error
- * handlers (envelope một chỗ) + 20 REST routes. Factory nhận BffConfig để
+ * handlers (envelope một chỗ) + 26 REST routes. Factory nhận BffConfig để
  * test inject được (mock upstream addrs, deadline ngắn...).
  */
 import Fastify from 'fastify';
@@ -14,10 +14,15 @@ import {
   createFulfillmentClient,
   createBatchingClient,
   createPrintClient,
+  createDeliveryBatchClient,
+  createTechClient,
 } from './clients/index.js';
 import { registerFulfillmentRoutes } from './routes/fulfillment.js';
+import { registerTechRoutes } from './routes/tech.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
+import { registerDeliveryBatchRoutes } from './routes/deliverybatch.js';
+import { registerAuthRoutes } from './routes/auth.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -25,8 +30,8 @@ export function buildApp(config: BffConfig): FastifyInstance {
   // CORS whitelist :3000-3002 (shell + orders + fulfillment remotes).
   void app.register(cors, { origin: config.corsOrigins });
 
-  // JWT guard — mọi route trừ /healthz (public).
-  registerJwtGuard(app, { secret: config.jwtSecret });
+  // OIDC guard (SF-4) — mọi route trừ /healthz + /auth/reset-password (public).
+  registerJwtGuard(app, { oidc: config.oidc });
 
   // Error envelope một chỗ cho error KHÔNG do gRPC (JSON parse, handler throw).
   app.setErrorHandler((err: FastifyError, request, reply) => {
@@ -54,17 +59,29 @@ export function buildApp(config: BffConfig): FastifyInstance {
 
   // gRPC clients — insecure nội bộ (spec §2); close dọn sạch khi shutdown.
   const fulfillment = createFulfillmentClient(config.grpc.fulfillment, config.grpc.deadlineMs);
+  // TechService (SF-19) sống cùng fulfillment-service — chung addr.
+  const tech = createTechClient(config.grpc.fulfillment, config.grpc.deadlineMs);
   const batching = createBatchingClient(config.grpc.batching, config.grpc.deadlineMs);
+  const deliveryBatch = createDeliveryBatchClient(config.grpc.deliverybatch, config.grpc.deadlineMs);
   const print = createPrintClient(config.grpc.print, config.grpc.deadlineMs);
   app.addHook('onClose', async () => {
     fulfillment.close();
+    tech.close();
     batching.close();
+    deliveryBatch.close();
     print.close();
   });
 
   registerFulfillmentRoutes(app, { fulfillment, batching });
+  registerTechRoutes(app, { tech });
   registerBatchRoutes(app, batching);
   registerPrintRoutes(app, { batching, print });
+  registerDeliveryBatchRoutes(app, deliveryBatch);
+  // DEV-ONLY — fail-safe: chỉ mount khi ENABLE_DEV_RESET_PASSWORD=1 tường minh
+  // (prod/K8s không set flag → endpoint không tồn tại thay vì dựa vào doc).
+  if (config.devResetPassword) {
+    registerAuthRoutes(app, { oidc: config.oidc });
+  }
 
   return app;
 }

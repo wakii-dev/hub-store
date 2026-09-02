@@ -1,0 +1,10 @@
+{
+  "eventId": "0e1c1bb2-3f4a-4c5d-8e6f-010203040506",
+  "type": "order.assigned",
+  "occurredAt": "2026-09-02T10:00:00Z",
+  "source": "fulfillment",
+  "payload": {
+    "fulfillCode": "ORD-3001",
+    "targetShop": { "code": "SHOP01", "name": "Kho CN Q1", "address": "1 Lê Lợi" }
+  }
+}

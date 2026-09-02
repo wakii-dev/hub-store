@@ -1,5 +1,6 @@
 package com.hubstore.fulfillment.service;
 
+import com.hubstore.fulfillment.events.OrderEventPublisher;
 import com.hubstore.fulfillment.seed.SeedModels;
 import com.hubstore.fulfillment.store.FilterResult;
 import com.hubstore.fulfillment.store.OrderFilter;
@@ -53,19 +54,27 @@ import java.time.ZonedDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
  * Impl đủ 12 RPC của FulfillmentService (plan Task 3) + validations rule 2+3
  * (plan Task 4). Reject = INVALID_ARGUMENT + metadata x-error-details (pin SF-2).
+ * SF-27: publish Kafka event best-effort SAU mutation thành công (side-channel,
+ * KHÔNG vào path blocking — publisher không bao giờ throw).
  */
 @GrpcService
 public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentServiceImplBase {
 
-    private final OrderRepository repo;
+    private static final org.slf4j.Logger log =
+            org.slf4j.LoggerFactory.getLogger(FulfillmentServiceImpl.class);
 
-    public FulfillmentServiceImpl(OrderRepository repo) {
+    private final OrderRepository repo;
+    private final OrderEventPublisher events;
+
+    public FulfillmentServiceImpl(OrderRepository repo, OrderEventPublisher events) {
         this.repo = repo;
+        this.events = events;
     }
 
     // ---------------- D1 list + detail + hydration ----------------
@@ -152,10 +161,22 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                 }
             }
             List<SeedModels.OrderSeed> updated = repo.mutateBatchStatus(codes, target);
+            if (updated.isEmpty() && !codes.isEmpty()) {
+                // SF-27 carry-in (spec-critic): repo trả rỗng dù có codes → không publish.
+                log.warn("fulfillment: mutateOrderStatus updated none of {} codes — skip publish", codes.size());
+            }
             for (SeedModels.OrderSeed o : updated) {
                 resp.addResults(MutateOrderStatusResult.newBuilder()
                         .setFulfillCode(o.fulfillCode()).setSuccess(true)
                         .setMessage("batchStatus=" + o.batchStatus() + "."));
+                // SF-27 — side-channel publish per-order (target 1/PREPARING không
+                // publish — đủ bởi batch.created phía Go).
+                if (target == 0) {
+                    events.publish("order.cancelled", o.fulfillCode(),
+                            Map.of("fulfillCode", o.fulfillCode(), "reason", request.getReason()));
+                } else if (target == 2) {
+                    events.publish("order.completed", o.fulfillCode(), Map.of("fulfillCode", o.fulfillCode()));
+                }
             }
             responseObserver.onNext(resp.build());
             responseObserver.onCompleted();
@@ -204,6 +225,11 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                     new SeedModels.ShopAssignmentSeed(targetShop.code(), targetShop.name(), targetShop.address()),
                     "fulfillment-service",
                     Instant.now());
+            // SF-27 — side-channel publish (best-effort, không block response).
+            events.publish("order.assigned", updated.fulfillCode(), Map.of(
+                    "fulfillCode", updated.fulfillCode(),
+                    "targetShop", Map.of("code", targetShop.code(), "name", targetShop.name(),
+                            "address", targetShop.address())));
             responseObserver.onNext(AssignShopHubResponse.newBuilder()
                     .setOrder(toFilterItem(updated))
                     .build());

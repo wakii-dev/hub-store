@@ -1,0 +1,3 @@
+# SF-1: mount dir cho realm import (compose: ./docker/keycloak → /opt/keycloak/data/import).
+# Realm JSON nội dung thuộc SF-4 (FI-249) — đặt file *.json vào đây.
+# Password trong realm JSON là literal dev-only — KHÔNG env-substitution.

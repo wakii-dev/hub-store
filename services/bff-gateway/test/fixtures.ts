@@ -28,6 +28,116 @@ import type {
   ListPrintersResponse,
   PrintResponse,
 } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
+import type {
+  CancelDeliveryBatchResponse,
+  CancelDeliveryOrderResponse,
+  ConfirmPlanningResponse,
+  CreateBookingResponse,
+  GetQuotesResponse,
+  ListAddonServicesResponse,
+  SearchBookingDetailResponse,
+} from '../../../api/proto/gen/ts/hubstore/batching/v1/delivery_batch';
+import { DeliveryStatus } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
+import type {
+  AssignTechnicianResponse,
+  DeliveryOrder as ProtoDeliveryOrder,
+  FilterDeliveryOrdersResponse,
+  FilterInstallationOrdersResponse,
+  InstallationOrder as ProtoInstallationOrder,
+  SuggestTechniciansResponse,
+} from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
+
+/** SF-19 fixtures — giá trị mirror api/seed/tech-sample.json (TD-0001/SO-0001). */
+export const fixtureTechDeliveryOrder: ProtoDeliveryOrder = {
+  code: 'TD-0001',
+  status: DeliveryStatus.DELIVERY_STATUS_SHIPPING,
+  driverName: 'Trần Giao Hàng',
+  driverPhone: '0901000001',
+  receiver: {
+    name: 'Nguyễn Văn A',
+    phone: '0902000001',
+    location: { lat: 10.77, long: 106.69 },
+  },
+  sender: { name: 'FPT Shop', phone: '19006800', location: { lat: 10.78, long: 106.7 } },
+  fee: 25000,
+  tip: 5000,
+  items: [
+    {
+      code: 'PRD-001',
+      name: 'Modem WiFi 6 FPT',
+      quantity: 1,
+      categoryL1: 'Internet',
+      categoryL2: 'Modem',
+    },
+  ],
+  regionCode: 'R1',
+  province: 'TP.HCM',
+  coordinationJson: '{"note":"Gọi trước khi giao"}',
+  deliveryDate: '2026-09-02',
+  createdAt: '2026-09-01T09:00:00+07:00',
+  buttons: {
+    allowCancel: true,
+    allowAssign: false,
+    allowReassign: false,
+    allowAccept: false,
+    allowReschedule: false,
+  },
+};
+
+export const fixtureTechInstallationOrder: ProtoInstallationOrder = {
+  serviceOrderCode: 'SO-0001',
+  deliveryOrderCode: 'TD-0001',
+  technicianCode: 'KTV-001',
+  status: DeliveryStatus.DELIVERY_STATUS_CONFIRMED,
+  expectedTime: '2026-09-03T08:00:00+07:00',
+  timelineJson:
+    '[{"at":"2026-09-01T10:00:00+07:00","status":"NEW","note":"Tạo đơn lắp đặt SO-0001","actor":"system"},{"at":"2026-09-01T11:00:00+07:00","status":"CONFIRMED","note":"KTV-001 nhận việc","actor":"KTV-001"}]',
+  serviceFee: 150000,
+  feeAdjust: 0,
+  items: [
+    {
+      code: 'PRD-001',
+      name: 'Modem WiFi 6 FPT',
+      quantity: 1,
+      categoryL1: 'Internet',
+      categoryL2: 'Modem',
+    },
+  ],
+  regionCode: 'R1',
+  province: 'TP.HCM',
+  createdAt: '2026-09-01T09:00:00+07:00',
+  buttons: {
+    allowCancel: true,
+    allowAssign: false,
+    allowReassign: true,
+    allowAccept: true,
+    allowReschedule: true,
+  },
+};
+
+export const techResponses = {
+  filterDeliveryOrders: {
+    items: [fixtureTechDeliveryOrder],
+    total: 10,
+    page: 1,
+    pageSize: 10,
+  } as FilterDeliveryOrdersResponse,
+  filterInstallationOrders: {
+    items: [fixtureTechInstallationOrder],
+    total: 8,
+    page: 1,
+    pageSize: 10,
+  } as FilterInstallationOrdersResponse,
+  assignTechnician: {
+    order: fixtureTechInstallationOrder,
+  } as AssignTechnicianResponse,
+  suggestTechnicians: {
+    items: [
+      { code: 'KTV-001', name: 'Lê Kỹ Thuật', type: 'KTV', activeCount: 1 },
+      { code: 'KTV-002', name: 'Phạm Lắp Đặt', type: 'KTV', activeCount: 3 },
+    ],
+  } as SuggestTechniciansResponse,
+};
 
 export const PDF_BYTES = new TextEncoder().encode('%PDF-1.4 hub-store contract-test\n');
 
@@ -136,4 +246,108 @@ export const printResponses = {
     printers: [{ id: 'P-30201-01', name: 'Printer Tầng 2', shopCode: '30201' }],
   } as ListPrintersResponse,
   print: { pdfContent: PDF_BYTES } as PrintResponse,
+};
+
+/** SF-15 — DeliveryBatchService fixtures (shape PROTO delivery_batch.ts). */
+export const deliveryBatchResponses = {
+  getQuotes: {
+    quotes: [
+      {
+        serviceId: 'SGCN',
+        name: 'Xe máy',
+        vehicleType: 'SGCN',
+        baseFee: 20000,
+        feePerKm: 13000,
+        fee: 74600,
+        etaMinutes: 60,
+        isExceedFeeLimit: false,
+        addonServices: [{ code: 'LOADING', name: 'Bốc xếp', grp: 'LOADING', fee: 50000 }],
+      },
+      {
+        serviceId: '8T',
+        name: 'Xe tải 8 tấn',
+        vehicleType: '8T',
+        baseFee: 120000,
+        feePerKm: 13000,
+        fee: 174600,
+        etaMinutes: 90,
+        isExceedFeeLimit: true,
+        addonServices: [],
+      },
+    ],
+    meta: { mock: true },
+  } as GetQuotesResponse,
+  confirmPlanning: {
+    plannings: [
+      {
+        id: 101,
+        planningId: '101',
+        batchCode: 'BAT-1001',
+        stopOrder: 1,
+        orderCode: 'RSA-700101',
+        vehicleType: 'SGCN',
+        serviceId: 'SGCN',
+        addons: ['LOADING'],
+        status: 'CONFIRMED',
+        codAmount: 1850000,
+        totalBill: 2000000,
+        fee: 74600,
+      },
+    ],
+    meta: { mock: true },
+  } as ConfirmPlanningResponse,
+  createBooking: {
+    bookings: [
+      {
+        planningId: '101',
+        carrierBookingId: 'MOCK-BK-1',
+        driverName: 'Nguyễn Văn A',
+        driverPhone: '0901234567',
+        licensePlate: '29H-123.45',
+        status: 'BOOKED',
+      },
+    ],
+    meta: { mock: true },
+  } as CreateBookingResponse,
+  cancelDeliveryOrder: {
+    planningId: '101',
+    status: 'CANCELLED',
+    meta: { mock: true },
+  } as CancelDeliveryOrderResponse,
+  cancelDeliveryBatch: {
+    results: [{ planningId: '101', status: 'CANCELLED' }],
+    cancelledCount: 1,
+    meta: { mock: true },
+  } as CancelDeliveryBatchResponse,
+  searchBookingDetail: {
+    bookings: [
+      {
+        planningId: '101',
+        booking: {
+          carrierBookingId: 'MOCK-BK-1',
+          driverName: 'Nguyễn Văn A',
+          driverPhone: '0901234567',
+          licensePlate: '29H-123.45',
+          status: 'BOOKED',
+          bookedAt: '2026-09-01T10:00:00Z',
+          cancelledAt: '',
+          cancelReason: '',
+        },
+        timeline: [
+          { status: 'BOOKED', source: 'BE', occurredAt: '2026-09-01T10:00:00Z', note: '' },
+          { status: 'DELIVERING', source: 'PARTNER', occurredAt: '2026-09-01T11:00:00Z', note: 'Đang giao' },
+        ],
+      },
+      {
+        planningId: '102',
+        booking: undefined,
+        timeline: [],
+      },
+    ],
+    meta: { mock: true },
+  } as SearchBookingDetailResponse,
+  listAddonServices: {
+    addons: [{ code: 'LOADING', name: 'Bốc xếp', grp: 'LOADING', fee: 50000, vehicleTypes: ['SGCN', '1T2'] }],
+    meta: { mock: true },
+  } as ListAddonServicesResponse,
 };

@@ -1,0 +1,250 @@
+syntax = "proto3";
+
+package hubstore.batching.v1;
+
+option go_package = "hubstore/gen/go/hubstore/batching/v1;batchingv1";
+option java_multiple_files = true;
+option java_package = "com.hubstore.batching.v1";
+
+// ============================================================================
+// DeliveryBatchService — giao hàng Ahamove (dual-mode mock|real), spec §3.5.
+// Envelope convention: same as batching.proto (per-RPC Request/Response
+// messages; mọi response mang ResponseMeta, meta.mock=true → mock mode).
+// Field names theo snake_case của REST DTO (ts-proto camelCase) để BFF map
+// gần như passthrough.
+//
+// Owned by batching-service (Go, :50052) — cùng service với BatchingService.
+// Fee là server-side truth (spec §3.2): server tính is_exceed_fee_limit,
+// FE không được tin. Datetimes là ISO-8601 strings. Distance đơn vị km float.
+// ============================================================================
+
+// ResponseMeta — mọi response kèm (spec §3.6): mock=true → mock mode.
+message ResponseMeta {
+  bool mock = 1;
+}
+
+// AddonService — dịch vụ gia tăng (quotes trả catalog phù hợp vehicle).
+message AddonService {
+  string code = 1;
+  string name = 2;
+  // Nhóm addon: ROUTE / LOADING (radio) / DOCUMENT (checkbox) / ROUND_TRIP.
+  string grp = 3;
+  // VND
+  int64 fee = 4;
+}
+
+// AddonServiceCatalog — entry đầy đủ của bảng addon_services (spec §3.3).
+message AddonServiceCatalog {
+  string code = 1;
+  string name = 2;
+  string grp = 3;
+  // VND
+  int64 fee = 4;
+  // Vehicle types được hỗ trợ (filter theo xe).
+  repeated string vehicle_types = 5;
+}
+
+// StopOrderQuote — 1 stop dùng cho quote (km float toàn bộ DTO, spec §3.1).
+message StopOrderQuote {
+  string address = 1;
+  // Km
+  double distance_km = 2;
+  // VND
+  int64 cod_amount = 3;
+  // VND
+  int64 total_bill = 4;
+}
+
+// Quote — 1 tải trọng trả về (6 mức SGCN→8T ở mock).
+message Quote {
+  string service_id = 1;
+  string name = 2;
+  string vehicle_type = 3;
+  // VND
+  int64 base_fee = 4;
+  // VND/km
+  int64 fee_per_km = 5;
+  // VND — fee = base_fee + fee_per_km × distance_km
+  int64 fee = 6;
+  int32 eta_minutes = 7;
+  // BE-authoritative: fee > limit (spec §3.2; strict >, đúng limit = OK).
+  bool is_exceed_fee_limit = 8;
+  repeated AddonService addon_services = 9;
+}
+
+message GetQuotesRequest {
+  string shop_code = 1;
+  repeated StopOrderQuote stop_orders = 2;
+}
+
+message GetQuotesResponse {
+  repeated Quote quotes = 1;
+  ResponseMeta meta = 2;
+}
+
+// PlanningInput — 1 planning cần confirm (fee do server persist, spec §3.2).
+message PlanningInput {
+  int32 stop_order = 1;
+  string order_code = 2;
+  string vehicle_type = 3;
+  string service_id = 4;
+  repeated string addons = 5;
+}
+
+// ShipmentPlanning — row shipment_plannings sau khi confirm (spec §3.4).
+message ShipmentPlanning {
+  int64 id = 1;
+  string planning_id = 2;
+  string batch_code = 3;
+  int32 stop_order = 4;
+  string order_code = 5;
+  string vehicle_type = 6;
+  string service_id = 7;
+  repeated string addons = 8;
+  // DRAFT / CONFIRMED / BOOKED / CANCELLED
+  string status = 9;
+  // VND
+  int64 cod_amount = 10;
+  // VND
+  int64 total_bill = 11;
+  // VND — fee server-persisted tại thời điểm confirm (spec §3.2).
+  int64 fee = 12;
+}
+
+message ConfirmPlanningRequest {
+  string batch_code = 1;
+  repeated PlanningInput plannings = 2;
+}
+
+message ConfirmPlanningResponse {
+  repeated ShipmentPlanning plannings = 1;
+  ResponseMeta meta = 2;
+}
+
+// ShipmentPlanningBookingInput — 1 planning cần book.
+// COD = money-to-collect (VND); tên proto cod_amount khớp batching.proto.
+message ShipmentPlanningBookingInput {
+  string planning_id = 1;
+  // VND
+  int64 cod_amount = 2;
+  // VND
+  int64 total_bill = 3;
+  int32 stop_order = 4;
+}
+
+// BookingResult — kết quả book 1 planning (driver giả từ pool ở mock).
+message BookingResult {
+  string planning_id = 1;
+  string carrier_booking_id = 2;
+  string driver_name = 3;
+  string driver_phone = 4;
+  string license_plate = 5;
+  string status = 6;
+}
+
+message CreateBookingRequest {
+  string batch_code = 1;
+  repeated ShipmentPlanningBookingInput shipment_plannings = 2;
+}
+
+message CreateBookingResponse {
+  repeated BookingResult bookings = 1;
+  ResponseMeta meta = 2;
+}
+
+message CancelDeliveryOrderRequest {
+  string planning_id = 1;
+  // Lý do hủy.
+  string reason = 2;
+}
+
+message CancelDeliveryOrderResponse {
+  string planning_id = 1;
+  string status = 2;
+  ResponseMeta meta = 3;
+}
+
+message CancelDeliveryBatchRequest {
+  string batch_code = 1;
+  string reason = 2;
+}
+
+// CancelDeliveryBatchResult — kết quả hủy từng planning trong batch.
+message CancelDeliveryBatchResult {
+  string planning_id = 1;
+  string status = 2;
+}
+
+message CancelDeliveryBatchResponse {
+  repeated CancelDeliveryBatchResult results = 1;
+  int32 cancelled_count = 2;
+  ResponseMeta meta = 3;
+}
+
+// BookingDetail — current booking của 1 planning (nullable semantics:
+// planning chưa book → message field unset, Go nil / TS undefined).
+message BookingDetail {
+  string carrier_booking_id = 1;
+  string driver_name = 2;
+  string driver_phone = 3;
+  string license_plate = 4;
+  string status = 5;
+  // ISO-8601 datetime
+  string booked_at = 6;
+  // ISO-8601 datetime — chỉ set khi CANCELLED
+  string cancelled_at = 7;
+  string cancel_reason = 8;
+}
+
+// TrackingEvent — 1 mốc timeline (spec §3.6; source BE | PARTNER).
+message TrackingEvent {
+  string status = 1;
+  string source = 2;
+  // ISO-8601 datetime
+  string occurred_at = 3;
+  string note = 4;
+}
+
+// BookingEntry — 1 entry search-booking-detail (SF-16 contract):
+// planning chưa book → booking unset, timeline rỗng.
+message BookingEntry {
+  string planning_id = 1;
+  BookingDetail booking = 2;
+  repeated TrackingEvent timeline = 3;
+}
+
+message SearchBookingDetailRequest {
+  repeated string planning_ids = 1;
+}
+
+message SearchBookingDetailResponse {
+  repeated BookingEntry bookings = 1;
+  ResponseMeta meta = 2;
+}
+
+message ListAddonServicesRequest {
+  // Filter theo vehicle type — optional (rỗng = trả tất cả).
+  string vehicle_type = 1;
+}
+
+message ListAddonServicesResponse {
+  repeated AddonServiceCatalog addons = 1;
+  ResponseMeta meta = 2;
+}
+
+service DeliveryBatchService {
+  // Báo giá theo từng stop (6 tải trọng mock, fee tăng theo distance).
+  rpc GetQuotes(GetQuotesRequest) returns (GetQuotesResponse);
+  // Confirm planning: server gọi adapter.Quotes, persist fee, chặn fee-limit.
+  rpc ConfirmPlanning(ConfirmPlanningRequest) returns (ConfirmPlanningResponse);
+  // Book loạt planning trong batch — 1 booking/planning (spec §3.1).
+  rpc CreateBooking(CreateBookingRequest) returns (CreateBookingResponse);
+  // Hủy 1 đơn: current booking CANCELLED + planning → CANCELLED (spec §3.6).
+  rpc CancelDeliveryOrder(CancelDeliveryOrderRequest) returns (CancelDeliveryOrderResponse);
+  // Hủy cả batch: cancel mọi booking ACTIVE + planning CONFIRMED → DRAFT.
+  rpc CancelDeliveryBatch(CancelDeliveryBatchRequest) returns (CancelDeliveryBatchResponse);
+  // Timeline tracking — planning chưa book → booking null, timeline rỗng.
+  rpc SearchBookingDetail(SearchBookingDetailRequest) returns (SearchBookingDetailResponse);
+  // Catalog addon_services (migration seed, spec §3.3).
+  rpc ListAddonServices(ListAddonServicesRequest) returns (ListAddonServicesResponse);
+}

@@ -7,6 +7,7 @@
  *   UNAUTHENTICATED   → 401 (code UNAUTHENTICATED)
  *   PERMISSION_DENIED → 403 (code PERMISSION_DENIED)
  *   NOT_FOUND         → 404 (code NOT_FOUND)
+ *   FAILED_PRECONDITION → 409 (code CONFLICT) — sai trạng thái (SF-19 assign)
  *   DEADLINE_EXCEEDED / UNAVAILABLE / UNKNOWN  → 503 code UPSTREAM_UNAVAILABLE
  *     + message kèm tên service (fulfillment-service/batching-service/print-service)
  *   khác              → 500 (code INTERNAL)
@@ -82,6 +83,7 @@ function safeDecode(raw: string): string {
 export function mapGrpcError(
   err: unknown,
   serviceName: string,
+  opts?: { preconditionAs422?: boolean },
 ): { statusCode: number; body: ReturnType<typeof errorEnvelope> } {
   if (!isServiceError(err)) {
     return {
@@ -119,6 +121,25 @@ export function mapGrpcError(
         statusCode: 404,
         body: errorEnvelope(404, err.details ?? 'Not found.', { code: 'NOT_FOUND' }),
       };
+    case GrpcStatus.FAILED_PRECONDITION:
+      // SF-19 (merge): FAILED_PRECONDITION toàn cục = xung đột trạng thái
+      // (assign/re-assign sai trạng thái đơn) → 409 CONFLICT.
+      // SF-15: /delivery-batch/* có ngữ nghĩa riêng (spec §3.6 + §4: "vượt fee
+      // limit → BE chặn (422)") — các route đó truyền
+      // `{ preconditionAs422: true }` để nhận 422 PRECONDITION_FAILED.
+      if (opts?.preconditionAs422) {
+        return {
+          statusCode: 422,
+          body: errorEnvelope(422, err.details ?? 'Precondition failed.', {
+            code: 'PRECONDITION_FAILED',
+            details: parseDetails(err),
+          }),
+        };
+      }
+      return {
+        statusCode: 409,
+        body: errorEnvelope(409, err.details ?? 'Precondition failed.', { code: 'CONFLICT' }),
+      };
     case GrpcStatus.DEADLINE_EXCEEDED:
     case GrpcStatus.UNAVAILABLE:
     case GrpcStatus.UNKNOWN:
@@ -142,8 +163,13 @@ export function mapGrpcError(
 }
 
 /** Catch-all của routes: map + send error envelope, return reply để dừng flow. */
-export function sendGrpcError(reply: FastifyReply, err: unknown, serviceName: string): void {
-  const { statusCode, body } = mapGrpcError(err, serviceName);
+export function sendGrpcError(
+  reply: FastifyReply,
+  err: unknown,
+  serviceName: string,
+  opts?: { preconditionAs422?: boolean },
+): void {
+  const { statusCode, body } = mapGrpcError(err, serviceName, opts);
   void reply.code(statusCode).send(body);
 }
 

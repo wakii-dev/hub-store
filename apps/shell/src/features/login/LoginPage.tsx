@@ -1,35 +1,27 @@
 import { useState } from 'react';
-import { useNavigate } from 'react-router-dom';
+import { Button, Card } from 'antd';
+import { Link } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
-import { Button, Card, Form, Input, Select } from 'antd';
-import { ROLES, type Role } from '@hub-store/shared';
-import { signIn } from '../../auth/session';
-import { firstPathForRole } from '../../nav';
+import { DESIGN_TOKENS } from '@hub-store/shared';
+import { signinRedirect } from '../../auth/oidc';
 
 /**
- * Login stub — giả lập SSO (spec: KHÔNG OTP/KHÔNG user-pass thật; production
- * đổi sang OIDC theo auth/oidc.ts). Chọn role + tên → ký fake JWT → vào layout.
+ * Login (SF-4): OIDC redirect PKCE — nút Đăng nhập → Keycloak hosted login
+ * (form username/password của Keycloak; KHÔNG ROPC, KHÔNG gửi password qua
+ * shell). Sau verify → /callback → landing firstPathForRole.
+ *
+ * SF-6 §2.4: card trắng radius 20 shadow.lg trên nền #F7F8FA, logo gradient
+ * 40×40, nút gradient full-width h44, link quên mật khẩu cam.
+ * Giữ testid login-page/login-submit/forgot-password-link (E2E auth.setup dùng).
  */
-export default function LoginPage(props: {
-  onSignIn: (sub: string, role: Role) => void;
-}) {
+export default function LoginPage() {
   const { t } = useTranslation('shell');
-  const navigate = useNavigate();
-  const [sub, setSub] = useState('dev-user');
-  const [role, setRole] = useState<Role>('Coordinator');
   const [signingIn, setSigningIn] = useState(false);
 
-  const handleLogin = async () => {
+  const handleLogin = () => {
     setSigningIn(true);
-    try {
-      await signIn(sub, role);
-      props.onSignIn(sub, role);
-      // Landing về route ĐẦU TIÊN role được phép (§2) — WarehouseOps không
-      // có orders.view, hard-code /order sẽ rơi thẳng vào 403.
-      navigate(firstPathForRole(role), { replace: true });
-    } finally {
-      setSigningIn(false);
-    }
+    // Redirect rời trang — không cần un-set (navigate đi Keycloak).
+    void signinRedirect();
   };
 
   return (
@@ -39,43 +31,72 @@ export default function LoginPage(props: {
         display: 'flex',
         alignItems: 'center',
         justifyContent: 'center',
-        background: '#F2F4F7',
+        background: `linear-gradient(180deg, rgba(235,110,9,0.03) 0%, ${DESIGN_TOKENS.color.bgSubtle} 40%)`,
       }}
       data-testid="login-page"
     >
-      <Card style={{ width: 380 }}>
+      <Card
+        style={{
+          width: 380,
+          borderRadius: DESIGN_TOKENS.radius.modal,
+          boxShadow: DESIGN_TOKENS.shadow.lg,
+          border: `1px solid ${DESIGN_TOKENS.color.divider}`,
+        }}
+      >
         <div style={{ textAlign: 'center', marginBottom: 24 }}>
-          <h1 style={{ fontSize: 24, fontWeight: 700, color: '#101828', margin: 0 }}>
+          <div
+            aria-hidden="true"
+            style={{
+              width: 40,
+              height: 40,
+              margin: '0 auto 12px',
+              borderRadius: 10,
+              background: DESIGN_TOKENS.color.primaryGradient,
+              boxShadow: DESIGN_TOKENS.shadow.primary,
+              display: 'flex',
+              alignItems: 'center',
+              justifyContent: 'center',
+              color: DESIGN_TOKENS.color.bgWhite,
+              fontWeight: 700,
+              fontSize: 17,
+            }}
+          >
+            IS
+          </div>
+          <h1
+            style={{
+              fontSize: DESIGN_TOKENS.typography.h1.fontSize,
+              fontWeight: DESIGN_TOKENS.typography.h1.fontWeight,
+              color: DESIGN_TOKENS.color.textStrong,
+              margin: 0,
+            }}
+          >
             {t('auth.login.title')}
           </h1>
-          <p style={{ fontSize: 12, color: '#98A2B3', marginTop: 8 }}>
+          <p style={{ fontSize: 12.5, color: DESIGN_TOKENS.color.textMuted, marginTop: 8 }}>
             {t('auth.login.subtitle')}
           </p>
         </div>
-        <Form layout="vertical">
-          <Form.Item label={t('auth.login.username')}>
-            <Input value={sub} onChange={(e) => setSub(e.target.value)} data-testid="login-username" />
-          </Form.Item>
-          <Form.Item label={t('auth.login.role')}>
-            <Select<Role> value={role} onChange={setRole} data-testid="login-role" style={{ width: '100%' }}>
-              {ROLES.map((r) => (
-                <Select.Option key={r} value={r}>
-                  {t(`auth.role.${r}`)}
-                </Select.Option>
-              ))}
-            </Select>
-          </Form.Item>
-          <Button
-            type="primary"
-            htmlType="submit"
-            block
-            loading={signingIn}
-            onClick={handleLogin}
-            data-testid="login-submit"
+        <Button
+          type="primary"
+          htmlType="submit"
+          block
+          loading={signingIn}
+          onClick={handleLogin}
+          style={{ height: 44, fontSize: 14, fontWeight: 600 }}
+          data-testid="login-submit"
+        >
+          {t('auth.login.button')}
+        </Button>
+        <div style={{ textAlign: 'center', marginTop: 16 }}>
+          <Link
+            to="/forgot-password"
+            style={{ fontSize: 12.5, color: DESIGN_TOKENS.color.primary, fontWeight: 600 }}
+            data-testid="forgot-password-link"
           >
-            {t('auth.login.button')}
-          </Button>
-        </Form>
+            {t('auth.forgot.link')}
+          </Link>
+        </div>
       </Card>
     </div>
   );

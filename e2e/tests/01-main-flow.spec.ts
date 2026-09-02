@@ -1,32 +1,17 @@
 import { expect, test, type Page } from "@playwright/test";
 
-/** AntD option hiển thị label i18n VI (không phải role value). */
-const ROLE_LABEL: Record<string, string> = {
-  Coordinator: "Điều phối",
-  WarehouseOps: "Vận hành kho",
-  Manager: "Quản lý",
-};
-
 /**
  * SF-11 Task 2+3 — E2E luồng §8 chính cross-remotes (spec §5 SF-11):
- * login → D1 filter 30201 → tick 3 đơn → D1b (DnD + suggest + thêm đơn +
+ * D1 filter 30201 → tick 3 đơn → D1b (DnD + suggest + thêm đơn +
  * shipper + TG giao) → tạo phiếu → D2 thấy phiếu (cross-remote invalidation)
  * → hủy → D1 đơn revert → tạo lại → In D3 PDF → hoàn tất soạn.
  * Chạy serial — spec này MUTATE store, phải chạy đầu (tiền tố 01).
+ * SF-4: đăng nhập qua storageState coordinator (auth.setup login Keycloak).
  */
 
 /** Dropdown đang mở duy nhất (modal có nhiều Select — dropdown ẩn vẫn mount trong DOM). */
 function openOptions(page: Page) {
   return page.locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option");
-}
-
-async function login(page: Page, role: string) {
-  await page.goto("/hub-store-order/order");
-  await page.getByTestId("login-page").waitFor();
-  await page.getByTestId("login-role").locator(".ant-select-selector").click();
-  await openOptions(page).filter({ hasText: ROLE_LABEL[role] }).click();
-  await page.getByTestId("login-submit").click();
-  await page.waitForURL("**/hub-store-order/**");
 }
 
 async function filterShop30201(page: Page) {
@@ -117,7 +102,7 @@ async function openBatchOfOrder(page: Page, orderCode: string): Promise<string> 
 }
 
 test("luồng §8: tạo phiếu → D2 cross-remote → hủy → revert", async ({ page }) => {
-  await login(page, "Coordinator");
+  await page.goto("/hub-store-order/order");
   await expect(page.getByText("Danh sách đơn hàng kho chi nhánh")).toBeVisible();
 
   // D1 filter Kho CN = 30201 → chỉ đơn 30201
@@ -157,7 +142,7 @@ test("luồng §8: tạo phiếu → D2 cross-remote → hủy → revert", asyn
 });
 
 test("bulk: tick khác kho → 'Tạo phiếu soạn' disable (rule 1 UI layer)", async ({ page }) => {
-  await login(page, "Coordinator");
+  await page.goto("/hub-store-order/order");
   // Lọc Chưa soạn → ORD-3001 (30201) + ORD-3013 (30202) cùng nằm page 1
   await page.locator(".ant-select").filter({ hasText: "Trạng thái soạn hàng" }).click();
   await openOptions(page).filter({ hasText: "Chưa soạn" }).first().click();
@@ -178,7 +163,7 @@ test("bulk: tick khác kho → 'Tạo phiếu soạn' disable (rule 1 UI layer)"
 });
 
 test("luồng §8: tạo lại → In D3 PDF → hoàn tất soạn", async ({ page, browser }) => {
-  await login(page, "Coordinator");
+  await page.goto("/hub-store-order/order");
   await filterShop30201(page);
 
   // Tạo lại sau hủy

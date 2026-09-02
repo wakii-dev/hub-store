@@ -6,7 +6,7 @@
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { SignJWT } from 'jose';
-import { startHarness, signTestToken, invalidArgument, mockGrpcError } from './harness.js';
+import { startHarness, signTestToken, invalidArgument, mockGrpcError, generateSecondIdentity, TEST_ISSUER, TEST_AUDIENCE } from './harness.js';
 import type { Harness } from './harness.js';
 
 let h: Harness;
@@ -35,8 +35,8 @@ describe('Task 5 — bootstrap: JWT guard + public /healthz', () => {
     expect(typeof body.message).toBe('string');
   });
 
-  it('401 khi token sai chữ ký / sai secret', async () => {
-    const forged = await new SignJWT({ role: 'ADMIN' })
+  it('401 khi token không verify được (alg sai / ký bằng key lạ)', async () => {
+    const forged = await new SignJWT({ role: 'Manager' })
       .setProtectedHeader({ alg: 'HS256' })
       .setSubject('attacker')
       .sign(new TextEncoder().encode('wrong-secret'));
@@ -253,14 +253,14 @@ describe('Task 7 — semantics + print PDF bytes', () => {
       method: 'POST',
       url: '/fulfillment/print',
       payload: { batchCode: 'BAT-1001', printType: 'bill', printerId: 'P-30201-01' },
-      headers: { authorization: `Bearer ${await signTestToken('ADMIN')}` },
+      headers: { authorization: `Bearer ${await signTestToken('Manager')}` },
     });
     expect(res.statusCode).toBe(200);
     expect(res.headers['content-type']).toContain('application/pdf');
     expect(res.rawPayload.subarray(0, 4).toString()).toBe('%PDF');
     expect(res.rawPayload.toString()).toContain('test-pdf-bytes');
     // spec §3.9: gRPC metadata truyền x-user-role; printType 'bill' → proto 1.
-    expect(capturedRole).toBe('ADMIN');
+    expect(capturedRole).toBe('Manager');
     expect(capturedPrintType).toBe(1);
   });
 
@@ -308,12 +308,46 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     expect(body.statusCode).toBe(400);
   });
 
-  it('TEST_SECRET khớp format fake-jwt shared (HS256 + role claim)', async () => {
+  it('401 khi token chỉ có role ngoài KNOWN_ROLES (SF-4 realm role map)', async () => {
     const token = await signTestToken('STAFF', 'u1');
-    const parts = token.split('.');
-    expect(parts).toHaveLength(3);
-    const payload = JSON.parse(Buffer.from(parts[1], 'base64url').toString());
-    expect(payload.role).toBe('STAFF');
-    expect(payload.sub).toBe('u1');
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/master-data/regions',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(res.json().code).toBe('UNAUTHENTICATED');
+  });
+
+  it('JWKS refetch khi gặp unknown kid (SF-4): key mới thêm → token verify 200', async () => {
+    // Ký bằng keypair-2 CHƯA có trong JWKS → 401 (kid lạ).
+    const second = await generateSecondIdentity();
+    const token = await new SignJWT({
+      realm_access: { roles: ['Coordinator'] },
+      preferred_username: 'kid-tester',
+    })
+      .setProtectedHeader({ alg: 'RS256', kid: 'test-kid-2' })
+      .setSubject('kid-tester')
+      .setIssuer(TEST_ISSUER)
+      .setAudience(TEST_AUDIENCE)
+      .setIssuedAt()
+      .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
+      .sign(second.privateKey);
+    const before = await h.app.inject({
+      method: 'GET',
+      url: '/master-data/regions',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(before.statusCode).toBe(401);
+    // JWKS thêm key-2 (mô phỏng Keycloak rotate key) → cùng token verify 200.
+    h.identity.addKey(second.jwk);
+    // cooldown JWKS refetch 100ms (auth.ts) — chờ đủ trước khi retry.
+    await new Promise((r) => setTimeout(r, 150));
+    const after = await h.app.inject({
+      method: 'GET',
+      url: '/master-data/regions',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(after.statusCode).toBe(200);
   });
 });

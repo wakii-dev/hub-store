@@ -14,6 +14,7 @@ import (
 	"hubstore/batching-service/internal/fulfillment"
 	"hubstore/batching-service/internal/mockfulfillment"
 	"hubstore/batching-service/internal/store"
+	"hubstore/batching-service/internal/testdb"
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
 	fulfillmentv1 "hubstore/gen/go/hubstore/fulfillment/v1"
 
@@ -61,10 +62,13 @@ func startFixture(t *testing.T) *fixture {
 	}
 	t.Cleanup(func() { _ = jconn.Close() })
 
-	st, err := store.LoadSeedFile(seedPath)
+	// Batches store — Postgres test DB riêng (skip khi không có Postgres).
+	testdb.Pool(t)
+	st, err := store.OpenPostgres(context.Background(), testdb.DSN())
 	if err != nil {
-		t.Fatalf("seed: %v", err)
+		t.Fatalf("postgres store: %v", err)
 	}
+	t.Cleanup(st.Close)
 	srv := New(st, fulfillment.NewGRPCClientFromConn(jconn))
 
 	blis := bufconn.Listen(1024 * 1024)

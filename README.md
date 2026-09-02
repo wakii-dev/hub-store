@@ -11,7 +11,7 @@ Browser ──REST──> BFF gateway (:8080, Node/Fastify)
 Browser ──Module Federation──> shell (:3000 host) + orders (:3001) + fulfillment (:3002 remotes)
 ```
 
-Mutation chain: `CreateBatch` → Go gọi Java `MutateOrderStatus` (batchStatus 0→1); `CancelBatch` → revert 0; `CompletePicking` → 2. Dữ liệu in-memory, seed từ `api/seed/canonical-seed.json` (nguồn duy nhất).
+Mutation chain: `CreateBatch` → Go gọi Java `MutateOrderStatus` (batchStatus 0→1); `CancelBatch` → revert 0; `CompletePicking` → 2. Dữ liệu seed từ `api/seed/canonical-seed.json` (nguồn duy nhất) nạp vào Postgres qua seed pipeline (xem "Postgres infra + seed" dưới).
 
 ## Dev port map
 
@@ -43,7 +43,23 @@ docker compose up --build
 # mở http://localhost:3000
 ```
 
-Compose là cấu hình **mẫu chạy local** (KHÔNG prod deploy): 4 service images + nginx phục vụ shell/2 remotes static (publicPath theo SPIKE 1) và proxy `/api` → BFF.
+Compose là cấu hình **mẫu chạy local** (KHÔNG prod deploy): postgres (2 DB: `fulfillment` + `batching`) → migrate one-shot (Flyway `orders-migrate`, golang-migrate `batches-migrate`) → `db-seed` → app services + keycloak + nginx phục vụ shell/2 remotes static (publicPath theo SPIKE 1) và proxy `/api` → BFF.
+
+### Postgres infra + seed (FI-245 SF-1)
+
+```bash
+# LƯU Ý: .env đang git-tracked — chỉ APPEND 2 dòng sau vào .env local
+# (POSTGRES_PASSWORD=..., KEYCLOAK_ADMIN_PASSWORD=...) và KHÔNG BAO GIỜ commit.
+# Tham khảo .env.example cho var contract đầy đủ.
+docker compose up -d postgres   # 2 DB tự tạo qua docker/postgres/initdb/
+bash scripts/wait-db.sh         # chờ healthy (run.sh SF-2/SF-3 + boot-all SF-5 dùng chung)
+bash scripts/seed-db.sh         # nạp canonical-seed.json cả 2 DB — emptiness-gate, KHÔNG upsert
+bash scripts/reset-db.sh        # E2E reset: TRUNCATE cả 2 DB + xóa keycloak volume + reseed
+```
+
+- **Emptiness-gate**: DB có data → seed bỏ qua. Seed file (`api/seed/canonical-seed.json`) đổi sau này → reset thủ công bằng `reset-db.sh`.
+- **Credentials local-only**: `POSTGRES_PASSWORD` / `KEYCLOAK_ADMIN_PASSWORD` tự điền trong `.env` local — file `.env` đang git-tracked nên phải append cục bộ, KHÔNG commit (compose fail-loud nếu thiếu POSTGRES_PASSWORD).
+- Bảng + sequence `batches_code_seq` do migration tạo (SF-2 Flyway `services/fulfillment-service/src/main/resources/db/migration`, SF-3 golang-migrate `services/batching-service/migrations`) — column contract ghi ở header `scripts/seed-db.sh`.
 
 ## Commands
 
@@ -133,4 +149,15 @@ curl -s -X POST http://127.0.0.1:18080/keycloak/realms/hub-store/protocol/openid
 
 ## Roles dev stub
 
-Login page cho chọn 1 trong 3 role (JWT giả, OIDC production): **Coordinator** (D1+D2+D3), **WarehouseOps** (D2+D3), **Manager** (tất cả).
+**(SF-4 đã thay bằng OIDC thật)** Role đến từ Keycloak realm role: **Coordinator** (D1+D2+D3), **WarehouseOps** (D2+D3), **Manager** (tất cả). Role switcher dev đã bỏ — đổi role = đăng nhập bằng user khác.
+
+## OIDC auth (Keycloak) — SF-4
+
+- Bật Keycloak + realm import tự động: `docker compose up -d keycloak` (realm JSON: `docker/keycloak/hubstore-realm.json`; `--import-realm` skip nếu realm đã tồn tại — đổi realm/user phải `docker compose down -v` reset volume keycloak-data).
+- Users mẫu (dev-only, password literal trong realm JSON): `coordinator` / `warehouse` / `manager` — password `Password123!`.
+- Shell login PKCE (public client `hubstore-web`) — env `VITE_OIDC_*` trong `.env`; silent renew qua refresh token; logout → Keycloak end-session.
+- BFF verify JWKS RS256 (`OIDC_ISSUER`/`OIDC_AUDIENCE`/`OIDC_JWKS_URL`), role từ claim `realm_access.roles` → gRPC metadata `x-user-role`.
+
+## Forgot password (DEV-ONLY)
+
+Trang "Quên mật khẩu" trên shell + endpoint `POST /auth/reset-password` đặt lại password trực tiếp qua Keycloak Admin API — **KHÔNG có bước xác minh danh tính** (không email, không OTP). Endpoint chỉ mount khi env `ENABLE_DEV_RESET_PASSWORD=1` tường minh (fail-safe: prod không set → 404). Chỉ dùng cho dev/local; production bắt buộc thay bằng OTP email hoặc Keycloak built-in forgot-password flow.

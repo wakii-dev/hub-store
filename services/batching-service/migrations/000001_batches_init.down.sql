@@ -1,0 +1,3 @@
+DROP SEQUENCE IF EXISTS batches_code_seq;
+DROP TABLE IF EXISTS batch_items;
+DROP TABLE IF EXISTS batches;

@@ -15,28 +15,13 @@ function openOptions(page: Page) {
   return page.locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option");
 }
 
-const ROLE_LABEL: Record<string, string> = {
-  Coordinator: "Điều phối",
-  WarehouseOps: "Vận hành kho",
-  Manager: "Quản lý",
-};
-
-async function login(page: Page, role: string) {
-  await page.goto("/hub-store-order/order");
-  await page.getByTestId("login-page").waitFor();
-  await page.getByTestId("login-role").locator(".ant-select-selector").click();
-  await openOptions(page).filter({ hasText: ROLE_LABEL[role] }).click();
-  await page.getByTestId("login-submit").click();
-  await page.waitForURL("**/hub-store-order/**");
-}
-
 async function gotoPage(page: Page, pageInput: string) {
   await page.locator(".ant-pagination-options-quick-jumper input").fill(pageInput);
   await page.locator(".ant-pagination-options-quick-jumper input").press("Enter");
 }
 
 test("§8b D1.7+D1.8: expand row items[] + pagination Tổng N / page size 10 / goto page", async ({ page }) => {
-  await login(page, "Coordinator");
+  await page.goto("/hub-store-order/order");
   await expect(page.getByText("Danh sách đơn hàng kho chi nhánh")).toBeVisible();
 
   // D1.8: Tổng N mã đúng (27 đơn seed) + page size 10
@@ -56,7 +41,7 @@ test("§8b D1.7+D1.8: expand row items[] + pagination Tổng N / page size 10 / 
 
 test("§8b D1.2+D1.9: filter Chưa soạn + URL state reload giữ nguyên filter", async ({ page }) => {
   // D1.9a: URL filters → render đúng state (useUrlState)
-  await login(page, "Coordinator");
+  await page.goto("/hub-store-order/order");
   await page.locator(".ant-select").filter({ hasText: "Trạng thái soạn hàng" }).click();
   await openOptions(page).filter({ hasText: "Chưa soạn" }).first().click();
   await page.keyboard.press("Escape");
@@ -79,7 +64,7 @@ test("§8b D1.2+D1.9: filter Chưa soạn + URL state reload giữ nguyên filte
 });
 
 test("§8b D1.6: tick 1 đơn → Chuyển kho modal select kho đích + lịch sử", async ({ page }) => {
-  await login(page, "Coordinator");
+  await page.goto("/hub-store-order/order");
   const box = page.locator('tr[data-row-key="ORD-3001"] .ant-checkbox-input');
   await box.check();
   await expect(page.getByTestId("bulk-transfer")).toBeEnabled();
@@ -96,9 +81,7 @@ test("§8b D1.6: tick 1 đơn → Chuyển kho modal select kho đích + lịch 
 });
 
 test("§8b D2.2+D2.3: D2 search theo mã phiếu + filter trạng thái phiếu", async ({ page }) => {
-  await login(page, "Coordinator");
-  await page.getByTestId("nav-batch").click();
-  await page.waitForURL("**/hub-store-order/batch");
+  await page.goto("/hub-store-order/batch");
   await expect(page.locator('[data-probe="fulfillment"]')).toBeVisible();
 
   // Tìm batch của ORD-3001 (01 đã tạo + hoàn tất → trạng thái Hoàn tất).
