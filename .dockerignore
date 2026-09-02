@@ -1,0 +1,16 @@
+node_modules
+**/node_modules
+dist
+**/dist
+target
+**/target
+.git
+.turbo
+**/.turbo
+**/.vite
+.mf
+e2e/test-results
+e2e/playwright-report
+services/*/build
+*.log
+.DS_Store
