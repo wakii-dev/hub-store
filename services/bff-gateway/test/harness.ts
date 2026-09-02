@@ -12,8 +12,12 @@ import type {
   sendUnaryData,
   UntypedServiceImplementation,
 } from '@grpc/grpc-js';
-import { SignJWT } from 'jose';
+import { SignJWT, exportJWK, generateKeyPair } from 'jose';
 import type { FastifyInstance } from 'fastify';
+import { createServer } from 'node:http';
+
+/** Private key type sinh ra bởi generateKeyPair('RS256'). */
+type RsaPrivateKey = Awaited<ReturnType<typeof generateKeyPair>>['privateKey'];
 import { buildApp } from '../src/app.js';
 import type { BffConfig } from '../src/config.js';
 import { fulfillmentResponses, batchingResponses, printResponses } from './fixtures.js';
@@ -21,7 +25,57 @@ import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fu
 import { BatchingServiceService } from '../../../api/proto/gen/ts/hubstore/batching/v1/batching';
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
 
-export const TEST_SECRET = 'contract-harness-dev-secret';
+export const TEST_ISSUER = 'https://keycloak.test/realms/hubstore';
+export const TEST_AUDIENCE = 'hubstore-api';
+
+/** Keypair + JWKS endpoint giả lập Keycloak — BFF verify JWKS thật qua HTTP. */
+export interface TestIdentity {
+  signToken(role: string, sub?: string): Promise<string>;
+  /** Thêm jwk vào JWKS đang serve (test unknown-kid refetch). */
+  addKey(jwk: Record<string, unknown>): void;
+  jwksUrl: string;
+  close(): Promise<void>;
+}
+
+export async function startTestIdentity(): Promise<TestIdentity> {
+  const { publicKey, privateKey } = await generateKeyPair('RS256', { extractable: true });
+  const jwk = { ...(await exportJWK(publicKey)), kid: 'test-kid-1', alg: 'RS256', use: 'sig' };
+  const keys: Record<string, unknown>[] = [jwk];
+  const httpServer = createServer((_req, res) => {
+    res.writeHead(200, { 'content-type': 'application/json' });
+    res.end(JSON.stringify({ keys: [...keys] }));
+  });
+  await new Promise<void>((resolve) => httpServer.listen(0, '127.0.0.1', resolve));
+  const address = httpServer.address();
+  if (address === null || typeof address === 'string') throw new Error('jwks server bind failed');
+  return {
+    jwksUrl: `http://127.0.0.1:${address.port}/certs`,
+    addKey: (j) => keys.push(j),
+    signToken: (role, sub = 'tester') =>
+      new SignJWT({
+        realm_access: { roles: [role] },
+        preferred_username: sub,
+      })
+        .setProtectedHeader({ alg: 'RS256', kid: 'test-kid-1' })
+        .setSubject(sub)
+        .setIssuer(TEST_ISSUER)
+        .setAudience(TEST_AUDIENCE)
+        .setIssuedAt()
+        .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
+        .sign(privateKey),
+    close: () => new Promise<void>((res) => httpServer.close(() => res())),
+  };
+}
+
+/** Keypair thứ 2 (kid khác) — test JWKS refetch khi gặp unknown kid. */
+export async function generateSecondIdentity(): Promise<{
+  privateKey: RsaPrivateKey;
+  jwk: Record<string, unknown>;
+}> {
+  const { publicKey, privateKey } = await generateKeyPair('RS256', { extractable: true });
+  const jwk = { ...(await exportJWK(publicKey)), kid: 'test-kid-2', alg: 'RS256', use: 'sig' };
+  return { privateKey, jwk };
+}
 
 /** ServiceError-like cho mock handler reject (đúng shape err của grpc-js). */
 export function mockGrpcError(code: number, message: string, metadata?: Metadata): ServiceError {
@@ -81,15 +135,11 @@ function startMockServer(
   });
 }
 
-/** HS256 fake-JWT cùng format với packages/shared auth/fake-jwt (spec §3.9). */
-export async function signTestToken(role = 'ADMIN', sub = 'tester'): Promise<string> {
-  const key = new TextEncoder().encode(TEST_SECRET);
-  return new SignJWT({ role })
-    .setProtectedHeader({ alg: 'HS256' })
-    .setSubject(sub)
-    .setIssuedAt()
-    .setExpirationTime(Math.floor(Date.now() / 1000) + 3600)
-    .sign(key);
+/** RS256 token có claim Keycloak (realm_access.roles + iss/aud) — sign bằng
+ * keypair của identity đang chạy (khác key → 401). */
+export async function signTestToken(role = 'Manager', sub = 'tester'): Promise<string> {
+  if (!currentIdentity) throw new Error('startHarness chưa chạy — không có identity');
+  return currentIdentity.signToken(role, sub);
 }
 
 export interface Harness {
@@ -97,8 +147,12 @@ export interface Harness {
   batching: MockUpstream;
   print: MockUpstream;
   app: FastifyInstance;
+  identity: TestIdentity;
   closeAll(): Promise<void>;
 }
+
+/** Module-level — signTestToken cần keypair của identity đang chạy. */
+let currentIdentity: TestIdentity | null = null;
 
 const fulfillmentDefaults: Record<string, UnaryHandler> = {
   filterOrders: (_c, cb) => cb(null, fulfillmentResponses.filterOrders),
@@ -153,6 +207,8 @@ export interface HarnessOptions {
 }
 
 export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> {
+  const identity = await startTestIdentity();
+  currentIdentity = identity;
   const fulfillment = await startMockServer(FulfillmentServiceService, {
     ...fulfillmentDefaults,
     ...opts.fulfillmentHandlers,
@@ -177,7 +233,15 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
 
   const config: BffConfig = {
     port: 0,
-    jwtSecret: TEST_SECRET,
+    oidc: {
+      issuer: TEST_ISSUER,
+      audience: TEST_AUDIENCE,
+      jwksUrl: identity.jwksUrl,
+      adminBaseUrl: 'https://keycloak.test/realms/hubstore',
+      adminTokenUrl: 'https://keycloak.test/realms/master/protocol/openid-connect/token',
+      adminUsername: 'admin',
+      adminPassword: 'admin',
+    },
     corsOrigins: ['http://localhost:3000'],
     grpc: {
       fulfillment: addrs.fulfillment,
@@ -193,22 +257,25 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     batching,
     print,
     app,
+    identity,
     closeAll: async () => {
+      currentIdentity = null;
       await app.close();
       await fulfillment.close();
       await batching.close();
       await print.close();
+      await identity.close();
     },
   };
 }
 
-/** Authorized inject helper — token signed bằng TEST_SECRET. */
+/** Authorized inject helper — token RS256 sign bằng identity của harness. */
 export async function authedInject(
   app: FastifyInstance,
   method: 'GET' | 'POST' | 'PUT',
   url: string,
   payload?: Record<string, unknown>,
-  role = 'ADMIN',
+  role = 'Manager',
 ): Promise<{ statusCode: number; body: unknown; rawPayload: Buffer; headers: Record<string, unknown> }> {
   const token = await signTestToken(role);
   const res = await app.inject({

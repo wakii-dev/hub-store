@@ -18,6 +18,7 @@ import {
 import { registerFulfillmentRoutes } from './routes/fulfillment.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
+import { registerAuthRoutes } from './routes/auth.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -25,8 +26,8 @@ export function buildApp(config: BffConfig): FastifyInstance {
   // CORS whitelist :3000-3002 (shell + orders + fulfillment remotes).
   void app.register(cors, { origin: config.corsOrigins });
 
-  // JWT guard — mọi route trừ /healthz (public).
-  registerJwtGuard(app, { secret: config.jwtSecret });
+  // OIDC guard (SF-4) — mọi route trừ /healthz + /auth/reset-password (public).
+  registerJwtGuard(app, { oidc: config.oidc });
 
   // Error envelope một chỗ cho error KHÔNG do gRPC (JSON parse, handler throw).
   app.setErrorHandler((err: FastifyError, request, reply) => {
@@ -65,6 +66,7 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerFulfillmentRoutes(app, { fulfillment, batching });
   registerBatchRoutes(app, batching);
   registerPrintRoutes(app, { batching, print });
+  registerAuthRoutes(app, { oidc: config.oidc });
 
   return app;
 }

@@ -1,0 +1,95 @@
+{
+  "realm": "hubstore",
+  "enabled": true,
+  "sslRequired": "none",
+  "registrationAllowed": false,
+  "loginWithEmailAllowed": false,
+  "accessTokenLifespan": 3600,
+  "roles": {
+    "realm": [
+      { "name": "Coordinator" },
+      { "name": "WarehouseOps" },
+      { "name": "Manager" }
+    ]
+  },
+  "clients": [
+    {
+      "clientId": "hubstore-web",
+      "name": "Hub Store Web",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "rootUrl": "http://localhost:3000",
+      "redirectUris": ["http://localhost:3000/*"],
+      "webOrigins": ["+"],
+      "attributes": {
+        "pkce.code.challenge.method": "S256"
+      },
+      "defaultClientScopes": ["profile", "email", "roles", "web-origins"],
+      "protocolMappers": [
+        {
+          "name": "hubstore-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hubstore-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "preferred_username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    }
+  ],
+  "users": [
+    {
+      "username": "coordinator",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Coordinator",
+      "lastName": "Demo",
+      "realmRoles": ["Coordinator"],
+      "credentials": [
+        { "type": "password", "value": "Password123!", "temporary": false }
+      ]
+    },
+    {
+      "username": "warehouse",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Warehouse",
+      "lastName": "Demo",
+      "realmRoles": ["WarehouseOps"],
+      "credentials": [
+        { "type": "password", "value": "Password123!", "temporary": false }
+      ]
+    },
+    {
+      "username": "manager",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Manager",
+      "lastName": "Demo",
+      "realmRoles": ["Manager"],
+      "credentials": [
+        { "type": "password", "value": "Password123!", "temporary": false }
+      ]
+    }
+  ]
+}
