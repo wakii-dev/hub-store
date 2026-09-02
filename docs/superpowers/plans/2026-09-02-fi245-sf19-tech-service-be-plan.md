@@ -317,7 +317,7 @@ git commit -m "feat(fi245-sf19): proto TechService additive + regen 4 langs"
 **Files:**
 - Create: `services/fulfillment-service/src/main/resources/db/migration/V6__tech_service_schema.sql`
 
-- [ ] **Step 1: Viết migration** (conventions V1: BIGSERIAL PK, VARCHAR, TIMESTAMPTZ, JSONB, snake_case)
+- [x] **Step 1: Viết migration** (conventions V1: BIGSERIAL PK, VARCHAR, TIMESTAMPTZ, JSONB, snake_case)
 
 ```sql
 -- SF-19 (FI-264) — đơn dịch vụ kỹ thuật: delivery_orders + installation_orders
@@ -393,7 +393,7 @@ CREATE TABLE technicians (
 );
 ```
 
-- [ ] **Step 2: Verify apply thủ công**
+- [x] **Step 2: Verify apply thủ công**
 
 ```bash
 docker compose up -d postgres && bash scripts/wait-db.sh
@@ -402,7 +402,7 @@ docker compose exec -T postgres psql -U hubstore -d fulfillment -c '\dt' | grep 
 ```
 Expected: 4 bảng xuất hiện; flyway_schema_history có row version 6.
 
-- [ ] **Step 3: Commit**
+- [x] **Step 3: Commit**
 
 ```bash
 git add services/fulfillment-service/src/main/resources/db/migration/V6__tech_service_schema.sql
