@@ -400,14 +400,14 @@ export function parseOrdersFile(filename: string, buffer: Buffer): { rows: RawRo
 - Modify: `apps/orders/src/i18n.ts` (registerOrdersResources — keys orders.intake.*)
 
 Steps:
-- [ ] `CreateOrderModal`: antd Modal + Form (customerName, customerPhone, customerAddress, Form.List items {productCode, productName, quantity}, codAmount InputNumber, shopHint Select từ useGetShopsQuery). Submit → createManualOrder → message.success + invalidate list (RTKQ tag) + onClose. data-testid: `create-order-button`, `create-order-modal`, `create-order-submit`.
-- [ ] `ImportOrdersModal`: bước 1 — `Upload.Dragger` accept `.csv,.xlsx,.xls` beforeUpload return false (không auto), nút "Tải template" `data-testid="download-template"` (axios GET blob → saveAs anchor). Bước 2 — chọn file → POST preview (FormData) → bảng preview: rows valid xanh (Icon CheckCircle) + rows lỗi đỏ kèm `{row, column, message}` — data-testid `import-preview`, `import-error-row-{n}`, nút Confirm disable khi errors>0 `data-testid="import-confirm"`. Confirm → confirmImport → success message hiện codes + invalidate.
-- [ ] D1Page: hàng nút mới cạnh "Tạo phiếu soạn" (Space, trước bulk-bar): `<Button data-testid="create-order-button">Tạo đơn</Button><Button data-testid="import-orders-button">Nhập đơn</Button>` — mở 2 modal. KHÔNG đổi cột/bộ lọc/testid cũ.
-- [ ] OrdersExpandContent: dòng "Khách" (customerName + customerPhone, ẩn nếu rỗng) + nếu `oldFulfillCode` → `Đơn gốc: <link copyable data-testid="old-order-link">{oldFulfillCode}</link>`.
-- [ ] i18n keys VI/EN đủ cho cả 2 modal + expand mới (KHÔNG hardcode string — pattern SF-22 chuẩn bị).
-- [ ] Unit tests: CreateOrderModal submit gọi mutation + close; ImportOrdersModal render lỗi preview đúng row/column; expand hiện oldFulfillCode.
-- [ ] `pnpm --filter @hub-store/orders test && pnpm --filter @hub-store/orders build` → xanh (tên filter kiểm tra apps/orders/package.json).
-- [ ] Commit: `feat(fi245-sf13): D1 tạo đơn + nhập đơn preview/confirm + expand retry-link`
+- [x] `CreateOrderModal`: antd Modal + Form (customerName, customerPhone, customerAddress, Form.List items {productCode, productName, quantity}, codAmount InputNumber, shopHint Select từ useGetShopsQuery). Submit → createManualOrder → message.success + invalidate list (RTKQ tag) + onClose. data-testid: `create-order-button`, `create-order-modal`, `create-order-submit`.
+- [x] `ImportOrdersModal`: bước 1 — `Upload.Dragger` accept `.csv,.xlsx,.xls` beforeUpload return false (không auto), nút "Tải template" `data-testid="download-template"` (axios GET blob → saveAs anchor). Bước 2 — chọn file → POST preview (FormData) → bảng preview: rows valid xanh (Icon CheckCircle) + rows lỗi đỏ kèm `{row, column, message}` — data-testid `import-preview`, `import-error-row-{n}`, nút Confirm disable khi errors>0 `data-testid="import-confirm"`. Confirm → confirmImport → success message hiện codes + invalidate.
+- [x] D1Page: hàng nút mới cạnh "Tạo phiếu soạn" (Space, trước bulk-bar): `<Button data-testid="create-order-button">Tạo đơn</Button><Button data-testid="import-orders-button">Nhập đơn</Button>` — mở 2 modal. KHÔNG đổi cột/bộ lọc/testid cũ.
+- [x] OrdersExpandContent: dòng "Khách" (customerName + customerPhone, ẩn nếu rỗng) + nếu `oldFulfillCode` → `Đơn gốc: <link copyable data-testid="old-order-link">{oldFulfillCode}</link>`.
+- [x] i18n keys VI/EN đủ cho cả 2 modal + expand mới (KHÔNG hardcode string — pattern SF-22 chuẩn bị).
+- [x] Unit tests: CreateOrderModal submit gọi mutation + close; ImportOrdersModal render lỗi preview đúng row/column; expand hiện oldFulfillCode.
+- [x] `pnpm --filter @hub-store/orders test && pnpm --filter @hub-store/orders build` → xanh (tên filter kiểm tra apps/orders/package.json).
+- [x] Commit: `feat(fi245-sf13): D1 tạo đơn + nhập đơn preview/confirm + expand retry-link`
 
 ### Task 8 — FE D2 (apps/fulfillment): mark-fail + giao lại
 **Depends:** Task 6
@@ -420,13 +420,13 @@ Steps:
 **Vấn đề dữ liệu:** BatchingItem (D2 rows) KHÔNG có fulfillCode/failReason — D2 item chỉ có `orderCode` (RSA). Chốt: thêm route BFF MỚI **`GET /orders/by-batch/:batchCode`** trả `HubStoreOrderFilterItem[]` của batch (BFF owns aggregation: gọi batching getBatchDetail → codes → fulfillment getOrdersByCodes; additive). FE fetch khi expand + refetch sau mutation. (Prefix `/orders*` thống nhất cho cả intake surface theo context pack touch map `/orders/import, /orders, /orders/{id}/fail, /redeliver` — có lệch với convention `/fulfillment/*` hiện có, đây là chủ đích theo context pack; ghi 1 câu vào spec errata.)
 - Modify: `services/bff-gateway/src/routes/intake.ts` (thêm route GET /orders/by-batch/:batchCode + contract test trong cùng test file T6)
 Steps:
-- [ ] Route BFF gộp (as BFF owns aggregation — spec §3.3 pattern).
-- [ ] `MarkFailModal`: Select lý do (DELIVERY_FAIL_REASON labels) + TextArea note + submit → failOrder → message + invalidate. data-testid: `mark-fail-button-{orderCode}`, `mark-fail-modal`, `fail-reason-select`, `fail-note`, `fail-submit`, `redeliver-button-{orderCode}`.
-- [ ] BatchListPage expanded row: fetch batch orders → mỗi item render failReason tag (nếu có, data-testid `fail-tag-{code}`) + nút Mark thất bại (ẩn khi đã FAILED) + nút Giao lại (chỉ khi FAILED && chưa có retry — server gate là chốt cuối, FE chỉ ẩn: check có `oldFulfillCode`-order trong list? — đơn giản: luôn hiện nút Giao lại trên đơn FAILED; double-redeliver server chặn INVALID_ARGUMENT → message lỗi).
-- [ ] Sau redeliver thành công: message "Đã tạo đơn giao lại ORD-xxxx" + invalidate.
-- [ ] Unit test MarkFailModal (chọn lý do + submit gọi mutation).
-- [ ] `pnpm --filter @hub-store/fulfillment test && pnpm --filter @hub-store/fulfillment build` xanh.
-- [ ] Commit: `feat(fi245-sf13): D2 mark-fail lý do + giao lại + batch orders hydration route`
+- [x] Route BFF gộp (as BFF owns aggregation — spec §3.3 pattern).
+- [x] `MarkFailModal`: Select lý do (DELIVERY_FAIL_REASON labels) + TextArea note + submit → failOrder → message + invalidate. data-testid: `mark-fail-button-{orderCode}`, `mark-fail-modal`, `fail-reason-select`, `fail-note`, `fail-submit`, `redeliver-button-{orderCode}`.
+- [x] BatchListPage expanded row: fetch batch orders → mỗi item render failReason tag (nếu có, data-testid `fail-tag-{code}`) + nút Mark thất bại (ẩn khi đã FAILED) + nút Giao lại (chỉ khi FAILED && chưa có retry — server gate là chốt cuối, FE chỉ ẩn: check có `oldFulfillCode`-order trong list? — đơn giản: luôn hiện nút Giao lại trên đơn FAILED; double-redeliver server chặn INVALID_ARGUMENT → message lỗi).
+- [x] Sau redeliver thành công: message "Đã tạo đơn giao lại ORD-xxxx" + invalidate.
+- [x] Unit test MarkFailModal (chọn lý do + submit gọi mutation).
+- [x] `pnpm --filter @hub-store/fulfillment test && pnpm --filter @hub-store/fulfillment build` xanh.
+- [x] Commit: `feat(fi245-sf13): D2 mark-fail lý do + giao lại + batch orders hydration route`
 
 ### Task 9 — E2E specs 05/06 + toàn bộ specs xanh
 **Depends:** Task 7, 8
