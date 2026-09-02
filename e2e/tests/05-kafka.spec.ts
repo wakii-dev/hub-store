@@ -68,8 +68,9 @@ async function pollTopics(): Promise<string[]> {
     try {
       const res = await fetch(`${KAFKA_UI}/api/clusters/local/topics`);
       if (res.ok) {
-        const topics = (await res.json()) as Array<{ name: string }>;
-        return topics.map((t) => t.name);
+        // kafka-ui trả envelope { pageCount, topics: [{ name, ... }] }.
+        const body = (await res.json()) as { topics?: Array<{ name: string }> };
+        return (body.topics ?? []).map((t) => t.name);
       }
     } catch {
       /* kafka-ui chưa lên — retry */
@@ -79,17 +80,29 @@ async function pollTopics(): Promise<string[]> {
   return [];
 }
 
+/**
+ * kafka-ui messages endpoint trả SSE stream — mỗi event một dòng `data:{...}`,
+ * message thật có type=MESSAGE + message.content là JSON string của envelope.
+ */
 async function lastMessages(topic: string): Promise<Array<Record<string, unknown>>> {
   const res = await fetch(`${KAFKA_UI}/api/clusters/local/topics/${topic}/messages?limit=20`);
   if (!res.ok) return [];
-  const body = (await res.json()) as Array<{ value?: { content?: string } }>;
-  return body.map((m) => {
+  const sse = await res.text();
+  const out: Array<Record<string, unknown>> = [];
+  for (const line of sse.split("\n")) {
+    if (!line.startsWith("data:")) continue;
     try {
-      return JSON.parse(m.value?.content ?? "{}") as Record<string, unknown>;
+      const evt = JSON.parse(line.slice(5).trim()) as {
+        type?: string;
+        message?: { content?: string } | null;
+      };
+      if (evt.type !== "MESSAGE" || !evt.message?.content) continue;
+      out.push(JSON.parse(evt.message.content) as Record<string, unknown>);
     } catch {
-      return {};
+      /* event điều khiển (PHASE/DONE) hoặc JSON cắt — bỏ qua */
     }
-  });
+  }
+  return out;
 }
 
 async function waitForType(topic: string, type: string): Promise<boolean> {
