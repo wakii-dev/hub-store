@@ -12,7 +12,6 @@ set -euo pipefail
 
 ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
-MIGRATION_MSG="chạy migration trước — see SF-2/SF-3"
 
 if [[ -z "${PGHOST:-}" ]]; then
   if [[ -f "$ROOT/.env" ]]; then set -a; . "$ROOT/.env"; set +a; fi
@@ -59,7 +58,8 @@ SQL
 if [[ -z "${PGHOST:-}" ]]; then
   docker compose stop keycloak >/dev/null 2>&1 || true
   docker compose rm -sf keycloak >/dev/null 2>&1 || true
-  if docker volume rm -f keycloak-data >/dev/null 2>&1; then
+  if docker volume inspect keycloak-data >/dev/null 2>&1; then
+    docker volume rm -f keycloak-data >/dev/null
     echo "reset-db: đã xóa keycloak volume (realm sẽ re-import sạch lần up sau)"
   else
     echo "reset-db: keycloak volume chưa tồn tại — bỏ qua"

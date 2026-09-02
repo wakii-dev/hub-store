@@ -39,7 +39,6 @@ ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 cd "$ROOT"
 
 SEED_JSON="${SEED_JSON:-$ROOT/api/seed/canonical-seed.json}"
-MIGRATION_MSG="chạy migration trước — see SF-2/SF-3 (orders-migrate Flyway / batches-migrate golang-migrate)"
 
 if [[ -n "${PGHOST:-}" ]]; then
   psql_cmd() { psql "$@"; }

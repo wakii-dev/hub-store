@@ -48,7 +48,9 @@ Compose là cấu hình **mẫu chạy local** (KHÔNG prod deploy): postgres (2
 ### Postgres infra + seed (FI-245 SF-1)
 
 ```bash
-cp .env.example .env   # điền POSTGRES_PASSWORD + KEYCLOAK_ADMIN_PASSWORD
+# LƯU Ý: .env đang git-tracked — chỉ APPEND 2 dòng sau vào .env local
+# (POSTGRES_PASSWORD=..., KEYCLOAK_ADMIN_PASSWORD=...) và KHÔNG BAO GIỜ commit.
+# Tham khảo .env.example cho var contract đầy đủ.
 docker compose up -d postgres   # 2 DB tự tạo qua docker/postgres/initdb/
 bash scripts/wait-db.sh         # chờ healthy (run.sh SF-2/SF-3 + boot-all SF-5 dùng chung)
 bash scripts/seed-db.sh         # nạp canonical-seed.json cả 2 DB — emptiness-gate, KHÔNG upsert
@@ -56,7 +58,7 @@ bash scripts/reset-db.sh        # E2E reset: TRUNCATE cả 2 DB + xóa keycloak 
 ```
 
 - **Emptiness-gate**: DB có data → seed bỏ qua. Seed file (`api/seed/canonical-seed.json`) đổi sau này → reset thủ công bằng `reset-db.sh`.
-- **Credentials local-only**: `POSTGRES_PASSWORD` / `KEYCLOAK_ADMIN_PASSWORD` tự điền trong `.env` local, KHÔNG commit (compose fail-loud nếu thiếu).
+- **Credentials local-only**: `POSTGRES_PASSWORD` / `KEYCLOAK_ADMIN_PASSWORD` tự điền trong `.env` local — file `.env` đang git-tracked nên phải append cục bộ, KHÔNG commit (compose fail-loud nếu thiếu POSTGRES_PASSWORD).
 - Bảng + sequence `batches_code_seq` do migration tạo (SF-2 Flyway `services/fulfillment-service/src/main/resources/db/migration`, SF-3 golang-migrate `services/batching-service/migrations`) — column contract ghi ở header `scripts/seed-db.sh`.
 
 ## Commands
