@@ -337,6 +337,20 @@ describe('SF-13 intake — fail / redeliver (WarehouseOps only)', () => {
     expect(res.statusCode).toBe(201);
     expect(res.json()).toEqual({ fulfillCode: 'ORD-9001' });
   });
+
+  it('fail reason lạ — upstream INVALID_ARGUMENT → 422 VALIDATION_ERROR', async () => {
+    h.intake.override({
+      markOrderFailed: (_c, cb) => cb(mockGrpcError(3, 'reason không hợp lệ.')),
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/orders/ORD-3001/fail',
+      payload: { reason: 99 },
+      headers: { authorization: `Bearer ${await signTestToken('WarehouseOps')}` },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+  });
 });
 
 describe('SF-13 intake — GET /orders/:code/audit', () => {
@@ -469,5 +483,14 @@ describe('SF-13 — parseOrdersFile (unit, không harness)', () => {
     expect(errors).toEqual([{ row: 2, column: 'customerName', message: 'Số cột không khớp template.' }]);
     expect(rows).toHaveLength(2);
     expect(rows[1].ok).toBe(false);
+  });
+
+  it('CSV có UTF-8 BOM (Excel save) — BOM stripped, header vẫn map đúng', () => {
+    const csv = '\uFEFF' + [CSV_TEMPLATE, 'A,0912,HN,SKU1:P:1,1,1000,'].join('\r\n');
+    const { rows, errors } = parseOrdersFile('f.csv', Buffer.from(csv, 'utf8'));
+    expect(errors).toEqual([]);
+    expect(rows).toHaveLength(1);
+    expect(rows[0].customerName).toBe('A');
+    expect(rows[0].ok).toBe(true);
   });
 });

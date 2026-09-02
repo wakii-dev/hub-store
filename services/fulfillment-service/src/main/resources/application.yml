@@ -12,6 +12,10 @@ spring:
   flyway:
     # Migrate-on-boot: V1__orders_schema.sql tự áp khi service start.
     enabled: true
+    # SF-13: V2__intake_schema có version NHỎ HƠN watermark khi SF-7 đã áp V5
+    # (dev DB dùng chung) — không bật out-of-order thì Flyway IM LẶNG skip V2
+    # mỗi boot thường → orders thiếu 7 cột intake → crash runtime.
+    out-of-order: true
 
 grpc:
   server:

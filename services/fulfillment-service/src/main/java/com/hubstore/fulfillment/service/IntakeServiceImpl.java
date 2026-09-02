@@ -337,16 +337,16 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
         return reason.name().replace("DELIVERY_FAIL_REASON_", "");
     }
 
-    /** Audit detail import — spec §4: "detail: count, codes" (kèm importedAt). */
+    /** Audit detail import/manual — spec §4: "detail: count, codes" (kèm createdAt). */
     private static String importDetail(Instant now, List<String> codes) {
         try {
             java.util.Map<String, Object> detail = new java.util.LinkedHashMap<>();
-            detail.put("importedAt", now.toString());
+            detail.put("createdAt", now.toString());
             detail.put("count", codes.size());
             detail.put("codes", codes);
             return JSON.writeValueAsString(detail);
         } catch (Exception e) {
-            return "{\"importedAt\":\"" + now + "\"}";
+            return "{\"createdAt\":\"" + now + "\"}";
         }
     }
 
