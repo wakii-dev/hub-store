@@ -55,6 +55,7 @@ async function createBatch(page: Page, opts: { suggest?: boolean; addOrder?: str
     const second = page.getByTestId("batch-row-ORD-3002").getByTestId("batch-drag-handle");
     const from = await first.boundingBox();
     const to = await second.boundingBox();
+    if (!from || !to) throw new Error("DnD: drag handle mất boundingBox (row detached?)");
     await page.mouse.move(from.x + from.width / 2, from.y + from.height / 2);
     await page.mouse.down();
     await page.mouse.move(to.x + to.width / 2, to.y + to.height / 2 + 20, { steps: 12 });

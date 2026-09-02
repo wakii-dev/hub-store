@@ -21,11 +21,15 @@ async function visitAllScreens(page: Page) {
   await page.goto("/hub-store-order/order");
   await page.getByTestId("fulfill-code-ORD-3001").waitFor();
 
-  // D1c transfer modal (1 row selection)
+  // D1c transfer modal (1 row selection) — waitFor thật (không .catch nuốt lỗi)
   await page.locator('tr[data-row-key="ORD-3004"] .ant-checkbox-input').check();
   await page.getByTestId("bulk-transfer").click();
-  await expect(page.getByTestId("bulk-bar").locator(".ant-modal, [role=dialog]").first()).toBeVisible().catch(() => {});
-  await page.keyboard.press("Escape");
+  // wait locale-agnostic (test chạy cả VI lẫn EN — không assert text ngôn ngữ nào)
+  await page.getByRole("dialog").waitFor({ timeout: 10_000 });
+  // đóng qua nút X (Escape không reliable — focus có khi không nằm trong modal)
+  await page.locator(".ant-modal .ant-modal-close").first().click();
+  // chờ modal đóng xong (animation) — .ant-modal-wrap còn sống sẽ cản click uncheck
+  await page.getByRole("dialog").waitFor({ state: "hidden", timeout: 10_000 });
   await page.locator('tr[data-row-key="ORD-3004"] .ant-checkbox-input').uncheck();
 
   // D1b modal (3 rows cùng kho)
@@ -37,6 +41,7 @@ async function visitAllScreens(page: Page) {
   await page.getByTestId("batch-packing-suggest").click();
   await expect(page.getByTestId("batch-groups")).toBeVisible();
   await page.getByTestId("batch-close").click();
+  await page.getByRole("dialog").waitFor({ state: "hidden", timeout: 10_000 });
   for (const code of ["ORD-3001", "ORD-3002", "ORD-3003"]) {
     await page.locator(`tr[data-row-key="${code}"] .ant-checkbox-input`).uncheck();
   }
