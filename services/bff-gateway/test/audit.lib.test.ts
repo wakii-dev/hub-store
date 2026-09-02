@@ -33,6 +33,16 @@ describe('parseDateBound', () => {
     expect(parseDateBound('2026-09-02T10:30:00.000Z', 'from')).toEqual(new Date('2026-09-02T10:30:00.000Z'));
   });
 
+  it('full ISO không mili-giây + offset múi giờ → so trực tiếp', () => {
+    expect(parseDateBound('2026-09-02T10:30:00Z', 'to')).toEqual(new Date('2026-09-02T10:30:00.000Z'));
+  });
+
+  it('format non-ISO ("2026/09/02") → null (không slip qua local time)', () => {
+    expect(parseDateBound('2026/09/02', 'from')).toBeNull();
+    expect(parseDateBound('Sep 2 2026', 'from')).toBeNull();
+    expect(parseDateBound('09/02/2026', 'to')).toBeNull();
+  });
+
   it('invalid → null', () => {
     expect(parseDateBound('not-a-date', 'from')).toBeNull();
     expect(parseDateBound('2026-13-45', 'from')).toBeNull();

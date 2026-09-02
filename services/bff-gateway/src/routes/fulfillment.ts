@@ -25,7 +25,7 @@ import { SERVICE_NAMES } from '../config.js';
 import { requireUser } from '../plugins/auth.js';
 import { paginated } from '../lib/envelope.js';
 import { sendGrpcError, grpcError } from '../lib/grpc-error.js';
-import { logActivity } from '../lib/audit.js';
+import { logActivity, getAuditPool, buildAuditWhere, normalizeAuditPage, type AuditQuery } from '../lib/audit.js';
 import {
   mapOrderItem,
   mapOrderDetail,
@@ -72,6 +72,61 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
       return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
     }
   });
+
+  // Audit viewer (SF-7) — Manager-only (bracket SF-11). Route order: static
+  // beats parametric (find-my-way) nhưng giữ cạnh route static cho dễ đọc —
+  // TRƯỚC /fulfillment/:fulfillCode (single-segment conflict — pattern batches criteria).
+  app.get<{ Querystring: AuditQuery }>(
+    '/fulfillment/audit',
+    async (request, reply) => {
+      const { role } = requireUser(request);
+      if (role !== 'Manager') {
+        return sendGrpcError(
+          reply,
+          grpcError(GrpcStatus.PERMISSION_DENIED, 'Manager only.'),
+          SERVICE_NAMES.fulfillment,
+        );
+      }
+      const p = getAuditPool();
+      if (!p) {
+        return sendGrpcError(
+          reply,
+          grpcError(GrpcStatus.UNAVAILABLE, 'Audit store unavailable.'),
+          SERVICE_NAMES.fulfillment,
+        );
+      }
+      const { whereSql, params } = buildAuditWhere(request.query);
+      const { page, pageSize, offset } = normalizeAuditPage(request.query);
+      try {
+        const { rows } = await p.query(
+          `SELECT c.total_all, a.* FROM (SELECT count(*) AS total_all FROM activity_log WHERE ${whereSql}) c
+           LEFT JOIN LATERAL (SELECT * FROM activity_log WHERE ${whereSql}
+             ORDER BY created_at DESC, id DESC OFFSET $${params.length + 1} LIMIT $${params.length + 2}) a ON TRUE`,
+          [...params, offset, pageSize],
+        );
+        const total = rows.length > 0 ? Number(rows[0].total_all) : 0;
+        const items = rows
+          .filter((r: Record<string, unknown>) => r.id != null)
+          .map((r: Record<string, unknown>) => ({
+            id: Number(r.id),
+            actor: r.actor,
+            action: r.action,
+            targetType: r.target_type,
+            targetId: r.target_id,
+            detail: r.detail ?? null,
+            createdAt: r.created_at instanceof Date ? r.created_at.toISOString() : r.created_at,
+          }));
+        return await reply.send(paginated(items, total, page, pageSize));
+      } catch (err) {
+        request.log.error(err);
+        return sendGrpcError(
+          reply,
+          grpcError(GrpcStatus.INTERNAL, 'Audit query failed.'),
+          SERVICE_NAMES.fulfillment,
+        );
+      }
+    },
+  );
 
   // D1 detail — FE waive tường minh (spec §3.8) nhưng implement đầy đủ.
   // Aggregation: detail + history (BFF owns aggregation — spec §3.3).

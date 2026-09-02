@@ -85,9 +85,12 @@ export function parseDateBound(input: string, bound: 'from' | 'to'): Date | null
     if (new Date(d).toISOString().slice(0, 10) !== input) return null;
     return bound === 'from' ? new Date(d) : new Date(d + 24 * 3600 * 1000);
   }
+  // Full ISO-8601 — CHỈ nhận prefix YYYY-MM-DDT; format khác ("2026/09/02",
+  // "Sep 2 2026"...) bị từ chối vì `new Date` parse theo timezone local.
+  if (!/^\d{4}-\d{2}-\d{2}T/.test(input)) return null;
   const t = new Date(input);
   if (Number.isNaN(t.getTime())) return null;
-  // Full ISO — round-trip check prefix YYYY-MM-DD (rollover month/day ngoài miền).
+  // Round-trip check prefix YYYY-MM-DD (rollover month/day ngoài miền).
   const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(input);
   if (m && new Date(Date.UTC(Number(m[1]), Number(m[2]) - 1, Number(m[3]))).toISOString().slice(0, 10) !== `${m[1]}-${m[2]}-${m[3]}`) {
     return null;
