@@ -6,8 +6,10 @@ package store
 
 import (
 	"context"
+	"fmt"
 	"sync"
 	"testing"
+	"time"
 
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
 
@@ -229,5 +231,199 @@ func TestTransition_CAS(t *testing.T) {
 	// persist: đọc lại đúng status sau transition.
 	if g, _ := s.Get(ctx, "B-1"); g.GetStatus() != batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_CANCELLED {
 		t.Fatal("transition status không persist")
+	}
+}
+
+// ---------------------------------------------------------------------------
+// Filter (SF-7) — pagination SQL trên PostgresStore, List() bất biến.
+// ---------------------------------------------------------------------------
+
+// putBatch — seed thêm batch ngoài fixture với createdAt cụ thể (Put upsert).
+func putBatch(t *testing.T, s *PostgresStore, code string, createdAt string, status batchingv1.BatchEntityStatus) {
+	t.Helper()
+	b := newBatch(code)
+	b.Status = status
+	b.CreatedAt = createdAt
+	if err := s.Put(context.Background(), b); err != nil {
+		t.Fatalf("Put %s: %v", code, err)
+	}
+}
+
+// Seed 7 + 8 batch "Z-" (createdAt 2099) = 15, pageSize 10 → 2 trang: duyệt
+// đủ 15 code, không trùng, không thiếu, khớp tập List.
+func TestFilter_PaginationTraversal(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	for i := 1; i <= 8; i++ {
+		putBatch(t, s, fmt.Sprintf("Z-%02d", i), fmt.Sprintf("2099-01-%02dT00:00:00Z", i),
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE)
+	}
+	want, err := s.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	wantCodes := map[string]bool{}
+	for _, b := range want {
+		wantCodes[b.GetBatchCode()] = true
+	}
+
+	seen := map[string]bool{}
+	var total int64
+	for page := 1; ; page++ {
+		items, tot, err := s.Filter(ctx, BatchFilter{Page: page, PageSize: 10})
+		if err != nil {
+			t.Fatalf("Filter page %d: %v", page, err)
+		}
+		total = tot
+		for _, b := range items {
+			code := b.GetBatchCode()
+			if seen[code] {
+				t.Fatalf("page %d: trùng code %s giữa các trang", page, code)
+			}
+			if !wantCodes[code] {
+				t.Fatalf("page %d: code lạ %s", page, code)
+			}
+			seen[code] = true
+		}
+		if len(items) < 10 {
+			break
+		}
+	}
+	if total != int64(len(want)) {
+		t.Fatalf("total = %d, want %d", total, len(want))
+	}
+	if len(seen) != len(wantCodes) {
+		t.Fatalf("duyệt được %d/%d code — thiếu trang", len(seen), len(wantCodes))
+	}
+}
+
+// Filter không filter → cùng thứ tự createdAt → batchCode như List.
+func TestFilter_OrderingCreatedAtThenCode(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+	all, err := s.List(ctx)
+	if err != nil {
+		t.Fatalf("List: %v", err)
+	}
+	items, total, err := s.Filter(ctx, BatchFilter{Page: 1, PageSize: 100})
+	if err != nil {
+		t.Fatalf("Filter: %v", err)
+	}
+	if total != int64(len(all)) || len(items) != len(all) {
+		t.Fatalf("Filter total=%d items=%d, want %d", total, len(items), len(all))
+	}
+	for i := range all {
+		if all[i].GetBatchCode() != items[i].GetBatchCode() {
+			t.Fatalf("thứ tự lệch tại %d: List=%s Filter=%s",
+				i, all[i].GetBatchCode(), items[i].GetBatchCode())
+		}
+	}
+}
+
+// Statuses + search: search khớp CẢ batch_code VÀ order_code của items;
+// wildcard user (%) bị escape — match literal như in-memory.
+func TestFilter_StatusesAndSearch(t *testing.T) {
+	s := newStore(t)
+	ctx := context.Background()
+
+	// Statuses: seed có 3 COMPLETED (BATCH-0002/0004/0007).
+	items, total, err := s.Filter(ctx, BatchFilter{
+		Statuses: []batchingv1.BatchEntityStatus{
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_COMPLETED,
+		},
+		Page: 1, PageSize: 10,
+	})
+	if err != nil {
+		t.Fatalf("Filter statuses: %v", err)
+	}
+	if total != 3 || len(items) != 3 {
+		t.Fatalf("statuses COMPLETED: total=%d items=%d, want 3/3", total, len(items))
+	}
+	for _, b := range items {
+		if b.GetStatus() != batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_COMPLETED {
+			t.Fatalf("lọt status %s: %s", b.GetStatus(), b.GetBatchCode())
+		}
+	}
+
+	// Search theo batch_code (case-insensitive).
+	items, total, err = s.Filter(ctx, BatchFilter{Search: "batch-0001", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("Filter search code: %v", err)
+	}
+	if total != 1 || len(items) != 1 || items[0].GetBatchCode() != "BATCH-0001" {
+		t.Fatalf("search batch_code: total=%d items=%v, want [BATCH-0001]", total, items)
+	}
+
+	// Search theo order_code của item (RSA-700107 thuộc BATCH-0001).
+	items, total, err = s.Filter(ctx, BatchFilter{Search: "RSA-700107", Page: 1, PageSize: 10})
+	if err != nil {
+		t.Fatalf("Filter search order_code: %v", err)
+	}
+	if total != 1 || len(items) != 1 || items[0].GetBatchCode() != "BATCH-0001" {
+		t.Fatalf("search order_code: total=%d items=%v, want [BATCH-0001]", total, items)
+	}
+
+	// Wildcard % user bị escape — seed không có '%' literal → 0 match.
+	if _, total, err = s.Filter(ctx, BatchFilter{Search: "%", Page: 1, PageSize: 10}); err != nil || total != 0 {
+		t.Fatalf("search '%%' → total=%d err=%v, want 0 (escape hoạt động)", total, err)
+	}
+
+	// Combo: ACTIVE + search code của 1 batch ACTIVE (BATCH-0003).
+	items, total, err = s.Filter(ctx, BatchFilter{
+		Search: "BATCH-0003",
+		Statuses: []batchingv1.BatchEntityStatus{
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE,
+		},
+		Page: 1, PageSize: 10,
+	})
+	if err != nil {
+		t.Fatalf("Filter combo: %v", err)
+	}
+	if total != 1 || len(items) != 1 || items[0].GetBatchCode() != "BATCH-0003" {
+		t.Fatalf("combo: total=%d items=%v, want [BATCH-0003]", total, items)
+	}
+	// Combo lệch status: BATCH-0003 không COMPLETED → 0.
+	if _, total, err = s.Filter(ctx, BatchFilter{
+		Search: "BATCH-0003",
+		Statuses: []batchingv1.BatchEntityStatus{
+			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_COMPLETED,
+		},
+		Page: 1, PageSize: 10,
+	}); err != nil || total != 0 {
+		t.Fatalf("combo lệch status: total=%d err=%v, want 0", total, err)
+	}
+}
+
+// Page vượt last page → items rỗng NHƯNG total vẫn đúng (LEFT JOIN LATERAL
+// anchor — pattern SF-2).
+func TestFilter_TotalBeyondLastPage(t *testing.T) {
+	s := newStore(t)
+	items, total, err := s.Filter(context.Background(), BatchFilter{Page: 99, PageSize: 10})
+	if err != nil {
+		t.Fatalf("Filter page 99: %v", err)
+	}
+	if len(items) != 0 {
+		t.Fatalf("items = %d, want 0", len(items))
+	}
+	if total != 7 {
+		t.Fatalf("total = %d, want 7 (seed fixture)", total)
+	}
+}
+
+// CreatedFrom/CreatedTo lọc theo created_at (timestamptz).
+func TestFilter_CreatedRange(t *testing.T) {
+	s := newStore(t)
+	from := time.Date(2026, 9, 2, 0, 0, 0, 0, time.UTC) // gồm BATCH-0001/0003/0006 (01:30Z/03:15Z/04:00Z ngày 2/9)
+	to := time.Date(2026, 8, 31, 0, 0, 0, 0, time.UTC)  // gồm BATCH-0004 (30/8 07:00Z) + BATCH-0005 (29/8 01:45Z); loại-trừ (<)
+	items, total, err := s.Filter(context.Background(), BatchFilter{CreatedFrom: &from, Page: 1, PageSize: 10})
+	if err != nil || total != 3 {
+		t.Fatalf("CreatedFrom 2026-09-02: total=%d err=%v, want 3", total, err)
+	}
+	items, total, err = s.Filter(context.Background(), BatchFilter{CreatedTo: &to, Page: 1, PageSize: 10})
+	if err != nil || total != 2 {
+		t.Fatalf("CreatedTo 2026-08-31 (loại-trừ): total=%d err=%v, want 2", total, err)
+	}
+	if len(items) == 0 {
+		t.Fatal("CreatedTo phải trả items")
 	}
 }

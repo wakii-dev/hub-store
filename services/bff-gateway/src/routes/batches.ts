@@ -22,6 +22,7 @@ import { SERVICE_NAMES } from '../config.js';
 import { requireUser } from '../plugins/auth.js';
 import { paginated } from '../lib/envelope.js';
 import { sendGrpcError } from '../lib/grpc-error.js';
+import { logActivity } from '../lib/audit.js';
 import { mapBatch, mapPackingGroup, mapOrderDistance } from '../mappers/batching.js';
 
 /**
@@ -60,7 +61,7 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
   // Tạo phiếu (D1b) — rule 1 §3.6 validate server-side ở Go (GetOrdersByCodes
   // → Java). shopCode trống → Go derive.
   app.post<{ Body: CreateBatchRequest }>('/fulfillment/batches/create', async (request, reply) => {
-    const { role } = requireUser(request);
+    const { role, sub } = requireUser(request);
     try {
       const resp = await batching.createBatch(
         {
@@ -71,6 +72,14 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
         },
         role,
       );
+      // SF-7 audit — fire-and-forget SAU gRPC thành công, fail-open.
+      logActivity({
+        actor: sub,
+        action: 'batch.create',
+        targetType: 'batch',
+        targetId: resp.batch?.batchCode ?? '',
+        detail: { orderCodes: request.body.orderCodes },
+      });
       return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
     } catch (err) {
       return sendGrpcError(reply, err, svc);
@@ -137,12 +146,19 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
   app.put<{ Params: { code: string }; Body: CancelBatchRequest }>(
     '/fulfillment/batches/:code/cancel',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const { role, sub } = requireUser(request);
       try {
         const resp = await batching.cancelBatch(
           { batchCode: request.params.code, reason: request.body.reason },
           role,
         );
+        logActivity({
+          actor: sub,
+          action: 'batch.cancel',
+          targetType: 'batch',
+          targetId: request.params.code,
+          detail: { reason: request.body.reason },
+        });
         return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
       } catch (err) {
         return sendGrpcError(reply, err, svc);

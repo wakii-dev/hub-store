@@ -7,6 +7,7 @@
  *   UNAUTHENTICATED   → 401 (code UNAUTHENTICATED)
  *   PERMISSION_DENIED → 403 (code PERMISSION_DENIED)
  *   NOT_FOUND         → 404 (code NOT_FOUND)
+ *   FAILED_PRECONDITION → 409 (code CONFLICT) — sai trạng thái (SF-19 assign)
  *   DEADLINE_EXCEEDED / UNAVAILABLE / UNKNOWN  → 503 code UPSTREAM_UNAVAILABLE
  *     + message kèm tên service (fulfillment-service/batching-service/print-service)
  *   khác              → 500 (code INTERNAL)
@@ -118,6 +119,13 @@ export function mapGrpcError(
       return {
         statusCode: 404,
         body: errorEnvelope(404, err.details ?? 'Not found.', { code: 'NOT_FOUND' }),
+      };
+    case GrpcStatus.FAILED_PRECONDITION:
+      // SF-19: assign/re-assign sai trạng thái đơn (vd DELIVERED) — xung đột
+      // trạng thái hiện tại, KHÔNG phải validation input (đó là 422).
+      return {
+        statusCode: 409,
+        body: errorEnvelope(409, err.details ?? 'Precondition failed.', { code: 'CONFLICT' }),
       };
     case GrpcStatus.DEADLINE_EXCEEDED:
     case GrpcStatus.UNAVAILABLE:

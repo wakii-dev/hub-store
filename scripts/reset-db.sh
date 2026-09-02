@@ -53,6 +53,23 @@ END
 $reset$;
 SQL
 
+# --- SF-19 (FI-264) — TRUNCATE tech service tables (additive, KHÔNG đụng block cũ) ---
+echo "reset-db: TRUNCATE DB fulfillment (tech) ..."
+psql_cmd -d fulfillment -v ON_ERROR_STOP=1 <<'SQL'
+DO $reset$
+BEGIN
+  IF to_regclass('public.delivery_orders') IS NULL
+     OR to_regclass('public.installation_orders') IS NULL
+     OR to_regclass('public.installation_assignment_history') IS NULL
+     OR to_regclass('public.technicians') IS NULL THEN
+    RAISE EXCEPTION 'fulfillment: thiếu bảng tech — chạy migration trước (Flyway V6)';
+  END IF;
+  TRUNCATE public.delivery_orders, public.installation_orders,
+           public.installation_assignment_history, public.technicians RESTART IDENTITY;
+END
+$reset$;
+SQL
+
 # Xóa keycloak volume — realm import chỉ chạy lần đầu, volume mới = re-import sạch.
 # Volume đặt name tường minh "keycloak-data" trong compose để script trỏ đúng.
 if [[ -z "${PGHOST:-}" ]]; then
