@@ -60,8 +60,24 @@ type DeliveryBatchServer struct {
 }
 
 // NewDeliveryBatch constructs the server over the V2 schema pool + NVC adapter.
+// Với mock adapter, seq booking-ID được seed từ max "MOCK-<n>" đang có trong
+// DB (FI-245 persist — boot mới phải tiếp dãy, không sinh ID trùng row cũ
+// → unique carrier_booking_id 23505).
 func NewDeliveryBatch(pool *pgxpool.Pool, nvc ahamove.Client) *DeliveryBatchServer {
-	return &DeliveryBatchServer{pool: pool, nvc: nvc, now: time.Now}
+	s := &DeliveryBatchServer{pool: pool, nvc: nvc, now: time.Now}
+	if mc, ok := nvc.(*ahamove.MockClient); ok {
+		var maxID int
+		err := pool.QueryRow(context.Background(),
+			`SELECT COALESCE(max(substring(carrier_booking_id FROM 6)::bigint), 0)
+			   FROM bookings WHERE carrier_booking_id LIKE 'MOCK-%'`).Scan(&maxID)
+		if err != nil {
+			log.Printf("delivery-batch: seed mock booking seq: %v (seq giữ default 1000)", err)
+		} else {
+			mc.SeedSeq(maxID)
+			log.Printf("delivery-batch: mock booking seq seeded → %d", mc.Seq())
+		}
+	}
+	return s
 }
 
 // SetClock overrides time source (tests).

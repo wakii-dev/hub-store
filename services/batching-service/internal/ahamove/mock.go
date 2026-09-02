@@ -74,6 +74,25 @@ func NewMock(fast bool) *MockClient {
 	return &MockClient{seq: 1000, fast: fast, Now: time.Now}
 }
 
+// SeedSeq nâng seq lên maxSeen nếu lớn hơn — FI-245 DB persist: bookings row
+// giữ nguyên qua restart, seq reset 1000 mỗi boot sẽ sinh ID trùng
+// (unique carrier_booking_id → 23505 → 500). Server gọi lúc boot với max ID
+// "MOCK-<n>" đang có trong DB; maxSeen ≤ seq hiện tại = no-op.
+func (m *MockClient) SeedSeq(maxSeen int) {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	if maxSeen > m.seq {
+		m.seq = maxSeen
+	}
+}
+
+// Seq trả về giá trị seq hiện tại (log/boot diagnostics).
+func (m *MockClient) Seq() int {
+	m.mu.Lock()
+	defer m.mu.Unlock()
+	return m.seq
+}
+
 // Quotes — bảng giá deterministic 6 tải trọng (mockFleet).
 func (m *MockClient) Quotes(ctx context.Context, req QuoteRequest) ([]Quote, error) {
 	out := make([]Quote, len(mockFleet))
