@@ -74,7 +74,7 @@ test("§4 tab KTV-CTV: group theo staff + detail modal theo ngày", async ({ pag
   // Click row → detail modal: 'Công việc của Nguyễn Văn An' + group ngày
   await row.click();
   await expect(page.getByText("Công việc của Nguyễn Văn An")).toBeVisible();
-  await expect(page.getByText("2026-09-02")).toBeVisible();
+  await expect(page.getByTestId("tech-staff-day-2026-09-02")).toBeVisible();
   await page.keyboard.press("Escape");
 });
 
