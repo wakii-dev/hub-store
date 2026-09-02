@@ -55,6 +55,12 @@ export interface BffOidcConfig {
   /** Admin credential — env KEYCLOAK_ADMIN / KEYCLOAK_ADMIN_PASSWORD (dev default 'admin'). */
   adminUsername: string;
   adminPassword: string;
+  /** SF-8 — token endpoint realm hubstore cho client-credential grant. */
+  kcAdminTokenUrl: string;
+  /** SF-8 — service-account client gọi KC Admin API (env KC_ADMIN_CLIENT_ID). */
+  kcAdminClientId: string;
+  /** SF-8 — secret; rỗng → users routes trả 503 KC_ADMIN_NOT_CONFIGURED (không crash boot). */
+  kcAdminClientSecret: string;
 }
 
 export interface BffConfig {
@@ -126,6 +132,9 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       adminTokenUrl: `${stripSlash(internalBase)}/realms/master/protocol/openid-connect/token`,
       adminUsername: env.KEYCLOAK_ADMIN ?? 'admin',
       adminPassword: env.KEYCLOAK_ADMIN_PASSWORD ?? 'admin',
+      kcAdminTokenUrl: `${stripSlash(internalBase)}${KC_REALM_PATH}/protocol/openid-connect/token`,
+      kcAdminClientId: env.KC_ADMIN_CLIENT_ID ?? 'hubstore-admin',
+      kcAdminClientSecret: env.KC_ADMIN_CLIENT_SECRET ?? '',
     },
     corsOrigins: env.BFF_CORS_ORIGINS
       ? env.BFF_CORS_ORIGINS.split(',').map((o) => o.trim())

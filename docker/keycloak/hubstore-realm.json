@@ -71,9 +71,27 @@
           }
         }
       ]
+    },
+    {
+      "clientId": "hubstore-admin",
+      "name": "Hub Store Admin API (SF-8)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": false,
+      "serviceAccountsEnabled": true,
+      "standardFlowEnabled": false,
+      "directAccessGrantsEnabled": false,
+      "secret": "hubstore-admin-dev-secret"
     }
   ],
   "users": [
+    {
+      "username": "service-account-hubstore-admin",
+      "enabled": true,
+      "clientRoles": {
+        "realm-management": ["manage-users"]
+      }
+    },
     {
       "username": "coordinator",
       "enabled": true,
