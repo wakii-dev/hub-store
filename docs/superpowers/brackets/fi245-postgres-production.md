@@ -33,6 +33,14 @@ Tasks: keycloak-realm-import / roles-users-seed / shell-login-pkce / silent-rene
 ## SF-5 Convergence — production compose + E2E + deploy docs
 Tier: 2
 linear:
-What: full compose chain verify (postgres → migrate one-shot → db-seed completed → apps — psql thấy ORD-3001/BATCH-0001 qua compose up); docker compose up --build full stack E2E với DB + auth thật; persistence proof restart; E2E 13/13 với E2E=1; boot-all.sh update; README deploy + backup pg_dump; security re-check
+What: full compose chain verify (postgres → migrate one-shot → db-seed completed → apps — psql thấy ORD-3001/BATCH-0001 qua compose up); docker compose up --build full stack E2E với DB + auth thật; persistence proof restart; E2E 13/13 với E2E=1; boot-all.sh update; README deploy + backup pg_dump; security re-check. READ-ONLY apps/** (SF-6 sở hữu song song)
 Depends on: SF-2, SF-3, SF-4
 Tasks: compose-full-chain-verify / compose-full-build / persistence-restart-proof / e2e-13-green / bootall-update / readme-deploy-guide / backup-doc / security-recheck / audit-comment
+
+## SF-6 UI/UX hiện đại hóa toàn web — antd4 refresh
+Tier: 2
+linear:
+Design: mock-prototype
+What: design-first bắt buộc (3 hướng HTML prototype shell+D1 → user chọn gate → hand-off direction); theme LESS tokens mới (palette #EB6E09, radius, shadow, spacing, typography), skeletons/empty-states, micro-interactions, login wrapper polish; phạm vi shell + D1 + D1b + D2 + D3 — 1 design system thống nhất; KHÔNG antd5; KHÔNG đổi testids/DOM mà E2E phụ thuộc; KHÔNG đổi business logic
+Depends on: SF-2, SF-3, SF-4
+Tasks: design-3-directions-user-gate / theme-tokens-LESS / shell-nav-refresh / login-wrapper / d1-orders-refresh / d1b-batching-modal-refresh / d2-fulfillment-refresh / d3-print-refresh / skeleton-empty-states / visual-verify-3-tiers

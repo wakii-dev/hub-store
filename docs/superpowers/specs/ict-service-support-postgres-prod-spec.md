@@ -16,6 +16,7 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 5. **Postgres topology**: 1 instance trong compose, **2 databases riêng** (`fulfillment`, `batching`) — mỗi service owns DB của mình, không cross-schema query.
 6. **API contract GIỮ NGUYÊN 100%**: gRPC proto (`api/proto/`) + BFF REST routes + response shape KHÔNG đổi. FE business logic không sửa (trừ login flow SF-4).
 7. **Seed**: `api/seed/canonical-seed.json` vẫn là nguồn khởi tạo DUY NHẤT, giữ nguyên nội dung; nạp vào DB theo emptiness-gate (chi tiết §3.1).
+8. **UI/UX hiện đại hóa trên antd4** (KHÔNG nâng antd5): theme tokens mới + polish toàn web, design-first (3 hướng HTML → user chọn). KHÔNG đổi testids/cấu trúc DOM mà E2E phụ thuộc; KHÔNG đổi business logic.
 
 ## 3. Scope
 
@@ -59,7 +60,7 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - go.mod thêm pgx v5 (+ nguyên tắc pin version).
 
 ### 3.4 Auth thật — OIDC Keycloak (SF-4, Tier 1, deps SF-1)
-- Keycloak trong compose (realm import tự động: roles `Coordinator`/`WarehouseOps`/`Manager` + users mẫu password đơn giản, đổi được qua env). **Realm re-import**: `--import-realm` skip realm tồn tại → E2E reset util XÓA keycloak volume để import lại sạch; dev volume giữ nguyên.
+- Keycloak trong compose (realm import tự động: roles `Coordinator`/`WarehouseOps`/`Manager` + users mẫu mỗi role 1 user — default `coordinator/coordinator123`, `warehouse/warehouse123`, `manager/manager123` (password LITERAL dev-only trong realm JSON, không env-substitution — đổi = Keycloak admin hoặc reset volume)). **Realm re-import**: `--import-realm` skip realm tồn tại → E2E reset util XÓA keycloak volume để import lại sạch; dev volume giữ nguyên.
 - Shell login: redirect PKCE qua `VITE_OIDC_AUTHORITY/CLIENT_ID/REDIRECT_URI` (env đã có, uncomment + wire); logout; **silent renew** access token (oidc-client-ts); 401 → redirect login.
 - BFF: verify access token qua **JWKS** (không còn HS256 shared secret cho user flow); **JWKS cache refresh khi gặp unknown `kid`** (Keycloak rotate/restart giữa run); map roles claim (`realm_access.roles` — SF-4 làm cả 2 phía, tự nhất quán) → `x-user-role` gửi xuống gRPC services (services KHÔNG đổi — vẫn nhận x-user-role, M-3 ghi note để sau).
 - Fake-JWT dev-stub: loại khỏi runtime path; GIỮ code path test-only (unit test mock).
@@ -67,6 +68,7 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - Pin versions: Keycloak image, oidc-client-ts, Flyway, golang-migrate, pgx v5.
 
 ### 3.5 Convergence — production compose + E2E + deploy docs (SF-5, Tier 2, deps SF-2+SF-3+SF-4)
+
 - `docker compose up --build` từ repo sạch → full stack lên, login thật, full flow D1→D3 chạy được.
 - **Persistence proof**: tạo phiếu → `docker compose restart` → phiếu còn, login lại thấy.
 - E2E Playwright: 13/13 xanh với `E2E=1` (reset DB) + auth thật.
@@ -74,12 +76,19 @@ Mục tiêu: **user thật sử dụng được** — PostgreSQL persistent, dep
 - README: deploy guide (compose up, tạo user Keycloak, backup `pg_dump` 1 đoạn).
 - Security re-check trên diff tổng (M-2 resolved pattern; H-1 phần lớn giải quyết bởi OIDC — còn lại ghi note).
 
+### 3.6 UI/UX hiện đại hóa toàn web — antd4 refresh (SF-6, Tier 2, deps SF-2+SF-3+SF-4, SONG SONG SF-5)
+- **DESIGN-FIRST bắt buộc**: designer agent tạo 3 hướng HTML prototype (shell + D1 sample) → USER CHỌN (gate) → hand-off direction (tokens/structure) → mới code.
+- Phạm vi: shell (login, nav, role switcher) + D1 orders + D1b batching modal + D2 fulfillment + D3 print — 1 design system thống nhất.
+- Nội dung: theme LESS tokens mới (palette mở rộng từ #EB6E09, radius, shadow/depth, spacing, typography), skeletons/empty-states, micro-interactions, polish màn login wrapper quanh Keycloak.
+- Cứng: KHÔNG antd5; KHÔNG đổi testids/DOM mà E2E Playwright phụ thuộc; KHÔNG đổi business logic; KHÔNG đụng e2e/, services/, compose (SF-5 read-only apps/**).
+
 ## 4. ACCEPTANCE (user-visible)
 1. `docker compose up --build` trên máy sạch → mở :3000 → đăng nhập username/password thật → D1 lọc đơn → D1b tạo phiếu (DnD + suggest + shipper) → D2 hủy/hoàn tất → D3 in PDF — toàn bộ hoạt động.
 2. Tạo 1 phiếu → `docker compose restart` → đăng nhập lại → phiếu VẪN ĐÓ.
 3. Mutations qua API reflecting ngay trên DB (`psql` thấy rows).
 4. E2E Playwright xanh khi `E2E=1`.
 5. `run.sh` từng service chạy được khi postgres đang lên; unit test pass không cần DB.
+6. UI nhìn hiện đại, thống nhất 1 design system mới (3-hướng đã user chọn) — verify bằng browser 3 tầng, không phải chỉ "chạy được".
 
 ## 5. Boundary (KHÔNG làm)
 - KHÔNG TLS/HA/backup automation/monitoring prod thật; KHÔNG k8s/helm; KHÔNG horizontal scaling.
