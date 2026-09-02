@@ -9,7 +9,15 @@ set -eu
 : "${BATCHING_DB_USER:=hubstore}"
 : "${BATCHING_DB_PASSWORD:?set BATCHING_DB_PASSWORD (compose wire từ POSTGRES_PASSWORD)}"
 
-DB_URL="postgres://${BATCHING_DB_USER}:${BATCHING_DB_PASSWORD}@${BATCHING_DB_HOST}:${BATCHING_DB_PORT}/${BATCHING_DB_NAME}?sslmode=disable"
+# URL-encode password — ký tự đặc biệt (@ : / ? # ...) không vỡ URL parse
+# (percent-encode set URL-reserved; % làm đầu tiên tránh double-encode).
+escape_url() {
+  printf '%s' "$1" | sed \
+    -e 's/%/%25/g' -e 's/@/%40/g' -e 's/:/%3A/g' -e 's#/#%2F#g' \
+    -e 's/?/%3F/g' -e 's/#/%23/g' -e 's/&/%26/g' -e 's/=/=%3D/g' \
+    -e 's/+/%2B/g' -e 's/ /%20/g'
+}
+DB_URL="postgres://$(escape_url "$BATCHING_DB_USER"):$(escape_url "$BATCHING_DB_PASSWORD")@${BATCHING_DB_HOST}:${BATCHING_DB_PORT}/${BATCHING_DB_NAME}?sslmode=disable"
 
 # 1. wait-for-db — pg_isready không có sẵn trong alpine → poll TCP bằng migrate
 #    connect retry (migrate -connectRetries=10, backoff ~10s tổng).

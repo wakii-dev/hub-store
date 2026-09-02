@@ -18,9 +18,9 @@ package main
 
 import (
 	"context"
-	"fmt"
 	"log"
 	"net"
+	"net/url"
 	"os"
 
 	"hubstore/batching-service/internal/fulfillment"
@@ -43,10 +43,14 @@ func env(key, def string) string {
 func main() {
 	port := env("BATCHING_PORT", "50052")
 	fulfillAddr := env("FULFILLMENT_ADDR", "localhost:50051")
-	dsn := fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable",
-		env("BATCHING_DB_USER", "hubstore"), os.Getenv("BATCHING_DB_PASSWORD"),
-		env("BATCHING_DB_HOST", "localhost"), env("BATCHING_DB_PORT", "5432"),
-		env("BATCHING_DB_NAME", "batching"))
+	// DSN qua net/url — password chứa ký tự đặc biệt (@ : / ? #) được escape.
+	dsn := (&url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(env("BATCHING_DB_USER", "hubstore"), os.Getenv("BATCHING_DB_PASSWORD")),
+		Host:     net.JoinHostPort(env("BATCHING_DB_HOST", "localhost"), env("BATCHING_DB_PORT", "5432")),
+		Path:     "/" + env("BATCHING_DB_NAME", "batching"),
+		RawQuery: "sslmode=disable",
+	}).String()
 
 	ctx := context.Background()
 

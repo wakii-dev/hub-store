@@ -96,7 +96,12 @@ func (s *BatchingServer) CreateBatch(ctx context.Context, req *batchingv1.Create
 
 	// Mutate chain: đơn batchStatus NOT_PREPARED → PREPARING qua Java.
 	if err := s.fulfill.MutateOrderStatus(ctx, orderCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARING, ""); err != nil {
-		if delErr := s.store.Delete(ctx, batch.GetBatchCode()); delErr != nil { // compensation
+		// Compensation KHÔNG dùng request ctx — mutate fail có thể do deadline
+		// ctx hết (spec: client deadline) → compensation trên ctx chết sẽ orphan
+		// batch ACTIVE trong DB.
+		compCtx, compCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer compCancel()
+		if delErr := s.store.Delete(compCtx, batch.GetBatchCode()); delErr != nil { // compensation
 			log.Printf("batching-service: compensation delete %s failed: %v", batch.GetBatchCode(), delErr)
 		}
 		return nil, status.Errorf(grpccodes.Unavailable, "order mutation failed: %v", err)
@@ -298,9 +303,12 @@ func (s *BatchingServer) CancelBatch(ctx context.Context, req *batchingv1.Cancel
 	}
 
 	itemCodes := itemOrderCodes(b)
-	// Revert đơn batchStatus → 0 qua Java; fail → hoàn tác phiếu về ACTIVE.
+	// Revert đơn batchStatus → 0 qua Java; fail → hoàn tác phiếu về ACTIVE
+	// (compensation trên context riêng — không dùng request ctx có thể đã deadline).
 	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_NOT_PREPARED, req.GetReason()); err != nil {
-		if _, trErr := s.store.Transition(ctx, req.GetBatchCode(),
+		compCtx, compCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer compCancel()
+		if _, trErr := s.store.Transition(compCtx, req.GetBatchCode(),
 			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_CANCELLED,
 			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE); trErr != nil {
 			log.Printf("batching-service: revert transition %s failed: %v", req.GetBatchCode(), trErr)
@@ -331,7 +339,10 @@ func (s *BatchingServer) CompletePicking(ctx context.Context, req *batchingv1.Co
 	}
 	itemCodes := itemOrderCodes(b)
 	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARED, ""); err != nil {
-		if _, trErr := s.store.Transition(ctx, req.GetBatchCode(),
+		// Compensation trên context riêng (request ctx có thể đã deadline).
+		compCtx, compCancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer compCancel()
+		if _, trErr := s.store.Transition(compCtx, req.GetBatchCode(),
 			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_COMPLETED,
 			batchingv1.BatchEntityStatus_BATCH_ENTITY_STATUS_ACTIVE); trErr != nil {
 			log.Printf("batching-service: revert transition %s failed: %v", req.GetBatchCode(), trErr)

@@ -10,7 +10,8 @@ package testdb
 import (
 	"context"
 	"encoding/json"
-	"fmt"
+	"net"
+	"net/url"
 	"os"
 	"path/filepath"
 	"sort"
@@ -23,12 +24,15 @@ import (
 
 // DSN từ env (test runner set khi muốn chạy integration); default localhost
 // dev compose map. POSTGRES_PASSWORD bắt buộc (compose fail-loud cũng vậy).
+// net/url escape — password chứa ký tự đặc biệt không vỡ URL.
 func dsn(db string) string {
-	host := envOr("BATCHING_DB_HOST", "localhost")
-	port := envOr("BATCHING_DB_PORT", "5432")
-	user := envOr("BATCHING_DB_USER", "hubstore")
-	pass := os.Getenv("POSTGRES_PASSWORD")
-	return fmt.Sprintf("postgres://%s:%s@%s:%s/%s?sslmode=disable", user, pass, host, port, db)
+	return (&url.URL{
+		Scheme:   "postgres",
+		User:     url.UserPassword(envOr("BATCHING_DB_USER", "hubstore"), os.Getenv("POSTGRES_PASSWORD")),
+		Host:     net.JoinHostPort(envOr("BATCHING_DB_HOST", "localhost"), envOr("BATCHING_DB_PORT", "5432")),
+		Path:     "/" + db,
+		RawQuery: "sslmode=disable",
+	}).String()
 }
 
 func envOr(key, def string) string {
