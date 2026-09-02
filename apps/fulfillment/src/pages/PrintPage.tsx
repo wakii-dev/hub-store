@@ -4,7 +4,7 @@ import { Alert, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Typ
 import { PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { PRINT_TYPES, type PrintType } from '@hub-store/shared';
+import { DESIGN_TOKENS, PRINT_TYPES, type PrintType } from '@hub-store/shared';
 import { fulfillmentStore } from '../store';
 import { printDocument, useGetBatchDetailQuery, useGetPrintersQuery } from '../api/printApi';
 import { registerFulfillmentResources } from '../i18n';
@@ -180,7 +180,7 @@ function PrintPageInner() {
     key: type,
     label: t(`print.tab.${type}`),
     children: (
-      <div className="print-preview-area" style={{ overflow: 'auto', maxHeight: 640, background: '#f5f5f5', textAlign: 'center', padding: 16 }}>
+      <div className="print-preview-area" style={{ overflow: 'auto', maxHeight: 640, background: DESIGN_TOKENS.color.bgSubtle, textAlign: 'center', padding: 16 }}>
         {previewLoading[type] && <Spin size="large" style={{ marginTop: 80 }} />}
         {!previewLoading[type] && previewError[type] && (
           <Alert type="error" showIcon message={`${t('print.preview.error')}: ${previewError[type]}`} />
@@ -197,8 +197,19 @@ function PrintPageInner() {
   }));
 
   return (
-    <div data-probe="fulfillment-print" style={{ padding: 24 }}>
-      <Typography.Title level={4}>{t('page.print.title')}</Typography.Title>
+    <div data-probe="fulfillment-print" style={{ padding: 0 }}>
+      {/* Page-head — SF-6 §2.2: h1 tokens + sub label */}
+      <h1
+        style={{
+          fontSize: DESIGN_TOKENS.typography.h1.fontSize,
+          fontWeight: DESIGN_TOKENS.typography.h1.fontWeight,
+          letterSpacing: DESIGN_TOKENS.typography.h1.letterSpacing,
+          color: DESIGN_TOKENS.color.textStrong,
+          margin: 0,
+        }}
+      >
+        {t('page.print.title')}
+      </h1>
       <Typography.Text type="secondary">
         {t('print.batch.label')}: {batchCode}
         {batch?.shopCode ? ` · ${t('print.shop.label')}: ${shopCode}` : ''}
