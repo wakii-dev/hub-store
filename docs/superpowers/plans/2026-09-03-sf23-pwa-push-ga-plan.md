@@ -42,7 +42,7 @@ Shared surfaces: env +3 vars; DB +1 table (V10); HTTP +1 GET endpoint; KHÔNG đ
 
 ## 5. Implementation outline — 9 tasks
 
-Tier DAG: T1,T3,T4,T7 → T2(T1),T5(T3+T4),T6(T3) → T8(T5+T6+T7) → T9(all).
+Tier DAG: T1,T3,T4,T7 → T2(T1),T5(T3+T4),T6(T1+T3+T7 — plan-critic P1: T7 trước T6 vì cả hai sửa App.tsx; T1 trước T6 vì cả hai sửa main.tsx) → T8(T5+T6+T7) → T9(all). Coordinator ENFORCE: T6 chỉ start sau khi T1+T7 commit xong (App.tsx/main.tsx shared files — executor chạy cùng worktree).
 
 | # | Task | Scope |
 |---|------|-------|
@@ -150,7 +150,7 @@ export function registerServiceWorker(): void {
 
 - [ ] **Step 5: index.html** — trong `<head>`: `<link rel="manifest" href="/manifest.webmanifest" />`, `<meta name="theme-color" content="#EB6E09" />`, `<link rel="apple-touch-icon" href="/icons/icon-192.png" />`. main.tsx: import + gọi `registerServiceWorker()` sau render.
 - [ ] **Step 6: test** — `pwa.test.ts` assert: manifest literal `theme_color` === design-tokens `primary` (import từ `@hub-store/shared`); sw.js source chứa guard `/api/` + `text/event-stream` không cần (guard 3 theo path đủ); index.html chứa link manifest.
-- [ ] **Step 7: Run** `pnpm --filter @hub-store/shell test` (hoặc test script của shell) → PASS; **manual smoke**: dev server lên → DevTools Application → manifest load + SW activated.
+- [ ] **Step 7: Run** `pnpm --filter @hub-store/shell test` → PASS; **smoke curl-level**: boot shell dev server (hoặc boot-all) → `curl -s -o /dev/null -w "%{http_code} %{content_type}" http://localhost:3000/manifest.webmanifest` = `200 application/manifest+json` (hoặc JSON), `/sw.js` = 200 `text/javascript`.
 - [ ] **Step 8: Commit** `feat(pwa): manifest + service worker + icons (SF-23 T1)`
 
 ### Task T2: offline-fallback
@@ -213,7 +213,7 @@ export async function listNotifications(page: number, pageSize: number, env = pr
 - [ ] **Step 3: routes/notifications.ts** — `GET /api/notifications?page=&pageSize=` JWT-guarded (app-level guard tự áp); reuse `normalizeAuditPage` pattern (Number.isFinite guard — input rác → default, KHÔNG 500). Pool thiếu → `{items:[],total:0}` 200 (fail-open như audit disabled). Comment đầu route: broadcast-by-design — KHÔNG lọc theo user.
 - [ ] **Step 4: app.ts** — import + `registerNotificationsRoutes(app);` cạnh registerEventsRoutes.
 - [ ] **Step 5: tests** — vitest: pool inject giả → logNotification INSERT params đúng + dedupe conflict không throw; listNotifications map camel; route integration (app.inject) 401 khi không JWT / 200 envelope khi có (pattern spec auth hiện có — xem test dùng `signToken`/mock JWKS nào trong test/*.spec.ts và làm y hệt).
-- [ ] **Step 6: Run** `pnpm --filter bff-gateway test` → PASS. **Commit** `feat(bff): notification_log + GET /api/notifications (SF-23 T3)`
+- [ ] **Step 6: Run** `pnpm --filter @hub-store/bff-gateway test` → PASS. **Commit** `feat(bff): notification_log + GET /api/notifications (SF-23 T3)`
 
 ### Task T4: onesignal-dual-mode (BFF)
 **Files:** Modify `services/bff-gateway/src/config.ts` (BffConfig + loadConfig); Create `services/bff-gateway/src/lib/onesignal.ts`; Test `services/bff-gateway/test/onesignal.spec.ts`.
@@ -336,17 +336,17 @@ export function pushLogout(): void {
 ```
 
 - [ ] **Step 2: login + session-restore hook** — trong `main.tsx` gọi `initOneSignal()`. Trong `App.tsx` nơi đã có `onSessionChange`/`loadCurrentUser` (xem sessionFromUser): tại useEffect session — `pushLogin(session?.user?.profile?.preferred_username)` khi có user, `pushLogout()` khi null. **ĐƯỜNG BOOT BẮT BUỘC**: onSessionChange fire cả khi restore từ storage → external_id sống qua reload (spec-critic P1).
-- [ ] **Step 3: notificationPoller.ts**
+- [ ] **Step 3: notificationPoller.ts** — KHÔNG import axios thô (shell không có dep đó): dùng `getAxiosInstance()` từ `@hub-store/api-client` — baseURL `VITE_API_BASE_URL ?? 'http://localhost:8080'` + tự gắn Bearer qua token getter đã register:
 
 ```ts
-import axios from 'axios';
+import { getAxiosInstance } from '@hub-store/api-client';
 const SEEN_KEY = 'sf23.notification.seenIds';
 export function seenIds(): Set<number> { try { return new Set(JSON.parse(localStorage.getItem(SEEN_KEY) ?? '[]') as number[]); } catch { return new Set(); } }
 function saveSeen(ids: Set<number>): void { localStorage.setItem(SEEN_KEY, JSON.stringify([...ids].slice(-200))); }
+export interface NewNotification { id: number; title: string; body: string; }
 /** Poll 1 lần — trả về rows mới (chưa thấy) để caller hiện antd notification. */
-export async function pollNotifications(apiBase: string, getToken: () => string | undefined): Promise<NewNotification[]> {
-  const token = getToken(); if (!token) return [];
-  const { data } = await axios.get(`${apiBase}/api/notifications?page=1&pageSize=10`, { headers: { Authorization: `Bearer ${token}` } });
+export async function pollNotifications(): Promise<NewNotification[]> {
+  const { data } = await getAxiosInstance().get('/api/notifications?page=1&pageSize=10');
   const seen = seenIds();
   const fresh = (data?.items ?? []).filter((n: { id: number }) => !seen.has(n.id));
   fresh.forEach((n: { id: number }) => seen.add(n.id));
@@ -355,8 +355,8 @@ export async function pollNotifications(apiBase: string, getToken: () => string 
 }
 ```
 
-- [ ] **Step 4: App.tsx wire** — useEffect khi session có user: `const t = setInterval(() => void pollNotifications('/api', getTokenFn).then(showAntdNotifications).catch(() => {}), 30_000)` + poll ngay 1 lần; cleanup clearInterval; showAntdNotifications = `notification.info({ message: n.title, description: n.body })` (antd static API đã dùng trong app? — check import pattern hiện có, ưu tiên `App.useApp()` nếu shell dùng antd App wrapper, fallback static). getTokenFn: từ auth/oidc token getter đã register (xuất hàm tương ứng hoặc reuse registerTokenGetter's source).
-- [ ] **Step 5: test** — vitest jsdom: env trống → initOneSignal không inject script; pollNotifications: mock axios → filter unseen đúng, seen persist localStorage.
+- [ ] **Step 4: App.tsx wire** — ⚠ MECHANISM (plan-critic P1): `onSessionChange` KHÔNG fire khi restore từ storage (boot đi qua `loadCurrentUser()` → state, bypass manager events). Hook **`pushLogin(session.sub)` trong useEffect keyed trên `session` STATE của App** (App.tsx ~:120 set session từ loadCurrentUser + signinCallback) — che phủ cả login mới lẫn restore. `ShellSession = {sub, role}` (KHÔNG có .user.profile). useEffect khi session có sub: `const t = setInterval(() => void pollNotifications().then(showAntdNotifications).catch(() => {}), 30_000)` + poll ngay 1 lần; session null → pushLogout + clearInterval. showAntdNotifications = `notification.info({ message: n.title, description: n.body })` (check shell đã dùng static `notification` hay `App.useApp()` — làm theo pattern hiện có).
+- [ ] **Step 5: test** — vitest jsdom (LƯU Ý: APP_ID đọc module-scope → test env-on cần `vi.resetModules()` + stub `import.meta.env` trước import động — pattern readEnv comment oidc.ts:29-39): env trống → initOneSignal không inject script; pollNotifications: mock getAxiosInstance → filter unseen đúng, seen persist localStorage.
 - [ ] **Step 6: Run shell tests + Commit** `feat(shell): OneSignal init + subscribe-on-login + notification polling (SF-23 T6)`
 
 ### Task T7: ga-dual-mode
@@ -432,10 +432,12 @@ types { application/manifest+json webmanifest; }
 ### Task T9: e2e-both-modes
 **Files:** Create `e2e/tests/08-pwa.spec.ts`.
 
-- [ ] **Step 1: spec** (pattern: storageState default coordinator, serial):
+- [ ] **Step 1: spec** (pattern: storageState default coordinator, serial; **P0 plan-critic: mọi assert `/api/...` dùng BFF base `http://localhost:8080` — shell dev server KHÔNG có proxy, relative path SPA-fallback về index.html**; Bearer token pattern: `e2e/tests/07-realtime.spec.ts:32-72` — đọc cách 07 lấy token oidc từ localStorage và làm y hệt):
 
 ```ts
 import { test, expect } from "@playwright/test";
+
+const BFF = "http://localhost:8080"; // pattern 07-realtime.spec.ts:32 — shell dev KHÔNG proxy /api
 
 test.describe("SF-23 PWA + push + GA (off-mode mặc định)", () => {
   test("manifest đăng ký + đầy đủ", async ({ request }) => {
@@ -449,12 +451,7 @@ test.describe("SF-23 PWA + push + GA (off-mode mặc định)", () => {
   });
   test("service worker đăng ký + phục vụ được", async ({ page }) => {
     await page.goto("/");
-    const sw = await page.evaluate(async () => {
-      const reg = await navigator.serviceWorker.getRegistration();
-      return reg ? reg.active?.scriptURL ?? reg.installing?.scriptURL ?? "pending" : null;
-    });
-    // SW register trên window load — đợi nếu chưa:
-    if (!sw) { await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 10_000 }).catch(() => { /* CI flake-guard: registration assert */ }); }
+    await page.waitForFunction(() => navigator.serviceWorker.controller !== null, undefined, { timeout: 15_000 });
     const swRes = await page.request.get("/sw.js");
     expect(swRes.ok()).toBeTruthy();
   });
@@ -463,20 +460,24 @@ test.describe("SF-23 PWA + push + GA (off-mode mặc định)", () => {
     expect(res.ok()).toBeTruthy();
     expect((await res.text())).toContain("Mất kết nối");
   });
-  test("/api/notifications guard + envelope", async ({ request }) => {
-    const anon = await request.get("/api/notifications");
+  test("/api/notifications 401 không token + 200 có token (MANDATORY spec §4.5 — KHÔNG skip)", async ({ request }) => {
+    const anon = await request.get(`${BFF}/api/notifications`);
     expect(anon.status()).toBe(401);
+    // TODO executor: authed request theo pattern token 07-realtime → expect 200 + body {items,total}
   });
-  test("GA off: không gtag script", async ({ page }) => {
+  test("GA off: không gtag script + 0 console error (spec §4.5)", async ({ page }) => {
+    const errors: string[] = [];
+    page.on("console", (msg) => { if (msg.type() === "error") errors.push(msg.text()); });
     await page.goto("/");
     const hasGtm = await page.evaluate(() => Boolean(document.querySelector('script[src*="googletagmanager"]')));
     expect(hasGtm).toBeFalsy();
+    expect(errors).toEqual([]);
   });
 });
 ```
 
-(Executor: 401 assert — xác nhận BFF guard trả gì khi thiếu token (401 hay envelope 401) bằng cách đọc plugins/auth.ts; điều chỉnh expect theo thực tế. Authenticated GET case: dùng page.evaluate fetch với token từ session nếu pattern hiện có hỗ trợ — nếu cầu kỳ, bỏ authenticated assert ở e2e, unit test đã che; nói thật trong report.)
-- [ ] **Step 2: Run** `pnpm --filter e2e test` (hoặc lệnh e2e chuẩn repo — xem e2e/package.json) → 08 xanh + 01–07 KHÔNG vỡ (đặc biệt 07-realtime — SW pass-through /api).
+(Executor: 401 assert — đọc plugins/auth.ts xác nhận guard trả 401 hay envelope; hoàn thiện authed assert theo pattern token 07-realtime — MANDATORY, unit đã che BFF nhưng spec đòi hỏi e2e authed path.)
+- [ ] **Step 2: Run** `pnpm --filter @hub-store/e2e e2e` (script tên `e2e` — xem e2e/package.json) → 08 xanh + 01–07 KHÔNG vỡ (đặc biệt 07-realtime — SW pass-through /api).
 - [ ] **Step 3: Commit** `test(e2e): 08-pwa manifest/sw/offline/notifications/GA-off (SF-23 T9)`
 
 ---
