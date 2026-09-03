@@ -2,7 +2,7 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
 import { MemoryRouter } from "react-router-dom";
-import { getI18n, initI18n } from "@hub-store/shared";
+import { getI18n, initI18n, PRINT_TYPES, type PrintType } from "@hub-store/shared";
 import { fulfillmentResources } from "../i18n";
 import PrintPage from "./PrintPage";
 import { printDocument } from "../api/printApi";
@@ -254,5 +254,49 @@ describe("PrintPage (D3)", () => {
     await selectPrinter("Máy in phụ");
     // Option thứ 2 không có location — label chỉ tên (value + option = 2 node).
     expect(screen.getAllByText("Máy in phụ").length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * SF-21 T1 — pin contracts: đúng 5 tab theo PRINT_TYPES + click từng tab
+ * trigger printDocument với đúng printType + printerId '' (preview seam).
+ */
+describe("PrintPage (SF-21 T1 — pin 5 print types)", () => {
+  it("render ĐÚNG 5 tab theo thứ tự PRINT_TYPES", () => {
+    renderPage();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(PRINT_TYPES.length);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(TAB_LABELS);
+  });
+
+  it("click từng tab → printDocument gọi đúng printType + printerId '' (preview seam)", async () => {
+    renderPage();
+    // Mount → tab bill load preview ngay (call 1).
+    await waitFor(() => expect(printDocMock).toHaveBeenCalledTimes(1));
+    expect(printDocMock).toHaveBeenCalledWith({
+      batchCode: "BATCH-0001",
+      printType: "bill",
+      printerId: "",
+    });
+    // Click từng tab còn lại → mỗi printType đúng 1 lần (cache per tab).
+    const expectations: Array<[string, PrintType]> = [
+      ["Vận đơn", "delivery"],
+      ["Bàn giao", "handover_receipt"],
+      ["Bàn giao hàng", "goods_handover"],
+      ["Lắp đặt", "installation_acceptance"],
+    ];
+    for (const [label, printType] of expectations) {
+      fireEvent.click(screen.getByRole("tab", { name: label }));
+      await waitFor(() =>
+        expect(printDocMock).toHaveBeenCalledWith({
+          batchCode: "BATCH-0001",
+          printType,
+          printerId: "",
+        }),
+      );
+    }
+    expect(printDocMock).toHaveBeenCalledTimes(5);
+    const types = printDocMock.mock.calls.map((c) => (c[0] as { printType: string }).printType);
+    expect([...new Set(types)].sort()).toEqual([...PRINT_TYPES].sort());
   });
 });

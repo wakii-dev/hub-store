@@ -47,11 +47,11 @@ Dispatch discipline (orca task deps không sửa được — coordinator enforc
 - Modify: `packages/shared/src/api-contracts/print.ts` — additive `PrinterDto.printerIp?/mac?/type?`
 
 **Steps:**
-- [ ] Đọc `packages/shared/src/enums.ts` PRINT_TYPES (5 loại: bill/delivery/handover_receipt/goods_handover/installation_acceptance) + `PrintPage.tsx` — xác nhận 5 tab render từ mảng này (đã có từ SF-10, KHÔNG build mới).
-- [ ] Thêm unit test PrintPage: render với batchCode → expect đúng 5 tab text; mock printApi → click từng tab → `printDocument` được gọi với đúng printType + `printerId: ''` (preview seam).
-- [ ] Additive `PrinterDto`: `printerIp?: string; mac?: string; type?: 'bill' | 'a4';` — KHÔNG xóa field nào.
-- [ ] Run: `pnpm -F fulfillment test -- PrintPage` + `pnpm -F shared test -- api-contracts` → PASS.
-- [ ] Commit `test(sf-21): pin 5 print types render + additive printer dto fields`.
+- [x] Đọc `packages/shared/src/enums.ts` PRINT_TYPES (5 loại: bill/delivery/handover_receipt/goods_handover/installation_acceptance) + `PrintPage.tsx` — xác nhận 5 tab render từ mảng này (đã có từ SF-10, KHÔNG build mới).
+- [x] Thêm unit test PrintPage: render với batchCode → expect đúng 5 tab text; mock printApi → click từng tab → `printDocument` được gọi với đúng printType + `printerId: ''` (preview seam).
+- [x] Additive `PrinterDto`: `printerIp?: string; mac?: string; type?: 'bill' | 'a4';` — KHÔNG xóa field nào.
+- [x] Run: `pnpm -F fulfillment test -- PrintPage` + `pnpm -F shared test -- api-contracts` → PASS.
+- [x] Commit `test(sf-21): pin 5 print types render + additive printer dto fields`.
 
 ### Task 2: printer-management — V8 + proto additive + CRUD + FE
 
