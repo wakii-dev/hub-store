@@ -126,13 +126,13 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - Modify: `services/bff-gateway/src/routes/fulfillment.ts` (time-slots GET mới + guard + role gate 2 PUT cũ + shops `?q=`)
 - Modify: `services/fulfillment-service/.../FulfillmentServiceImpl.java` (publish order.updated trong updateDeliveryTime — pattern order.assigned:248)
 
-- [ ] **Step 1: GET /fulfillment/time-slots?date=YYYY-MM-DD** — static slots `08:00-10:00, 10:00-12:00, 14:00-16:00, 16:00-18:00` TZ +07:00; date < hôm nay (VN) → 422; date hôm nay → lọc slot đã qua; date hôm-mai→+7 OK; > +7 → 422. requireRole 3 role.
-- [ ] **Step 2: PUT delivery-time guard** — trước khi proxy: parse from/to, if from < hôm nay VN → 422 envelope code `PAST_DATE_NOT_ALLOWED`. Mapping từ slot: FE gửi from/to ISO +07:00 tường minh (contract spec Q4).
-- [ ] **Step 3: Role gates** — thêm `requireRole(request, reply, 'Coordinator','Manager','Admin')` cho `PUT /fulfillment/:code/note` (line ~372) + `PUT /fulfillment/:code/delivery-time` (line ~396). TRƯỚC KHI ĐÓ: đọc e2e/tests/01-main-flow.spec.ts + 02-role-matrix.spec.ts — xác nhận không có bước gọi 2 route này dưới role khác (warehouse storageState); nếu có → điều chỉnh spec test đó theo role đúng và GHI vào commit message.
-- [ ] **Step 4: GET /master-data/shops thêm `?q=`** — BFF in-memory filter (code OR name, case-insensitive) sau khi listDistinctShops — không proto change.
-- [ ] **Step 5: Java publish `order.updated`** — trong updateDeliveryTime sau mutate thành công: events.publish("order-events", envelope {type:"order.updated", source:"fulfillment", payload:{fulfillCode, deliveryTime}}) — best-effort try/catch log, pattern order.assigned (Impl:248). Verify consumer BFF (`src/kafka/consumer.ts` parseMessage → onEvent generic) không crash với type mới — đọc code, ghi nhận trong commit message.
-- [ ] **Step 6: Contract test** — slots: 422 quá khứ, lọc slot hôm nay, OK ngày mai; PUT guard 422; 403 warehouse trên 2 PUT cũ; shops ?q= filter.
-- [ ] **Step 7: Test + commit** `feat(delivery-time): slots API + past-date guard + role gates + order.updated event`
+- [x] **Step 1: GET /fulfillment/time-slots?date=YYYY-MM-DD** — static slots `08:00-10:00, 10:00-12:00, 14:00-16:00, 16:00-18:00` TZ +07:00; date < hôm nay (VN) → 422; date hôm nay → lọc slot đã qua; date hôm-mai→+7 OK; > +7 → 422. requireRole 3 role.
+- [x] **Step 2: PUT delivery-time guard** — trước khi proxy: parse from/to, if from < hôm nay VN → 422 envelope code `PAST_DATE_NOT_ALLOWED`. Mapping từ slot: FE gửi from/to ISO +07:00 tường minh (contract spec Q4).
+- [x] **Step 3: Role gates** — thêm `requireRole(request, reply, 'Coordinator','Manager','Admin')` cho `PUT /fulfillment/:code/note` (line ~372) + `PUT /fulfillment/:code/delivery-time` (line ~396). TRƯỚC KHI ĐÓ: đọc e2e/tests/01-main-flow.spec.ts + 02-role-matrix.spec.ts — xác nhận không có bước gọi 2 route này dưới role khác (warehouse storageState); nếu có → điều chỉnh spec test đó theo role đúng và GHI vào commit message.
+- [x] **Step 4: GET /master-data/shops thêm `?q=`** — BFF in-memory filter (code OR name, case-insensitive) sau khi listDistinctShops — không proto change.
+- [x] **Step 5: Java publish `order.updated`** — trong updateDeliveryTime sau mutate thành công: events.publish("order-events", envelope {type:"order.updated", source:"fulfillment", payload:{fulfillCode, deliveryTime}}) — best-effort try/catch log, pattern order.assigned (Impl:248). Verify consumer BFF (`src/kafka/consumer.ts` parseMessage → onEvent generic) không crash với type mới — đọc code, ghi nhận trong commit message.
+- [x] **Step 6: Contract test** — slots: 422 quá khứ, lọc slot hôm nay, OK ngày mai; PUT guard 422; 403 warehouse trên 2 PUT cũ; shops ?q= filter.
+- [x] **Step 7: Test + commit** `feat(delivery-time): slots API + past-date guard + role gates + order.updated event`
 
 ### Task 5: delivery-time-slots — FE DeliveryTimeCell widen
 
