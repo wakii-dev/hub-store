@@ -41,10 +41,22 @@ import './slices/masterData';
 import './slices/users';
 import './slices/intake';
 import './slices/d2c';
+import './slices/audit';
 
 // Re-export the stub hooks for convenience (remotes can deep-import the slice
 // files directly too).
-export { useListOrdersQuery, useGetDashboardStatsQuery } from './slices/fulfillment';
+export {
+  useListOrdersQuery,
+  useGetDashboardStatsQuery,
+  buildExportParams,
+  isCsvHeaderOnly,
+  fetchOrdersExport,
+  type OrdersExportFilterState,
+  type OrdersExportQueryParams,
+  type ExportDeriveResult,
+  type ExportUnsupportedReason,
+  type OrdersExportResult,
+} from './slices/fulfillment';
 export { useListBatchesQuery } from './slices/batches';
 export {
   useListD2cOrdersQuery,
@@ -70,3 +82,9 @@ export {
   useConfirmImportMutation,
   useCreateManualOrderMutation,
 } from './slices/intake';
+export {
+  useListAuditQuery,
+  buildAuditQueryParams,
+  type AuditListItem,
+  type AuditQueryParams,
+} from './slices/audit';

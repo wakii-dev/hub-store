@@ -15,6 +15,7 @@ import { parseTab, TECH_FILTER_URL_DEFAULTS, useTechFilters, type TechFilterStat
 import { DeliveryTab } from './DeliveryTab';
 import { InstallationTab } from './InstallationTab';
 import { StaffTab } from './StaffTab';
+import { MapTab } from './MapTab';
 import { registerTechResources } from './tech.i18n';
 
 // LƯU Ý: KHÔNG đăng ký ở module-eval — App.tsx được import tĩnh trong
@@ -103,6 +104,7 @@ export default function TechServicePage() {
           { key: 'delivery', label: t('tab.delivery'), children: null },
           { key: 'installation', label: t('tab.installation'), children: null },
           { key: 'staff', label: t('tab.staff'), children: null },
+          { key: 'map', label: <span data-testid="tech-tab-map">{t('tab.map')}</span>, children: null },
         ]}
         data-testid="tech-tabs"
       />
@@ -229,6 +231,8 @@ export default function TechServicePage() {
           <StaffTab filter={staffFilter} onTotal={setTotal} />
         </>
       )}
+
+      {tab === 'map' && <MapTab />}
     </div>
   );
 }

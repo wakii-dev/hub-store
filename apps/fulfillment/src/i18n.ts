@@ -73,6 +73,13 @@ export const fulfillmentResources: I18nResources = {
       "tracking.bookedAt": "Thời điểm book",
       "tracking.trackingLink": "Xem trên NVC",
 
+      // SF-24 (Task 2): tab bản đồ tracking modal
+      "tracking.tabTimeline": "Timeline",
+      "tracking.tabMap": "Bản đồ",
+      "tracking.noRoute": "Chưa có lộ trình — batch chưa xác nhận planning",
+      "tracking.noRouteForOrder": "Đơn không có điểm dừng trên lộ trình này",
+      "tracking.noCoordsNote": "{{count}} điểm chưa có tọa độ",
+
       "complete.title": "Hoàn tất soạn hàng",
       "complete.content": "Hoàn tất phiếu {{code}}? Đơn hàng sẽ chuyển sang Đã soạn.",
       "complete.ok": "Xác nhận",
@@ -207,6 +214,13 @@ export const fulfillmentResources: I18nResources = {
       "tracking.carrierBookingId": "Carrier booking ID",
       "tracking.bookedAt": "Booked at",
       "tracking.trackingLink": "View on carrier",
+
+      // SF-24 (Task 2): map tab in tracking modal
+      "tracking.tabTimeline": "Timeline",
+      "tracking.tabMap": "Map",
+      "tracking.noRoute": "No route — planning not confirmed in this session",
+      "tracking.noRouteForOrder": "Order has no stops on this route",
+      "tracking.noCoordsNote": "{{count}} stop(s) without coordinates",
 
       "complete.title": "Complete picking",
       "complete.content": "Complete batch {{code}}? Orders will move to Prepared.",

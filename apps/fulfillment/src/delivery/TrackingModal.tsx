@@ -6,13 +6,14 @@
  * (BE chưa trả field → tự ẩn — contract-ready). Timeline 2 cột BE | PARTNER.
  */
 import { useMemo } from "react";
-import { Col, Descriptions, Modal, Row, Spin, Timeline, Typography } from "antd";
+import { Col, Descriptions, Modal, Row, Spin, Tabs, Timeline, Typography } from "antd";
 import { useTranslation } from "react-i18next";
 import { EmptyState, formatPeriodOfTime, loadPlanningMap, type Locale } from "@hub-store/shared";
 import type { DeliveryBookingDetailDto, DeliveryBookingEntryDto } from "@hub-store/shared";
 import { useSearchBookingDetailQuery } from "../api/deliveryBatchApi";
 import { shipmentStatusLabel } from "./shipmentStatuses";
 import { ShipmentStatusTag } from "./ShipmentStatusTag";
+import { BatchRouteMap, type StopMeta } from "./BatchRouteMap";
 
 export interface TrackingModalProps {
   open: boolean;
@@ -21,6 +22,8 @@ export interface TrackingModalProps {
   planningIds: string[];
   /** Có → chỉ hiển thị entry của đơn này (per-order tracking trong expand row). */
   orderCode?: string;
+  /** SF-24: meta stops cho tab bản đồ (address + COD) — optional, Task 4 wire. */
+  stopMeta?: Record<string, StopMeta>;
   onClose: () => void;
 }
 
@@ -117,7 +120,32 @@ function PlanningTracking({
   );
 }
 
-export function TrackingModal({ open, batchCode, planningIds, orderCode, onClose }: TrackingModalProps) {
+/** Nội dung tab Timeline — code gốc của modal (SF-16) giữ NGUYÊN, testid
+ * tracking-entry / tracking-timeline-be/partner / tracking-link không đổi. */
+function TimelineContent({ isLoading, entries, locale }: {
+  isLoading: boolean;
+  entries: DeliveryBookingEntryDto[];
+  locale: Locale;
+}) {
+  const { t } = useTranslation("fulfillment");
+  if (isLoading) {
+    return (
+      <div style={{ textAlign: "center", padding: 48 }}>
+        <Spin />
+      </div>
+    );
+  }
+  if (entries.length === 0) {
+    return <EmptyState title={t("tracking.notBooked")} sub={t("tracking.notBookedSub")} />;
+  }
+  return (
+    <>
+      {entries.map((entry) => <PlanningTracking key={entry.planningId} entry={entry} locale={locale} />)}
+    </>
+  );
+}
+
+export function TrackingModal({ open, batchCode, planningIds, orderCode, stopMeta, onClose }: TrackingModalProps) {
   const { t, i18n } = useTranslation("fulfillment");
   const locale: Locale = i18n.language.startsWith("vi") ? "vi" : "en";
 
@@ -146,15 +174,23 @@ export function TrackingModal({ open, batchCode, planningIds, orderCode, onClose
       onCancel={onClose}
       destroyOnClose
     >
-      {isLoading ? (
-        <div style={{ textAlign: "center", padding: 48 }}>
-          <Spin />
-        </div>
-      ) : entries.length === 0 ? (
-        <EmptyState title={t("tracking.notBooked")} sub={t("tracking.notBookedSub")} />
-      ) : (
-        entries.map((entry) => <PlanningTracking key={entry.planningId} entry={entry} locale={locale} />)
-      )}
+      {/* SF-24 (plan Task 2): tab Timeline mặc định — KHÔNG forceRender tab map
+       * (không init leaflet ẩn; map chỉ mount khi user bấm tab). */}
+      <Tabs
+        defaultActiveKey="timeline"
+        items={[
+          {
+            key: "timeline",
+            label: t("tracking.tabTimeline"),
+            children: <TimelineContent isLoading={isLoading} entries={entries} locale={locale} />,
+          },
+          {
+            key: "map",
+            label: <span data-testid="tracking-map-tab">{t("tracking.tabMap")}</span>,
+            children: <BatchRouteMap batchCode={batchCode} perOrderCode={orderCode} stopMeta={stopMeta} />,
+          },
+        ]}
+      />
     </Modal>
   );
 }

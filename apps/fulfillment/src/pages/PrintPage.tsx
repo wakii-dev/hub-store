@@ -216,7 +216,8 @@ function PrintPageInner() {
         {batch?.shopCode ? ` · ${t('print.shop.label')}: ${shopCode}` : ''}
       </Typography.Text>
 
-      <Space wrap style={{ display: 'flex', marginTop: 16, gap: 12 }} align="center">
+      {/* SF-11 (FI-256 D3) — className cho stack dọc ≤768px (CSS sf6-antd-overrides) */}
+      <Space wrap className="sf11-print-controls" style={{ display: 'flex', marginTop: 16, gap: 12 }} align="center">
         <Select
           style={{ minWidth: 240 }}
           placeholder={t('print.printer.placeholder')}

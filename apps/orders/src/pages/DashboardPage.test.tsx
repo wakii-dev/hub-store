@@ -105,10 +105,12 @@ describe("DashboardPage", () => {
     expect(texts.filter((x) => x?.startsWith("2026-08"))).toHaveLength(3); // đầu/giữa/cuối
   });
 
-  it("data rỗng → chart không crash (maxVal floor 1)", () => {
+  it("data rỗng → EmptyState thay chart, không crash (SF-11 Task 5)", () => {
     mockQuery({ data: makeStats({ ordersPerDay: [] }) });
     renderDash();
-    expect(screen.getByTestId("chart-orders-per-day-svg")).toBeTruthy();
+    // SF-11: ordersPerDay rỗng → EmptyState (i18n dashboard.empty.title), không render chart rỗng.
+    expect(screen.getByText("Chưa có dữ liệu đơn hàng")).toBeTruthy();
+    expect(screen.queryByTestId("chart-orders-per-day-svg")).toBeNull();
   });
 
   it("isError → Alert lỗi + không render số 0 gây hiểu nhầm", () => {

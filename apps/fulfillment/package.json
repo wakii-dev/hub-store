@@ -14,6 +14,7 @@
     "@hub-store/shared": "workspace:*",
     "@reduxjs/toolkit": "2.12.0",
     "antd": "4.24.16",
+    "leaflet": "1.9.4",
     "i18next": "26.4.0",
     "moment": "2.30.1",
     "pdfjs-dist": "5.4.296",
