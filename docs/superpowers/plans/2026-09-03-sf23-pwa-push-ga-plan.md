@@ -218,7 +218,7 @@ export async function listNotifications(page: number, pageSize: number, env = pr
 ### Task T4: onesignal-dual-mode (BFF)
 **Files:** Modify `services/bff-gateway/src/config.ts` (BffConfig + loadConfig); Create `services/bff-gateway/src/lib/onesignal.ts`; Test `services/bff-gateway/test/onesignal.spec.ts`.
 
-- [ ] **Step 1: config** — thêm vào BffConfig + loadConfig return:
+- [x] **Step 1: config** — thêm vào BffConfig + loadConfig return:
 
 ```ts
 onesignal: {
@@ -227,7 +227,7 @@ onesignal: {
 },
 ```
 
-- [ ] **Step 2: lib/onesignal.ts**
+- [x] **Step 2: lib/onesignal.ts**
 
 ```ts
 export interface PushPayload { title: string; body: string; }
@@ -255,8 +255,8 @@ export async function sendOneSignalPush(restApiKey: string, payload: PushPayload
 ```
 
 ⚠ LƯU Ý EXECUTOR: REST API cần `app_id` → config block phải là `{ restApiKey: env.ONESIGNAL_REST_API_KEY ?? '', appId: env.ONESIGNAL_APP_ID ?? '' }` (BFF-side APP_ID, KHÔNG nhầm VITE_ONESIGNAL_APP_ID build-time của FE — 2 env khác nhau, .env.example ghi rõ cả hai). Mock mode khi THIẾU restApiKey HOẶC appId.
-- [ ] **Step 3: test** — inject global fetch mock: có key → POST đúng shape (segments, headings/contents, Authorization Basic) + timeout path; thiếu key → return false KHÔNG fetch; fetch reject → false + không throw.
-- [ ] **Step 4: Run + Commit** `feat(bff): OneSignal REST adapter dual-mode (SF-23 T4)`
+- [x] **Step 3: test** — inject global fetch mock: có key → POST đúng shape (segments, headings/contents, Authorization Basic) + timeout path; thiếu key → return false KHÔNG fetch; fetch reject → false + không throw.
+- [x] **Step 4: Run + Commit** `feat(bff): OneSignal REST adapter dual-mode (SF-23 T4)`
 
 ### Task T5: push-events
 **Files:** Create `services/bff-gateway/src/lib/push-triggers.ts`; Modify `services/bff-gateway/src/server.ts`; Test `services/bff-gateway/test/push-triggers.spec.ts`.
@@ -303,8 +303,8 @@ const stopPushTriggers = startPushTriggers(config);
 // signal handler: gọi stopPushTriggers() trong chuỗi shutdown
 ```
 
-- [ ] **Step 3: test** — bffEvents.emit('kafka:event', {topic:'order-events', envelope:{eventId:'evt-1',type:'order.assigned',payload:{fulfillCode:'ORD-1'}}}) → pool giả nhận 1 INSERT với dedupeKey 'evt-1'; type không trong map (vd order.cancelled) → 0 INSERT; emit trùng eventId → 1 INSERT (ON CONFLICT do SQL — assert không throw + chỉ intent); mock mode (key rỗng) → sendOneSignalPush false path.
-- [ ] **Step 4: Run + Commit** `feat(bff): push triggers trên bffEvents bus (SF-23 T5)`
+- [x] **Step 3: test** — bffEvents.emit('kafka:event', {topic:'order-events', envelope:{eventId:'evt-1',type:'order.assigned',payload:{fulfillCode:'ORD-1'}}}) → pool giả nhận 1 INSERT với dedupeKey 'evt-1'; type không trong map (vd order.cancelled) → 0 INSERT; emit trùng eventId → 1 INSERT (ON CONFLICT do SQL — assert không throw + chỉ intent); mock mode (key rỗng) → sendOneSignalPush false path.
+- [x] **Step 4: Run + Commit** `feat(bff): push triggers trên bffEvents bus (SF-23 T5)`
 
 ### Task T6: subscribe-login (FE push + polling)
 **Files:** Create `apps/shell/src/lib/push.ts`, `apps/shell/src/lib/notificationPoller.ts`; Modify `apps/shell/src/main.tsx`, `apps/shell/src/App.tsx`; Test `apps/shell/src/lib/__tests__/push.test.ts`.
