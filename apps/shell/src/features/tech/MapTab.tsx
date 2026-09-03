@@ -7,7 +7,7 @@
 import { useMemo } from 'react';
 import { Skeleton } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { EmptyState, MapView, type StopSpec } from '@hub-store/shared';
+import { EmptyState, escapeHtml, MapView, type StopSpec } from '@hub-store/shared';
 import { useTechFetch } from './useTechFetch';
 import { filterDeliveryOrders, type DeliveryOrderDto } from './techApi';
 import { statusTone, toneColors } from './techHelpers';
@@ -36,6 +36,14 @@ export function buildPins(
       missing++;
       continue;
     }
+    // escapeHtml mọi giá trị nội suy (code-review P1) — popupHtml là raw HTML.
+    const code = escapeHtml(order.code);
+    const status = escapeHtml(order.status);
+    const province = order.province ? `<div>${escapeHtml(order.province)}</div>` : '';
+    const receiverName = order.receiver?.name ? `<div>${escapeHtml(order.receiver.name)}</div>` : '';
+    const receiverTel = order.receiver?.phone
+      ? `<a href="tel:${escapeHtml(order.receiver.phone)}" data-testid="tech-map-call-${code}">${escapeHtml(callLabel)}</a>`
+      : '';
     pinned.push({
       lat: loc.lat,
       long: loc.long,
@@ -43,7 +51,7 @@ export function buildPins(
       orderCode: order.code,
       color: pinColor(order.status),
       testId: `tech-map-pin-${order.code}`,
-      popupHtml: `<div class="sf24-tech-popup" data-testid="tech-map-popup-${order.code}"><strong>${order.code}</strong><div>${order.status}</div>${order.province ? `<div>${order.province}</div>` : ''}${order.receiver?.name ? `<div>${order.receiver.name}</div>` : ''}${order.receiver?.phone ? `<a href="tel:${order.receiver.phone}" data-testid="tech-map-call-${order.code}">${callLabel}</a>` : ''}</div>`,
+      popupHtml: `<div class="sf24-tech-popup" data-testid="tech-map-popup-${code}"><strong>${code}</strong><div>${status}</div>${province}${receiverName}${receiverTel}</div>`,
     });
   }
   return { pinned, missing };

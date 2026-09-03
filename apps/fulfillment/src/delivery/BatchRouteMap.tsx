@@ -6,7 +6,7 @@
  */
 import { useMemo } from "react";
 import { useTranslation } from "react-i18next";
-import { deriveStopCoord, EmptyState, loadPlanningMap, MapView, MOCK_WAREHOUSE, sortStops } from "@hub-store/shared";
+import { deriveStopCoord, EmptyState, escapeHtml, loadPlanningMap, MapView, MOCK_WAREHOUSE, sortStops } from "@hub-store/shared";
 
 export interface StopMeta { address?: string; cod?: number }
 
@@ -20,11 +20,15 @@ export function buildStops(batchCode: string, stopMeta?: Record<string, StopMeta
     const c = deriveStopCoord(e.orderCode);
     if (!c) { missing++; continue; }
     const meta = stopMeta?.[e.orderCode];
+    // escapeHtml mọi giá trị nội suy (code-review P1) — popupHtml là raw HTML.
+    const code = escapeHtml(e.orderCode);
+    const address = meta?.address ? `<div>${escapeHtml(meta.address)}</div>` : "";
+    const cod = meta?.cod != null ? `<div>COD: ${escapeHtml(String(meta.cod))}</div>` : "";
     stops.push({
       ...c,
       stopOrder: e.stopOrder,
       orderCode: e.orderCode,
-      popupHtml: `<div class="sf24-stop-popup" data-testid="route-stop-popup-${e.orderCode}"><strong>${e.orderCode}</strong>${meta?.address ? `<div>${meta.address}</div>` : ""}${meta?.cod != null ? `<div>COD: ${meta.cod}</div>` : ""}</div>`,
+      popupHtml: `<div class="sf24-stop-popup" data-testid="route-stop-popup-${code}"><strong>${code}</strong>${address}${cod}</div>`,
     });
   }
   return { stops, missing };

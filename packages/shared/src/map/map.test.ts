@@ -1,6 +1,26 @@
 import { describe, expect, it } from "vitest";
 import { sortStops } from "./mapController";
+import { escapeHtml } from "./escapeHtml";
 import { numberedStopIcon, statusPinIcon, warehouseIcon } from "./markers";
+
+describe("escapeHtml", () => {
+  it("escape cả 5 ký tự nguy hiểm & < > \" '", () => {
+    expect(escapeHtml(`<script>alert("x")</script>`)).toBe(
+      "&lt;script&gt;alert(&quot;x&quot;)&lt;/script&gt;",
+    );
+  });
+  it("escape & trước tiên — không double-escape entity có sẵn", () => {
+    expect(escapeHtml("A & B")).toBe("A &amp; B");
+    expect(escapeHtml("&amp;")).toBe("&amp;amp;");
+  });
+  it("quote trong attribute context — tel href không bẻ vỡ attribute", () => {
+    expect(escapeHtml(`09'1"2`)).toBe("09&#39;1&quot;2");
+  });
+  it("chuỗi sạch → nguyên văn", () => {
+    expect(escapeHtml("TP. Hồ Chí Minh")).toBe("TP. Hồ Chí Minh");
+    expect(escapeHtml("")).toBe("");
+  });
+});
 
 describe("sortStops", () => {
   it("sắp stops theo stopOrder tăng dần — không mutate input", () => {

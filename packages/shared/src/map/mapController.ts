@@ -44,36 +44,47 @@ export function createMap(container: HTMLElement, opts?: { scrollWheelZoom?: boo
   }).addTo(map);
   const layer = L.layerGroup().addTo(map);
   let dataBounds: L.LatLngBounds | undefined;
-  // SF-24 fix (Task 2): MapView effect gọi setWarehouse TRƯỚC setStops —
-  // clearLayers() của setStops xóa warehouse marker vừa thêm → track marker
-  // và re-add sau mỗi clear (marker instance vẫn dùng được sau clearLayers).
-  let warehouseMarker: L.Marker | undefined;
+
+  // SF-24 fix (code-review P0-residual): các setter CHỈ lưu params — vẽ tập
+  // trung trong redraw(): clearLayers() đúng MỘT lần rồi thêm lại warehouse →
+  // stops → polyline theo thứ tự. Không còn "clear xóa nhầm warehouse" và
+  // không phụ thuộc thứ tự gọi setter.
+  let warehouse: (LatLng & { popupHtml?: string; testId?: string }) | undefined;
+  let stops: StopSpec[] = [];
+  let polylinePoints: LatLng[] = [];
+
+  function redraw() {
+    layer.clearLayers();
+    if (warehouse) {
+      L.marker([warehouse.lat, warehouse.long], {
+        icon: warehouseIcon("#475467" /* DESIGN_TOKENS gray — xem header */, warehouse.testId),
+      })
+        .bindPopup(warehouse.popupHtml ?? "Kho")
+        .addTo(layer);
+    }
+    for (const s of stops) {
+      const icon = s.color
+        ? statusPinIcon(s.color, s.testId)
+        : numberedStopIcon(s.stopOrder, "#EB6E09" /* DESIGN_TOKENS.color.primary */, s.testId);
+      L.marker([s.lat, s.long], { icon })
+        .bindPopup(s.popupHtml ?? s.orderCode)
+        .addTo(layer);
+    }
+    if (polylinePoints.length >= 2) {
+      L.polyline(polylinePoints.map((p) => [p.lat, p.long] as [number, number]), { weight: 3 }).addTo(layer);
+    }
+    // dataBounds recompute mỗi redraw từ stops hiện tại (+ warehouse nếu có) —
+    // empty stops + không warehouse → bounds undefined → fitToData no-op.
+    const pts: [number, number][] = warehouse
+      ? [[warehouse.lat, warehouse.long], ...stops.map((s) => [s.lat, s.long] as [number, number])]
+      : stops.map((s) => [s.lat, s.long] as [number, number]);
+    dataBounds = pts.length > 0 ? L.latLngBounds(pts) : undefined;
+  }
 
   const api: MapController = {
-    setWarehouse(p) {
-      layer.clearLayers();
-      warehouseMarker = L.marker([p.lat, p.long], { icon: warehouseIcon("#475467" /* DESIGN_TOKENS gray — xem header */, p.testId) })
-        .bindPopup(p.popupHtml ?? "Kho")
-        .addTo(layer);
-    },
-    setStops(stops) {
-      layer.clearLayers(); // chống marker trùng khi effect re-run (prop identity đổi)
-      if (warehouseMarker) warehouseMarker.addTo(layer);
-      for (const s of stops) {
-        const icon = s.color
-          ? statusPinIcon(s.color, s.testId)
-          : numberedStopIcon(s.stopOrder, "#EB6E09" /* DESIGN_TOKENS.color.primary */, s.testId);
-        L.marker([s.lat, s.long], { icon })
-          .bindPopup(s.popupHtml ?? s.orderCode)
-          .addTo(layer);
-      }
-      if (stops.length > 0) {
-        dataBounds = L.latLngBounds(stops.map((s) => [s.lat, s.long] as [number, number]));
-      }
-    },
-    setPolyline(points) {
-      if (points.length >= 2) L.polyline(points.map((p) => [p.lat, p.long] as [number, number]), { weight: 3 }).addTo(layer);
-    },
+    setWarehouse(p) { warehouse = p; redraw(); },
+    setStops(next) { stops = next; redraw(); },
+    setPolyline(points) { polylinePoints = points; redraw(); },
     fitToData() {
       if (dataBounds) map.fitBounds(dataBounds.pad(0.25));
     },

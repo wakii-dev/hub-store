@@ -92,6 +92,27 @@ describe('buildPins — pure helper (plan-critic P0-2)', () => {
     expect(html).toContain('>Gọi</a>');
   });
 
+  it('escape HTML trong code/status/receiver/phone — <script> + quote render escaped (code-review P1)', () => {
+    const evil = order({
+      code: 'TD-EVIL',
+      status: 'SHIPPING',
+      receiver: {
+        name: `Giang <script>alert("x")</script>`,
+        phone: `0912"'><img src=x>`,
+        location: { lat: 10.762, long: 106.68 },
+      },
+    });
+    const { pinned } = buildPins([evil], 'Gọi');
+    const html = pinned[0].popupHtml ?? '';
+    expect(html).not.toContain('<script>');
+    expect(html).not.toContain('<img');
+    expect(html).not.toContain('href="tel:0912"');
+    expect(html).toContain('&lt;script&gt;');
+    expect(html).toContain('&#39;&gt;&lt;img');
+    expect(html).toContain(`href="tel:0912&quot;&#39;&gt;&lt;img src=x&gt;"`);
+    expect(html).toContain(`data-testid="tech-map-call-TD-EVIL"`);
+  });
+
   it('order thiếu location: không pin + missing = 1', () => {
     const { pinned, missing } = buildPins([WITH_LOC, NO_LOC], 'Gọi');
     expect(pinned.map((p) => p.orderCode)).not.toContain('TD-0002');

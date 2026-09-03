@@ -59,6 +59,20 @@ describe("BatchRouteMap.buildStops", () => {
     expect(buildStops("B-EMPTY")).toEqual({ stops: [], missing: 0 });
   });
 
+  it("escape HTML trong orderCode/address/COD — <script> + quote render escaped (code-review P1)", () => {
+    const { stops } = buildStops("B001", {
+      "ORD-A": { address: `12 O'Neil <script>alert("x")</script> & Co`, cod: 1000 },
+    });
+    const html = stops.find((s) => s.orderCode === "ORD-A")!.popupHtml;
+    expect(html).not.toContain("<script>");
+    expect(html).not.toContain(`"12`);
+    expect(html).toContain("&lt;script&gt;");
+    expect(html).toContain("12 O&#39;Neil");
+    expect(html).toContain("&amp; Co");
+    // testid attribute vẫn resolve được (escaped quote không bẻ vỡ attribute)
+    expect(html).toContain(`data-testid="route-stop-popup-ORD-A"`);
+  });
+
   it("orderCode rỗng → điểm missing (fallback chưa có tọa độ)", () => {
     loadPlanningMapMock.mockReturnValueOnce([
       { planningId: "p9", orderCode: "", stopOrder: 1, serviceId: "s", vehicleType: "truck", addons: [] },
