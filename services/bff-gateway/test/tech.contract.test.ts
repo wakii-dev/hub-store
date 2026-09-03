@@ -156,6 +156,46 @@ describe('SF-19 — POST /service-orders/filter', () => {
     expect(captured?.technicianCode).toBe('KTV-001');
     expect(captured?.statuses).toEqual([DeliveryStatus.DELIVERY_STATUS_CONFIRMED]);
   });
+
+  // SF-25: allowComplete passthrough — PROCESSING order → flag true nguyên vẹn
+  // qua mapper (T2-review P1: đường true phải được exercise, không chỉ false).
+  it('SF-25 — allowComplete=true passthrough cho PROCESSING order', async () => {
+    h.tech.override({
+      filterInstallationOrders: (call, cb) =>
+        cb(null, {
+          ...techResponses.filterInstallationOrders,
+          items: [
+            {
+              ...fixtureTechInstallationOrder,
+              status: DeliveryStatus.DELIVERY_STATUS_PROCESSING,
+              buttons: {
+                allowCancel: true,
+                allowAssign: false,
+                allowReassign: true,
+                allowAccept: false,
+                allowReschedule: true,
+                allowComplete: true,
+              },
+            },
+          ],
+        }),
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/filter',
+      payload: {},
+      headers: await auth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().items[0].buttons).toEqual({
+      allowCancel: true,
+      allowAssign: false,
+      allowReassign: true,
+      allowAccept: false,
+      allowReschedule: true,
+      allowComplete: true,
+    });
+  });
 });
 
 describe('SF-19 — POST /service-orders/:code/assign', () => {
