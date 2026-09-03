@@ -311,6 +311,10 @@ const techDefaults: Record<string, UnaryHandler> = {
   filterInstallationOrders: (_c, cb) => cb(null, techResponses.filterInstallationOrders),
   assignTechnician: (_c, cb) => cb(null, techResponses.assignTechnician),
   suggestTechnicians: (_c, cb) => cb(null, techResponses.suggestTechnicians),
+  // SF-25 — defaults happy-path; test chi tiết override per-test.
+  acceptOrder: (_c, cb) => cb(null, techResponses.acceptOrder),
+  completeOrder: (_c, cb) => cb(null, techResponses.completeOrder),
+  rescheduleOrder: (_c, cb) => cb(null, techResponses.rescheduleOrder),
 };
 
 const batchingDefaults: Record<string, UnaryHandler> = {

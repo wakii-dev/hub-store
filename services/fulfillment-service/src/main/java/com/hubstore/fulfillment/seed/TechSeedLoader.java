@@ -8,7 +8,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDate;
+import java.time.LocalTime;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -122,9 +124,21 @@ public final class TechSeedLoader {
         return LocalDate.parse(raw);
     }
 
+    /**
+     * Placeholder expectedTime (SF-25) — "TODAY@HH:MM" → hôm nay +07:00 giờ HH:MM
+     * (mirror seed-db.sh CASE CURRENT_DATE + time); ISO-8601 nạp nguyên trạng;
+     * null/rỗng → null.
+     */
     private static OffsetDateTime expectedTime(JsonNode o) {
         String raw = o.path("expectedTime").asText(null);
-        return raw == null || raw.isBlank() ? null : OffsetDateTime.parse(raw);
+        if (raw == null || raw.isBlank()) {
+            return null;
+        }
+        if (raw.startsWith("TODAY@")) {
+            return OffsetDateTime.of(LocalDate.now(),
+                    LocalTime.parse(raw.substring("TODAY@".length())), ZoneOffset.of("+07:00"));
+        }
+        return OffsetDateTime.parse(raw);
     }
 
     private static String jsonPassthrough(JsonNode n) {

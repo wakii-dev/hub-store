@@ -260,12 +260,14 @@ INSERT INTO public.installation_orders (
   expected_time, timeline, service_fee, fee_adjust, items, region_code, province)
 SELECT
   i->>'serviceOrderCode', i->>'deliveryOrderCode', i->>'technicianCode', i->>'status',
-  NULLIF(i->>'expectedTime','')::timestamptz,
+  CASE WHEN i->>'expectedTime' LIKE 'TODAY@%'   -- SF-25: TODAY@HH:MM → hôm nay + giờ (offset 7 = sau 'TODAY@')
+         THEN CURRENT_DATE + substring(i->>'expectedTime' from 7)::time
+       ELSE NULLIF(i->>'expectedTime','')::timestamptz END,
   i->'timeline',
   (i->>'serviceFee')::double precision, (i->>'feeAdjust')::double precision,
   i->'items', i->>'regionCode', i->>'province'
 FROM jsonb_array_elements(:'tech_json'::jsonb->'installationOrders') AS i;
-\echo 'tech: seeded installation_orders'
+\echo 'tech: seeded installation_orders (expectedTime TODAY@HH:MM → CURRENT_DATE + time)'
 \else
 \echo 'tech: installation_orders đã có data — bỏ qua'
 \endif

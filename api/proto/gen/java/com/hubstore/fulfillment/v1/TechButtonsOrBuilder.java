@@ -38,4 +38,14 @@ public interface TechButtonsOrBuilder extends
    * @return The allowReschedule.
    */
   boolean getAllowReschedule();
+
+  /**
+   * <pre>
+   * SF-25: assigned &amp;&amp; PROCESSING
+   * </pre>
+   *
+   * <code>bool allow_complete = 6;</code>
+   * @return The allowComplete.
+   */
+  boolean getAllowComplete();
 }

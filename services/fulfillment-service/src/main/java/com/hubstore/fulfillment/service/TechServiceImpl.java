@@ -2,8 +2,10 @@ package com.hubstore.fulfillment.service;
 
 import com.hubstore.fulfillment.store.TechModels;
 import com.hubstore.fulfillment.store.TechOrderRepository;
+import com.hubstore.fulfillment.v1.AcceptOrderRequest;
 import com.hubstore.fulfillment.v1.AssignTechnicianRequest;
 import com.hubstore.fulfillment.v1.AssignTechnicianResponse;
+import com.hubstore.fulfillment.v1.CompleteOrderRequest;
 import com.hubstore.fulfillment.v1.Contact;
 import com.hubstore.fulfillment.v1.DeliveryOrder;
 import com.hubstore.fulfillment.v1.DeliveryStatus;
@@ -13,6 +15,8 @@ import com.hubstore.fulfillment.v1.FilterInstallationOrdersRequest;
 import com.hubstore.fulfillment.v1.FilterInstallationOrdersResponse;
 import com.hubstore.fulfillment.v1.GeoPoint;
 import com.hubstore.fulfillment.v1.InstallationOrder;
+import com.hubstore.fulfillment.v1.MutateTechOrderResponse;
+import com.hubstore.fulfillment.v1.RescheduleOrderRequest;
 import com.hubstore.fulfillment.v1.SuggestTechniciansRequest;
 import com.hubstore.fulfillment.v1.SuggestTechniciansResponse;
 import com.hubstore.fulfillment.v1.SuggestedTechnician;
@@ -27,6 +31,7 @@ import net.devh.boot.grpc.server.service.GrpcService;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
 import java.time.format.DateTimeFormatter;
 import java.time.format.DateTimeParseException;
 import java.util.ArrayList;
@@ -184,6 +189,120 @@ public class TechServiceImpl extends TechServiceGrpc.TechServiceImplBase {
         }
     }
 
+    // ---------------- SF-25 accept/complete/reschedule (spec §4.2) ----------------
+
+    private static final ZoneOffset ZONE_HCM = ZoneOffset.of("+07:00");
+
+    /**
+     * Lỗi phân tầng như assign: blank → INVALID_ARGUMENT; SO lạ → NOT_FOUND;
+     * không phải chủ đơn / sai trạng thái → FAILED_PRECONDITION (spec §4.2 —
+     * not-owner trùng mapping wrong-state là pattern-consistency, flag Linear).
+     * Response = đơn re-fetched với flags re-computed.
+     */
+    @Override
+    public void acceptOrder(AcceptOrderRequest request,
+                            StreamObserver<MutateTechOrderResponse> responseObserver) {
+        try {
+            TechModels.InstallationOrder updated = repo.acceptInstallation(
+                    requireOrderAndOwner(request.getServiceOrderCode(), request.getTechnicianCode()),
+                    request.getTechnicianCode(), OffsetDateTime.now(ZONE_HCM));
+            respondMutated(updated, responseObserver);
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (IllegalStateException e) {
+            responseObserver.onError(Status.FAILED_PRECONDITION
+                    .withDescription(e.getMessage()).asRuntimeException());
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    @Override
+    public void completeOrder(CompleteOrderRequest request,
+                              StreamObserver<MutateTechOrderResponse> responseObserver) {
+        try {
+            TechModels.InstallationOrder updated = repo.completeInstallation(
+                    requireOrderAndOwner(request.getServiceOrderCode(), request.getTechnicianCode()),
+                    request.getTechnicianCode(), OffsetDateTime.now(ZONE_HCM));
+            respondMutated(updated, responseObserver);
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (IllegalStateException e) {
+            responseObserver.onError(Status.FAILED_PRECONDITION
+                    .withDescription(e.getMessage()).asRuntimeException());
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /**
+     * Reschedule: CONFIRMED|PROCESSING|REDELIVERY|RESCHEDULED → RESCHEDULED +
+     * expected_time = newExpectedTime (ISO-8601; quá khứ → INVALID_ARGUMENT).
+     */
+    @Override
+    public void rescheduleOrder(RescheduleOrderRequest request,
+                                StreamObserver<MutateTechOrderResponse> responseObserver) {
+        try {
+            String soCode = requireOrderAndOwner(request.getServiceOrderCode(), request.getTechnicianCode());
+            OffsetDateTime newTime = parseExpectedTime(request.getNewExpectedTime());
+            if (newTime.isBefore(OffsetDateTime.now(ZONE_HCM))) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "newExpectedTime", "newExpectedTime không được ở quá khứ: " + request.getNewExpectedTime())));
+            }
+            TechModels.InstallationOrder updated = repo.rescheduleInstallation(
+                    soCode, request.getTechnicianCode(), newTime, request.getNote(),
+                    OffsetDateTime.now(ZONE_HCM));
+            respondMutated(updated, responseObserver);
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (IllegalStateException e) {
+            responseObserver.onError(Status.FAILED_PRECONDITION
+                    .withDescription(e.getMessage()).asRuntimeException());
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /** Blank → INVALID_ARGUMENT; SO lạ → NOT_FOUND; không chủ đơn → FAILED_PRECONDITION. Trả SO code. */
+    private String requireOrderAndOwner(String serviceOrderCode, String technicianCode) {
+        if (serviceOrderCode == null || serviceOrderCode.isBlank()) {
+            throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                    "serviceOrderCode", "serviceOrderCode bắt buộc.")));
+        }
+        if (technicianCode == null || technicianCode.isBlank()) {
+            throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                    "technicianCode", "technicianCode bắt buộc.")));
+        }
+        TechModels.InstallationOrder order = repo.findInstallation(serviceOrderCode)
+                .orElseThrow(() -> GrpcErrors.notFound("serviceOrderCode", serviceOrderCode));
+        if (!technicianCode.equals(order.technicianCode())) {
+            throw Status.FAILED_PRECONDITION.withDescription("Đơn " + serviceOrderCode
+                    + " không thuộc KTV " + technicianCode).asRuntimeException();
+        }
+        return serviceOrderCode;
+    }
+
+    private static OffsetDateTime parseExpectedTime(String raw) {
+        if (raw == null || raw.isBlank()) {
+            throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                    "newExpectedTime", "newExpectedTime bắt buộc.")));
+        }
+        try {
+            return OffsetDateTime.parse(raw);
+        } catch (DateTimeParseException e) {
+            throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                    "newExpectedTime", "newExpectedTime phải là ISO-8601: " + raw)));
+        }
+    }
+
+    private static void respondMutated(TechModels.InstallationOrder updated,
+                                       StreamObserver<MutateTechOrderResponse> responseObserver) {
+        responseObserver.onNext(MutateTechOrderResponse.newBuilder()
+                .setOrder(toProtoInstallation(updated))
+                .build());
+        responseObserver.onCompleted();
+    }
+
     // ---------------- proto ↔ models mapping ----------------
 
     /** Enum → string thường; UNRECOGNIZED trong filter bỏ qua (plan §4). */
@@ -283,6 +402,7 @@ public class TechServiceImpl extends TechServiceGrpc.TechServiceImplBase {
                 .setAllowReassign(btn.allowReassign())
                 .setAllowAccept(btn.allowAccept())
                 .setAllowReschedule(btn.allowReschedule())
+                .setAllowComplete(btn.allowComplete())
                 .build();
     }
 

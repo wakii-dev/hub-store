@@ -15,6 +15,9 @@ import type {
   FilterDeliveryOrdersRequest,
   FilterInstallationOrdersRequest,
   AssignTechnicianRequest,
+  AcceptOrderRequest,
+  CompleteOrderRequest,
+  RescheduleOrderRequest,
   SuggestTechniciansRequest,
 } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
 
@@ -284,6 +287,183 @@ describe('SF-19 — GET /technicians/suggest', () => {
     });
     expect(res.statusCode).toBe(422);
     expect(res.json().code).toBe('VALIDATION_ERROR');
+  });
+});
+
+describe('SF-25 — accept/complete/reschedule + read-side override', () => {
+  const techAuth = async (role = 'InsideTechnician', sub = 'KTV-001') => ({
+    authorization: `Bearer ${await signTestToken(role, sub)}`,
+  });
+
+  it('accept 200 — { order } + gRPC args đúng (role InsideTechnician)', async () => {
+    let captured: AcceptOrderRequest | undefined;
+    h.tech.override({
+      acceptOrder: (call, cb) => {
+        captured = call.request as AcceptOrderRequest;
+        cb(null, techResponses.acceptOrder);
+      },
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-0006/accept',
+      payload: { technicianCode: 'KTV-001' },
+      headers: await techAuth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().order.serviceOrderCode).toBe('SO-0001'); // fixture order
+    expect(captured).toEqual({ serviceOrderCode: 'SO-0006', technicianCode: 'KTV-001' });
+  });
+
+  it('accept role không phải KTV/CTV → 403 (không gọi upstream)', async () => {
+    let called = false;
+    h.tech.override({
+      acceptOrder: (_call, cb) => {
+        called = true;
+        cb(null, techResponses.acceptOrder);
+      },
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-0006/accept',
+      payload: { technicianCode: 'KTV-001' },
+      headers: await techAuth('Manager'),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PERMISSION_DENIED');
+    expect(called).toBe(false);
+  });
+
+  it('accept technicianCode blank → 422 BFF-side (không gọi upstream)', async () => {
+    let called = false;
+    h.tech.override({
+      acceptOrder: (_call, cb) => {
+        called = true;
+        cb(null, techResponses.acceptOrder);
+      },
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-0006/accept',
+      payload: { technicianCode: ' ' },
+      headers: await techAuth(),
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().code).toBe('VALIDATION_ERROR');
+    expect(called).toBe(false);
+  });
+
+  it('complete 200 + FAILED_PRECONDITION → 409 CONFLICT', async () => {
+    let captured: CompleteOrderRequest | undefined;
+    h.tech.override({
+      completeOrder: (call, cb) => {
+        captured = call.request as CompleteOrderRequest;
+        cb(null, techResponses.completeOrder);
+      },
+    });
+    const ok = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-0004/complete',
+      payload: { technicianCode: 'KTV-001' },
+      headers: await techAuth('OutsideTechnician', 'CTV-001'),
+    });
+    expect(ok.statusCode).toBe(200);
+    // technicianCode đi từ body nguyên trạng — ownership BE-side (spec §4.2).
+    expect(captured).toEqual({ serviceOrderCode: 'SO-0004', technicianCode: 'KTV-001' });
+
+    h.tech.override({
+      completeOrder: (_call, cb) =>
+        cb(mockGrpcError(GrpcStatus.FAILED_PRECONDITION, 'Order SO-0004 is CONFIRMED.')),
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-0004/complete',
+      payload: { technicianCode: 'KTV-001' },
+      headers: await techAuth(),
+    });
+    expect(res.statusCode).toBe(409);
+    expect(res.json().code).toBe('CONFLICT');
+  });
+
+  it('reschedule 200 — gRPC args đủ (newExpectedTime + note)', async () => {
+    let captured: RescheduleOrderRequest | undefined;
+    h.tech.override({
+      rescheduleOrder: (call, cb) => {
+        captured = call.request as RescheduleOrderRequest;
+        cb(null, techResponses.rescheduleOrder);
+      },
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-0004/reschedule',
+      payload: {
+        technicianCode: 'KTV-001',
+        expectedTime: '2026-09-04T09:00:00+07:00',
+        note: 'Khách xin dời',
+      },
+      headers: await techAuth(),
+    });
+    expect(res.statusCode).toBe(200);
+    expect(res.json().order.status).toBe('CONFIRMED'); // fixture status → string
+    expect(captured).toEqual({
+      serviceOrderCode: 'SO-0004',
+      newExpectedTime: '2026-09-04T09:00:00+07:00',
+      note: 'Khách xin dời',
+      technicianCode: 'KTV-001',
+    });
+  });
+
+  it('reschedule thiếu expectedTime → 422; SO lạ → 404', async () => {
+    const missing = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-0004/reschedule',
+      payload: { technicianCode: 'KTV-001' },
+      headers: await techAuth(),
+    });
+    expect(missing.statusCode).toBe(422);
+    expect(missing.json().details).toEqual([
+      { field: 'expectedTime', message: 'expectedTime is required.' },
+    ]);
+
+    h.tech.override({
+      rescheduleOrder: (_call, cb) =>
+        cb(mockGrpcError(GrpcStatus.NOT_FOUND, 'Order SO-404 not found.')),
+    });
+    const notFound = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-404/reschedule',
+      payload: {
+        technicianCode: 'KTV-001',
+        expectedTime: '2026-09-04T09:00:00+07:00',
+      },
+      headers: await techAuth(),
+    });
+    expect(notFound.statusCode).toBe(404);
+    expect(notFound.json().code).toBe('NOT_FOUND');
+  });
+
+  it('read-side override: InsideTechnician filter → technicianCode ép từ token sub', async () => {
+    let captured: FilterInstallationOrdersRequest | undefined;
+    h.tech.override({
+      filterInstallationOrders: (call, cb) => {
+        captured = call.request as FilterInstallationOrdersRequest;
+        cb(null, techResponses.filterInstallationOrders);
+      },
+    });
+    await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/filter',
+      payload: { technicianCode: 'KTV-999' },
+      headers: await techAuth('InsideTechnician', 'KTV-001'),
+    });
+    expect(captured?.technicianCode).toBe('KTV-001');
+    // Role khác (Manager desktop) — giữ body nguyên.
+    await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/filter',
+      payload: { technicianCode: 'KTV-002' },
+      headers: await techAuth('Manager'),
+    });
+    expect(captured?.technicianCode).toBe('KTV-002');
   });
 });
 

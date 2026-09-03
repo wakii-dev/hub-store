@@ -101,6 +101,21 @@ private static final long serialVersionUID = 0L;
     return allowReschedule_;
   }
 
+  public static final int ALLOW_COMPLETE_FIELD_NUMBER = 6;
+  private boolean allowComplete_ = false;
+  /**
+   * <pre>
+   * SF-25: assigned &amp;&amp; PROCESSING
+   * </pre>
+   *
+   * <code>bool allow_complete = 6;</code>
+   * @return The allowComplete.
+   */
+  @java.lang.Override
+  public boolean getAllowComplete() {
+    return allowComplete_;
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -129,6 +144,9 @@ private static final long serialVersionUID = 0L;
     }
     if (allowReschedule_ != false) {
       output.writeBool(5, allowReschedule_);
+    }
+    if (allowComplete_ != false) {
+      output.writeBool(6, allowComplete_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -159,6 +177,10 @@ private static final long serialVersionUID = 0L;
       size += com.google.protobuf.CodedOutputStream
         .computeBoolSize(5, allowReschedule_);
     }
+    if (allowComplete_ != false) {
+      size += com.google.protobuf.CodedOutputStream
+        .computeBoolSize(6, allowComplete_);
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -184,6 +206,8 @@ private static final long serialVersionUID = 0L;
         != other.getAllowAccept()) return false;
     if (getAllowReschedule()
         != other.getAllowReschedule()) return false;
+    if (getAllowComplete()
+        != other.getAllowComplete()) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -210,6 +234,9 @@ private static final long serialVersionUID = 0L;
     hash = (37 * hash) + ALLOW_RESCHEDULE_FIELD_NUMBER;
     hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
         getAllowReschedule());
+    hash = (37 * hash) + ALLOW_COMPLETE_FIELD_NUMBER;
+    hash = (53 * hash) + com.google.protobuf.Internal.hashBoolean(
+        getAllowComplete());
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -350,6 +377,7 @@ private static final long serialVersionUID = 0L;
       allowReassign_ = false;
       allowAccept_ = false;
       allowReschedule_ = false;
+      allowComplete_ = false;
       return this;
     }
 
@@ -398,6 +426,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000010) != 0)) {
         result.allowReschedule_ = allowReschedule_;
       }
+      if (((from_bitField0_ & 0x00000020) != 0)) {
+        result.allowComplete_ = allowComplete_;
+      }
     }
 
     @java.lang.Override
@@ -426,6 +457,9 @@ private static final long serialVersionUID = 0L;
       }
       if (other.getAllowReschedule() != false) {
         setAllowReschedule(other.getAllowReschedule());
+      }
+      if (other.getAllowComplete() != false) {
+        setAllowComplete(other.getAllowComplete());
       }
       this.mergeUnknownFields(other.getUnknownFields());
       onChanged();
@@ -478,6 +512,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000010;
               break;
             } // case 40
+            case 48: {
+              allowComplete_ = input.readBool();
+              bitField0_ |= 0x00000020;
+              break;
+            } // case 48
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -651,6 +690,50 @@ private static final long serialVersionUID = 0L;
     public Builder clearAllowReschedule() {
       bitField0_ = (bitField0_ & ~0x00000010);
       allowReschedule_ = false;
+      onChanged();
+      return this;
+    }
+
+    private boolean allowComplete_ ;
+    /**
+     * <pre>
+     * SF-25: assigned &amp;&amp; PROCESSING
+     * </pre>
+     *
+     * <code>bool allow_complete = 6;</code>
+     * @return The allowComplete.
+     */
+    @java.lang.Override
+    public boolean getAllowComplete() {
+      return allowComplete_;
+    }
+    /**
+     * <pre>
+     * SF-25: assigned &amp;&amp; PROCESSING
+     * </pre>
+     *
+     * <code>bool allow_complete = 6;</code>
+     * @param value The allowComplete to set.
+     * @return This builder for chaining.
+     */
+    public Builder setAllowComplete(boolean value) {
+
+      allowComplete_ = value;
+      bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * SF-25: assigned &amp;&amp; PROCESSING
+     * </pre>
+     *
+     * <code>bool allow_complete = 6;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearAllowComplete() {
+      bitField0_ = (bitField0_ & ~0x00000020);
+      allowComplete_ = false;
       onChanged();
       return this;
     }

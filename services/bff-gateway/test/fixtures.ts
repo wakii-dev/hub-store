@@ -64,6 +64,7 @@ import type {
   FilterDeliveryOrdersResponse,
   FilterInstallationOrdersResponse,
   InstallationOrder as ProtoInstallationOrder,
+  MutateTechOrderResponse,
   SuggestTechniciansResponse,
 } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
 
@@ -101,6 +102,7 @@ export const fixtureTechDeliveryOrder: ProtoDeliveryOrder = {
     allowReassign: false,
     allowAccept: false,
     allowReschedule: false,
+    allowComplete: false,
   },
 };
 
@@ -132,6 +134,7 @@ export const fixtureTechInstallationOrder: ProtoInstallationOrder = {
     allowReassign: true,
     allowAccept: true,
     allowReschedule: true,
+    allowComplete: false,
   },
 };
 
@@ -151,6 +154,10 @@ export const techResponses = {
   assignTechnician: {
     order: fixtureTechInstallationOrder,
   } as AssignTechnicianResponse,
+  // SF-25 — mutate responses (cùng shape {order}, flags re-computed upstream)
+  acceptOrder: { order: fixtureTechInstallationOrder } as MutateTechOrderResponse,
+  completeOrder: { order: fixtureTechInstallationOrder } as MutateTechOrderResponse,
+  rescheduleOrder: { order: fixtureTechInstallationOrder } as MutateTechOrderResponse,
   suggestTechnicians: {
     items: [
       { code: 'KTV-001', name: 'Lê Kỹ Thuật', type: 'KTV', activeCount: 1 },

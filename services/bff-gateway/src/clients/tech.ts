@@ -5,12 +5,16 @@
  */
 import { TechServiceClient } from '../../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
 import type {
+  AcceptOrderRequest,
   AssignTechnicianRequest,
   AssignTechnicianResponse,
+  CompleteOrderRequest,
   FilterDeliveryOrdersRequest,
   FilterDeliveryOrdersResponse,
   FilterInstallationOrdersRequest,
   FilterInstallationOrdersResponse,
+  MutateTechOrderResponse,
+  RescheduleOrderRequest,
   SuggestTechniciansRequest,
   SuggestTechniciansResponse,
 } from '../../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
@@ -30,6 +34,10 @@ export interface TechApi {
     req: SuggestTechniciansRequest,
     role: string,
   ): Promise<SuggestTechniciansResponse>;
+  // SF-25 — accept/complete/reschedule KTV mobile (spec §4.2)
+  acceptOrder(req: AcceptOrderRequest, role: string): Promise<MutateTechOrderResponse>;
+  completeOrder(req: CompleteOrderRequest, role: string): Promise<MutateTechOrderResponse>;
+  rescheduleOrder(req: RescheduleOrderRequest, role: string): Promise<MutateTechOrderResponse>;
   close(): void;
 }
 
@@ -43,6 +51,9 @@ export function createTechClient(addr: string, deadlineMs: number): TechApi {
     assignTechnician: (req, role) => callUnary(c.assignTechnician.bind(c), req, role, deadlineMs),
     suggestTechnicians: (req, role) =>
       callUnary(c.suggestTechnicians.bind(c), req, role, deadlineMs),
+    acceptOrder: (req, role) => callUnary(c.acceptOrder.bind(c), req, role, deadlineMs),
+    completeOrder: (req, role) => callUnary(c.completeOrder.bind(c), req, role, deadlineMs),
+    rescheduleOrder: (req, role) => callUnary(c.rescheduleOrder.bind(c), req, role, deadlineMs),
     close: () => c.close(),
   };
 }

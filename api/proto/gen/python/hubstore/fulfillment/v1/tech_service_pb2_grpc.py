@@ -54,6 +54,21 @@ class TechServiceStub:
                 request_serializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.SuggestTechniciansRequest.SerializeToString,
                 response_deserializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.SuggestTechniciansResponse.FromString,
                 _registered_method=True)
+        self.AcceptOrder = channel.unary_unary(
+                '/hubstore.fulfillment.v1.TechService/AcceptOrder',
+                request_serializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.AcceptOrderRequest.SerializeToString,
+                response_deserializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.MutateTechOrderResponse.FromString,
+                _registered_method=True)
+        self.CompleteOrder = channel.unary_unary(
+                '/hubstore.fulfillment.v1.TechService/CompleteOrder',
+                request_serializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.CompleteOrderRequest.SerializeToString,
+                response_deserializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.MutateTechOrderResponse.FromString,
+                _registered_method=True)
+        self.RescheduleOrder = channel.unary_unary(
+                '/hubstore.fulfillment.v1.TechService/RescheduleOrder',
+                request_serializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.RescheduleOrderRequest.SerializeToString,
+                response_deserializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.MutateTechOrderResponse.FromString,
+                _registered_method=True)
 
 
 class TechServiceServicer:
@@ -83,6 +98,25 @@ class TechServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def AcceptOrder(self, request, context):
+        """SF-25 — accept/complete/reschedule KTV mobile (spec §4.2)
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def CompleteOrder(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def RescheduleOrder(self, request, context):
+        """Missing associated documentation comment in .proto file."""
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_TechServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -105,6 +139,21 @@ def add_TechServiceServicer_to_server(servicer, server):
                     servicer.SuggestTechnicians,
                     request_deserializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.SuggestTechniciansRequest.FromString,
                     response_serializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.SuggestTechniciansResponse.SerializeToString,
+            ),
+            'AcceptOrder': grpc.unary_unary_rpc_method_handler(
+                    servicer.AcceptOrder,
+                    request_deserializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.AcceptOrderRequest.FromString,
+                    response_serializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.MutateTechOrderResponse.SerializeToString,
+            ),
+            'CompleteOrder': grpc.unary_unary_rpc_method_handler(
+                    servicer.CompleteOrder,
+                    request_deserializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.CompleteOrderRequest.FromString,
+                    response_serializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.MutateTechOrderResponse.SerializeToString,
+            ),
+            'RescheduleOrder': grpc.unary_unary_rpc_method_handler(
+                    servicer.RescheduleOrder,
+                    request_deserializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.RescheduleOrderRequest.FromString,
+                    response_serializer=hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.MutateTechOrderResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -215,6 +264,87 @@ class TechService:
             '/hubstore.fulfillment.v1.TechService/SuggestTechnicians',
             hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.SuggestTechniciansRequest.SerializeToString,
             hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.SuggestTechniciansResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def AcceptOrder(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hubstore.fulfillment.v1.TechService/AcceptOrder',
+            hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.AcceptOrderRequest.SerializeToString,
+            hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.MutateTechOrderResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def CompleteOrder(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hubstore.fulfillment.v1.TechService/CompleteOrder',
+            hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.CompleteOrderRequest.SerializeToString,
+            hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.MutateTechOrderResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def RescheduleOrder(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hubstore.fulfillment.v1.TechService/RescheduleOrder',
+            hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.RescheduleOrderRequest.SerializeToString,
+            hubstore_dot_fulfillment_dot_v1_dot_tech__service__pb2.MutateTechOrderResponse.FromString,
             options,
             channel_credentials,
             insecure,
