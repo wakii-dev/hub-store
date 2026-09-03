@@ -1,4 +1,5 @@
 import { expect, test } from "@playwright/test";
+import { E2E_PASSWORD } from "../lib/credentials";
 
 /**
  * SF-11 Task 4 — role matrix verify 3 roles (REQUIREMENTS §2):
@@ -73,7 +74,7 @@ test.describe("Landing thật (login flow — KHÔNG storageState)", () => {
     await page.getByTestId("login-submit").click();
     await page.waitForURL("**/protocol/openid-connect/auth**");
     await page.locator("#username").fill(username);
-    await page.locator("#password").fill("Password123!");
+    await page.locator("#password").fill(E2E_PASSWORD);
     await page.locator("#kc-login").click();
     await page.waitForURL("**/hub-store-order/**");
   }

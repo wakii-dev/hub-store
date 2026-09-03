@@ -214,7 +214,7 @@ services:
       OIDC_JWKS_URL: http://keycloak:8081 # JWKS fetch trong network compose — URL riêng (gotcha Keycloak-in-Docker)
       INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-} # SF-12 — webhooks machine-call qua gRPC (x-internal-token)
       KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID:-hubstore-admin} # SF-8 — Users management
-      KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:-hubstore-admin-dev-secret}
+      KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:-ac865e01df73169f63e8b07002bc85b7} # SF-12 rotated — khớp realm JSON client hubstore-admin secret
       ENABLE_DEV_RESET_PASSWORD: "1" # DEV-ONLY — bật /auth/reset-password (prod không set → 404)
       ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-} # SF-23 — trống = push mock/off (dual-mode)
       ONESIGNAL_REST_API_KEY: ${ONESIGNAL_REST_API_KEY:-}

@@ -1,11 +1,12 @@
 import fs from "node:fs";
 import path from "node:path";
 import { chromium, type FullConfig } from "@playwright/test";
+import { E2E_PASSWORD } from "./lib/credentials";
 
 /**
  * SF-4 — globalSetup: login THẬT qua Keycloak hosted UI (Authorization Code +
  * PKCE) cho các user mẫu của realm import (coordinator/warehouse/manager/
- * admin/warehouse-emp — password dev `Password123!`) → storageState
+ * admin/warehouse-emp — password dev chung `E2E_PASSWORD`) → storageState
  * `.auth/<user>.json`. Các spec dùng lại storageState (default coordinator)
  * — KHÔNG login lại mỗi test.
  *
@@ -19,7 +20,7 @@ import { chromium, type FullConfig } from "@playwright/test";
  */
 
 const USERS = ["coordinator", "warehouse", "manager", "admin", "warehouse-emp"] as const;
-const PASSWORD = "Password123!"; // dev-only literal — realm JSON import
+const PASSWORD = E2E_PASSWORD; // SF-12 — dev-only, realm JSON import (lib/credentials)
 const AUTH_DIR = path.join(__dirname, ".auth");
 // Private-port seam (SF-15 precedent) — default :3000 giữ behavior cũ.
 const SHELL_URL = process.env.E2E_SHELL_URL ?? "http://localhost:3000";

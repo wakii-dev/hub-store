@@ -79,12 +79,12 @@ Tier 1: T1, T2, T6, T8. Tier 2: T3, T4, T7, T9. Tier 3: T5, T10. Cuối: T11. **
 - Modify: `docker/keycloak/hubstore-realm.json` (:191 admin client secret + :206-314 7 user passwords `"Password123!"`), `docker-compose.yml` (lockstep defaults), `.env.example` (lockstep), README.md (dev credentials section + rotation runbook)
 - **Lockstep e2e credentials (plan-critic P0):** `e2e/auth.setup.ts:22` (PASSWORD hardcoded `Password123!`), `e2e/tests/02-role-matrix.spec.ts:76`, `e2e/tests/05-users.spec.ts:82`, `e2e/tests/05-dashboard.spec.ts:163`, `e2e/walkthrough-sf18.ts:25` — đổi cùng đợt (tốt nhất: extract vào 1 constants file `e2e/lib/credentials.ts` import thay literal, hoặc đọc env `E2E_PASSWORD` với default mới)
 
-- [ ] **Step 3.1:** Sinh giá trị mới (openssl rand -hex 16 style): admin client secret mới; mỗi 7 user 1 password dev mới KHÁC nhau (ghi bảng vào README "Dev credentials (KHÔNG dùng prod)"). Chọn 1 password chung cho e2e users nếu e2e specs fill literal — cập nhật e2e files ở Step 3.2b.
-- [ ] **Step 3.2:** Sửa realm JSON: `"secret"` admin + `credentials[].value` 7 users ( realm import hash format giữ nguyên — plain value KC tự hash khi import). Sửa compose + .env.example cùng giá trị (lockstep — 1 commit).
-- [ ] **Step 3.2b:** Cập nhật e2e credentials lockstep: extract `Password123!` từ 5 file trên vào `e2e/lib/credentials.ts` (hoặc env) — mọi spec login vẫn pass sau rotate (`pnpm --filter e2e exec tsc --noEmit` nếu có).
-- [ ] **Step 3.3:** README: mục "Secrets & rotation runbook" — bảng secret → nơi phải đổi đồng bộ (realm JSON / compose / .env.example / .env local) + quy trình rotate prod-style (từng secret 1 đoạn ngắn).
-- [ ] **Step 3.4:** Verify: Keycloak import thành công với realm JSON mới (boot keycloak compose service hoặc docker run --import-realm một lần) → login 1 user bằng password mới qua token endpoint (password grant hoặc PKCE script `e2e/scripts/`). `git diff` chỉ chứa file đã liệt kê.
-- [ ] **Step 3.5:** Commit: `chore(secrets): SF-12 rotate dev defaults — realm admin+7 users, lockstep compose/env.example, rotation runbook (FI-257)`.
+- [x] **Step 3.1:** Sinh giá trị mới (openssl rand -hex 16 style): admin client secret mới; mỗi 7 user 1 password dev mới KHÁC nhau (ghi bảng vào README "Dev credentials (KHÔNG dùng prod)"). Chọn 1 password chung cho e2e users nếu e2e specs fill literal — cập nhật e2e files ở Step 3.2b.
+- [x] **Step 3.2:** Sửa realm JSON: `"secret"` admin + `credentials[].value` 7 users ( realm import hash format giữ nguyên — plain value KC tự hash khi import). Sửa compose + .env.example cùng giá trị (lockstep — 1 commit).
+- [x] **Step 3.2b:** Cập nhật e2e credentials lockstep: extract `Password123!` từ 5 file trên vào `e2e/lib/credentials.ts` (hoặc env) — mọi spec login vẫn pass sau rotate (`pnpm --filter e2e exec tsc --noEmit` nếu có).
+- [x] **Step 3.3:** README: mục "Secrets & rotation runbook" — bảng secret → nơi phải đổi đồng bộ (realm JSON / compose / .env.example / .env local) + quy trình rotate prod-style (từng secret 1 đoạn ngắn).
+- [x] **Step 3.4:** Verify: Keycloak import thành công với realm JSON mới (boot keycloak compose service hoặc docker run --import-realm một lần) → login 1 user bằng password mới qua token endpoint (password grant hoặc PKCE script `e2e/scripts/`). `git diff` chỉ chứa file đã liệt kê.
+- [x] **Step 3.5:** Commit: `chore(secrets): SF-12 rotate dev defaults — realm admin+7 users, lockstep compose/env.example, rotation runbook (FI-257)`.
 
 ### Task 4: healthchecks — /health mọi service + compose wiring
 

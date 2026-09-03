@@ -12,7 +12,7 @@ Usage:
 origin mặc định http://127.0.0.1:4220 (khớp VITE_OIDC_* của runner — storage
 key `oidc.user:http://127.0.0.1:8082/realms/hubstore:hubstore-mobile`).
 """
-import base64, hashlib, secrets, json, time, re, sys, urllib.parse, urllib.request, http.client, http.cookiejar
+import base64, hashlib, secrets, json, time, re, sys, os, urllib.parse, urllib.request, http.client, http.cookiejar
 
 KC_PORT = 8082
 BASE = f"http://127.0.0.1:{KC_PORT}/realms/hubstore"
@@ -22,7 +22,7 @@ REDIRECT_PORT = 4220
 USER = sys.argv[1] if len(sys.argv) > 1 else "KTV-001"
 OUT = sys.argv[2] if len(sys.argv) > 2 else "e2e/.auth/ktv-001.json"
 ORIGIN = sys.argv[3] if len(sys.argv) > 3 else f"http://{REDIRECT_HOST}:{REDIRECT_PORT}"
-PASSWORD = "Password123!"
+PASSWORD = os.environ.get("E2E_PASSWORD", "gY0pM9SO7QEmqil_lWHQ")  # SF-12 — dev-only, realm JSON (rotate đồng bộ lib/credentials)
 CLIENT = "hubstore-mobile"
 REDIRECT = f"{ORIGIN}/callback"
 

@@ -134,6 +134,49 @@ cp .env.example .env
 
 Các biến còn lại có default hợp lý (xem `.env.example`). Sau khi điền xong: `docker compose up --build`.
 
+## Dev credentials (SF-12 — rotated, KHÔNG dùng prod)
+
+Realm dev import từ `docker/keycloak/hubstore-realm.json` — password dev đã rotate (không còn `Password123!`).
+**Giá trị này DEV-ONLY, không bao giờ dùng cho staging/prod.**
+
+| User | Password | Ghi chú |
+| ----------------- | ----------------------- | --------------------------------------------- |
+| `coordinator` | `gY0pM9SO7QEmqil_lWHQ` | e2e (auth.setup storageState) |
+| `warehouse` | `gY0pM9SO7QEmqil_lWHQ` | e2e |
+| `manager` | `gY0pM9SO7QEmqil_lWHQ` | e2e (users/dashboard specs login thật) |
+| `admin` | `gY0pM9SO7QEmqil_lWHQ` | e2e |
+| `warehouse-emp` | `gY0pM9SO7QEmqil_lWHQ` | e2e (SF-18 D2C) |
+| `KTV-001` | `gY0pM9SO7QEmqil_lWHQ` | ktv-mobile mint script (`E2E_PASSWORD` env) |
+| `CTV-001` | `GSzIMCBcUNtcbKwnTn_o` | không qua e2e password chung |
+
+E2e đọc password từ `e2e/lib/credentials.ts` (env `E2E_PASSWORD` override) — KHÔNG hardcode lại literal trong spec.
+
+| Secret | Giá trị dev hiện tại | Nơi khai báo |
+| ------------------------------ | ------------------------------------ | ------------------------------------------- |
+| Keycloak admin client secret | `ac865e01df73169f63e8b07002bc85b7` | realm JSON client `hubstore-admin` + compose `KC_ADMIN_CLIENT_SECRET` + `.env.example` |
+
+## Secrets & rotation runbook (SF-12)
+
+Mỗi secret phải đổi ĐỒNG BỘ ở mọi nơi nó xuất hiện — đổi thiếu 1 nơi là service lệch token/secret khi boot.
+
+| Secret | Nơi phải đổi đồng bộ |
+| ------------------------- | ------------------------------------------------------------------------ |
+| Admin client secret (`hubstore-admin`) | `docker/keycloak/hubstore-realm.json` (`clients[].secret`) + `docker-compose.yml` (`KC_ADMIN_CLIENT_SECRET` default) + `.env.example` + `.env` local |
+| Realm user password (7 users) | `docker/keycloak/hubstore-realm.json` (`credentials[].value`) + `e2e/lib/credentials.ts` + 2 mint script `e2e/scripts/mint_*.py` + bảng trên |
+| `KEYCLOAK_ADMIN_PASSWORD` | compose default + `.env` local |
+| `JWT_DEV_SECRET` / `VITE_JWT_DEV_SECRET` | `.env` local (không default trong git — placeholder rỗng) |
+| `INTERNAL_SERVICE_TOKEN` | `.env` local; compose chỉ đọc `${INTERNAL_SERVICE_TOKEN:-}` (không default) |
+| `POSTGRES_PASSWORD` | `.env` local (compose `:?` fail-loud — không có default) |
+
+Quy trình rotate (dev realm):
+
+1. Sinh giá trị mới: `openssl rand -hex 16` (hoặc `-base64 15` cho password).
+2. Sửa realm JSON (secret + credentials — KC tự hash khi import).
+3. Sửa compose default + `.env.example` + `e2e/lib/credentials.ts` + mint scripts CÙNG 1 commit (lockstep).
+4. Reset volume keycloak để re-import: `bash scripts/reset-db.sh` (hoặc `docker compose down -v` riêng keycloak-data) → `docker compose up -d keycloak`.
+5. Verify login: `E2E_PASSWORD=<mới> python3 e2e/scripts/mint_sf11.py coordinator /tmp/auth.json` → token OK.
+6. Prod-style: KHÔNG dùng literal — secret nằm secret manager/env, realm import chỉ cho dev.
+
 ## K8s / minikube deploy — requirements + preflight
 
 Deploy lên Kubernetes local (minikube) cần:
@@ -183,7 +226,7 @@ curl -s -X POST http://127.0.0.1:18080/keycloak/realms/hub-store/protocol/openid
 ## OIDC auth (Keycloak) — SF-4
 
 - Bật Keycloak + realm import tự động: `docker compose up -d keycloak` (realm JSON: `docker/keycloak/hubstore-realm.json`; `--import-realm` skip nếu realm đã tồn tại — đổi realm/user phải `docker compose down -v` reset volume keycloak-data).
-- Users mẫu (dev-only, password literal trong realm JSON): `coordinator` / `warehouse` / `manager` — password `Password123!`.
+- Users mẫu (dev-only, password đã rotate SF-12 — bảng ở mục "Dev credentials" trên).
 - Shell login PKCE (public client `hubstore-web`) — env `VITE_OIDC_*` trong `.env`; silent renew qua refresh token; logout → Keycloak end-session.
 - BFF verify JWKS RS256 (`OIDC_ISSUER`/`OIDC_AUDIENCE`/`OIDC_JWKS_URL`), role từ claim `realm_access.roles` → gRPC metadata `x-user-role`.
 

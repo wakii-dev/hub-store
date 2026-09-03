@@ -9,6 +9,7 @@
  * Exit 0 = PASS; exit 1 = FAIL (assert chi tiết in stdout).
  */
 import { readFileSync } from "node:fs";
+import { E2E_PASSWORD as CREDENTIALS_E2E_PASSWORD } from "./lib/credentials";
 import { createHash, randomBytes } from "node:crypto";
 import { ChannelCredentials, Metadata } from "@grpc/grpc-js";
 import type { CreateBatchRequest } from "../api/proto/gen/ts/hubstore/batching/v1/batching.js";
@@ -41,7 +42,7 @@ const DEADLINE = 5_000;
 // grant — password grant bị từ chối; port flow của e2e/scripts/mint_sf11.py).
 const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "http://localhost:8081";
 const E2E_USER = process.env.E2E_USER ?? "coordinator";
-const E2E_PASSWORD = process.env.E2E_PASSWORD ?? "Password123!"; // dev-only (realm JSON)
+const E2E_PASSWORD = CREDENTIALS_E2E_PASSWORD; // SF-12 — lib/credentials (vẫn override E2E_PASSWORD env)
 
 async function mintAccessToken(): Promise<string> {
   const base = `${KEYCLOAK_URL}/realms/hubstore`;

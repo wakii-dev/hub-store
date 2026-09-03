@@ -7,6 +7,7 @@
  */
 import fs from "node:fs";
 import { chromium } from "@playwright/test";
+import { E2E_PASSWORD } from "./lib/credentials";
 
 const OUT = `${__dirname}/../.claude/verify-sf18`;
 fs.mkdirSync(OUT, { recursive: true });
@@ -22,7 +23,7 @@ await page.goto("http://localhost:3000/hub-store-order/d2c");
 await page.getByTestId("login-submit").click();
 await page.waitForURL("**/protocol/openid-connect/auth**");
 await page.locator("#username").fill("warehouse-emp");
-await page.locator("#password").fill("Password123!");
+await page.locator("#password").fill(E2E_PASSWORD);
 await page.locator("#kc-login").click();
 await page.waitForURL("**/hub-store-order/d2c**");
 await page.getByTestId("d2c-page").waitFor();

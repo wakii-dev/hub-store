@@ -14,7 +14,7 @@ arg2 — pattern SF-15 PKCE). Khác sf16:
     <role>/Password123!), argv[2] = out path.
 Chạy: python3 e2e/scripts/mint_sf11.py manager /tmp/story/fi245/sf11/auth-manager.json
 """
-import base64, hashlib, secrets, json, time, re, sys, urllib.parse, urllib.request, http.client, http.cookiejar
+import base64, hashlib, secrets, json, time, re, sys, os, urllib.parse, urllib.request, http.client, http.cookiejar
 
 KC_HOST = "localhost"
 KC_PORT = 8082
@@ -22,7 +22,7 @@ BASE = f"http://localhost:{KC_PORT}/realms/hubstore"
 REDIRECT = "http://localhost:3000/callback"
 CLIENT = "hubstore-web"
 ORIGIN = "http://localhost:4010"
-PASSWORD = "Password123!"  # dev-only literal trong realm JSON
+PASSWORD = os.environ.get("E2E_PASSWORD", "gY0pM9SO7QEmqil_lWHQ")  # SF-12 — dev-only, realm JSON (rotate đồng bộ lib/credentials)
 
 role = sys.argv[1] if len(sys.argv) > 1 else "manager"
 OUT = sys.argv[2] if len(sys.argv) > 2 else f"/tmp/story/fi245/sf11/auth-{role}.json"

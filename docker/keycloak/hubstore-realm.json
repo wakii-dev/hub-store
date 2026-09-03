@@ -188,7 +188,7 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "secret": "hubstore-admin-dev-secret"
+      "secret": "ac865e01df73169f63e8b07002bc85b7"
     }
   ],
   "users": [
@@ -204,7 +204,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -222,7 +222,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -240,7 +240,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -258,7 +258,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -276,7 +276,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -294,7 +294,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -312,7 +312,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "GSzIMCBcUNtcbKwnTn_o",
           "temporary": false
         }
       ],
