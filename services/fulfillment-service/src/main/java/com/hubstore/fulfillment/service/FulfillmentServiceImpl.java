@@ -472,10 +472,15 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                 }
                 Long collectedArg = item.hasCollectedAmount() ? item.getCollectedAmount() : null;
                 long collected = collectedArg == null ? existing.get().expectedAmount() : collectedArg;
-                codRepo.confirmOne(code, collectedArg, actor, Instant.now());
-                repo.appendAudit(actor, "cod.confirmed", code, json(Map.of(
-                        "expected", existing.get().expectedAmount(),
-                        "collected", collected)));
+                // Security-audit P2-2: mutation + audit trong 1 transaction —
+                // audit không mất khi money-status đã đổi (same tx như mutateOrderStatus).
+                transactions.execute(tx -> {
+                    codRepo.confirmOne(code, collectedArg, actor, Instant.now());
+                    repo.appendAudit(actor, "cod.confirmed", code, json(Map.of(
+                            "expected", existing.get().expectedAmount(),
+                            "collected", collected)));
+                    return null;
+                });
                 resp.addResults(ConfirmCodResult.newBuilder()
                         .setFulfillCode(code).setSuccess(true)
                         .setMessage("collected=" + collected + "."));
@@ -504,12 +509,18 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
             List<CodConfirmation> pending = codRepo.findPendingByBatch(request.getBatchCode());
             long total = pending.stream().mapToLong(CodConfirmation::expectedAmount).sum();
             String actor = ActorInterceptor.currentActor();
-            int confirmed = codRepo.confirmBatch(request.getBatchCode(), actor, Instant.now());
-            if (confirmed > 0) {
-                repo.appendAudit(actor, "cod.batch_confirmed", request.getBatchCode(), json(Map.of(
-                        "count", confirmed, "total", total,
-                        "codes", pending.stream().map(CodConfirmation::fulfillCode).toList())));
-            }
+            // Security-audit P2-2: mutation + audit trong 1 transaction (same
+            // pattern mutateOrderStatus) — audit không tách khỏi money-status.
+            Integer confirmedBox = transactions.execute(tx -> {
+                int n = codRepo.confirmBatch(request.getBatchCode(), actor, Instant.now());
+                if (n > 0) {
+                    repo.appendAudit(actor, "cod.batch_confirmed", request.getBatchCode(), json(Map.of(
+                            "count", n, "total", total,
+                            "codes", pending.stream().map(CodConfirmation::fulfillCode).toList())));
+                }
+                return n;
+            });
+            int confirmed = confirmedBox == null ? 0 : confirmedBox;
             responseObserver.onNext(ConfirmBatchCodResponse.newBuilder()
                     .setConfirmedCount(confirmed).setTotalAmount(total).build());
             responseObserver.onCompleted();

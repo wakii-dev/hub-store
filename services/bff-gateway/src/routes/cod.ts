@@ -149,16 +149,23 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
           .send(errorEnvelope(400, 'fulfillCode bắt buộc.', { code: 'BAD_REQUEST' }));
         return reply;
       }
+      // Upper bound MAX_SAFE_INTEGER (security-audit P2-1): 1e19 pass int64
+      // đây nhưng ts-proto encode wrap âm → corrupt settlement.
       if (
         body.collectedAmount !== undefined &&
         (typeof body.collectedAmount !== 'number' ||
           !Number.isInteger(body.collectedAmount) ||
-          body.collectedAmount < 0)
+          body.collectedAmount < 0 ||
+          body.collectedAmount > Number.MAX_SAFE_INTEGER)
       ) {
         void reply.code(400).send(
-          errorEnvelope(400, 'collectedAmount phải là số nguyên ≥ 0 (bỏ trống = lấy expected).', {
-            code: 'BAD_REQUEST',
-          }),
+          errorEnvelope(
+            400,
+            'collectedAmount phải là số nguyên ≥ 0 (bỏ trống = lấy expected).',
+            {
+              code: 'BAD_REQUEST',
+            },
+          ),
         );
         return reply;
       }

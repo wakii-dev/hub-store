@@ -91,6 +91,16 @@ describe('POST /cod/confirm — guard + per-order confirm', () => {
     const fractional = await authedInject(h.app, 'POST', '/cod/confirm', { fulfillCode: 'O', collectedAmount: 1.5 });
     expect(fractional.statusCode).toBe(400);
   });
+
+  it('collectedAmount > MAX_SAFE_INTEGER → 400 (P2-1: 1e19 wrap âm int64); MAX_SAFE_INTEGER → 200', async () => {
+    const huge = await authedInject(h.app, 'POST', '/cod/confirm', { fulfillCode: 'O', collectedAmount: 1e19 });
+    expect(huge.statusCode).toBe(400);
+    const bound = await authedInject(h.app, 'POST', '/cod/confirm', {
+      fulfillCode: 'O',
+      collectedAmount: Number.MAX_SAFE_INTEGER,
+    });
+    expect(bound.statusCode).toBe(200);
+  });
 });
 
 describe('POST /cod/confirm-batch — guard + bulk confirm', () => {
