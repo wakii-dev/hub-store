@@ -104,6 +104,19 @@ export function registerWebhookRoutes(
           }),
         );
       }
+      // X-Source ASCII-safe — gRPC metadata (webhook:<source> actor header) chỉ
+      // chấp nhận byte ASCII; source non-ASCII/space hiện tại nổ 500 ở RPC.
+      // Charset chặt cũng ép caller giữ nhất quán casing (lowercase convention).
+      if (!/^[A-Za-z0-9._-]+$/.test(source)) {
+        return reply.code(422).send(
+          errorEnvelope(422, 'Dữ liệu đơn không hợp lệ', {
+            code: 'VALIDATION_ERROR',
+            details: [
+              { field: 'X-Source', message: 'Chỉ cho phép A-Z a-z 0-9 . _ -' },
+            ],
+          }),
+        );
+      }
       // Mapping — thu gom MỌI lỗi field vào details[] (không fail-fast).
       try {
         const { externalId, order } = mapWebhookPayload(

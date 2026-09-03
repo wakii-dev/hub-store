@@ -134,6 +134,33 @@ describe('SF-26 retry semantics — error contract đầy đủ (Task 6)', () =>
     expectNoSecretLeak(res.payload);
   });
 
+  it('422 X-Source non-ASCII (shopeé) — 422 VALIDATION_ERROR, KHÔNG 500 grpc metadata', async () => {
+    const raw = JSON.stringify(VALID_PAYLOAD);
+    const res = await rawInject(h, raw, { 'x-source': 'shopeé', 'x-signature': sign(raw) });
+    expect(res.statusCode).toBe(422);
+    const body = JSON.parse(res.payload);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.details).toEqual([
+      { field: 'X-Source', message: 'Chỉ cho phép A-Z a-z 0-9 . _ -' },
+    ]);
+    expectNoSecretLeak(res.payload);
+  });
+
+  it('422 X-Source chứa space (shopee shop) — 422 VALIDATION_ERROR', async () => {
+    const raw = JSON.stringify(VALID_PAYLOAD);
+    const res = await rawInject(h, raw, {
+      'x-source': 'shopee shop',
+      'x-signature': sign(raw),
+    });
+    expect(res.statusCode).toBe(422);
+    const body = JSON.parse(res.payload);
+    expect(body.code).toBe('VALIDATION_ERROR');
+    expect(body.details).toEqual([
+      { field: 'X-Source', message: 'Chỉ cho phép A-Z a-z 0-9 . _ -' },
+    ]);
+    expectNoSecretLeak(res.payload);
+  });
+
   it('422 externalId missing — details field externalId', async () => {
     const { externalId: _drop, ...noExt } = VALID_PAYLOAD;
     const raw = JSON.stringify(noExt);
