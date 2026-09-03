@@ -477,7 +477,7 @@ test.describe("SF-23 PWA + push + GA (off-mode mặc định)", () => {
 ```
 
 (Executor: 401 assert — đọc plugins/auth.ts xác nhận guard trả 401 hay envelope; hoàn thiện authed assert theo pattern token 07-realtime — MANDATORY, unit đã che BFF nhưng spec đòi hỏi e2e authed path.)
-- [ ] **Step 2: Run** `pnpm --filter @hub-store/e2e e2e` (script tên `e2e` — xem e2e/package.json) → 08 xanh + 01–07 KHÔNG vỡ (đặc biệt 07-realtime — SW pass-through /api). **BLOCKED (env):** port 3000 + 8080 do stack SF khác (sf-28-d1-order-ops — vite PID 97639, BFF PID 97235) giữ; playwright `reuseExistingServer:false` từ chối boot ("http://localhost:3000 is already used"). Spec đã compile OK (`playwright test --list` = 60 tests/15 files, 08 có 5 tests) — re-run khi stack foreign dừng.
+- [x] **Step 2: Run** — private-port seam (E2E_SHELL_URL=:3200 / E2E_BFF_URL=:18080, E2E_REUSE=1) chạy đủ suite. Kết quả cuối (e2e-final4.log): **08-pwa 5/5 XANH** (manifest/SW đăng ký+controller/offline.html/notifications 401+200 MANDATORY/GA-off 0 console error) + **07-realtime 2/2 XANH** (SW pass-through /api không vỡ SSE). Các failure còn lại đều pre-existing (stale FORBIDDEN assertion 05-area từ SF-13, antd4 Modal testid, DnD headless flake) — không thuộc SF-23, note trong audit. **T9 bước đầu BLOCKED (env):** port 3000 + 8080 do stack SF khác giữ — đã giải quyết bằng private-port seam.
 - [x] **Step 3: Commit** `test(e2e): 08-pwa manifest/sw/offline/notifications/GA-off (SF-23 T9)` — d587916
 
 ---
