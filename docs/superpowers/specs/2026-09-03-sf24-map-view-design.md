@@ -115,23 +115,35 @@ component không đổi."
   metadata địa chỉ/COD lấy từ prop mới `stopMeta?: Record<orderCode, {address, cod}>`
   do `BatchListPage` truyền (đã có data batch rows trong tay, KHÔNG fetch mới); thiếu
   → chỉ hiện orderCode + stopOrder.
+- **Per-order mode** (modal mở với `orderCode` — expand row): tab Bản đồ hiển thị
+  CHỈ stops của đơn đó (filter planningMap theo orderCode — cùng logic filter
+  timeline đang có) + warehouse; không polyline liên-stop. Full batch mode giữ
+  nguyên hành vi trên.
+- Warehouse marker popup: label "Kho" (fixture name) — không dữ liệu nghiệp vụ.
 - Fallback: planningMap rỗng (batch chưa confirm trong phiên) → EmptyState
   "chưa có lộ trình/tọa độ" (testid `map-no-coords-note`). Stop thiếu coords
   (defensive — fixture luôn derive được, nhưng giữ path): loại khỏi polyline +
-  gộp vào note.
+  gộp vào note. Nhiều entry cùng orderCode → cùng toạ độ (chấp nhận chồng marker,
+  không dedupe — plan-critic P2 note).
 - Popup: div antd-styled, radius `tokens.radius.md`, nút/testid `route-stop-popup-${orderCode}`.
 
 ### 4.3 Tech service pins (MapTab)
 
 - `TECH_TABS` thêm `'map'`; `TECH_FILTER_URL_DEFAULTS.tab` giữ 'delivery' (tab mặc
   định không đổi → testid các tab cũ an toàn; parseTab whitelist tự extend).
-- `TechServicePage` render tab "Bản đồ" → `MapTab` (mới): fetch delivery orders bằng
-  cùng query pattern `useTechFetch`/techApi (POST `/delivery-orders/filter`, filter
-  trạng thái đang chọn nếu có) → pins cho mỗi order có
-  `receiver.location`: màu = `STATUS_TONE_MAP[status]` → `toneColors(tone).text`;
-  popup: fulfillCode, trạng thái (TechStatusTag-style), địa chỉ, receiver, nút
-  `<a href="tel:...">Gọi</a>` (pattern PhoneLink, testid `tech-map-call-${code}`),
-  popup testid `tech-map-popup-${code}`.
+- `TechServicePage` render tab "Bản đồ" → `MapTab` (mới): MapTab TỰ fetch delivery
+  orders bằng cùng query pattern `useTechFetch`/techApi (POST
+  `/delivery-orders/filter`) **KHÔNG áp filter ẩn** (filter bar chỉ render trong tab
+  delivery — filter vô hình trong map tab là UX trap, spec-critic P1) → pins cho
+  mỗi order có `receiver.location`: màu = `STATUS_TONE_MAP[status]` →
+  `toneColors(tone).text`; popup: fulfillCode, trạng thái (TechStatusTag-style),
+  địa chỉ, receiver, nút `<a href="tel:...">Gọi</a>` (pattern PhoneLink, testid
+  `tech-map-call-${code}`), popup testid `tech-map-popup-${code}`.
+- **Data reality (P0 spec-critic):** mọi seed runtime (canonical-seed.json) KHÔNG có
+  lat/long → môi trường dev/thật hiển thị 0 pin + note là HÀNH VI CHẤP NHẬN cho tới
+  khi REQUIREMENT-GAP FI-245 được đóng (backend thêm GeoPoint). E2E assert pins bằng
+  **route-mock POST `/delivery-orders/filter`** (Playwright `page.route` trả fixture
+  có location) — cùng chiến lược route-abort tiles, không phụ thuộc seed.
 - Orders thiếu tọa độ (installation orders + delivery thiếu location): KHÔNG marker —
   liệt kê note bên dưới map "N đơn chưa có tọa độ" (testid `map-no-coords-note`,
   count thật).
@@ -139,9 +151,12 @@ component không đổi."
 
 ### 4.4 MF singleton + CSS
 
-- Thêm `'leaflet'` vào `mfShared` singleton của `apps/fulfillment/vite.config.ts` +
-  `apps/shell/vite.config.ts` (requiredVersion exact — cùng pattern deps khác) để
-  2 remote dùng chung 1 instance leaflet.
+- Thêm `'leaflet'` vào `mfShared` singleton của `apps/fulfillment/vite.config.ts`,
+  `apps/shell/vite.config.ts` VÀ `apps/orders/vite.config.ts` (requiredVersion
+  exact — cùng pattern deps khác). Lý do orders: `export * from './map'` +
+  CSS side-effect import không tree-shake được → orders (consumer của shared) sẽ
+  bundle leaflet dù không dùng map — phải cùng singleton version để tránh 2 copies
+  runtime (spec-critic P1).
 - `leaflet/dist/leaflet.css` import trong `MapView.tsx` (duy nhất) — Vite handle;
   không thêm vào index.html.
 
@@ -177,9 +192,11 @@ Task DAG (5 tasks, tuần tự phần lớn vì cùng chạm shared/app files):
    (BatchListPage truyền metadata địa chỉ/COD vào modal) + kiểm tra build/typecheck
    cả 2 apps không vỡ.
 5. **e2e-map** — playwright.map.config.ts (containers sf-24-*, private ports) +
-   08-map.spec.ts: login → tracking modal → tab Bản đồ → assert markers theo seed
-   (stop markers có data-stop-order, warehouse marker) → tech map tab → assert pins
-   + popup + nút gọi. Route-abort OSM tiles. Chạy spec 08 + smoke 01/07 trên seam
+   08-map.spec.ts: login → tracking modal → tab Bản đồ → assert markers theo
+   planningMap seed qua addInitScript (stop markers có data-stop-order, warehouse
+   marker, container width > 0 — đo được "responsive trong modal") → tech map tab
+   với route-mock `/delivery-orders/filter` → assert pins + popup + nút gọi.
+   Route-abort OSM tiles. Chạy spec 08 + smoke 01/07 trên seam
    riêng sf-24 (KHÔNG tranh port với các SF đang chạy).
 
 Test runner: theo pattern hiện có của repo (vitest cho shared/apps nếu có, Playwright
