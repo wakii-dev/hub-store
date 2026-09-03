@@ -45,12 +45,12 @@ public interface CodConfirmationRepository {
 }
 ```
 
-- [ ] Step 1: V3 migration — đúng schema spec §4 (có shop_name snapshot + 3 indexes + header comment "V3 slot reserved bởi V5 header"). KHÔNG `IF NOT EXISTS`.
-- [ ] Step 2: Viết unit test InMemory TRƯỚC (TDD): insertPendingIfAbsent idempotent; confirmBatch chỉ touch PENDING; confirmOne với collectedAmount=null → collected=expected, =0L → collected=0; deletePendingByFulfillCodes không xóa CONFIRMED.
-- [ ] Step 3: Implement InMemory (thread-safe theo pattern InMemoryOrderRepository — synchronized collections).
-- [ ] Step 4: Implement Postgres (plain class, ctor inject JdbcClient/JdbcTemplate như PostgresOrderRepository; `jdbc.update/query` pattern :556-574; Instant ↔ `OffsetDateTime` qua helper `instant()`/`ts()` — copy pattern, không import chéo private). `findPendingByBatch`/`confirmBatch` JOIN orders `o.fail_reason IS NULL` (D7). + CodRepositoryConfig với @ConditionalOnProperty (xem Files).
-- [ ] Step 5: Integration test với test DB (pattern SF-2 `skip-when-no-DB`): migrate V3 chạy qua Flyway test harness hiện có.
-- [ ] Step 6: `cd services/fulfillment-service && ./mvnw -q test` (hoặc mvn wrapper hiện có) → PASS. Commit `feat(cod): V3 cod_confirmations table + CodConfirmationRepository (PG+InMemory)`.
+- [x] Step 1: V3 migration — đúng schema spec §4 (có shop_name snapshot + 3 indexes + header comment "V3 slot reserved bởi V5 header"). KHÔNG `IF NOT EXISTS`.
+- [x] Step 2: Viết unit test InMemory TRƯỚC (TDD): insertPendingIfAbsent idempotent; confirmBatch chỉ touch PENDING; confirmOne với collectedAmount=null → collected=expected, =0L → collected=0; deletePendingByFulfillCodes không xóa CONFIRMED.
+- [x] Step 3: Implement InMemory (thread-safe theo pattern InMemoryOrderRepository — synchronized collections).
+- [x] Step 4: Implement Postgres (plain class, ctor inject JdbcClient/JdbcTemplate như PostgresOrderRepository; `jdbc.update/query` pattern :556-574; Instant ↔ `OffsetDateTime` qua helper `instant()`/`ts()` — copy pattern, không import chéo private). `findPendingByBatch`/`confirmBatch` JOIN orders `o.fail_reason IS NULL` (D7). + CodRepositoryConfig với @ConditionalOnProperty (xem Files).
+- [x] Step 5: Integration test với test DB (pattern SF-2 `skip-when-no-DB`): migrate V3 chạy qua Flyway test harness hiện có.
+- [x] Step 6: `cd services/fulfillment-service && ./mvnw -q test` (hoặc mvn wrapper hiện có) → PASS. Commit `feat(cod): V3 cod_confirmations table + CodConfirmationRepository (PG+InMemory)`.
 
 ### Task 2: cod-confirm-flow — proto additive + regen + service RPCs (eager PENDING + confirm/pending + revert-delete)
 
