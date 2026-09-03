@@ -77,11 +77,15 @@ chỉ additive field được phép).
 
 - **D1 — printers authority = fulfillment-service; print-service KHÔNG đổi.** Bảng `printers`
   ở fulfillment DB; BFF `GET /fulfillment/print/printers` đọc trực tiếp fulfillment-service
-  (Java) thay vì print-service ListPrinters; BFF validate printerId trước khi proxy print
-  (invalid → 400). print-service giữ nguyên registry in-memory + warn-only validation (không
-  proto change, không test rework — blast radius nhỏ nhất). V8 seed: INSERT canonical-seed
-  printers (set shop 30201 pin bởi api-contracts.test.ts + e2e print flow) với ON CONFLICT
-  DO NOTHING — bảng không rỗng sau migration.
+  (Java) thay vì print-service ListPrinters; BFF validate printerId trước khi proxy print:
+  **`printerId === ''` = preview pass-through — KHÔNG validate, KHÔNG record** (preview hiện
+  hữu giữ nguyên); printerId khác rỗng mà không có trong printers → 400 + record print error.
+  print-service giữ nguyên registry in-memory + warn-only validation (không
+  proto change, không test rework — blast radius nhỏ nhất). V8 seed: INSERT **đủ 6 rows
+  canonical-seed printers** (print-service registry: 2× shop 30201 + 4 shop khác — mọi shop
+  phải còn printer list sau khi BFF đổi nguồn) với type gán tường minh: mỗi shop 1 máy
+  `bill` + 1 máy `a4` (nếu shop chỉ có 1 row trong canonical → gán `a4`; shop 30201 có 2
+  rows → 1 bill + 1 a4). ON CONFLICT DO NOTHING.
 - **D2 — print errors = bảng fulfillment DB; BFF record trên failure path của lệnh IN THẬT.**
   Phân biệt print thật vs preview: preview gọi với `printerId: ''` (seam có sẵn —
   PrintPage.tsx:105); BFF CHỈ record khi `printerId` khác rỗng. Record khi: (a) printerId
@@ -89,7 +93,9 @@ chỉ additive field được phép).
   Preview fail KHÔNG record. "Máy off" vật lý KHÔNG detect được trong kiến trúc này
   (boundary: không socket máy in) — failure trigger thực tế là failure của print pipeline;
   E2E mô phỏng fail qua print-service down/invalid printerId. Ghi REQUIREMENT-GAP lên epic
-  FI-245 về semantic này. Schema: `print_errors(id, order_code, batch_code, print_type,
+  FI-245 về semantic này. Request print-thật fail ở bước batching-hydration
+  (getBatchDetail 404/gRPC error) cũng record (bất kỳ failure nào sau khi printerId hợp lệ
+  được xác định). Schema: `print_errors(id, order_code, batch_code, print_type,
   printer_id NULLABLE, error_message, occurred_at)`; badge = count per order; sort orders
   theo count desc. Record-write fail (DB down) → log-and-continue, KHÔNG mask lỗi print gốc
   trả về FE. Retention: KHÔNG cleanup job trong SF này (dev-scale; ghi chú cho SF-12).
