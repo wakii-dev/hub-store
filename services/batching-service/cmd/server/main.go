@@ -14,6 +14,7 @@
 //	BATCHING_DB_USER     default hubstore
 //	BATCHING_DB_PASSWORD required (compose/.env wire)
 //	FULFILLMENT_ADDR     default localhost:50051 (Java; hydration + mutate)
+//	HEALTH_PORT          default 8082 (SF-12 HTTP /health side-port)
 //	KAFKA_ENABLED        "true" bật publisher SF-27; off (mặc định) = Noop
 //	KAFKA_BOOTSTRAP_SERVERS default localhost:9092 (chỉ đọc khi KAFKA_ENABLED=true)
 package main
@@ -22,9 +23,11 @@ import (
 	"context"
 	"log"
 	"net"
+	"net/http"
 	"net/url"
 	"os"
 	"strings"
+	"time"
 
 	"hubstore/batching-service/internal/ahamove"
 	"hubstore/batching-service/internal/fulfillment"
@@ -127,8 +130,23 @@ func main() {
 	health.Register(grpcServer, hs) // SF-2: grpc.health.v1
 	reflection.Register(grpcServer)
 
-	log.Printf("batching-service: listening on :%s", port)
-	if err := grpcServer.Serve(lis); err != nil {
-		log.Fatalf("batching-service: serve: %v", err)
+	// SF-12 — HTTP health side-port (compose probe; gRPC health vẫn giữ cho
+	// grpcurl/smoke). Ping batches DB pool — 503 khi DB chết.
+	healthPort := env("HEALTH_PORT", "8082")
+	healthSrv := server.NewHealthHTTP(st.Pool(), healthPort)
+	go func() {
+		if err := healthSrv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Printf("batching-service: health http :%s: %v", healthPort, err)
+		}
+	}()
+
+	log.Printf("batching-service: listening on :%s (health http :%s)", port, healthPort)
+	serveErr := grpcServer.Serve(lis)
+	// Graceful stop — HTTP health tắt trước khi process thoát.
+	shCtx, shCancel := context.WithTimeout(context.Background(), 3*time.Second)
+	_ = healthSrv.Shutdown(shCtx)
+	shCancel()
+	if serveErr != nil {
+		log.Fatalf("batching-service: serve: %v", serveErr)
 	}
 }

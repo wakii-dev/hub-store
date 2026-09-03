@@ -9,6 +9,7 @@ import { SignJWT } from 'jose';
 import { startHarness, signTestToken, invalidArgument, mockGrpcError, generateSecondIdentity, TEST_ISSUER, TEST_AUDIENCE } from './harness.js';
 import type { Harness } from './harness.js';
 import { staffAreaResponses } from './fixtures.js';
+import { __setAuditPoolForTests } from '../src/lib/audit.js';
 
 let h: Harness;
 
@@ -25,6 +26,33 @@ describe('Task 5 — bootstrap: JWT guard + public /healthz', () => {
     const res = await h.app.inject({ method: 'GET', url: '/healthz' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'ok' });
+  });
+
+  // SF-12 — /health readiness public (compose probe không JWT).
+  it('GET /health public — DB env thiếu → disabled, vẫn 200 (fail-open như audit)', async () => {
+    delete process.env.FULFILLMENT_DB_HOST;
+    const res = await h.app.inject({ method: 'GET', url: '/health' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'ok', db: { fulfillment: 'disabled' } });
+  });
+
+  it('GET /health — DB ping fail → 503 degraded', async () => {
+    // getAuditPool gate theo env TRƯỚC khi trả pool → phải set env để pool
+    // inject (test hook) được dùng.
+    process.env.FULFILLMENT_DB_HOST = 'localhost';
+    __setAuditPoolForTests({
+      query: async () => {
+        throw new Error('connection refused');
+      },
+    } as never);
+    try {
+      const res = await h.app.inject({ method: 'GET', url: '/health' });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({ status: 'degraded', db: { fulfillment: 'down' } });
+    } finally {
+      __setAuditPoolForTests(null);
+      delete process.env.FULFILLMENT_DB_HOST;
+    }
   });
 
   it('401 khi thiếu Authorization header (error envelope)', async () => {

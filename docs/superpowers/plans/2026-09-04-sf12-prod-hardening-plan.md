@@ -96,11 +96,11 @@ Tier 1: T1, T2, T6, T8. Tier 2: T3, T4, T7, T9. Tier 3: T5, T10. Cuối: T11. **
 - Modify: `docker-compose.yml` (healthcheck mỗi app service; Java probe không giả định curl — cài curl vào `services/fulfillment-service/Dockerfile` HOẶC bash /dev/tcp; Go/BFF alpine busybox wget)
 - Test: BFF contract test /health
 
-- [ ] **Step 4.1:** BFF: `/health` mới — `await pool1.query('SELECT 1')` + pool2 (đọc wiring DB hiện có trong bff — nếu BFF không có pg pool trực tiếp thì health check qua gRPC ping fulfillment, ghi rõ choice); response `{status:'ok'|'degraded', db:{fulfillment,batching}}`, 200/503. `/healthz` alias giữ (contract test không vỡ). **Thêm `/health` vào skip-list public của `plugins/auth.ts` (:58)** — KHÔNG thì compose probe 401. Update test assert db shape.
-- [ ] **Step 4.2:** Go: health server tách file `internal/server/health_http.go` — start goroutine, graceful shutdown; ping `store.Pool().Ping(ctx)`. Java: `HealthHttpServer` class nhỏ cạnh bootstrap — start sau Spring context sẵn sàng, ping `jdbcTemplate.queryForObject("SELECT 1")`. Print: FastAPI/Flask route `/health` `{"status":"ok"}`.
-- [ ] **Step 4.3:** compose healthchecks: mỗi app service `test:` probe /health tương ứng image (Java: cài curl trong Dockerfile — 1 dòng apt-get; interval 10s timeout 5s retries 5 start_period 30s Java / 15s còn lại).
-- [ ] **Step 4.4:** Verify: boot từng service host-run → `curl -s localhost:<port>/health | jq` đúng shape; compose config parse. `go test ./... && mvn -q test && pnpm --filter bff-gateway test`.
-- [ ] **Step 4.5:** Commit: `feat(health): SF-12 /health endpoints 4 services + compose healthcheck wiring (FI-257)`.
+- [x] **Step 4.1:** BFF: `/health` mới — `await pool1.query('SELECT 1')` + pool2 (đọc wiring DB hiện có trong bff — nếu BFF không có pg pool trực tiếp thì health check qua gRPC ping fulfillment, ghi rõ choice); response `{status:'ok'|'degraded', db:{fulfillment,batching}}`, 200/503. `/healthz` alias giữ (contract test không vỡ). **Thêm `/health` vào skip-list public của `plugins/auth.ts` (:58)** — KHÔNG thì compose probe 401. Update test assert db shape.
+- [x] **Step 4.2:** Go: health server tách file `internal/server/health_http.go` — start goroutine, graceful shutdown; ping `store.Pool().Ping(ctx)`. Java: `HealthHttpServer` class nhỏ cạnh bootstrap — start sau Spring context sẵn sàng, ping `jdbcTemplate.queryForObject("SELECT 1")`. Print: FastAPI/Flask route `/health` `{"status":"ok"}`.
+- [x] **Step 4.3:** compose healthchecks: mỗi app service `test:` probe /health tương ứng image (Java: cài curl trong Dockerfile — 1 dòng apt-get; interval 10s timeout 5s retries 5 start_period 30s Java / 15s còn lại).
+- [x] **Step 4.4:** Verify: boot từng service host-run → `curl -s localhost:<port>/health | jq` đúng shape; compose config parse. `go test ./... && mvn -q test && pnpm --filter bff-gateway test`.
+- [x] **Step 4.5:** Commit: `feat(health): SF-12 /health endpoints 4 services + compose healthcheck wiring (FI-257)`.
 
 ### Task 5: structured logs — JSON trên đường s2s/health
 

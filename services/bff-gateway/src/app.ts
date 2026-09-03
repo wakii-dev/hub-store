@@ -11,6 +11,7 @@ import type { ErrorEnvelope } from '@hub-store/shared';
 import type { BffConfig } from './config.js';
 import { registerJwtGuard } from './plugins/auth.js';
 import { errorEnvelope } from './lib/envelope.js';
+import { getAuditPool } from './lib/audit.js';
 import {
   createFulfillmentClient,
   createBatchingClient,
@@ -77,6 +78,25 @@ export function buildApp(config: BffConfig): FastifyInstance {
 
   // Public — liveness probe (không JWT).
   app.get('/healthz', async () => ({ status: 'ok' }));
+
+  // SF-12 — readiness probe (không JWT — plugins/auth public skip-list).
+  // Ping DB BFF sở hữu TRỰC TIẾP: fulfillment (pool audit — notifications dùng
+  // chung cùng DB). BFF KHÔNG có cred DB batching → không key batching ở đây
+  // (batches DB được Go /health :8082 ping riêng — plan step 4.1 choice).
+  // Fail-open khi thiếu env DB (host-run/test không cấu hình) — như audit/notifications.
+  app.get('/health', async (_request, reply) => {
+    const pool = getAuditPool();
+    if (!pool) {
+      return { status: 'ok', db: { fulfillment: 'disabled' } };
+    }
+    try {
+      await pool.query('SELECT 1');
+      return { status: 'ok', db: { fulfillment: 'ok' } };
+    } catch {
+      void reply.code(503);
+      return { status: 'degraded', db: { fulfillment: 'down' } };
+    }
+  });
 
   // gRPC clients — insecure nội bộ (spec §2); close dọn sạch khi shutdown.
   // StaffArea (SF-17) sống trong cùng process fulfillment-service → cùng addr.

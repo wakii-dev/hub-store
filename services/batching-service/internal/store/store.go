@@ -89,6 +89,9 @@ func (s *PostgresStore) bootstrapSequence(ctx context.Context) error {
 // Close giải phóng pool.
 func (s *PostgresStore) Close() { s.pool.Close() }
 
+// Pool — expose pool cho health probe (SF-12 /health HTTP ping pgx).
+func (s *PostgresStore) Pool() *pgxpool.Pool { return s.pool }
+
 // ---------------------------------------------------------------------------
 // Reads
 // ---------------------------------------------------------------------------

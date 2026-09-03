@@ -41,6 +41,8 @@ fulfillment:
   # Nguồn dữ liệu duy nhất: api/seed/canonical-seed.json (SF-2 authored).
   # Rỗng = auto-resolve (README): SEED_PATH > ../../api/seed > ../api/seed > api/seed.
   seed-path: ${SEED_PATH:}
+  # SF-12 — HTTP health side-port (HealthHttpServer; 8081=Keycloak, 8082=Go health).
+  health-port: ${HEALTH_PORT:8083}
 
 kafka:
   # SF-27 — event bus flag (env KAFKA_ENABLED; false → NoopEventPublisher).

@@ -8,7 +8,8 @@
  * `authorization: Bearer <token>` — Go/Java verify JWKS độc lập (token
  * passthrough), x-user-role chỉ được tin sau khi verify (claim wins).
  *
- * Public routes: /healthz (liveness) + /auth/reset-password (dev-only,
+ * Public routes: /healthz (liveness) + /health (SF-12 readiness — compose
+ * probe KHÔNG có JWT) + /auth/reset-password (dev-only,
  * KHÔNG có token để verify — chính nó là endpoint cấp lại password) +
  * /webhooks/orders (SF-26 — máy-máy, auth HMAC tại route).
  */
@@ -62,6 +63,11 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
   app.addHook('onRequest', async (request, reply) => {
     // URL check thay vì routeOptions — onRequest chạy trước khi route resolve.
     if (request.url === '/healthz' || request.url.startsWith('/healthz?')) {
+      return;
+    }
+    // SF-12 — /health readiness (DB ping): compose probe không JWT — public,
+    // KHÔNG thêm → probe 401 → stack boot deadlock (plan-critic P0).
+    if (request.url === '/health' || request.url.startsWith('/health?')) {
       return;
     }
     if (request.url === '/auth/reset-password' || request.url.startsWith('/auth/reset-password?')) {

@@ -9,6 +9,8 @@ RUN mvn -q -B dependency:go-offline
 RUN mvn -q -B package -DskipTests
 
 FROM eclipse-temurin:17-jre
+# SF-12 — curl cho compose healthcheck probe (base temurin KHÔNG có curl/wget).
+RUN apt-get update && apt-get install -y --no-install-recommends curl && rm -rf /var/lib/apt/lists/*
 WORKDIR /app
 COPY --from=build /repo/services/fulfillment-service/target/*.jar app.jar
 ENV SEED_PATH=/seed/canonical-seed.json
