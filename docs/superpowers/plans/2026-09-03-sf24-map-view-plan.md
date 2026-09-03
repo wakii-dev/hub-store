@@ -400,11 +400,11 @@ git commit -m "feat(fulfillment): SF-24 batch route map tab trong tracking modal
 
 **Dep:** Task 1. (Có thể chạy SONG SONG Task 2 — khác app, chỉ cùng dep Task 1.)
 
-- [ ] **Step 3.1: TECH_TABS + i18n**
+- [x] **Step 3.1: TECH_TABS + i18n**
 
 `useTechFilters.ts`: `TECH_TABS = ['delivery', 'installation', 'staff', 'map'] as const`. `TECH_FILTER_URL_DEFAULTS.tab` giữ `'delivery'`. `tech.i18n.ts` vi/en: `tech.tabMap` ("Bản đồ"/"Map"), `tech.map.noCoords` ("{{count}} đơn chưa có tọa độ"/"{{count}} order(s) without coordinates"), `tech.map.call` ("Gọi"/"Call").
 
-- [ ] **Step 3.2: Test trước**
+- [x] **Step 3.2: Test trước**
 
 `MapTab.test.tsx`: mock `filterDeliveryOrders` trả 2 orders (1 có `receiver.location`, 1 `location: null`) + vi.mock `@hub-store/shared` MapView thành stub div `data-testid="tech-map-view"` (jsdom không render leaflet thật trong test app — mock ở MapView level, KHÔNG mock leaflet global):
 
@@ -417,7 +417,7 @@ vi.mock("@hub-store/shared", async (importOriginal) => ({
 
 Assert TRÊN HELPER (không assert DOM pin — MapView đã stub, plan-critic P0-2): export `buildPins(orders)` từ `MapTab.tsx` và assert output — pin của order có location: `color === toneColors(statusTone(status)).text`, `testId === "tech-map-pin-<code>"`, `popupHtml` chứa code + status + address + receiver + `tech-map-call-<code>`; order thiếu location không có pin; đếm `missing === 1`. Test render (MapView stub) chỉ assert `map-no-coords-note` chứa "1" + `tech-map-view` visible.
 
-- [ ] **Step 3.3: Implement MapTab**
+- [x] **Step 3.3: Implement MapTab**
 
 `MapTab.tsx`:
 
@@ -475,11 +475,11 @@ export function MapTab() {
 
 `TechServicePage.tsx`: thêm Tab item `{ key: 'map', label: t('tech.tabMap'), children: <MapTab /> }` với `data-testid="tech-tab-map"` trên label (antd Tabs label accept node). KHÔNG đổi tabs cũ.
 
-- [ ] **Step 3.4: Test pass + typecheck**
+- [x] **Step 3.4: Test pass + typecheck**
 
 Run: `pnpm --filter shell test` → PASS. Typecheck shell → sạch.
 
-- [ ] **Step 3.5: Commit**
+- [x] **Step 3.5: Commit**
 
 ```bash
 git add apps/shell/src/features/tech/MapTab.tsx apps/shell/src/features/tech/MapTab.test.tsx apps/shell/src/features/tech/useTechFilters.ts apps/shell/src/features/tech/TechServicePage.tsx apps/shell/src/features/tech/tech.i18n.ts
