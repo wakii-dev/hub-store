@@ -188,6 +188,8 @@ export const ordersResources: I18nResources = {
       "dashboard.workload.title": "Khối lượng shipper",
       "dashboard.refresh": "Làm mới",
       "dashboard.error.title": "Không tải được số liệu tổng quan — thử lại.",
+      "dashboard.empty.title": "Chưa có dữ liệu đơn hàng",
+      "dashboard.empty.sub": "Chưa có đơn nào trong 30 ngày qua.",
     },
   },
   en: {
@@ -372,6 +374,8 @@ export const ordersResources: I18nResources = {
       "dashboard.workload.title": "Shipper workload",
       "dashboard.refresh": "Refresh",
       "dashboard.error.title": "Failed to load dashboard stats — try again.",
+      "dashboard.empty.title": "No order data yet",
+      "dashboard.empty.sub": "No orders in the last 30 days.",
     },
   },
 };

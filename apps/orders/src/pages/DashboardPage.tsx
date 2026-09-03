@@ -15,7 +15,7 @@ import { Alert, Button, Card, Col, List, Progress, Row, Statistic, Typography } 
 import { useTranslation } from "react-i18next";
 import { Provider } from "react-redux";
 import type { DashboardStats } from "@hub-store/shared";
-import { DESIGN_TOKENS } from "@hub-store/shared";
+import { DESIGN_TOKENS, StatStripSkeleton, EmptyState } from "@hub-store/shared";
 import { createAppStore, useGetDashboardStatsQuery, type AppStore } from "@hub-store/api-client";
 import { registerOrdersResources } from "../i18n";
 
@@ -164,9 +164,14 @@ function DashboardContent() {
 
       {!isError && (
         <>
+      {/* SF-11 (FI-256, Task 5): aggregate loading → StatStripSkeleton (SF-6 §2.2,
+          thay antd skeleton từng card — pattern StatStrip D1). */}
+      {isLoading ? (
+        <StatStripSkeleton />
+      ) : (
       <Row gutter={16}>
         <Col span={6}>
-          <Card data-testid="stat-today" loading={isLoading} style={statCardStyle(true)}>
+          <Card data-testid="stat-today" style={statCardStyle(true)}>
             <Statistic
               title={t("dashboard.stat.today")}
               value={stats?.totalToday ?? 0}
@@ -175,7 +180,7 @@ function DashboardContent() {
           </Card>
         </Col>
         <Col span={6}>
-          <Card data-testid="stat-pending" loading={isLoading} style={statCardStyle(false)}>
+          <Card data-testid="stat-pending" style={statCardStyle(false)}>
             <Statistic
               title={t("dashboard.stat.pending")}
               value={stats?.pendingApproval ?? 0}
@@ -184,7 +189,7 @@ function DashboardContent() {
           </Card>
         </Col>
         <Col span={6}>
-          <Card data-testid="stat-delivering" loading={isLoading} style={statCardStyle(false)}>
+          <Card data-testid="stat-delivering" style={statCardStyle(false)}>
             <Statistic
               title={t("dashboard.stat.delivering")}
               value={stats?.delivering ?? 0}
@@ -193,11 +198,7 @@ function DashboardContent() {
           </Card>
         </Col>
         <Col span={6}>
-          <Card
-            data-testid="stat-completion-rate"
-            loading={isLoading}
-            style={statCardStyle(false)}
-          >
+          <Card data-testid="stat-completion-rate" style={statCardStyle(false)}>
             <Progress
               type="circle"
               percent={stats?.completionRate ?? 0}
@@ -211,6 +212,7 @@ function DashboardContent() {
           </Card>
         </Col>
       </Row>
+      )}
 
       <Card
         title={t("dashboard.chart.title")}
@@ -218,7 +220,15 @@ function DashboardContent() {
         data-testid="chart-orders-per-day"
         loading={isLoading}
       >
-        <OrdersPerDayChart data={stats?.ordersPerDay ?? []} />
+        {/* SF-11 (FI-256, Task 5): chart không data sau load → EmptyState (SF-6 §2.2). */}
+        {!isLoading && (stats?.ordersPerDay ?? []).length === 0 ? (
+          <EmptyState
+            title={t("dashboard.empty.title")}
+            sub={t("dashboard.empty.sub")}
+          />
+        ) : (
+          <OrdersPerDayChart data={stats?.ordersPerDay ?? []} />
+        )}
       </Card>
 
       <Card

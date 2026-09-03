@@ -19,7 +19,7 @@ import {
   useSetUserPasswordMutation,
   type UserListItem,
 } from "@hub-store/api-client";
-import { DESIGN_TOKENS, ROLES } from "@hub-store/shared";
+import { DESIGN_TOKENS, ROLES, TableSkeleton, EmptyState } from "@hub-store/shared";
 
 /** Semantic tag SF-6 §1.1 — pastel bg + line + solid text, pill (class sf6-status-tag). */
 function statusTagStyle(tone: "success" | "neutral"): CSSProperties {
@@ -189,7 +189,8 @@ export default function UsersPage(props: { currentUsername: string }) {
         </Button>
       </div>
 
-      {/* Table card — SF-6 §2.2: radius 16, border, shadow.sm (pattern AuditPage/D1). */}
+      {/* Table card — SF-6 §2.2: radius 16, border, shadow.sm (pattern AuditPage/D1).
+          SF-11 (FI-256, Task 5): initial load → TableSkeleton (không spinner); list rỗng → EmptyState. */}
       <div
         data-testid="users-table"
         style={{
@@ -200,16 +201,26 @@ export default function UsersPage(props: { currentUsername: string }) {
           overflow: "hidden",
         }}
       >
-        <Table
-          rowKey="id"
-          size="middle"
-          loading={isLoading}
-          dataSource={users}
-          columns={columns}
-          onRow={(record): HTMLAttributes<HTMLTableRowElement> =>
-            ({ "data-testid": `user-row-${record.username}` } as HTMLAttributes<HTMLTableRowElement>)
-          }
-        />
+        {isLoading ? (
+          <TableSkeleton />
+        ) : users.length === 0 ? (
+          <EmptyState
+            title={t("users.empty")}
+            sub={t("users.emptyHint")}
+            actionLabel={t("users.add")}
+            onAction={() => setAddOpen(true)}
+          />
+        ) : (
+          <Table
+            rowKey="id"
+            size="middle"
+            dataSource={users}
+            columns={columns}
+            onRow={(record): HTMLAttributes<HTMLTableRowElement> =>
+              ({ "data-testid": `user-row-${record.username}` } as HTMLAttributes<HTMLTableRowElement>)
+            }
+          />
+        )}
       </div>
 
       <Modal
