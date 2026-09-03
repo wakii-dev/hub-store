@@ -50,18 +50,22 @@ KTV/CTV không thao tác được đơn của mình trên điện thoại; accep
 
 Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per task có UI → e2e private seam cuối.
 
+**Mid-task browser-verify recipe (plan-critic P1 — cho Task 4/5/6/7):** seam runner là deliverable Task 8 — KHÔNG tồn tại khi T4-T7 chạy. Verify recipe per task: (1) boot mini-stack dùng ports riêng sf-25: postgres docker `sf-25-postgres` :56443 (fresh), keycloak :8082 với **named volume fresh** `sf-25-kc-data` (realm mới — KHÔNG dùng shared :8081 vì realm import no-op trên volume cũ), flyway+seed one-shot, fulfillment :52073, bff :4286, app dev :3010 (hoặc 4220); (2) script hóa boot này vào `/tmp/sf25/mini-stack.sh` ngay tại Task 4 (không commit — T8 sẽ viết runner chuẩn từ nó); (3) browser qua `orca tab create` + screenshot 3 tầng (DOM → VISUAL → FLOW). Port-guard trước boot (lsof check 4220/4286/52073/56443/8082 — SF-21/26 đang chạy stack riêng).
+
 ### Task 1: realm-ktv-roles — realm JSON + BFF KNOWN_ROLES
 **Files:** `docker/keycloak/hubstore-realm.json`, `services/bff-gateway/src/plugins/auth.ts`, test BFF auth roles.
 - [ ] Thêm realm roles `InsideTechnician`, `OutsideTechnician` (mục `roles.realm`).
 - [ ] Thêm client `hubstore-mobile`: public, PKCE S256, `redirectUris`: `http://localhost:3010/*`, `http://127.0.0.1:4220/*`, `webOrigins` +, attr `pkce.code.challenge.method` = S256 (copy pattern `hubstore-web`), audience mapper `hubstore-api` + `preferred_username` mapper (copy từ hubstore-web protocolMappers).
 - [ ] Thêm users: username `KTV-001` (firstName "Nguyễn", lastName "Văn An", email `ktv-001@hubstore.dev`, credentials password literal `Password123!` temporary:false, realmRoles `[InsideTechnician]`), `CTV-001` (firstName "Hoàng", lastName "Văn Em", realmRoles `[OutsideTechnician]`).
 - [ ] `auth.ts` KNOWN_ROLES += 2 roles; verify role claim map test (unit test BFF auth nếu có — extend).
-- [ ] Validate JSON parse (`python3 -m json.tool`) — realm JSON phải hợp lệ (SF-8 đã fix lần trước).
+- [ ] **Done-signal (plan-critic P2):** realm JSON import sạch vào keycloak 26.0 (`docker run --rm -v ./docker/keycloak:/import keycloak:26.0` optimize/import dry hoặc tối thiểu `python3 -m json.tool` parse + schema fields khớp pattern users/clients hiện có) — import thật sẽ được T8 keycloak boot xác nhận.
 - [ ] Commit: `feat(realm): SF-25 InsideTechnician/OutsideTechnician roles + hubstore-mobile client`
 
 ### Task 2: tech-actions-be — proto additive + Java RPCs + BFF routes + seed
 **Files:** `api/proto/hubstore/fulfillment/v1/tech_service.proto`, gen ts + java, `TechModels.java`, `TechServiceImpl.java`, repo/store layer nếu cần (mở `PostgresTechStore`/tương đương — đọc code trước), `services/bff-gateway/src/routes/tech.ts`, `api/seed/tech-sample.json`, `scripts/seed-db.sh`.
-- [ ] Proto additive: `TechButtons.allow_complete = 6`; `AcceptOrderRequest {service_order_code=1, technician_code=2}`, `CompleteOrderRequest` tương tự, `RescheduleOrderRequest {service_order_code=1, new_expected_time=2, note=3, technician_code=4}`, `MutateTechOrderResponse {InstallationOrder order=1}`; service +3 RPCs. Regen ts-proto + grpc-java theo pins (memory fi233; toolchain /tmp có thể phải re-setup).
+- [ ] **ĐẦU TIÊN — verify proto regen toolchain** (plan-critic P1: biggest-risk step): ts-proto + grpc-java plugin paths theo memory fi233 — `/tmp` dirs có thể đã biến mất → re-setup ngay nếu thiếu, TRƯỚC khi sửa proto. Regen fail → STOP report BLOCKED (downstream T5 phụ thuộc).
+- [ ] Proto additive: `TechButtons.allow_complete = 6`; `AcceptOrderRequest {service_order_code=1, technician_code=2}`, `CompleteOrderRequest` tương tự, `RescheduleOrderRequest {service_order_code=1, new_expected_time=2, note=3, technician_code=4}`, `MutateTechOrderResponse {InstallationOrder order=1}`; service +3 RPCs. Regen ts-proto + grpc-java.
+- [ ] Seed status assertion: SO-0004 phải giữ **PROCESSING** (nếu seed hiện tại khác → sửa) — e2e scenario 4 reschedule PROCESSING chính là path matrix-mở-rộng cần test.
 - [ ] `TechModels.java`: record TechButtons thêm allowComplete; `installationButtons` → `allowAccept = assigned && (CONFIRMED||RESCHEDULED)`, `allowComplete = assigned && PROCESSING`; `reschedulable` += PROCESSING. Unit test matrix.
 - [ ] `TechServiceImpl.java`: 3 RPCs — blank→INVALID_ARGUMENT, unknown SO→NOT_FOUND, wrong-state / not-owner (order.technicianCode != request.technician_code)→FAILED_PRECONDITION; accept CONFIRMED|RESCHEDULED→PROCESSING; complete PROCESSING→DELIVERED; reschedule CONFIRMED|PROCESSING|REDELIVERY|RESCHEDULED→RESCHEDULED + expected_time mới (quá khứ → INVALID_ARGUMENT). Timeline append `{at, status, note, actor}` (accept: status PROCESSING note "KTV nhận việc"; complete: status DELIVERED note "Hoàn tất lắp đặt"; reschedule: status RESCHEDULED note = request.note). Update assignment/timeline persistence qua store layer sẵn có (đọc TechServiceImpl assign để theo cùng path).
 - [ ] Java unit tests cho 3 RPCs (happy + 4 error paths) — pattern test assign hiện có.
@@ -78,6 +82,7 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 - [ ] auth/oidc.ts: copy shell pattern, default clientId `hubstore-mobile`, scope openid, automaticSilentRenew, localStorage userStore, 401 interceptor.
 - [ ] App.tsx: BrowserRouter `/callback` (signinCallback → navigate /), `/` MyOrdersPage placeholder, guard chưa-login → signinRedirect; role gate: user không có role technician → màn "Không có quyền".
 - [ ] public/: sw.js (cache `ktv-mobile-v1`, pattern shell — giữ fetch-guard order), manifest.webmanifest (name "HubStore KTV", standalone, theme #EB6E09, icons 192/512 copy shell), offline.html, index.html meta viewport + theme-color + manifest link.
+- [ ] **Bottom-nav [Đơn của tôi][Tài khoản] + Account page (plan-critic P0 fix — spec §4.1):** route `/account` — user info (sub, role, tên) + nút Đăng xuất (signoutRedirect → về login). Empty shell đủ dùng, Task 4 nạp danh sách vào tab Đơn.
 - [ ] i18n: namespace `ktvMobile`, vi + en, register trong component (trap App static-import — memory SF-20).
 - [ ] `pnpm install` + `pnpm --filter @hub-store/ktv-mobile build` pass + vitest smoke (App render placeholder). Browser check: dev server boot, redirect Keycloak login hiện.
 - [ ] Commit: `feat(ktv-mobile): SF-25 standalone PWA shell — OIDC + SW/manifest + tokens`
@@ -112,7 +117,7 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 **Files:** `apps/ktv-mobile/src/features/order-detail/**` (OrderDetailPage, Timeline, AddressMapCard), unit tests.
 - [ ] OrderDetailPage route `/order/:code`: fetch detail từ my-orders list state (nếu thiếu → refetch filter theo code… filter endpoint không có code param — fetch 2 filters hôm nay rồi tìm code; đơn giản, đủ). Header code + status; nút thao tác dùng chung components Task 5/6.
 - [ ] Timeline: render timeline_json `{at,status,note,actor}` sắp theo at — status pill + note + giờ (vi-VN).
-- [ ] AddressMapCard: địa chỉ (province + coordination lat/long nếu có) — tap → mở MapView inline (MapView từ @hub-store/shared, height 220, marker stop từ lat/long) + nút "Mở bản đồ" → deep-link `https://www.openstreetmap.org/?mlat=<lat>&mlon=<long>#map=17/<lat>/<long>` (target _blank).
+- [ ] AddressMapCard: địa chỉ (province + coordination lat/long nếu có) — tap → mở MapView inline (MapView từ @hub-store/shared, height 220, marker stop từ lat/long; **chú ý plan-critic P2: MapView built cho desktop — check horizontal overflow 375px trong browser verify**) + nút "Mở bản đồ" → deep-link `https://www.openstreetmap.org/?mlat=<lat>&mlon=<long>#map=17/<lat>/<long>` (target _blank).
 - [ ] PhoneLink: `tel:` (pattern shell PhoneLink, testid `tech-phone-link`).
 - [ ] Unit tests: timeline sort + render, map deep-link URL build (escapeHtml cho mọi interpolation).
 - [ ] Browser verify 3 tầng: detail → timeline → tap map → OSM tab; tap SĐT → dialer intent (mobile emulation).
@@ -131,3 +136,16 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 - **Verify trước khi code:** TechServiceImpl assign persistence path (đọc trước Task 2); BFF test pattern cho tech.ts; mint script path còn tồn tại `/tmp/story/fi233/mint_sf16_v2.py` (nếu mất → viết mint helper mới trong e2e/scripts).
 - **Assumptions:** gen proto toolchain paths từ memory (re-setup được); KC preferred_username giữ case username stored; `name` claim = firstName + " " + lastName.
 - **Rollback unit:** mỗi task 1 commit — BE (Task 2) tách riêng FE để revert chọn lọc nếu epic owner phản đối REQUIREMENT-GAP resolution.
+- **README không đụng (plan-critic P2 resolution):** reset-db note cho dev trên stack cũ ghi ở đây thay vì README — DB cũ không re-seed (emptiness-gate) → mobile dev cần `reset-db.sh` trước. Note này là tài liệu chạy, không phải deliverable.
+
+## 7. Execution DAG (sau plan-critic fix)
+Orca run `run_33cb5ca71e4c` — task ids sau replacement (task cũ T4-T8 đầu = SUPERSEDED, giữ làm audit trail):
+- T1 `task_edb2d7da83f2` realm-ktv-roles (no deps)
+- T2 `task_b4819de14640` tech-actions-be (no deps)
+- T3 `task_80579c261515` pwa-shell ← T1 (+ Account page)
+- T4b `task_7317f9659660` my-orders-today ← T3, T2
+- T5b `task_b92f672fb7a8` accept-complete ← T2, T4b
+- T6b `task_265013f6548d` reschedule ← T5b
+- T7b `task_283f956534c4` order-detail-map-tel ← T4b, T2
+- T8b `task_4b4160e4313c` e2e-mobile-spec ← T6b, T7b
+Tiers: {T1,T2} → {T3} → {T4b} → {T5b,T7b} → {T6b} → {T8b}. Max width 2. Critical path T2→T4b→T5b→T6b→T8b.
