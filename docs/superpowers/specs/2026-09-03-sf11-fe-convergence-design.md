@@ -33,7 +33,7 @@ BE surfaces đã có (SF-7 audit query + export CSV + pagination; SF-8 users; SF
 | D2 | Gate permission? | Permission MỚI `audit.view` trong `PERMISSIONS` + `PERMISSION_MATRIX`, map Manager only | BFF check `role !== 'Manager'` → 403; reuse `users.manage` (Manager+Admin) sẽ cho Admin thấy nav rồi ăn 403 |
 | D3 | Mobile table strategy? | Controlled horizontal scroll (D1 đã có `scroll={{x:1400}}`; thêm tương tự cho D2/D3 nếu thiếu) + wrap filters + stack stat grids; nav collapse bằng CSS `@media` thuần | Desktop 1440×900 phải pixel-identical (specs cũ dùng viewport đó); card-view double-render quá đắt; acceptance chỉ yêu cầu "usable, không vỡ" |
 | D4 | Nav collapse pattern? | ≤768px: sidebar rail chuyển thành off-canvas (hidden bằng transform, element VẪN trong DOM), nút hamburger trong header toggle overlay | Frozen testids `app-sidebar`, `nav-*` phải giữ nguyên DOM; CSS-first tránh hydration flash |
-| D5 | Export khi filter không hỗ trợ? (deliveryFrom/To, originalFrom/To — export.csv không nhận params này) | Pass chỉ các filter được hỗ trợ; khi filter KHÔNG hỗ trợ đang active → disable nút + tooltip giải thích | Không được tải file "không đúng filter" (vi phạm acceptance); BE READ-ONLY — REQUIREMENT-GAP đã lên FI-245 |
+| D5 | Export khi filter không hỗ trợ? | Pass chỉ các filter được hỗ trợ: `fulfillCode, batchStatus, regionCodes, shopCodes, orderStatus` + `createdAt` CHỈ khi `createdFrom === createdTo` (map thẳng, BE wrap full UTC day). KHÔNG hỗ trợ → disable nút + Tooltip giải thích: (a) `deliveryFrom/To`, `originalFrom/To` (endpoint không nhận), (b) `createdFrom ≠ createdTo` (endpoint chỉ nhận single-day, range nhiều ngày sẽ tải sai) | Không được tải file "không đúng filter" (vi phạm acceptance); BE READ-ONLY — REQUIREMENT-GAP đã lên FI-245 (đề xuất BE thêm range params) |
 | D6 | Audit timezone? | Hiển thị `createdAt` theo Asia/Ho_Chi_Minh (khớp convention dashboard `05-dashboard.spec.ts`); date filter gửi bare `YYYY-MM-DD` (BFF tự xử lý UTC day bounds, dateTo exclusive-next-day) | Consistent với phần còn lại của app |
 | D7 | Audit detail (JSONB freeform)? | Cell hiển thị `action` + `targetType/targetId`; `detail` render vào expandable row (antd Table `expandedRowRender`) pretty-print JSON, handle null | Freeform JSON không biết shape trước — expandable an toàn |
 | D8 | Design direction cho audit viewer? | KHÔNG cần 3 hướng user-gate — design system SF-6 che phủ đầy đủ (table card, filter bar, pagination, TableSkeleton, EmptyState đều có pattern trong sf6-direction + code SF-6); audit viewer = composition các component đó | Directive: "NẾU design system SF-6 che phủ hết → implement theo" |
@@ -53,16 +53,16 @@ BE surfaces đã có (SF-7 audit query + export CSV + pagination; SF-8 users; SF
 ### 4.2 Export UI
 - `apps/orders/src/pages/D1Page.tsx` — button "Export CSV" (icon Download) trong page-head cạnh "Làm mới", `type="default"`.
 - Helper `fetchOrdersExport(params)` trong `packages/api-client/src/slices/fulfillment.ts` — copy blob pattern `fetchD2cOrdersExport` (`slices/d2c.ts`): axios singleton (Bearer interceptor) → `responseType: 'blob'` → caller tạo object URL + click link. **KHÔNG dùng `<a href>` trực tiếp** (sẽ 401).
-- Querystring derive từ `useUrlState` filter state (mapping util trong task, KHÔNG eyeball): hỗ trợ `fulfillCode, batchStatus, regionCodes, shopCodes, orderStatus, createdAt`.
-- Loading: button `loading` state trong lúc fetch blob. Empty: nếu CSV chỉ có header row (resp text 1 dòng) → `message.info` "Không có dữ liệu để xuất" thay vì tải file rỗng.
-- Filter không hỗ trợ (delivery/original dates) đang active → button disabled + Tooltip (theo D5).
+- Querystring derive từ `useUrlState` filter state (mapping util trong task, KHÔNG eyeball): hỗ trợ `fulfillCode, batchStatus, regionCodes, shopCodes, orderStatus` + `createdAt` (chỉ khi `createdFrom === createdTo`, theo D5).
+- Loading: button `loading` state trong lúc fetch blob. **Empty (behavior cố định, E2E assert đúng behavior này):** CSV header-only = mọi byte sau newline đầu tiên đều whitespace/EOF (count theo định nghĩa này, không `split('\n').length`) → KHÔNG tải file, hiện `message.info` "Không có dữ liệu để xuất". **Error:** request fail (401/500/error-blob) → button thoát loading + `message.error`, KHÔNG tải file; error path là manual-verify (E2E chỉ assert happy path + empty).
+- Filter không hỗ trợ (theo D5) đang active → button disabled + Tooltip.
 
 ### 4.3 Mobile responsive (~768px breakpoint)
 - Tất cả CSS `@media (max-width: 768px)` đặt trong `packages/shared/src/theme/sf6-antd-overrides.css` (+ CSS mới nếu cần class riêng); KHÔNG JS breakpoint cho chrome layout.
 - Shell: sidebar rail (64px, `app-sidebar`) → off-canvas translate khi ≤768px; hamburger button trong header (`app-header`) toggle class trên wrapper; drawer overlay đóng khi click nav item / route change. Element luôn trong DOM.
 - Header: co padding, user chip rút gọn.
 - D1: FilterBar wrap (flex-wrap), stat-strip stack 2 cột, table đã `scroll={{x:1400}}` (giữ); bulk-bar wrap.
-- D2 (BatchListPage): thêm `scroll={{x: <tổng cột>}}` + wrap filters; D3 (PrintPage): layout stack; Dashboard: stat cards grid → 1-2 cột, charts stack; Users: table scroll ngang + form modal full-width ≤768px.
+- D2 (`apps/fulfillment/src/pages/BatchListPage.tsx`): thêm `scroll={{x: <tổng cột>}}` + wrap filters; D3 (`apps/fulfillment/src/pages/PrintPage.tsx` — KHÔNG có apps/print-mf, print là remote name): layout stack; D1b là batching modal nằm trong apps/orders (`CreateBatchingModal`/wizard) — polish modal full-width ≤768px; Dashboard: stat cards grid → 1-2 cột, charts stack; Users: table scroll ngang + form modal full-width ≤768px.
 - Không đổi testid/DOM structure có sẵn — chỉ style + element mới (hamburger).
 
 ### 4.4 Design harmonize (Users + Dashboard)
@@ -76,9 +76,11 @@ BE surfaces đã có (SF-7 audit query + export CSV + pagination; SF-8 users; SF
 - AuditPage: như §4.1.
 
 ### 4.6 E2E
-- NEW `e2e/tests/08-audit-viewer.spec.ts`: Manager login (storageState mint từ Keycloak qua seam v2) → nav tới /audit → thấy bảng + phân trang; lọc theo actor/action → kết quả lọc đúng; non-Manager (Coordinator) → KHÔNG thấy nav entry + vào thẳng URL → bị chặn.
-- NEW `e2e/tests/08-export.spec.ts`: Manager → D1 → set 1 filter → click Export → download event, file tồn tại + content có header CSV; empty filter result → không download + info message (hoặc empty CSV tùy hành vi thật — assert theo implement).
+- NEW `e2e/tests/08-audit-viewer.spec.ts`: Manager login (storageState mint từ Keycloak qua seam v2) → nav tới /audit → thấy bảng + phân trang; lọc theo actor + action + **date range WIDE** (dateFrom = 7 ngày trước — tránh boundary UTC/HCM: entry hiển thị giờ HCM có thể rơi UTC ngày trước, wide range vô hiệu hóa edge này) → kết quả lọc đúng; Coordinator KHÔNG thấy nav entry + vào thẳng URL → bị chặn; **Admin cũng bị chặn** (audit là Manager-only, khác `users.manage`).
+- NEW `e2e/tests/08-export.spec.ts`: Manager → D1 → set 1 filter → click Export → download event, file tồn tại + content có header CSV; empty filter result (filter không match gì) → KHÔNG download + `message.info` (assert ĐÚNG behavior §4.2 — không circular); assert disabled+Tooltip khi created-range nhiều ngày active.
+- NEW `e2e/tests/08-mobile.spec.ts` (smoke nhỏ, chi phí thấp): viewport 768px → hamburger toggle nav hoạt động (app-sidebar vẫn trong DOM), D1 table scroll ngang, không overflow-x trên body — coverage tự động cho acceptance 3 (phần còn lại manual browser verify).
 - Regression: chạy TOÀN BỘ 15 specs hiện hữu trên seam v2 (hoặc stack tương đương) — all green, `git diff` = 0 trên `e2e/tests/` cũ.
+- Data note: `detail` từ API là parsed JSONB object hoặc null (`detail: r.detail ?? null`) — FE KHÔNG double-parse, guard `typeof === 'object'` trước stringify.
 - Data note: audit activity_log có sẵn data từ mutation flows (SF-7 ghi mọi mutation); specs KHÔNG mutate data ngoài việc tạo order/batch qua UI nếu cần (dùng flows specs cũ đã chứng minh).
 
 ## 5. Touch map
@@ -97,7 +99,9 @@ packages/api-client/src/slices/fulfillment.ts      fetchOrdersExport
 apps/orders/src/pages/D1Page.tsx                   export button + mobile wrap
 apps/orders/src/pages/DashboardPage.tsx            harmonize + skeleton/empty + mobile
 apps/fulfillment/src/pages/BatchListPage.tsx       scroll + wrap (D2)
-apps/print-mf/src/... (PrintPage)                  stack (D3)
+apps/fulfillment/src/pages/PrintPage.tsx           stack (D3)
+apps/orders/src/**/CreateBatchingModal*            modal full-width ≤768px (D1b)
+e2e/tests/08-mobile.spec.ts                        NEW (768px smoke)
 e2e/tests/08-audit-viewer.spec.ts                  NEW
 e2e/tests/08-export.spec.ts                        NEW
 ```
