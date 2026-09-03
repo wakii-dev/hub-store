@@ -10,7 +10,6 @@ import org.junit.jupiter.api.Test;
 import org.springframework.jdbc.core.JdbcTemplate;
 import org.springframework.jdbc.datasource.DriverManagerDataSource;
 
-import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;
 
@@ -110,10 +109,6 @@ class PostgresCodConfirmationRepositoryIT {
 
     private static String code(CodConfirmation c) {
         return c.fulfillCode().substring(PREFIX.length());
-    }
-
-    private static Timestamp ts(Instant i) {
-        return Timestamp.from(i);
     }
 
     // ---------------- tests ----------------

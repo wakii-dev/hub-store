@@ -1,7 +1,9 @@
 package com.hubstore.fulfillment;
 
+import com.hubstore.fulfillment.seed.SeedModels;
 import com.hubstore.fulfillment.store.CodConfirmation;
 import com.hubstore.fulfillment.store.InMemoryCodConfirmationRepository;
+import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.store.SettlementShopRow;
 import org.junit.jupiter.api.Test;
 
@@ -240,5 +242,49 @@ class CodConfirmationRepositoryTest {
 
         var pending = repo.findPendingByBatch("B1");
         assertThat(pending).extracting(CodConfirmation::fulfillCode).containsExactly("ORD-1");
+    }
+
+    // ---------------- config wiring (D7 twin parity) ----------------
+
+    /**
+     * Wire như CodRepositoryConfig inmemory bean: predicate lấy từ order repo
+     * thật (InMemoryOrderRepository::isFailed) — KHÔNG phải no-arg `code -> false`
+     * (P1 review 45a5fc5: no-op D7 trên 4 batch paths trong inmemory mode).
+     */
+    @Test
+    void configWiringD7ThroughInMemoryOrderRepository() {
+        var seed = new SeedModels.SeedFile(
+                List.of(orderSeed("ORD-OK"), orderSeed("ORD-FAIL")),
+                List.of(), List.of(), List.of(), List.of());
+        var orderRepo = new InMemoryOrderRepository(seed);
+        orderRepo.markFailed("ORD-FAIL", "hàng hỏng", null, T0);
+
+        var repo = new InMemoryCodConfirmationRepository(orderRepo::isFailed);
+        repo.insertPendingIfAbsent(pending("ORD-OK", "B1", "S1", "Shop Một", 5000, T0));
+        repo.insertPendingIfAbsent(pending("ORD-FAIL", "B1", "S1", "Shop Một", 9000, T0));
+
+        // pending: loại ORD-FAIL.
+        assertThat(repo.findPendingByBatch("B1"))
+                .extracting(CodConfirmation::fulfillCode)
+                .containsExactly("ORD-OK");
+        // confirmBatch: chỉ 1 row, ORD-FAIL giữ PENDING.
+        assertThat(repo.confirmBatch("B1", "nv", T1)).isEqualTo(1);
+        assertThat(repo.findByFulfillCode("ORD-FAIL").orElseThrow().status()).isZero();
+        // aggregate: chỉ shop của ORD-OK (ORD-FAIL loại hẳn, không tạo row S1 lệch).
+        var rows = repo.aggregate(FROM, TO);
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).totalOrders()).isEqualTo(1);
+        assertThat(rows.get(0).pendingCount()).isZero();
+        // detail: chỉ ORD-OK.
+        assertThat(repo.detail(null, FROM, TO, false))
+                .extracting(CodConfirmation::fulfillCode)
+                .containsExactly("ORD-OK");
+    }
+
+    /** OrderSeed tối thiểu cho test — history rỗng (InMemoryOrderRepository iterate lúc boot). */
+    private static SeedModels.OrderSeed orderSeed(String fulfillCode) {
+        return new SeedModels.OrderSeed(fulfillCode, null, 0, 0, null, null, null, null, 0,
+                List.of(), 0L, 0, false, null, null, null, List.of(),
+                null, null, null, null, null, null, null);
     }
 }
