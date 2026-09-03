@@ -60,9 +60,9 @@ Coordinator/warehouse tạo phiếu giao cần NVC (xe tải) nhưng FE không c
 | 3 | quotes-display-recalc | orders | 1 |
 | 4 | addon-selector | orders | 3 |
 | 5 | fee-limit-gates | orders | 4 |
-| 6 | replan-rebook-flows | fulfillment | 1 |
+| 6 | replan-rebook-flows | fulfillment + shared + orders(D1Page) | 1, 5 (same-file serialization với T3-T5 — dispatch serial) |
 | 7 | cancel-shipment-ui | fulfillment | 6 |
-| 8 | tracking-modal | fulfillment | 2, 6 |
+| 8 | tracking-modal | fulfillment | 2, 7 (same-file BatchListPage — encode edge) |
 | 9 | e2e-nvc-fe-spec | e2e | 5, 7, 8 |
 
 - **Testing strategy:** unit (vitest) helpers/statuses/planningMap + modal modes; e2e UI thật (mock mode); browser walkthrough Rule 0 3 tầng trước merge.
@@ -171,25 +171,27 @@ export const hasBlockedSelection = (q: DeliveryQuoteDto | null) => q != null && 
 ### Task 6: replan-rebook-flows — D2 actions + planning map + modal modes
 
 **Files:**
-- Create: `apps/fulfillment/src/delivery/planningMap.ts(+test)`, `apps/fulfillment/src/api/deliveryBatchApi.ts`
-- Modify: `apps/fulfillment/src/pages/BatchListPage.tsx` (actions mới — KHÔNG đụng nút Cancel/Complete/Print cũ), `apps/orders/src/batching/CreateBatchingModal.tsx` (behavior mode replan/rebook — Task 1 đã thêm prop), i18n cả 2 app
+- Create: `packages/shared/src/storage/planningMap.ts` + `planningMap.test.ts` (P0 plan-critic: KHÔNG cross-app import — shell serve cả 2 remote cùng origin :3000 nên localStorage chung; shared package là đường duy nhất), `apps/fulfillment/src/api/deliveryBatchApi.ts`
+- Modify: `apps/fulfillment/src/pages/BatchListPage.tsx` (actions mới — KHÔNG đụng nút Cancel/Complete/Print cũ), `apps/orders/src/batching/CreateBatchingModal.tsx` (behavior mode replan/rebook — Task 1 đã thêm prop), `apps/orders/src/pages/D1Page.tsx` (entry-point đọc URL params), i18n cả 2 app
+
+**Kiến trúc cross-MF (P0 plan-critic):** D2 (fulfillment) KHÔNG import modal của orders trực tiếp — navigate `/hub-store-order/order?nvcMode=replan|rebook&batchCode=<code>` (URLSearchParams, sạch khi rời page); `D1Page` đọc params on mount → set selectedRows + mở `CreateBatchingModal` mode tương ứng. KHÔNG thêm MF remotes/exposes mới (tránh exposed-module-init risk).
 
 **Steps:**
-- [ ] 6.1 `planningMap.ts`:
+- [ ] 6.1 `packages/shared/src/storage/planningMap.ts`:
 ```ts
 export interface PlanningMapEntry { planningId: string; orderCode: string; stopOrder: number; serviceId: string; vehicleType: string; addons: string[]; }
-export const loadPlanningMap = (batchCode: string): PlanningMapEntry[] => // JSON.parse localStorage `nvc.plannings.<batchCode>`, throw-safe → []
-export const savePlanningMap = (batchCode: string, entries: PlanningMapEntry[]) => void
+const key = (b: string) => `nvc.plannings.${b}`;
+export const loadPlanningMap = (batchCode: string): PlanningMapEntry[] => { try { return JSON.parse(localStorage.getItem(key(batchCode)) ?? '[]') as PlanningMapEntry[]; } catch { return []; } }
+export const savePlanningMap = (batchCode: string, entries: PlanningMapEntry[]) => { localStorage.setItem(key(batchCode), JSON.stringify(entries)); }
 ```
-  Orders side: modal (Task 3 sequence) gọi `savePlanningMap` sau confirm. Test: save/load roundtrip + corrupt JSON → [].
-- [ ] 6.2 `apps/fulfillment/src/api/deliveryBatchApi.ts`: injectEndpoints `confirmPlanning`, `createBooking`, `cancelDeliveryOrder`, `cancelBatch`, `searchBookingDetail` (GET query planningIds join ',').
+  Orders side: modal (Task 3 sequence) gọi `savePlanningMap` sau confirm. Test: save/load roundtrip + corrupt JSON → []. Export qua barrel `packages/shared/src/index.ts` (nếu có) theo pattern hiện có.
+- [ ] 6.2 `apps/fulfillment/src/api/deliveryBatchApi.ts`: injectEndpoints `cancelDeliveryOrder`, `cancelBatch`, `searchBookingDetail` (GET query planningIds join ','). **KHÔNG đăng ký `confirmPlanning`/`createBooking` ở fulfillment** — rebook đi qua orders modal (navigate), tránh trùng endpoint name trên singleton api (P2 plan-critic).
 - [ ] 6.3 D2 actions trong `batch-actions-{code}` Space (thêm item, không đổi item cũ):
-  - **"Tạo lại phiếu"** (replan): hiện khi `batch.status === BATCH_ENTITY_STATUS.CANCELLED`. Click → `getBatchOrders(batchCode)` → loại đơn FAILED (field failStatus theo `OrderExpandContent` hiện có — đọc exact field từ code) → mở modal `mode='replan'` với orders còn lại (prefill rows). Hết order khả dụng → Modal info EmptyState.
-  - **"Book lại vận đơn"** (rebook): hiện khi batch ACTIVE + `loadPlanningMap(batchCode)` có entries (planning tồn tại = đã confirm; entries có current booking cancelled sẽ được re-confirm). Click → modal `mode='rebook'` (section 1 locked, prefill vehicle/addons từ map — modal tự fetch quotes lại).
-  - Testid: `batch-replan-{code}`, `batch-rebook-{code}`.
-- [ ] 6.4 Modal behavior `mode='replan'`: title i18n "Tạo lại phiếu giao", submit = create flow (như create). `mode='rebook'`: title "Book lại vận đơn", section 1 rows disabled (không DnD/thêm/bớt), submit **KHÔNG create batch** → chỉ `confirmPlanning` (batchCode hiện có) + `createBooking`; chỉ confirm các planning đang CANCELLED (FE giữ map + biết nào vừa hủy — rebook từ cancel action truyền `planningIdsToRebook` qua modal prop), CONFIRMED khác không đụng (BE no-op idempotent). Review hiển thị kết quả book mới.
-- [ ] 6.5 i18n vi/en cả orders (modal modes) + fulfillment (actions).
-- [ ] 6.6 Test: planningMap roundtrip; BatchListPage — gate hiện/ẩn actions theo status + map (mock localStorage); modal rebook không gọi create.
+  - **"Tạo lại phiếu"** (replan) testid `batch-replan-{code}`: hiện khi `batch.status === BATCH_ENTITY_STATUS.CANCELLED`. Click → `navigate('/hub-store-order/order?nvcMode=replan&batchCode=' + code)`.
+  - **"Book lại vận đơn"** (rebook) testid `batch-rebook-{code}`: hiện khi batch ACTIVE + `loadPlanningMap(code)` có entries. Click → `navigate('/hub-store-order/order?nvcMode=rebook&batchCode=' + code)`.
+- [ ] 6.4 `D1Page.tsx` entry-point: on mount đọc `nvcMode`/`nvcBatchCode` search params → `replan`: fetch `getBatchOrders(batchCode)` → loại đơn FAILED (exact field từ `OrderExpandContent` hiện có) → selectedRows = orders còn lại → mở modal `mode='replan'` (hết order khả dụng → info EmptyState); `rebook`: fetch `searchBookingDetail(planningIds từ map)` → `planningIdsToRebook` = entries có booking cancelled/booking null mà planning CANCELLED → mở modal `mode='rebook'`. Xóa params sau khi mở (replaceState) để refresh không mở lại.
+- [ ] 6.5 Modal behavior `mode='replan'`: title i18n "Tạo lại phiếu giao", submit = create flow (như create). `mode='rebook'`: title "Book lại vận đơn", section 1 rows disabled (không DnD/thêm/bớt), submit **KHÔNG create batch** → chỉ `confirmPlanning` (batchCode hiện có — chỉ planningIdsToRebook) + `createBooking`; planning CONFIRMED/BOOKED khác không đụng (BE idempotent no-op). Review hiển thị kết quả book mới.
+- [ ] 6.6 i18n vi/en cả orders (modal modes + D1Page entry) + fulfillment (actions). Test: planningMap roundtrip; BatchListPage — gate hiện/ẩn actions theo status + map (mock localStorage); modal rebook không gọi create; D1Page đọc params mở đúng mode.
 - [ ] 6.7 test + tsc (cả 2 app) → commit `feat(sf16): replan/rebook flows — D2 actions + planning map + modal modes`.
 
 ### Task 7: cancel-shipment-ui — hủy vận đơn per-đơn/batch + auto-note
@@ -226,6 +228,7 @@ export const savePlanningMap = (batchCode: string, entries: PlanningMapEntry[]) 
 - Create: `e2e/tests/07-nvc-fe.spec.ts`
 
 **Steps:**
+- [ ] 9.0 Pre: `pnpm --filter orders build && pnpm --filter fulfillment build` (MF build bắt import cross-package lỗi mà tsc bỏ sót) — pass mới chạy e2e.
 - [ ] 9.1 Spec UI qua browser (storageState coordinator mặc định, baseURL :3000). Dùng đơn seed chưa dùng: chọn 2 đơn shop 30203 còn "Chưa soạn" qua D1 filter (pattern 01-main-flow select rows) — cleanup afterAll cancel batch (pattern 05-nvc-api).
 - [ ] 9.2 Flow 1 — tạo phiếu Xe tải: D1 select 2 đơn → `bulk-create-batch` → section 1/2 → `carrier-group-TRUCK` → chờ `quote-1T` visible (6 `quote-*`) → click `quote-1T` → click `addon-DOCUMENT` → tổng phí text đổi → click `quote-8T` expect disabled (fixture: 8T vượt limit 150000 — guard `test.skip` nếu seed đổi) → `batch-submit` → success → đóng modal.
 - [ ] 9.3 Flow 2 — D2 vận đơn: navigate `/hub-store-order/batch` → tìm batch mới → thấy driver text trong actions/expand → `batch-track-{code}` → modal: `tracking-timeline-partner` có ≥1 mốc, `shipment-status-DRIVER_FOUND` visible → đóng.
