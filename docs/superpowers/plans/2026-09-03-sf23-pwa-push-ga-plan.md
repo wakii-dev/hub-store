@@ -309,7 +309,7 @@ const stopPushTriggers = startPushTriggers(config);
 ### Task T6: subscribe-login (FE push + polling)
 **Files:** Create `apps/shell/src/lib/push.ts`, `apps/shell/src/lib/notificationPoller.ts`; Modify `apps/shell/src/main.tsx`, `apps/shell/src/App.tsx`; Test `apps/shell/src/lib/__tests__/push.test.ts`.
 
-- [ ] **Step 1: push.ts** — env-gated OneSignal init + login/logout:
+- [x] **Step 1: push.ts** — env-gated OneSignal init + login/logout:
 
 ```ts
 declare const OneSignal: { init(o: { appId: string }): Promise<void>; login(id: string): Promise<void>; logout(): Promise<void>; slidedown?: unknown } | undefined;
@@ -335,8 +335,8 @@ export function pushLogout(): void {
 }
 ```
 
-- [ ] **Step 2: login + session-restore hook** — trong `main.tsx` gọi `initOneSignal()`. Trong `App.tsx` nơi đã có `onSessionChange`/`loadCurrentUser` (xem sessionFromUser): tại useEffect session — `pushLogin(session?.user?.profile?.preferred_username)` khi có user, `pushLogout()` khi null. **ĐƯỜNG BOOT BẮT BUỘC**: onSessionChange fire cả khi restore từ storage → external_id sống qua reload (spec-critic P1).
-- [ ] **Step 3: notificationPoller.ts** — KHÔNG import axios thô (shell không có dep đó): dùng `getAxiosInstance()` từ `@hub-store/api-client` — baseURL `VITE_API_BASE_URL ?? 'http://localhost:8080'` + tự gắn Bearer qua token getter đã register:
+- [x] **Step 2: login + session-restore hook** — trong `main.tsx` gọi `initOneSignal()`. Trong `App.tsx` nơi đã có `onSessionChange`/`loadCurrentUser` (xem sessionFromUser): tại useEffect session — `pushLogin(session?.user?.profile?.preferred_username)` khi có user, `pushLogout()` khi null. **ĐƯỜNG BOOT BẮT BUỘC**: onSessionChange fire cả khi restore từ storage → external_id sống qua reload (spec-critic P1).
+- [x] **Step 3: notificationPoller.ts** — KHÔNG import axios thô (shell không có dep đó): dùng `getAxiosInstance()` từ `@hub-store/api-client` — baseURL `VITE_API_BASE_URL ?? 'http://localhost:8080'` + tự gắn Bearer qua token getter đã register:
 
 ```ts
 import { getAxiosInstance } from '@hub-store/api-client';
@@ -355,9 +355,9 @@ export async function pollNotifications(): Promise<NewNotification[]> {
 }
 ```
 
-- [ ] **Step 4: App.tsx wire** — ⚠ MECHANISM (plan-critic P1): `onSessionChange` KHÔNG fire khi restore từ storage (boot đi qua `loadCurrentUser()` → state, bypass manager events). Hook **`pushLogin(session.sub)` trong useEffect keyed trên `session` STATE của App** (App.tsx ~:120 set session từ loadCurrentUser + signinCallback) — che phủ cả login mới lẫn restore. `ShellSession = {sub, role}` (KHÔNG có .user.profile). useEffect khi session có sub: `const t = setInterval(() => void pollNotifications().then(showAntdNotifications).catch(() => {}), 30_000)` + poll ngay 1 lần; session null → pushLogout + clearInterval. showAntdNotifications = `notification.info({ message: n.title, description: n.body })` (check shell đã dùng static `notification` hay `App.useApp()` — làm theo pattern hiện có).
-- [ ] **Step 5: test** — vitest jsdom (LƯU Ý: APP_ID đọc module-scope → test env-on cần `vi.resetModules()` + stub `import.meta.env` trước import động — pattern readEnv comment oidc.ts:29-39): env trống → initOneSignal không inject script; pollNotifications: mock getAxiosInstance → filter unseen đúng, seen persist localStorage.
-- [ ] **Step 6: Run shell tests + Commit** `feat(shell): OneSignal init + subscribe-on-login + notification polling (SF-23 T6)`
+- [x] **Step 4: App.tsx wire** — ⚠ MECHANISM (plan-critic P1): `onSessionChange` KHÔNG fire khi restore từ storage (boot đi qua `loadCurrentUser()` → state, bypass manager events). Hook **`pushLogin(session.sub)` trong useEffect keyed trên `session` STATE của App** (App.tsx ~:120 set session từ loadCurrentUser + signinCallback) — che phủ cả login mới lẫn restore. `ShellSession = {sub, role}` (KHÔNG có .user.profile). useEffect khi session có sub: `const t = setInterval(() => void pollNotifications().then(showAntdNotifications).catch(() => {}), 30_000)` + poll ngay 1 lần; session null → pushLogout + clearInterval. showAntdNotifications = `notification.info({ message: n.title, description: n.body })` (check shell đã dùng static `notification` hay `App.useApp()` — làm theo pattern hiện có).
+- [x] **Step 5: test** — vitest jsdom (LƯU Ý: APP_ID đọc module-scope → test env-on cần `vi.resetModules()` + stub `import.meta.env` trước import động — pattern readEnv comment oidc.ts:29-39): env trống → initOneSignal không inject script; pollNotifications: mock getAxiosInstance → filter unseen đúng, seen persist localStorage.
+- [x] **Step 6: Run shell tests + Commit** `feat(shell): OneSignal init + subscribe-on-login + notification polling (SF-23 T6)`
 
 ### Task T7: ga-dual-mode
 **Files:** Create `packages/shared/src/analytics/ga.ts` + `packages/shared/src/analytics/__tests__/ga.test.ts` (vị trí test theo pattern package); Modify `packages/shared/src/index.ts` (+1 export line), `apps/shell/src/App.tsx` (pageview), 5 call-site files (1 line mỗi file).
