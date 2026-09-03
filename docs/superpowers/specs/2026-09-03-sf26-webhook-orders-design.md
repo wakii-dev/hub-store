@@ -20,7 +20,7 @@ Hiện chỉ có 2 đường tạo đơn (manual SF-13, import file) — đều 
 - Retry semantics: 2xx xử lý xong (kể cả replay) / 400 malformed JSON / 401 sai-thiếu signature / 422 lỗi dữ liệu + errors[] / 5xx lỗi hệ thống (caller retry, idempotency bảo vệ).
 - E2E `09-webhook.spec.ts` private seam (`sf-26-*` containers).
 
-**Out (boundary):** caller side, async queue, multi-source mapping phức tạp, rate limiting (ghi nhận known-limitation), secret rotation, UI mới.
+**Out (boundary):** caller side, async queue, multi-source mapping phức tạp, rate limiting + retention/cleanup webhook_events (known-limitation, ghi chú docs), secret rotation, UI mới.
 
 ## 3. Architecture — Direction B (atomic Java-side)
 
@@ -50,7 +50,7 @@ CREATE TABLE IF NOT EXISTS webhook_events (
   id BIGSERIAL PRIMARY KEY,
   source VARCHAR NOT NULL,
   external_id VARCHAR NOT NULL,
-  payload JSONB NOT NULL,
+  payload JSONB NOT NULL,                      -- IntakeOrder đã-map (proto-JSON), KHÔNG raw payload (Java không thấy raw body)
   status VARCHAR NOT NULL DEFAULT 'PENDING',   -- PENDING | PROCESSED
   fulfill_code VARCHAR,                        -- kết quả lần đầu
   received_at TIMESTAMPTZ NOT NULL DEFAULT now(),
@@ -60,17 +60,28 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 ```
 
 ### Java flow (IntakeServiceImpl — tái dùng createOrders/IntakeValidator; inject thêm OrderEventPublisher)
-1. `SELECT` theo (source, external_id): nếu tồn tại PROCESSED → trả `{fulfill_code, replayed=true}` (200).
-2. Chưa có → `INSERT ... status='PENDING' ON CONFLICT DO NOTHING`: nếu conflict (request song song đang chạy) → re-select; PENDING → trả `UNAVAILABLE` (5xx, caller retry — idempotency bảo vệ).
-3. Validate qua `IntakeValidator` (nguyên văn SF-13) → lỗi → `INVALID_ARGUMENT` với details rows (BFF map 422) + xóa row PENDING (hoặc mark FAILED — quyết định executor, miễn replay-sau-lỗi được phép gửi lại).
-4. TX: `createOrders(rows)` (nextFulfillCodes advisory lock + insert + appendAudit `order.created`) → `UPDATE webhook_events SET status='PROCESSED', fulfill_code, processed_at`.
-5. SAU commit: `events.publish("order.created", fulfillCode, payload)` best-effort fire-and-forget — đúng pattern FulfillServiceImpl (SF-27). Envelope source `'fulfillment'`, topic `order-events`. KHÔNG double-publish: xác nhận CreateManualOrder không publish (đã verify).
+
+**State machine `webhook_events.status`** (quyết định cứng, không để executor chọn):
+- `PENDING` = đã claim, đang xử lý (hoặc đã crash giữa claim và process).
+- `PROCESSED` = thành công — replay trả kết quả lần đầu.
+- `FAILED` = validation fail — caller sửa payload rồi gửi LẠI được (replay trên FAILED → xử lý lại, không trả kết quả cũ).
+
+Flow:
+1. Claim là **tx riêng, commit ngay** (bước 2) — tách khỏi tx xử lý (bước 4) để ON CONFLICT chặn race giữa các request song song.
+2. `SELECT` theo (source, external_id): `PROCESSED` → trả `{fulfill_code, replayed=true}` (200). `FAILED` → tiếp tục xử lý lại (update row về PENDING). Không có row → bước 3.
+3. `INSERT ... status='PENDING' ON CONFLICT DO NOTHING`: nếu conflict → re-select: `PROCESSED` → trả kết quả như replay; `FAILED` → xử lý lại; `PENDING` còn **mới** (< `WEBHOOK_CLAIM_STALE_SECONDS`, mặc định 120) → request song song đang chạy → trả `UNAVAILABLE` (5xx, caller retry an toàn); `PENDING` **stale** (≥ ngưỡng — crash mồ côi) → reclaim: update về PENDING với received_at mới rồi xử lý tiếp (không có poison-row vĩnh viễn).
+4. Validate qua `IntakeValidator` (nguyên văn SF-13) → lỗi → `UPDATE row SET status='FAILED'` + `INVALID_ARGUMENT` với details rows (BFF map 422). FAILED nghĩa là lần gửi ĐÓ bị từ chối; gửi lại (cùng externalId) qua bước 2/3 xử lý lại bình thường.
+5. TX xử lý: `createOrders(rows)` (nextFulfillCodes advisory lock + insert + appendAudit `order.created`) → `UPDATE webhook_events SET status='PROCESSED', fulfill_code, processed_at` → commit.
+6. SAU commit: `events.publish("order.created", fulfillCode, payload)` best-effort fire-and-forget — đúng pattern FulfillServiceImpl (SF-27). Envelope source `'fulfillment'`, topic `order-events`. KHÔNG double-publish: xác nhận CreateManualOrder không publish (đã verify).
+7. Defense-in-depth Java: `source`/`external_id` blank (proto3 "") → `INVALID_ARGUMENT` (bảo vệ cả caller gRPC trực tiếp).
 
 ### BFF
 - `plugins/auth.ts`: skip **exact-path** `/webhooks/orders` (pattern `/healthz`) — KHÔNG prefix lỏng `/webhooks`.
 - `routes/webhooks.ts`: đọc **raw body** (để HMAC đúng bytes), verify → mapping → `intakeClient.createWebhookOrder` → map phản hồi/lỗi.
 - `lib/hmac.ts`: HMAC-SHA256 hex, so `crypto.timingSafeEqual` (check length trước để không throw); **secret KHÔNG bao giờ vào log/error/audit**; `WEBHOOK_HMAC_SECRET` thiếu/rỗng → **503 fail-closed** (không nhận webhook không auth) + log một lần cảnh báo thiếu secret.
-- `lib/webhook-mapping.ts`: pure function payload→IntakeOrder; default mapping (externalId, customerName, customerPhone, customerAddress, items[{productCode,productName,quantity}], codAmount, shopHint tương đương template SF-13); override tên field qua `WEBHOOK_MAPPING` env JSON (flat rename map — 1 mức, đủ boundary). externalId thiếu trong payload → 422 (không phải lỗi hệ thống).
+- `lib/webhook-mapping.ts`: pure function payload→IntakeOrder; default mapping (externalId, customerName, customerPhone, customerAddress, items[{productCode,productName,quantity}], codAmount, shopHint tương đương template SF-13; **quantity tự tính = Σ items[].quantity** — validator SF-13 bắt buộc); override tên field qua `WEBHOOK_MAPPING` env JSON (flat rename map — 1 mức, đủ boundary). externalId thiếu trong payload → 422 (không phải lỗi hệ thống).
+- **`source` lấy từ HTTP header `X-Source`** (bắt buộc, blank/missing → 422) — KHÔNG nằm trong payload mapping (sàn không tự đặt tên mình trong payload). Header ASCII-safe dùng cho dedupe key + audit actor.
+- Route đặt `bodyLimit: 1MB` (Fastify default giữ nguyên, khai rõ trên route).
 - `callUnary` actor = `webhook:<source>` (ActorInterceptor fallback "unknown" đã verify an toàn), role metadata `MANAGER` (gRPC nội bộ không validate role — thông tin audit).
 - Config `config.ts`: `WEBHOOK_HMAC_SECRET`, `WEBHOOK_MAPPING` (optional).
 - `.env.example`: `WEBHOOK_HMAC_SECRET=dev-webhook-secret-change-me` + comment.
@@ -81,8 +92,8 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 | 200 | xử lý xong hoặc replay | `{ fulfillCode, replayed }` |
 | 400 | JSON malformed | envelope error |
 | 401 | thiếu/sai `X-Signature` | envelope error, KHÔNG tiết lộ chi tiết secret |
-| 422 | validate fail (IntakeValidator) | `code: VALIDATION_ERROR`, `details[]` từng field (row/field/message) |
-| 503 | secret env thiếu (fail-closed) | envelope error |
+| 422 | validate fail (IntakeValidator) hoặc thiếu `X-Source`/externalId | `code: VALIDATION_ERROR`, `details[]` từng field (row/field/message) |
+| 503 | secret env thiếu (fail-closed); **hoặc** replay-PENDING-conflict — đi qua mapping sẵn `UNAVAILABLE→503 UPSTREAM_UNAVAILABLE` của `lib/grpc-error.ts` (thông điệp chung, chấp nhận reuse) | envelope error |
 | 5xx | DB/gRPC lỗi hệ thống, replay-PENDING-conflict | envelope error — caller retry an toàn |
 
 ## 4. Data flow
@@ -107,7 +118,7 @@ Sàn → `POST /webhooks/orders` (raw body + X-Signature) → BFF HMAC verify (4
 |---|---|
 | auth skip lỏng mở endpoint khác | exact-path match, security-audit review bắt buộc |
 | HMAC dùng body đã parse lại (encode lệch) | raw body capture trong route (Fastify `request.body` raw qua content-type parser custom hoặc `req.raw`) |
-| Replay-PENDING deadlock (crash giữ row PENDING mãi) | caller retry → conflict path → UNAVAILABLE; row PENDING mồ côi: replay sau khi không còn in-flight → executor quyết: nếu PENDING cũ > ngưỡng thì tái xử lý (ghi decision vào code comment). Đơn giản: PENDING row không chặn lần gọi MỚI sau khi RPC trước đã trả lỗi — xử lý idempotent-tiếp |
+| Replay-PENDING deadlock (crash giữ row PENDING mãi) | stale-reclaim: PENDING ≥ `WEBHOOK_CLAIM_STALE_SECONDS` (120s mặc định) → reclaim + xử lý lại; PENDING mới → UNAVAILABLE 503 (caller retry). Không có poison-row vĩnh viễn |
 | Flyway collision cross-SF | chỉ V11 (V10 đã bị SF-23 notification_log chiếm); IF NOT EXISTS + out-of-order đã bật |
 | Kafka e2e false-pass khi KAFKA off | e2e skip-gate như 05-kafka + private stack bật 'true' strict + assert message thật trên kafka-ui |
 | reset-db table-gap (memory fi279) | runner private seam migrate-on-boot của Java tự chạy V11 |
