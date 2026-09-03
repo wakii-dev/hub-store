@@ -114,7 +114,12 @@ func main() {
 		log.Fatalf("batching-service: delivery-batch DB ping: %v", err)
 	}
 
-	grpcServer := grpc.NewServer(grpc.UnaryInterceptor(server.RoleUnaryInterceptor))
+	// SF-12: auth interceptor (token passthrough / internal token) chạy TRƯỚC
+	// role interceptor — auth derive role từ claim, role interceptor chỉ đọc.
+	grpcServer := grpc.NewServer(grpc.ChainUnaryInterceptor(
+		server.AuthUnaryInterceptor,
+		server.RoleUnaryInterceptor,
+	))
 	srv := server.New(st, fc)
 	srv.SetEventPublisher(events)
 	batchingv1.RegisterBatchingServiceServer(grpcServer, srv)

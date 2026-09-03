@@ -11,6 +11,7 @@ package fulfillment
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	fulfillmentv1 "hubstore/gen/go/hubstore/fulfillment/v1"
@@ -76,9 +77,21 @@ func NewGRPCClient(ctx context.Context, addr string) (*GRPCClient, error) {
 	return &GRPCClient{conn: conn, stub: fulfillmentv1.NewFulfillmentServiceClient(conn)}, nil
 }
 
+// ctx — outbound metadata cho call Go→Java (SF-12 s2s auth, spec §3.1):
+//   - luồng BFF đi qua (ctx có user token) → forward authorization Bearer;
+//   - ngược lại (reconciler / luồng máy-máy) → x-internal-token từ env.
+// Role vẫn forward để Java ghi actor/audit.
 func (c *GRPCClient) ctx(ctx context.Context) context.Context {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if vals := md.Get("authorization"); len(vals) > 0 && vals[0] != "" {
+			return metadata.AppendToOutgoingContext(ctx, "authorization", vals[0])
+		}
+	}
+	if tok := os.Getenv("INTERNAL_SERVICE_TOKEN"); tok != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-internal-token", tok)
+	}
 	if role := RoleFromContext(ctx); role != "" {
-		return metadata.AppendToOutgoingContext(ctx, "x-user-role", role)
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-user-role", role)
 	}
 	return ctx
 }
