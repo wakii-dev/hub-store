@@ -32,11 +32,11 @@
 - Modify: `packages/shared/src/index.ts` (export + ghi chú SF-24)
 - Modify: `packages/shared/package.json` (leaflet 1.9.4 exact + `@types/leaflet` 1.9.x devDep)
 
-- [ ] **Step 1.1: Thêm dep + install**
+- [x] **Step 1.1: Thêm dep + install**
 
 `packages/shared/package.json` → dependencies thêm `"leaflet": "1.9.4"`, devDependencies thêm `"@types/leaflet": "1.9.20"`. Chạy `pnpm install` từ repo root.
 
-- [ ] **Step 1.2: Test trước cho pure helpers (TDD)**
+- [x] **Step 1.2: Test trước cho pure helpers (TDD)**
 
 `packages/shared/src/map/routeFixture.test.ts`:
 
@@ -66,11 +66,11 @@ describe("deriveStopCoord", () => {
 
 `packages/shared/src/map/map.test.ts`: test `sortStops(stops)` sắp theo stopOrder tăng dần; test `numberedStopIcon(n, color, testId?)` trả HTML chứa `sf24-stop-marker` + `data-stop-order="n"` (+ `data-testid` khi truyền testId); test `statusPinIcon(color, testId?)` chứa `sf24-status-pin` + màu được truyền (KHÔNG hardcode màu trong shared).
 
-- [ ] **Step 1.3: Chạy test → FAIL**
+- [x] **Step 1.3: Chạy test → FAIL**
 
 Run: `pnpm --filter @hub-store/shared test -- map` — Expected: FAIL (module không tồn tại).
 
-- [ ] **Step 1.4: Implement**
+- [x] **Step 1.4: Implement**
 
 `routeFixture.ts` — MOCK coords, header comment bắt buộc:
 
@@ -236,11 +236,11 @@ export function MapView(props: MapViewProps) {
 
 SF-6 CSS cho markers + popup (module-level trong `markers.ts` hoặc file `map.css` import cùng leaflet.css): marker span tròn 26px, chữ trắng 12px bold, box-shadow `DESIGN_TOKENS.shadow.sm` (copy giá trị — shared icon nhận string, CSS dùng literal khớp token, ghi comment nguồn). `.leaflet-popup-content-wrapper` border-radius 10 (radius.md).
 
-- [ ] **Step 1.5: Test pass + typecheck**
+- [x] **Step 1.5: Test pass + typecheck**
 
 Run: `pnpm --filter @hub-store/shared test` → PASS toàn bộ (cả test cũ). Run: `pnpm --filter @hub-store/shared build` (tsc --noEmit) → sạch.
 
-- [ ] **Step 1.6: Commit**
+- [x] **Step 1.6: Commit**
 
 ```bash
 git add packages/shared/src/map packages/shared/src/index.ts packages/shared/package.json pnpm-lock.yaml
