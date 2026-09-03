@@ -214,6 +214,28 @@
   box-shadow: 0 6px 16px -4px rgba(16, 24, 40, 0.1), 0 2px 6px -2px rgba(16, 24, 40, 0.06);
 }
 
+/* ─── SF-21 D6 font-size slider runtime (antd4 không có runtime token) ───
+   `--app-font-size` set trên <html> inline style từ slider (fontScale.ts).
+   Phạm vi: main text surfaces scale — KHÔNG promise pixel-perfect mọi
+   sub-component (spec §6). */
+
+html {
+  --app-font-size: 14px;
+}
+body {
+  font-size: var(--app-font-size);
+}
+.ant-btn,
+.ant-table,
+.ant-form-item,
+.ant-modal,
+.ant-select,
+.ant-menu,
+.ant-descriptions-item,
+.ant-card {
+  font-size: inherit;
+}
+
 /* ─── §4 SF-11 Mobile ≤768px (FI-256 Task 3) ───
  * Desktop 1440×900 pixel-identical: mọi rule layout nằm trong @media bên dưới;
  * ngoài media CHỈ class definition (display:none toggle). Sidebar rail off-canvas

@@ -36,8 +36,18 @@ import type {
   ListDeliveryStaffResponse,
   ListDistinctShopsRequest,
   ListDistinctShopsResponse,
+  ListPrintersRequest,
+  ListPrintersResponse,
   ListRegionsRequest,
   ListRegionsResponse,
+  CreatePrinterRequest,
+  CreatePrinterResponse,
+  UpdatePrinterRequest,
+  UpdatePrinterResponse,
+  RecordPrintErrorRequest,
+  RecordPrintErrorResponse,
+  GetPrintErrorCountsRequest,
+  GetPrintErrorCountsResponse,
   UpdateDeliveryTimeRequest,
   UpdateDeliveryTimeResponse,
   UpdateD2cOrderNoteResponse,
@@ -80,6 +90,14 @@ export interface FulfillmentApi {
     req: GetSettlementDetailRequest,
     role: string,
   ): Promise<GetSettlementDetailResponse>;
+  // SF-21 printer management (FI-266) — create/update truyền actor (x-user-name)
+  // cho audit trail activity_log (pattern confirmCod).
+  listPrinters(req: ListPrintersRequest, role: string): Promise<ListPrintersResponse>;
+  createPrinter(req: CreatePrinterRequest, role: string, actor: string): Promise<CreatePrinterResponse>;
+  updatePrinter(req: UpdatePrinterRequest, role: string, actor: string): Promise<UpdatePrinterResponse>;
+  // SF-21 print errors (FI-266, spec D2) — record fail-open ở route (log-only).
+  recordPrintError(req: RecordPrintErrorRequest, role: string): Promise<RecordPrintErrorResponse>;
+  getPrintErrorCounts(req: GetPrintErrorCountsRequest, role: string): Promise<GetPrintErrorCountsResponse>;
   close(): void;
 }
 
@@ -109,6 +127,14 @@ export function createFulfillmentClient(addr: string, deadlineMs: number): Fulfi
     getSettlement: (req, role) => callUnary(c.getSettlement.bind(c), req, role, deadlineMs),
     getSettlementDetail: (req, role) =>
       callUnary(c.getSettlementDetail.bind(c), req, role, deadlineMs),
+    listPrinters: (req, role) => callUnary(c.listPrinters.bind(c), req, role, deadlineMs),
+    createPrinter: (req, role, actor) =>
+      callUnary(c.createPrinter.bind(c), req, role, deadlineMs, actor),
+    updatePrinter: (req, role, actor) =>
+      callUnary(c.updatePrinter.bind(c), req, role, deadlineMs, actor),
+    recordPrintError: (req, role) => callUnary(c.recordPrintError.bind(c), req, role, deadlineMs),
+    getPrintErrorCounts: (req, role) =>
+      callUnary(c.getPrintErrorCounts.bind(c), req, role, deadlineMs),
     close: () => c.close(),
   };
 }

@@ -29,6 +29,8 @@ export const NAV_ROUTES: NavRoute[] = [
   // SF-11 — audit viewer Manager-only; append CUỐI (constraint firstPathForRole —
   // chỉ Manager có audit.view nên không đổi landing path của role nào).
   { path: '/audit', labelKey: 'nav.audit', permission: 'audit.view' },
+  // SF-21 — quản lý máy in (Admin duy nhất) — append CUỐI để không đổi landing.
+  { path: '/printers', labelKey: 'nav.printers', permission: 'printers.manage' },
 ];
 
 // Fallback theo permission (KHÔNG hard-code index — mảng có thể thêm entry đầu).

@@ -22,7 +22,7 @@ import {
   type AppStore,
   type UserListItem,
 } from "@hub-store/api-client";
-import { DESIGN_TOKENS, ROLES, TableSkeleton, EmptyState } from "@hub-store/shared";
+import { DESIGN_TOKENS, ROLES, TableSkeleton, EmptyState, useHotkeys } from "@hub-store/shared";
 
 /**
  * Store per-remote (spec §2) — shell KHÔNG share store qua MF boundary.
@@ -100,6 +100,19 @@ function UsersContent(props: { currentUsername: string }) {
       messageApi.error(t("users.error"));
     }
   };
+
+  // SF-21 D5 — F6 mở modal tạo; khi modal mở: F4 submit / F8 đóng
+  // (helper modal T10 đọc registry theo contextId 'users-page').
+  useHotkeys(
+    "users-page",
+    t("users.title"),
+    addOpen
+      ? [
+          { key: "F4", handler: () => void submitAdd(), description: t("users.form.submit") },
+          { key: "F8", handler: () => setAddOpen(false), description: t("users.form.cancel") },
+        ]
+      : [{ key: "F6", handler: () => setAddOpen(true), description: t("users.add") }],
+  );
 
   const columns: ColumnsType<UserListItem> = [
     { title: t("users.column.username"), dataIndex: "username" },

@@ -39,6 +39,7 @@ import type {
 import type {
   ConfirmImportOrdersResponse,
   CreateManualOrderResponse,
+  CreateWebhookOrderResponse,
   GetOrderAuditResponse,
   MarkOrderFailedResponse,
   RedeliverOrderResponse,
@@ -446,6 +447,8 @@ export const intakeResponses = {
   validateImportOrders: { errors: [] } as ValidateImportOrdersResponse,
   confirmImportOrders: { fulfillCodes: ['ORD-4001', 'ORD-4002'] } as ConfirmImportOrdersResponse,
   createManualOrder: { fulfillCode: 'ORD-4001' } as CreateManualOrderResponse,
+  // SF-26 — webhook sàn (FI-27); happy-path default, replay test override.
+  createWebhookOrder: { fulfillCode: 'ORD-WH-0001', replayed: false } as CreateWebhookOrderResponse,
   markOrderFailed: {} as MarkOrderFailedResponse,
   redeliverOrder: { newFulfillCode: 'ORD-9001' } as RedeliverOrderResponse,
   getOrderAudit: {

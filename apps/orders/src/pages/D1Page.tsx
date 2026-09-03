@@ -27,6 +27,7 @@ import {
   FilterBar,
   formatPeriodOfTime,
   useUrlState,
+  useHotkeys,
   DESIGN_TOKENS,
   StatStripSkeleton,
   EmptyState,
@@ -231,6 +232,15 @@ function D1Content() {
   // SF-13 — tạo đơn tay + nhập đơn file
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [importOrdersOpen, setImportOrdersOpen] = useState(false);
+
+  // SF-21 D5 — F6 mở "Tạo đơn" (helper modal T10 đọc registry theo contextId này)
+  useHotkeys("d1-orders-page", t("page.title"), [
+    {
+      key: "F6",
+      handler: () => setCreateOrderOpen(true),
+      description: t("intake.createOrderButton"),
+    },
+  ]);
 
   // --- SF-16 (Task 6) — replan/rebook entry-point -----------------------------
   // D2 (fulfillment) navigate sang đây với ?nvcMode=replan|rebook&nvcBatchCode=

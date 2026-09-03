@@ -23,6 +23,7 @@ import ForgotPasswordPage from "./features/login/ForgotPasswordPage";
 import TechServicePage from "./features/tech/TechServicePage";
 import UsersPage from "./features/users/UsersPage";
 import AuditPage from "./features/audit/AuditPage";
+import PrintersPage from "./pages/PrintersPage";
 import AreaListPage from "./pages/area-staff/AreaListPage";
 import AreaFormPage from "./pages/area-staff/AreaFormPage";
 import SettlementPage from "./pages/settlement/SettlementPage";
@@ -308,6 +309,15 @@ export default function App() {
                   element={
                     <RequirePermission permission="audit.view">
                       <AuditPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* SF-21 — quản lý máy in, shell-local (Admin duy nhất). */}
+                <Route
+                  path="/printers"
+                  element={
+                    <RequirePermission permission="printers.manage">
+                      <PrintersPage />
                     </RequirePermission>
                   }
                 />

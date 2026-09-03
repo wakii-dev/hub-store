@@ -61,6 +61,8 @@ export type {
   PrintersResponse,
   PrintRequest,
   PrintResponseMeta,
+  PrintErrorCountDto,
+  PrintErrorCountsResponse,
 } from './print';
 
 export type {

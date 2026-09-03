@@ -6,6 +6,7 @@ import com.hubstore.fulfillment.store.D2cOrderFilter;
 import com.hubstore.fulfillment.store.D2cOrderRecord;
 import com.hubstore.fulfillment.store.D2cOrderRepository;
 import com.hubstore.fulfillment.store.InMemoryCodConfirmationRepository;
+import com.hubstore.fulfillment.store.InMemoryPrinterRepository;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.v1.D2cOrder;
 import com.hubstore.fulfillment.v1.FilterD2cOrdersRequest;
@@ -56,7 +57,8 @@ class D2cFilterAndNoteTest {
                 orders,
                 new RecordingEventPublisher(), repo,
                 new InMemoryCodConfirmationRepository(orders::isFailed),
-                TestTx.noop());
+                new InMemoryPrinterRepository(),
+                new com.hubstore.fulfillment.store.InMemoryPrintErrorRepository(), TestTx.noop());
     }
 
     // ---------------- repo filter semantics ----------------

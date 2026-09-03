@@ -26,6 +26,7 @@ import { registerTechRoutes } from './routes/tech.js';
 import { registerIntakeRoutes } from './routes/intake.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
+import { registerPrinterRoutes } from './routes/printers.js';
 import { registerDeliveryBatchRoutes } from './routes/deliverybatch.js';
 import { registerServiceEmployeesRoutes } from './routes/serviceEmployees.js';
 import { registerAuthRoutes } from './routes/auth.js';
@@ -36,7 +37,10 @@ import { registerTransferRoutes } from './routes/transfer.js';
 import { registerBatchingPresetRoutes } from './routes/batching-presets.js';
 import { registerCodRoutes } from './routes/cod.js';
 import { registerEventsRoutes } from './routes/events.js';
+import { registerAvatarRoutes } from './routes/avatar.js';
+import { registerMetaRoutes } from './routes/meta.js';
 import { registerNotificationsRoutes } from './routes/notifications.js';
+import { registerWebhookRoutes } from './routes/webhooks.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -102,7 +106,9 @@ export function buildApp(config: BffConfig): FastifyInstance {
   // SF-13 intake routes — đăng ký SAU fulfillment (plan T6).
   registerIntakeRoutes(app, { intake, fulfillment, batching });
   registerBatchRoutes(app, batching);
-  registerPrintRoutes(app, { batching, print });
+  registerPrintRoutes(app, { batching, print, fulfillment });
+  // SF-21 — printer CRUD (Admin) — dùng fulfillment client (DB-backed registry).
+  registerPrinterRoutes(app, { fulfillment });
   registerDeliveryBatchRoutes(app, deliveryBatch);
   registerServiceEmployeesRoutes(app, { staffArea });
   // SF-18 — D2C orders (consumer trực tiếp) — dùng fulfillment client.
@@ -116,9 +122,16 @@ export function buildApp(config: BffConfig): FastifyInstance {
   // SF-10 — SSE /events realtime (không cần gRPC client; nguồn là bffEvents).
   // corsOrigins: hijack discard headers của @fastify/cors → route tự tính CORS.
   registerEventsRoutes(app, { corsOrigins: config.corsOrigins });
+  // SF-21 — avatar upload/serve (DB fulfillment qua pg Pool, precedent audit).
+  registerAvatarRoutes(app);
+  // SF-21 — GET /version metadata (public, không JWT — plugins/auth exempt).
+  registerMetaRoutes(app);
   // SF-23 — notifications feed cho FE polling (không cần gRPC client; nguồn
   // là notification_log DB trực tiếp — pattern audit pool).
   registerNotificationsRoutes(app);
+  // SF-26 — webhook nhận đơn từ sàn (public, auth HMAC trong route; scoped
+  // raw-body parser tự encapsulate trong app.register scope con).
+  registerWebhookRoutes(app, { intake, config });
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });

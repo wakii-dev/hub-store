@@ -123,8 +123,8 @@ export function mapGrpcError(
         body: errorEnvelope(404, err.details ?? 'Not found.', { code: 'NOT_FOUND' }),
       };
     case GrpcStatus.ALREADY_EXISTS:
-      // SF-28: trùng ticket PENDING (transfer) → 409 CONFLICT (spec §3 Q6 —
-      // lifecycle tối đa 1 ticket PENDING/order).
+      // SF-21 (D9): duplicate (shopCode, printerId) → 409 CONFLICT.
+      // SF-28: trùng ticket PENDING (transfer) → 409 CONFLICT (spec §3 Q6).
       return {
         statusCode: 409,
         body: errorEnvelope(409, err.details ?? 'Already exists.', {

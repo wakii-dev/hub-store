@@ -227,8 +227,9 @@ test("luồng §8: tạo lại → In D3 PDF → hoàn tất soạn", async ({ p
   // PDF preview render (react-pdf → canvas) + zoom slider tồn tại
   const canvas = page.locator(".print-preview-area canvas").first();
   await canvas.waitFor({ timeout: 45_000 });
-  // antd 4 Slider không nhận aria-label trực tiếp → dùng role=slider của handle
-  const zoom = page.getByRole("slider");
+  // antd 4 Slider không nhận aria-label trực tiếp → dùng role=slider của handle.
+  // Scope vào remote-mount: SF-21 thêm FontSizeSlider (slider thứ 2) ở header.
+  const zoom = page.getByTestId("remote-mount").getByRole("slider");
   await expect(zoom).toBeVisible();
   await zoom.click();
   await page.keyboard.press("ArrowRight"); // tăng zoom — canvas re-render không crash

@@ -14,6 +14,8 @@ import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.FilterResult;
 import com.hubstore.fulfillment.store.OrderFilter;
 import com.hubstore.fulfillment.store.OrderRepository;
+import com.hubstore.fulfillment.store.PrintErrorRepository;
+import com.hubstore.fulfillment.store.PrinterRepository;
 import com.hubstore.fulfillment.v1.ConfirmBatchCodRequest;
 import com.hubstore.fulfillment.v1.ConfirmBatchCodResponse;
 import com.hubstore.fulfillment.v1.ConfirmCodItem;
@@ -52,15 +54,25 @@ import com.hubstore.fulfillment.v1.GetOrderDetailResponse;
 import com.hubstore.fulfillment.v1.GetOrdersByCodesRequest;
 import com.hubstore.fulfillment.v1.GetOrdersByCodesResponse;
 import com.hubstore.fulfillment.v1.GetTimeDeliveryRequest;
+import com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest;
+import com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse;
 import com.hubstore.fulfillment.v1.GetTimeDeliveryResponse;
 import com.hubstore.fulfillment.v1.HubStoreOrderFilterItem;
 import com.hubstore.fulfillment.v1.ListDeliveryStaffRequest;
 import com.hubstore.fulfillment.v1.ListDeliveryStaffResponse;
 import com.hubstore.fulfillment.v1.ListDistinctShopsRequest;
 import com.hubstore.fulfillment.v1.ListDistinctShopsResponse;
+import com.hubstore.fulfillment.v1.ListPrintersRequest;
+import com.hubstore.fulfillment.v1.ListPrintersResponse;
 import com.hubstore.fulfillment.v1.ListRegionsRequest;
 import com.hubstore.fulfillment.v1.ListRegionsResponse;
+import com.hubstore.fulfillment.v1.CreatePrinterRequest;
+import com.hubstore.fulfillment.v1.CreatePrinterResponse;
+import com.hubstore.fulfillment.v1.UpdatePrinterRequest;
+import com.hubstore.fulfillment.v1.UpdatePrinterResponse;
 import com.hubstore.fulfillment.v1.MutateOrderStatusRequest;
+import com.hubstore.fulfillment.v1.RecordPrintErrorRequest;
+import com.hubstore.fulfillment.v1.RecordPrintErrorResponse;
 import com.hubstore.fulfillment.v1.MutateOrderStatusResponse;
 import com.hubstore.fulfillment.v1.MutateOrderStatusResult;
 import com.hubstore.fulfillment.v1.OrderStatus;
@@ -110,15 +122,20 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
     private final OrderEventPublisher events;
     private final D2cOrderRepository d2cRepo;
     private final CodConfirmationRepository codRepo;
+    private final PrinterRepository printers;
+    private final PrintErrorRepository printErrors;
     private final TransactionTemplate transactions;
 
     public FulfillmentServiceImpl(OrderRepository repo, OrderEventPublisher events,
             D2cOrderRepository d2cRepo, CodConfirmationRepository codRepo,
+            PrinterRepository printers, PrintErrorRepository printErrors,
             TransactionTemplate transactions) {
         this.repo = repo;
         this.events = events;
         this.d2cRepo = d2cRepo;
         this.codRepo = codRepo;
+        this.printers = printers;
+        this.printErrors = printErrors;
         this.transactions = transactions;
     }
 
@@ -799,6 +816,196 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
             return JSON.writeValueAsString(value);
         } catch (Exception e) {
             return "{}";
+        }
+    }
+
+    // ---------------- Printer management (SF-21, FI-266) ----------------
+
+    /**
+     * List máy in theo kho (D3 print dùng). shop_code trống = tất cả
+     * (defensive — BFF luôn truyền shop). Role check KHÔNG ở Java: services
+     * trust BFF (convention SF-17) — gate Admin ở BFF (spec SF-21 D9).
+     */
+    @Override
+    public void listPrinters(ListPrintersRequest request, StreamObserver<ListPrintersResponse> responseObserver) {
+        try {
+            ListPrintersResponse.Builder resp = ListPrintersResponse.newBuilder();
+            printers.list(request.getShopCode()).forEach(p -> resp.addPrinters(toPrinter(p)));
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /**
+     * Tạo máy in — duplicate (shop_code, printer_id) → ALREADY_EXISTS
+     * (BFF map 409). Audit: activity_log print.managed (actor từ
+     * x-user-name — ActorInterceptor, pattern confirmCod).
+     */
+    @Override
+    public void createPrinter(CreatePrinterRequest request, StreamObserver<CreatePrinterResponse> responseObserver) {
+        try {
+            com.hubstore.fulfillment.v1.Printer proto = request.getPrinter();
+            List<GrpcErrors.ErrorDetail> details = validatePrinter(proto, true);
+            if (!details.isEmpty()) {
+                throw GrpcErrors.invalidArgument(details);
+            }
+            // Review-nhóm-2 P1-2: mutation + audit trong 1 transaction (pattern
+            // a5f0d93 confirmCod) — audit INSERT fail → tạo printer bị roll back.
+            String actor = ActorInterceptor.currentActor();
+            PrinterRepository.Printer created = transactions.execute(tx -> {
+                PrinterRepository.Printer p = printers.create(new PrinterRepository.Printer(
+                        proto.getShopCode().trim(), proto.getPrinterId().trim(),
+                        proto.getName(), proto.getLocation(), proto.getPrinterIp(),
+                        proto.getMac(), proto.getType().trim()));
+                repo.appendAudit(actor, "printer.created", p.printerId(), json(Map.of(
+                        "shopCode", p.shopCode(), "type", orEmpty(p.type()))));
+                return p;
+            });
+            if (created == null) {
+                throw Status.INTERNAL.withDescription("printer create tx returned null.")
+                        .asRuntimeException();
+            }
+            responseObserver.onNext(CreatePrinterResponse.newBuilder()
+                    .setPrinter(toPrinter(created)).build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (PrinterRepository.DuplicatePrinterException e) {
+            responseObserver.onError(GrpcErrors.withDetails(
+                    Status.ALREADY_EXISTS, e.getMessage(),
+                    List.of(new GrpcErrors.ErrorDetail("printerId", e.getMessage()))));
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /**
+     * Sửa máy in — identity (shop_code, printer_id) từ request fields CHỐT:
+     * chỉ name/printer_ip/mac/type có hiệu lực (D9). Không thấy → NOT_FOUND.
+     */
+    @Override
+    public void updatePrinter(UpdatePrinterRequest request, StreamObserver<UpdatePrinterResponse> responseObserver) {
+        try {
+            List<GrpcErrors.ErrorDetail> details = new java.util.ArrayList<>();
+            if (request.getShopCode().isBlank()) {
+                details.add(new GrpcErrors.ErrorDetail("shopCode", "shopCode bắt buộc."));
+            }
+            if (request.getPrinterId().isBlank()) {
+                details.add(new GrpcErrors.ErrorDetail("printerId", "printerId bắt buộc."));
+            }
+            details.addAll(validatePrinter(request.getPrinter(), false));
+            if (!details.isEmpty()) {
+                throw GrpcErrors.invalidArgument(details);
+            }
+            // Review-nhóm-2 P1-2: mutation + audit trong 1 transaction (pattern
+            // a5f0d93 confirmBatchCod) — audit INSERT fail → update bị roll back.
+            String actor = ActorInterceptor.currentActor();
+            PrinterRepository.Printer updated = transactions.execute(tx -> {
+                PrinterRepository.Printer p = printers.update(
+                        request.getShopCode().trim(), request.getPrinterId().trim(),
+                        new PrinterRepository.Printer(request.getShopCode().trim(),
+                                request.getPrinterId().trim(),
+                                request.getPrinter().getName(), request.getPrinter().getLocation(),
+                                request.getPrinter().getPrinterIp(), request.getPrinter().getMac(),
+                                request.getPrinter().getType().trim()));
+                repo.appendAudit(actor, "printer.updated", p.printerId(), json(Map.of(
+                        "shopCode", p.shopCode(), "type", orEmpty(p.type()))));
+                return p;
+            });
+            if (updated == null) {
+                throw Status.INTERNAL.withDescription("printer update tx returned null.")
+                        .asRuntimeException();
+            }
+            responseObserver.onNext(UpdatePrinterResponse.newBuilder()
+                    .setPrinter(toPrinter(updated)).build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (PrinterRepository.PrinterNotFoundException e) {
+            responseObserver.onError(GrpcErrors.withDetails(
+                    Status.NOT_FOUND, e.getMessage(),
+                    List.of(new GrpcErrors.ErrorDetail("printerId", e.getMessage()))));
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /**
+     * Validate input create/update printer. create=true: identity bắt buộc;
+     * type phải 'bill'|'a4'. Static để unit test không cần gRPC runtime.
+     */
+    static List<GrpcErrors.ErrorDetail> validatePrinter(com.hubstore.fulfillment.v1.Printer proto,
+                                                        boolean create) {
+        List<GrpcErrors.ErrorDetail> details = new java.util.ArrayList<>();
+        if (create && proto.getShopCode().isBlank()) {
+            details.add(new GrpcErrors.ErrorDetail("shopCode", "shopCode bắt buộc."));
+        }
+        if (create && proto.getPrinterId().isBlank()) {
+            details.add(new GrpcErrors.ErrorDetail("printerId", "printerId bắt buộc."));
+        }
+        if (!"bill".equals(proto.getType()) && !"a4".equals(proto.getType())) {
+            details.add(new GrpcErrors.ErrorDetail("type", "type phải là 'bill' hoặc 'a4'."));
+        }
+        return details;
+    }
+
+    private static com.hubstore.fulfillment.v1.Printer toPrinter(PrinterRepository.Printer p) {
+        return com.hubstore.fulfillment.v1.Printer.newBuilder()
+                .setShopCode(orEmpty(p.shopCode()))
+                .setPrinterId(orEmpty(p.printerId()))
+                .setName(orEmpty(p.name()))
+                .setLocation(orEmpty(p.location()))
+                .setPrinterIp(orEmpty(p.printerIp()))
+                .setMac(orEmpty(p.mac()))
+                .setType(orEmpty(p.type()))
+                .build();
+    }
+
+    // ---------------- Print errors (SF-21, FI-266 — spec D2) ----------------
+
+    /**
+     * Ghi nhận 1 lỗi in thật — BFF gọi trên failure path (invalid printer /
+     * batching fail / print-service fail). order_code rỗng khi batch chưa
+     * hydrate được (D2). Không audit — table print_errors chính là trail.
+     */
+    @Override
+    public void recordPrintError(RecordPrintErrorRequest request,
+            StreamObserver<RecordPrintErrorResponse> responseObserver) {
+        try {
+            var r = request.getRecord();
+            printErrors.insert(new PrintErrorRepository.PrintError(
+                    r.getOrderCode(), r.getBatchCode(), r.getPrintType(),
+                    r.getPrinterId(), r.getErrorMessage()));
+            responseObserver.onNext(RecordPrintErrorResponse.newBuilder().build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /** Đếm lỗi per đơn theo phiếu — badge + sort D3 (GROUP BY order_code). */
+    @Override
+    public void getPrintErrorCounts(GetPrintErrorCountsRequest request,
+            StreamObserver<GetPrintErrorCountsResponse> responseObserver) {
+        try {
+            GetPrintErrorCountsResponse.Builder resp = GetPrintErrorCountsResponse.newBuilder();
+            for (PrintErrorRepository.OrderErrorCount c : printErrors.countsByBatch(request.getBatchCode())) {
+                resp.addCounts(com.hubstore.fulfillment.v1.PrintErrorCount.newBuilder()
+                        .setOrderCode(c.orderCode())
+                        .setCount(c.count()));
+            }
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
         }
     }
 

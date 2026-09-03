@@ -100,6 +100,16 @@ public final class Intake {
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_hubstore_intake_v1_GetOrderAuditResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_intake_v1_CreateWebhookOrderRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_intake_v1_CreateWebhookOrderRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_intake_v1_CreateWebhookOrderResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_intake_v1_CreateWebhookOrderResponse_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -139,31 +149,38 @@ public final class Intake {
       "\n\013detail_json\030\004 \001(\t\022\022\n\ncreated_at\030\005 \001(\t\"" +
       ",\n\024GetOrderAuditRequest\022\024\n\014fulfill_code\030" +
       "\001 \001(\t\"H\n\025GetOrderAuditResponse\022/\n\007entrie" +
-      "s\030\001 \003(\0132\036.hubstore.intake.v1.AuditEntry*" +
-      "\246\001\n\022DeliveryFailReason\022#\n\037DELIVERY_FAIL_" +
-      "REASON_KHACH_VANG\020\000\022$\n DELIVERY_FAIL_REA" +
-      "SON_SAI_DIA_CHI\020\001\022&\n\"DELIVERY_FAIL_REASO" +
-      "N_KHACH_TU_CHOI\020\002\022\035\n\031DELIVERY_FAIL_REASO" +
-      "N_KHAC\020\0032\257\005\n\rIntakeService\022y\n\024ValidateIm" +
-      "portOrders\022/.hubstore.intake.v1.Validate" +
-      "ImportOrdersRequest\0320.hubstore.intake.v1" +
-      ".ValidateImportOrdersResponse\022v\n\023Confirm" +
-      "ImportOrders\022..hubstore.intake.v1.Confir" +
-      "mImportOrdersRequest\032/.hubstore.intake.v" +
-      "1.ConfirmImportOrdersResponse\022p\n\021CreateM" +
-      "anualOrder\022,.hubstore.intake.v1.CreateMa" +
-      "nualOrderRequest\032-.hubstore.intake.v1.Cr" +
-      "eateManualOrderResponse\022j\n\017MarkOrderFail" +
-      "ed\022*.hubstore.intake.v1.MarkOrderFailedR" +
-      "equest\032+.hubstore.intake.v1.MarkOrderFai" +
-      "ledResponse\022g\n\016RedeliverOrder\022).hubstore" +
-      ".intake.v1.RedeliverOrderRequest\032*.hubst" +
-      "ore.intake.v1.RedeliverOrderResponse\022d\n\r" +
-      "GetOrderAudit\022(.hubstore.intake.v1.GetOr" +
-      "derAuditRequest\032).hubstore.intake.v1.Get" +
-      "OrderAuditResponseBG\n\026com.hubstore.intak" +
-      "e.v1P\001Z+hubstore/gen/go/hubstore/intake/" +
-      "v1;intakev1b\006proto3"
+      "s\030\001 \003(\0132\036.hubstore.intake.v1.AuditEntry\"" +
+      "p\n\031CreateWebhookOrderRequest\022\016\n\006source\030\001" +
+      " \001(\t\022\023\n\013external_id\030\002 \001(\t\022.\n\005order\030\003 \001(\013" +
+      "2\037.hubstore.intake.v1.IntakeOrder\"D\n\032Cre" +
+      "ateWebhookOrderResponse\022\024\n\014fulfill_code\030" +
+      "\001 \001(\t\022\020\n\010replayed\030\002 \001(\010*\246\001\n\022DeliveryFail" +
+      "Reason\022#\n\037DELIVERY_FAIL_REASON_KHACH_VAN" +
+      "G\020\000\022$\n DELIVERY_FAIL_REASON_SAI_DIA_CHI\020" +
+      "\001\022&\n\"DELIVERY_FAIL_REASON_KHACH_TU_CHOI\020" +
+      "\002\022\035\n\031DELIVERY_FAIL_REASON_KHAC\020\0032\244\006\n\rInt" +
+      "akeService\022y\n\024ValidateImportOrders\022/.hub" +
+      "store.intake.v1.ValidateImportOrdersRequ" +
+      "est\0320.hubstore.intake.v1.ValidateImportO" +
+      "rdersResponse\022v\n\023ConfirmImportOrders\022..h" +
+      "ubstore.intake.v1.ConfirmImportOrdersReq" +
+      "uest\032/.hubstore.intake.v1.ConfirmImportO" +
+      "rdersResponse\022p\n\021CreateManualOrder\022,.hub" +
+      "store.intake.v1.CreateManualOrderRequest" +
+      "\032-.hubstore.intake.v1.CreateManualOrderR" +
+      "esponse\022j\n\017MarkOrderFailed\022*.hubstore.in" +
+      "take.v1.MarkOrderFailedRequest\032+.hubstor" +
+      "e.intake.v1.MarkOrderFailedResponse\022g\n\016R" +
+      "edeliverOrder\022).hubstore.intake.v1.Redel" +
+      "iverOrderRequest\032*.hubstore.intake.v1.Re" +
+      "deliverOrderResponse\022d\n\rGetOrderAudit\022(." +
+      "hubstore.intake.v1.GetOrderAuditRequest\032" +
+      ").hubstore.intake.v1.GetOrderAuditRespon" +
+      "se\022s\n\022CreateWebhookOrder\022-.hubstore.inta" +
+      "ke.v1.CreateWebhookOrderRequest\032..hubsto" +
+      "re.intake.v1.CreateWebhookOrderResponseB" +
+      "G\n\026com.hubstore.intake.v1P\001Z+hubstore/ge" +
+      "n/go/hubstore/intake/v1;intakev1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -260,6 +277,18 @@ public final class Intake {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_hubstore_intake_v1_GetOrderAuditResponse_descriptor,
         new java.lang.String[] { "Entries", });
+    internal_static_hubstore_intake_v1_CreateWebhookOrderRequest_descriptor =
+      getDescriptor().getMessageTypes().get(15);
+    internal_static_hubstore_intake_v1_CreateWebhookOrderRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_intake_v1_CreateWebhookOrderRequest_descriptor,
+        new java.lang.String[] { "Source", "ExternalId", "Order", });
+    internal_static_hubstore_intake_v1_CreateWebhookOrderResponse_descriptor =
+      getDescriptor().getMessageTypes().get(16);
+    internal_static_hubstore_intake_v1_CreateWebhookOrderResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_intake_v1_CreateWebhookOrderResponse_descriptor,
+        new java.lang.String[] { "FulfillCode", "Replayed", });
     descriptor.resolveAllFeaturesImmutable();
     com.hubstore.fulfillment.v1.Fulfillment.getDescriptor();
   }

@@ -8,7 +8,8 @@
  * KHÔNG đổi (vẫn tin BFF, zero-trust s2s = M-3 out-of-scope).
  *
  * Public routes: /healthz (liveness) + /auth/reset-password (dev-only,
- * KHÔNG có token để verify — chính nó là endpoint cấp lại password).
+ * KHÔNG có token để verify — chính nó là endpoint cấp lại password) +
+ * /webhooks/orders (SF-26 — máy-máy, auth HMAC tại route).
  */
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -60,6 +61,16 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
       return;
     }
     if (request.url === '/auth/reset-password' || request.url.startsWith('/auth/reset-password?')) {
+      return;
+    }
+    // SF-21 — /version là harmless metadata (build version) → public.
+    if (request.url === '/version' || request.url.startsWith('/version?')) {
+      return;
+    }
+    // SF-26 — webhook máy-máy từ sàn TMĐT: sàn KHÔNG có JWT user → auth bằng
+    // HMAC X-Signature tại route (verifyHmac). EXACT-PATH /webhooks/orders —
+    // KHÔNG prefix /webhooks (route khác trong /webhooks/* vẫn bắt JWT).
+    if (request.url === '/webhooks/orders' || request.url.startsWith('/webhooks/orders?')) {
       return;
     }
     // SF-10 — EventSource (SSE) KHÔNG set được Authorization header → CHỈ url

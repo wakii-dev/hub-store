@@ -48,6 +48,7 @@ export const PERMISSIONS = [
   'd2c.view',
   'audit.view',
   'settlement.view',
+  'printers.manage', // SF-21 — quản lý máy in (Admin duy nhất)
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
@@ -80,6 +81,7 @@ export const PERMISSION_MATRIX = {
     'areastaff.manage',
     'd2c.view',
     'settlement.view',
+    'printers.manage', // SF-21 — chỉ Admin
   ],
   WarehouseEmployee: ['d2c.view'],
 } as const satisfies Record<Role, readonly Permission[]>;

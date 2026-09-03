@@ -204,6 +204,37 @@ public final class IntakeServiceGrpc {
     return getGetOrderAuditMethod;
   }
 
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.intake.v1.CreateWebhookOrderRequest,
+      com.hubstore.intake.v1.CreateWebhookOrderResponse> getCreateWebhookOrderMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "CreateWebhookOrder",
+      requestType = com.hubstore.intake.v1.CreateWebhookOrderRequest.class,
+      responseType = com.hubstore.intake.v1.CreateWebhookOrderResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.intake.v1.CreateWebhookOrderRequest,
+      com.hubstore.intake.v1.CreateWebhookOrderResponse> getCreateWebhookOrderMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.intake.v1.CreateWebhookOrderRequest, com.hubstore.intake.v1.CreateWebhookOrderResponse> getCreateWebhookOrderMethod;
+    if ((getCreateWebhookOrderMethod = IntakeServiceGrpc.getCreateWebhookOrderMethod) == null) {
+      synchronized (IntakeServiceGrpc.class) {
+        if ((getCreateWebhookOrderMethod = IntakeServiceGrpc.getCreateWebhookOrderMethod) == null) {
+          IntakeServiceGrpc.getCreateWebhookOrderMethod = getCreateWebhookOrderMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.intake.v1.CreateWebhookOrderRequest, com.hubstore.intake.v1.CreateWebhookOrderResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "CreateWebhookOrder"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.intake.v1.CreateWebhookOrderRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.intake.v1.CreateWebhookOrderResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new IntakeServiceMethodDescriptorSupplier("CreateWebhookOrder"))
+              .build();
+        }
+      }
+    }
+    return getCreateWebhookOrderMethod;
+  }
+
   /**
    * Creates a new async stub that supports all call types for the service
    */
@@ -296,6 +327,16 @@ public final class IntakeServiceGrpc {
         io.grpc.stub.StreamObserver<com.hubstore.intake.v1.GetOrderAuditResponse> responseObserver) {
       io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getGetOrderAuditMethod(), responseObserver);
     }
+
+    /**
+     * <pre>
+     * SF-26 — webhook nhận đơn từ sàn (FI-271). Additive-only.
+     * </pre>
+     */
+    default void createWebhookOrder(com.hubstore.intake.v1.CreateWebhookOrderRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.intake.v1.CreateWebhookOrderResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getCreateWebhookOrderMethod(), responseObserver);
+    }
   }
 
   /**
@@ -378,6 +419,17 @@ public final class IntakeServiceGrpc {
       io.grpc.stub.ClientCalls.asyncUnaryCall(
           getChannel().newCall(getGetOrderAuditMethod(), getCallOptions()), request, responseObserver);
     }
+
+    /**
+     * <pre>
+     * SF-26 — webhook nhận đơn từ sàn (FI-271). Additive-only.
+     * </pre>
+     */
+    public void createWebhookOrder(com.hubstore.intake.v1.CreateWebhookOrderRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.intake.v1.CreateWebhookOrderResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getCreateWebhookOrderMethod(), getCallOptions()), request, responseObserver);
+    }
   }
 
   /**
@@ -439,6 +491,16 @@ public final class IntakeServiceGrpc {
     public com.hubstore.intake.v1.GetOrderAuditResponse getOrderAudit(com.hubstore.intake.v1.GetOrderAuditRequest request) {
       return io.grpc.stub.ClientCalls.blockingUnaryCall(
           getChannel(), getGetOrderAuditMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-26 — webhook nhận đơn từ sàn (FI-271). Additive-only.
+     * </pre>
+     */
+    public com.hubstore.intake.v1.CreateWebhookOrderResponse createWebhookOrder(com.hubstore.intake.v1.CreateWebhookOrderRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getCreateWebhookOrderMethod(), getCallOptions(), request);
     }
   }
 
@@ -508,6 +570,17 @@ public final class IntakeServiceGrpc {
       return io.grpc.stub.ClientCalls.futureUnaryCall(
           getChannel().newCall(getGetOrderAuditMethod(), getCallOptions()), request);
     }
+
+    /**
+     * <pre>
+     * SF-26 — webhook nhận đơn từ sàn (FI-271). Additive-only.
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.intake.v1.CreateWebhookOrderResponse> createWebhookOrder(
+        com.hubstore.intake.v1.CreateWebhookOrderRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getCreateWebhookOrderMethod(), getCallOptions()), request);
+    }
   }
 
   private static final int METHODID_VALIDATE_IMPORT_ORDERS = 0;
@@ -516,6 +589,7 @@ public final class IntakeServiceGrpc {
   private static final int METHODID_MARK_ORDER_FAILED = 3;
   private static final int METHODID_REDELIVER_ORDER = 4;
   private static final int METHODID_GET_ORDER_AUDIT = 5;
+  private static final int METHODID_CREATE_WEBHOOK_ORDER = 6;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -557,6 +631,10 @@ public final class IntakeServiceGrpc {
         case METHODID_GET_ORDER_AUDIT:
           serviceImpl.getOrderAudit((com.hubstore.intake.v1.GetOrderAuditRequest) request,
               (io.grpc.stub.StreamObserver<com.hubstore.intake.v1.GetOrderAuditResponse>) responseObserver);
+          break;
+        case METHODID_CREATE_WEBHOOK_ORDER:
+          serviceImpl.createWebhookOrder((com.hubstore.intake.v1.CreateWebhookOrderRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.intake.v1.CreateWebhookOrderResponse>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -618,6 +696,13 @@ public final class IntakeServiceGrpc {
               com.hubstore.intake.v1.GetOrderAuditRequest,
               com.hubstore.intake.v1.GetOrderAuditResponse>(
                 service, METHODID_GET_ORDER_AUDIT)))
+        .addMethod(
+          getCreateWebhookOrderMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.intake.v1.CreateWebhookOrderRequest,
+              com.hubstore.intake.v1.CreateWebhookOrderResponse>(
+                service, METHODID_CREATE_WEBHOOK_ORDER)))
         .build();
   }
 
@@ -672,6 +757,7 @@ public final class IntakeServiceGrpc {
               .addMethod(getMarkOrderFailedMethod())
               .addMethod(getRedeliverOrderMethod())
               .addMethod(getGetOrderAuditMethod())
+              .addMethod(getCreateWebhookOrderMethod())
               .build();
         }
       }

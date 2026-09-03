@@ -13,12 +13,18 @@ import {
   SendOutlined,
   FileSearchOutlined,
   LogoutOutlined,
+  KeyOutlined,
   MenuOutlined,
   MenuFoldOutlined,
 } from '@ant-design/icons';
 import { DESIGN_TOKENS, usePermissions, sharedCssVariables } from '@hub-store/shared';
 import type { ShellSession } from '../../auth/oidc';
 import { NAV_ROUTES } from '../../nav';
+import { AvatarUpload } from './AvatarUpload';
+import FontSizeSlider from './FontSizeSlider';
+import FullscreenToggle from './FullscreenToggle';
+import HotkeyHelperModal from './HotkeyHelperModal';
+import VersionCheck from './VersionCheck';
 
 // Tokens SF-6 §1.4 — rail 64px #101828, header 60px trắng, FPT orange gradient.
 const SIDEBAR_WIDTH = DESIGN_TOKENS.layout.sidebarWidth; // 64
@@ -83,6 +89,7 @@ export default function AppLayout(props: {
   const { can } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
+  const [hotkeyHelpOpen, setHotkeyHelpOpen] = useState(false);
 
   // SF-11 (FI-256 Task 3) — nav off-canvas ≤768px: hamburger toggle class
   // sf11-nav-open trên wrapper (CSS trong sf6-antd-overrides.css); route change
@@ -161,6 +168,21 @@ export default function AppLayout(props: {
           </div>
         </div>
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+          {/* SF-21 D6: font-size slider — node MỚI, không đổi testid header có sẵn. */}
+          <FontSizeSlider />
+          {/* SF-21 D7/D8: fullscreen toggle + version badge/prompt — nodes MỚI. */}
+          <FullscreenToggle />
+          {/* SF-21 D5: hotkey helper — node MỚI, mở bảng phím tắt. */}
+          <Tooltip title="Phím tắt">
+            <Button
+              type="text"
+              icon={<KeyOutlined />}
+              onClick={() => setHotkeyHelpOpen(true)}
+              data-testid="hotkey-helper-button"
+              aria-label="Phím tắt"
+            />
+          </Tooltip>
+          <VersionCheck />
           <span
             style={{ ...langPillStyle }}
             onClick={props.onToggleLanguage}
@@ -189,24 +211,32 @@ export default function AppLayout(props: {
               boxShadow: DESIGN_TOKENS.shadow.xs,
             }}
           >
-            <span
-              aria-hidden="true"
-              style={{
-                width: 28,
-                height: 28,
-                borderRadius: '50%',
-                background: DESIGN_TOKENS.color.primaryGradient,
-                color: DESIGN_TOKENS.color.bgWhite,
-                fontSize: 11,
-                fontWeight: 700,
-                display: 'inline-flex',
-                alignItems: 'center',
-                justifyContent: 'center',
-                textTransform: 'uppercase',
-              }}
-            >
-              {props.session.sub.slice(0, 2)}
-            </span>
+            {/* SF-21: avatar upload chip — fallback initials như cũ (span
+                aria-hidden giữ nguyên DOM fallback, testid không đổi). */}
+            <AvatarUpload
+              userId={props.session.sub}
+              size={28}
+              fallback={
+                <span
+                  aria-hidden="true"
+                  style={{
+                    width: 28,
+                    height: 28,
+                    borderRadius: '50%',
+                    background: DESIGN_TOKENS.color.primaryGradient,
+                    color: DESIGN_TOKENS.color.bgWhite,
+                    fontSize: 11,
+                    fontWeight: 700,
+                    display: 'inline-flex',
+                    alignItems: 'center',
+                    justifyContent: 'center',
+                    textTransform: 'uppercase',
+                  }}
+                >
+                  {props.session.sub.slice(0, 2)}
+                </span>
+              }
+            />
             <span style={{ fontSize: 12.5, fontWeight: 500, color: DESIGN_TOKENS.color.textPrimary }} data-testid="header-user">
               {props.session.sub}
             </span>
@@ -266,6 +296,7 @@ export default function AppLayout(props: {
           {props.children}
         </main>
       </div>
+      <HotkeyHelperModal open={hotkeyHelpOpen} onClose={() => setHotkeyHelpOpen(false)} />
     </div>
   );
 }

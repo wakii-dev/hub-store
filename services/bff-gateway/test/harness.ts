@@ -309,6 +309,48 @@ const fulfillmentDefaults: Record<string, UnaryHandler> = {
   getCodPending: (_c, cb) => cb(null, { pendingCount: 0, totalAmount: 0 }),
   getSettlement: (_c, cb) => cb(null, { rows: [] }),
   getSettlementDetail: (_c, cb) => cb(null, { confirmations: [] }),
+  // SF-21 printer management (FI-266) — defaults happy-path; override per-test.
+  listPrinters: (_c, cb) =>
+    cb(null, {
+      printers: [
+        {
+          shopCode: '30201',
+          printerId: 'PRN-30201-01',
+          name: 'HP LaserJet M404',
+          location: 'Khu soạn A',
+          printerIp: '192.168.30.21',
+          mac: 'AA:BB:CC:30:21:01',
+          type: 'bill',
+        },
+      ],
+    }),
+  createPrinter: (_c, cb) =>
+    cb(null, {
+      printer: {
+        shopCode: '30201',
+        printerId: 'PRN-NEW',
+        name: 'New',
+        location: 'Khu mới',
+        printerIp: '',
+        mac: '',
+        type: 'bill',
+      },
+    }),
+  updatePrinter: (_c, cb) =>
+    cb(null, {
+      printer: {
+        shopCode: '30201',
+        printerId: 'PRN-30201-01',
+        name: 'Renamed',
+        location: 'Khu mới',
+        printerIp: '192.168.30.21',
+        mac: 'AA:BB:CC:30:21:01',
+        type: 'a4',
+      },
+    }),
+  // SF-21 print errors (FI-266) — defaults happy-path; override per-test.
+  recordPrintError: (_c, cb) => cb(null, {}),
+  getPrintErrorCounts: (_c, cb) => cb(null, { counts: [] }),
 };
 
 const techDefaults: Record<string, UnaryHandler> = {
@@ -352,6 +394,8 @@ const intakeDefaults: Record<string, UnaryHandler> = {
   validateImportOrders: (_c, cb) => cb(null, intakeResponses.validateImportOrders),
   confirmImportOrders: (_c, cb) => cb(null, intakeResponses.confirmImportOrders),
   createManualOrder: (_c, cb) => cb(null, intakeResponses.createManualOrder),
+  // SF-26 — webhook sàn (FI-27); test chi tiết override qua intakeHandlers.
+  createWebhookOrder: (_c, cb) => cb(null, intakeResponses.createWebhookOrder),
   markOrderFailed: (_c, cb) => cb(null, intakeResponses.markOrderFailed),
   redeliverOrder: (_c, cb) => cb(null, intakeResponses.redeliverOrder),
   getOrderAudit: (_c, cb) => cb(null, intakeResponses.getOrderAudit),
@@ -379,6 +423,8 @@ export interface HarnessOptions {
   deadlineMs?: number;
   /** Trỏ 1 upstream tới port chết — test 503 UPSTREAM_UNAVAILABLE. */
   deadUpstream?: 'fulfillment' | 'batching' | 'deliverybatch' | 'print' | 'intake';
+  /** SF-26 — override secret test (vd rỗng → nhánh fail-closed 503). */
+  webhookHmacSecret?: string;
   /** Override handler mặc định lúc boot. */
   fulfillmentHandlers?: Record<string, UnaryHandler>;
   techHandlers?: Record<string, UnaryHandler>;
@@ -489,6 +535,9 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     },
     devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
     kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 side-channel — off trong test
+    // SF-26 — webhook HMAC; secret test để route chạm được nhánh verifyHmac.
+    webhookHmacSecret: opts.webhookHmacSecret ?? 'test-webhook-secret',
+    webhookMapping: '',
   };
   const app = buildApp(config);
 

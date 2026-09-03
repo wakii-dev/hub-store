@@ -1,5 +1,5 @@
 import { api, getAxiosInstance } from '@hub-store/api-client';
-import type { BatchDto, PrintRequest, PrintersResponse } from '@hub-store/shared';
+import type { BatchDto, PrintErrorCountsResponse, PrintRequest, PrintersResponse } from '@hub-store/shared';
 
 /**
  * SF-10 print endpoints — inject vào RTK Query SINGLETON của api-client
@@ -30,10 +30,26 @@ const printApi = api.injectEndpoints({
       }),
       providesTags: () => [{ type: 'Batches', id: 'PRINTERS' }],
     }),
+
+    // SF-21 (spec D2): số lỗi in per đơn theo phiếu — badge + sort PrintPage.
+    getPrintErrorCounts: builder.query<PrintErrorCountsResponse, string>({
+      query: (batchCode) => ({
+        url: '/fulfillment/print-errors/counts',
+        method: 'GET',
+        params: { batchCode },
+      }),
+      providesTags: (_result, _error, batchCode) => [
+        { type: 'Batches', id: `PRINT_ERRORS-${batchCode}` },
+      ],
+    }),
   }),
 });
 
-export const { useGetBatchDetailQuery, useGetPrintersQuery } = printApi;
+export const {
+  useGetBatchDetailQuery,
+  useGetPrintersQuery,
+  useGetPrintErrorCountsQuery,
+} = printApi;
 
 /**
  * In 1 phiếu → PDF bytes (Uint8Array cho react-pdf `file={{ data }}`).

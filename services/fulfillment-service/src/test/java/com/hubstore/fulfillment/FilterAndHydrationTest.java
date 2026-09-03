@@ -5,6 +5,7 @@ import com.hubstore.fulfillment.seed.SeedModels;
 import com.hubstore.fulfillment.service.FulfillmentServiceImpl;
 import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.InMemoryCodConfirmationRepository;
+import com.hubstore.fulfillment.store.InMemoryPrinterRepository;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.v1.BatchStatus;
 import com.hubstore.fulfillment.v1.FilterOrdersRequest;
@@ -59,7 +60,8 @@ class FilterAndHydrationTest {
         service = new FulfillmentServiceImpl(repo, publisher,
                 new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()),
                 new InMemoryCodConfirmationRepository(repo::isFailed),
-                TestTx.noop());
+                new InMemoryPrinterRepository(),
+                new com.hubstore.fulfillment.store.InMemoryPrintErrorRepository(), TestTx.noop());
     }
 
     private FilterOrdersResponse filter(FilterOrdersRequest.Builder req) {

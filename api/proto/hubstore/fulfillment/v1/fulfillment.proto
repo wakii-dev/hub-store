@@ -204,6 +204,16 @@ service FulfillmentService {
   rpc GetSettlement(GetSettlementRequest) returns (GetSettlementResponse);
   // SF-14: drill-down đơn theo shop + kỳ (lệch tiền / chưa thu).
   rpc GetSettlementDetail(GetSettlementDetailRequest) returns (GetSettlementDetailResponse);
+  // SF-21: danh sách máy in theo kho (DB-backed — V8) cho D3 print.
+  rpc ListPrinters(ListPrintersRequest) returns (ListPrintersResponse);
+  // SF-21: tạo máy in (Admin — BFF gate, spec D9).
+  rpc CreatePrinter(CreatePrinterRequest) returns (CreatePrinterResponse);
+  // SF-21: sửa máy in — (shop_code, printer_id) immutable, chỉ name/ip/mac/type.
+  rpc UpdatePrinter(UpdatePrinterRequest) returns (UpdatePrinterResponse);
+  // SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2).
+  rpc RecordPrintError(RecordPrintErrorRequest) returns (RecordPrintErrorResponse);
+  // SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9).
+  rpc GetPrintErrorCounts(GetPrintErrorCountsRequest) returns (GetPrintErrorCountsResponse);
 }
 
 // --- Filter ---
@@ -537,4 +547,81 @@ message GetSettlementDetailRequest {
 
 message GetSettlementDetailResponse {
   repeated CodConfirmation confirmations = 1;
+}
+
+// --- SF-21 printer management (additive only) ---
+
+// Printer — 1 máy in của kho (bảng printers, V8). (shop_code, printer_id) là
+// identity — KHÔNG sửa sau tạo (spec D9). type là STRING ('bill' | 'a4') —
+// tránh enum churn (lint rule như buf.yaml chú thích), validation ở Java.
+message Printer {
+  string shop_code = 1;
+  string printer_id = 2;
+  string name = 3;
+  string printer_ip = 4;
+  string mac = 5;
+  string type = 6;
+  // Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+  string location = 7;
+}
+
+message ListPrintersRequest {
+  // shop_code trống = tất cả (BFF luôn truyền shop — defensive như print-service).
+  string shop_code = 1;
+}
+
+message ListPrintersResponse {
+  repeated Printer printers = 1;
+}
+
+message CreatePrinterRequest {
+  Printer printer = 1;
+}
+
+message CreatePrinterResponse {
+  Printer printer = 1;
+}
+
+message UpdatePrinterRequest {
+  string shop_code = 1;
+  string printer_id = 2;
+  // Chỉ name/printer_ip/mac/type có hiệu lực — identity lấy từ 2 field path.
+  Printer printer = 3;
+}
+
+message UpdatePrinterResponse {
+  Printer printer = 1;
+}
+
+// --- SF-21 print errors (additive only, spec D2) ---
+
+// PrintErrorRecord — 1 lỗi in thật. BFF ghi qua rpc này; order_code rỗng
+// khi batch chưa hydrate được (lỗi xảy ra trước khi biết danh sách đơn).
+message PrintErrorRecord {
+  string order_code = 1;
+  string batch_code = 2;
+  string print_type = 3;
+  string printer_id = 4;
+  string error_message = 5;
+}
+
+message RecordPrintErrorRequest {
+  PrintErrorRecord record = 1;
+}
+
+message RecordPrintErrorResponse {
+}
+
+// PrintErrorCount — số lỗi in của 1 đơn trong phiếu (badge D3).
+message PrintErrorCount {
+  string order_code = 1;
+  int64 count = 2;
+}
+
+message GetPrintErrorCountsRequest {
+  string batch_code = 1;
+}
+
+message GetPrintErrorCountsResponse {
+  repeated PrintErrorCount counts = 1;
 }
