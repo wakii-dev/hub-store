@@ -14,8 +14,10 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.List;
 
@@ -101,13 +103,40 @@ public class TransferServiceImpl extends TransferServiceGrpc.TransferServiceImpl
                     "orderFulfillCode", "Đơn tách nợ không thể tạo yêu cầu chuyển kho.")));
         }
         if (tickets.existsPendingByOrder(code)) {
-            throw GrpcErrors.withDetails(Status.ALREADY_EXISTS,
-                    "Order " + code + " already has a PENDING transfer ticket.",
-                    List.of(new GrpcErrors.ErrorDetail("orderFulfillCode",
-                            "Đơn đã có yêu cầu chuyển kho đang chờ duyệt.")));
+            throw pendingConflict(code);
         }
-        return tickets.insert(code, blankToNull(request.getFromHub()), request.getToHub(),
-                blankToNull(request.getReason()), ActorInterceptor.currentActor());
+        try {
+            return tickets.insert(code, blankToNull(request.getFromHub()), request.getToHub(),
+                    blankToNull(request.getReason()), ActorInterceptor.currentActor());
+        } catch (DataIntegrityViolationException e) {
+            // Safety net: 2 request đồng thời cùng order đều pass existsPendingByOrder
+            // (READ COMMITTED, không lock) — unique partial index
+            // uq_transfer_tickets_one_pending (V9) chặn, map lại ALREADY_EXISTS.
+            if (isPendingUniqueViolation(e)) {
+                throw pendingConflict(code);
+            }
+            throw e;
+        }
+    }
+
+    private static StatusRuntimeException pendingConflict(String code) {
+        return GrpcErrors.withDetails(Status.ALREADY_EXISTS,
+                "Order " + code + " already has a PENDING transfer ticket.",
+                List.of(new GrpcErrors.ErrorDetail("orderFulfillCode",
+                        "Đơn đã có yêu cầu chuyển kho đang chờ duyệt.")));
+    }
+
+    /** SQLState 23505 trên ĐÚNG index pending (ticket_code UNIQUE cũng 23505). */
+    private static boolean isPendingUniqueViolation(Throwable e) {
+        for (Throwable t = e; t != null; t = t.getCause() == t ? null : t.getCause()) {
+            if (t instanceof SQLException sql
+                    && "23505".equals(sql.getSQLState())
+                    && String.valueOf(sql.getMessage())
+                            .contains("uq_transfer_tickets_one_pending")) {
+                return true;
+            }
+        }
+        return false;
     }
 
     private static TransferTicket toProto(TransferTicketRecord r) {

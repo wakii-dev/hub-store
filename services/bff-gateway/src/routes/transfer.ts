@@ -4,7 +4,9 @@
  *       ticket chuyển kho; tách nợ → upstream INVALID_ARGUMENT → 422; trùng
  *       PENDING → upstream ALREADY_EXISTS → 409. Audit order.transfer_ticket_create.
  *   GET  /fulfillment/transfer-tickets?codes=a,b[&status=PENDING] — cùng role —
- *       lịch sử ticket theo mã đơn (comma → repeated; read — không audit).
+ *       lịch sử ticket theo mã đơn (comma → repeated; read — không audit);
+ *       caps review P2: codes ≤ 100 + status whitelist (lệch → 422), upstream
+ *       LIMIT 500.
  * Prefix /fulfillment khớp surface fulfillment (TransferService sống cùng process).
  */
 import type { FastifyInstance } from 'fastify';
@@ -18,6 +20,10 @@ import { mapTransferTicket } from '../mappers/transfer.js';
 export interface TransferRouteDeps {
   transfer: TransferApi;
 }
+
+/** Review P2: cap số codes + whitelist status — lệch → 422 lộ lỗi sớm cho FE. */
+const MAX_CODES = 100;
+const ALLOWED_STATUSES = ['PENDING', 'APPROVED', 'REJECTED'];
 
 export function registerTransferRoutes(app: FastifyInstance, deps: TransferRouteDeps): void {
   const transfer = deps.transfer;
@@ -89,8 +95,18 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
           { field: 'codes', message: 'Ít nhất 1 mã đơn (codes) là bắt buộc.' },
         ]);
       }
+      if (codes.length > MAX_CODES) {
+        return sendBadRequest(reply, [
+          { field: 'codes', message: `Tối đa ${MAX_CODES} mã đơn mỗi lần truy vấn.` },
+        ]);
+      }
       const statusRaw = request.query.status;
       const status = Array.isArray(statusRaw) ? statusRaw[0] : statusRaw;
+      if (status != null && status !== '' && !ALLOWED_STATUSES.includes(status)) {
+        return sendBadRequest(reply, [
+          { field: 'status', message: 'Trạng thái không hợp lệ (PENDING/APPROVED/REJECTED).' },
+        ]);
+      }
       try {
         const resp = await transfer.listTransferTickets(
           { orderFulfillCodes: codes, status: status ?? '' },

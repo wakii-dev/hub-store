@@ -225,6 +225,43 @@ describe('SF-28 transfer — GET /fulfillment/transfer-tickets', () => {
     expect(res.json().details[0].field).toBe('codes');
   });
 
+  it('codes > 100 → 422 VALIDATION_ERROR, không gọi upstream (review P2)', async () => {
+    let called = false;
+    h.transfer.override({
+      listTransferTickets: (_c, cb) => {
+        called = true;
+        cb(null, { tickets: [] });
+      },
+    });
+    const codes = Array.from({ length: 101 }, (_, i) => `ORD-${i}`).join(',');
+    const res = await h.app.inject({
+      method: 'GET',
+      url: `/fulfillment/transfer-tickets?codes=${codes}`,
+      headers: { authorization: `Bearer ${await signTestToken('Manager')}` },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().details[0].field).toBe('codes');
+    expect(called).toBe(false);
+  });
+
+  it('status lạ → 422 VALIDATION_ERROR, không gọi upstream (review P2)', async () => {
+    let called = false;
+    h.transfer.override({
+      listTransferTickets: (_c, cb) => {
+        called = true;
+        cb(null, { tickets: [] });
+      },
+    });
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/fulfillment/transfer-tickets?codes=ORD-3001&status=CANCELLED',
+      headers: { authorization: `Bearer ${await signTestToken('Manager')}` },
+    });
+    expect(res.statusCode).toBe(422);
+    expect(res.json().details[0].field).toBe('status');
+    expect(called).toBe(false);
+  });
+
   it('WarehouseOps (non-role) → 403', async () => {
     const res = await h.app.inject({
       method: 'GET',

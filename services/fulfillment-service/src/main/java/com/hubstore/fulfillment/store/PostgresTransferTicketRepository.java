@@ -62,7 +62,7 @@ public class PostgresTransferTicketRepository implements TransferTicketRepositor
             sql.append(" AND status = ?");
             args.add(status);
         }
-        sql.append(" ORDER BY created_at DESC, id DESC");
+        sql.append(" ORDER BY created_at DESC, id DESC LIMIT 500");
         return jdbc.query(sql.toString(), ROW_MAPPER, args.toArray());
     }
 

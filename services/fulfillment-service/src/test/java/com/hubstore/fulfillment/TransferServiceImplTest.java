@@ -13,6 +13,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.transaction.PlatformTransactionManager;
 import org.springframework.transaction.TransactionDefinition;
 import org.springframework.transaction.TransactionStatus;
@@ -20,6 +21,7 @@ import org.springframework.transaction.support.SimpleTransactionStatus;
 import org.springframework.transaction.support.TransactionTemplate;
 
 import java.nio.file.Path;
+import java.sql.SQLException;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.List;
@@ -43,6 +45,8 @@ class TransferServiceImplTest {
     private static class FakeTicketRepo implements TransferTicketRepository {
         final List<TransferTicketRecord> rows = new ArrayList<>();
         final AtomicLong seq = new AtomicLong(1);
+        /** Không null → insert ném exception này (mô phỏng unique_violation race). */
+        RuntimeException throwOnInsert;
 
         @Override
         public boolean existsPendingByOrder(String orderFulfillCode) {
@@ -53,6 +57,9 @@ class TransferServiceImplTest {
         @Override
         public TransferTicketRecord insert(String orderFulfillCode, String fromHub, String toHub,
                                            String reason, String createdBy) {
+            if (throwOnInsert != null) {
+                throw throwOnInsert;
+            }
             TransferTicketRecord r = new TransferTicketRecord(
                     String.format("TT-%04d", seq.getAndIncrement()), orderFulfillCode,
                     fromHub, toHub, reason, "PENDING", createdBy, Instant.now());
@@ -167,6 +174,39 @@ class TransferServiceImplTest {
     void blankToHub_invalidArgument() {
         StatusRuntimeException e = create("ORD-3001", "");
         assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.INVALID_ARGUMENT);
+    }
+
+    @Test
+    void blankOrderFulfillCode_invalidArgument() {
+        StatusRuntimeException e = create("", "Hub Đà Nẵng");
+        assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.INVALID_ARGUMENT);
+        assertThat(tickets.rows).isEmpty();
+    }
+
+    @Test
+    void raceUniqueViolation_alreadyExists() {
+        // 2 request đồng thời cùng order đều pass existsPendingByOrder → index
+        // uq_transfer_tickets_one_pending (V9) ném unique_violation 23505 —
+        // service map lại ALREADY_EXISTS (không rò DataIntegrityViolation 500).
+        tickets.throwOnInsert = new DataIntegrityViolationException(
+                "PreparedStatementCallback",
+                new SQLException("duplicate key value violates unique constraint "
+                        + "\"uq_transfer_tickets_one_pending\"", "23505", 0));
+        StatusRuntimeException e = create("ORD-3001", "Hub Đà Nẵng");
+        assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.ALREADY_EXISTS);
+        assertThat(e.getStatus().getDescription()).contains("PENDING");
+    }
+
+    @Test
+    void otherUniqueViolation_notMapped() {
+        // 23505 nhưng index khác (vd ticket_code) → KHÔNG map ALREADY_EXISTS —
+        // lan nguyên DataIntegrityViolationException (onError INTERNAL).
+        tickets.throwOnInsert = new DataIntegrityViolationException(
+                "PreparedStatementCallback",
+                new SQLException("duplicate key value violates unique constraint "
+                        + "\"transfer_tickets_ticket_code_key\"", "23505", 0));
+        StatusRuntimeException e = create("ORD-3001", "Hub Đà Nẵng");
+        assertThat(e.getStatus().getCode()).isEqualTo(Status.Code.INTERNAL);
     }
 
     // ---------------- listTransferTickets ----------------
