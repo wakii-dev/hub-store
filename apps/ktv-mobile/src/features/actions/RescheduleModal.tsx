@@ -96,10 +96,15 @@ export default function RescheduleModal(props: {
       confirmLoading={submitting}
       onOk={() => void handleOk()}
       onCancel={props.onClose}
-      data-testid="ktv-reschedule-modal"
       destroyOnClose
     >
-      <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+      {/* testid trên div trong body — KHÔNG trên <Modal>: antd4 đặt restProps
+          lên .ant-modal-root (bounding box 0x0 vì con position:fixed) →
+          Playwright toBeVisible = hidden dù modal đang mở (trap lần 3). */}
+      <div
+        data-testid="ktv-reschedule-modal"
+        style={{ display: "flex", flexDirection: "column", gap: 12 }}
+      >
         <label>
           <div style={{ marginBottom: 4 }}>{t("actions.reschedule.dateLabel")}</div>
           <DatePicker

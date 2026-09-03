@@ -91,11 +91,30 @@ test.describe.serial("SF-25 ktv-mobile — KTV-001", () => {
     await expect(page.getByTestId("ktv-reschedule-SO-0004")).toBeVisible();
     await page.getByTestId("ktv-reschedule-SO-0004").click();
     await expect(page.getByTestId("ktv-reschedule-modal")).toBeVisible();
-    // Ngày mai + 23:30 (luônfuture) — antd4 picker input nhận gõ + Enter.
-    await page.locator(".ant-modal .ant-picker input").nth(0).fill(tomorrowKt());
-    await page.keyboard.press("Enter");
-    await page.locator(".ant-modal .ant-picker input").nth(1).fill("23:30");
-    await page.keyboard.press("Enter");
+    // antd4 picker input là readonly → fill() chết (element not editable).
+    // Panel-click pattern: click input → click cell theo title (YYYY-MM-DD /
+    // HH / mm) — deterministic, không lệch layout.
+    await page.locator(".ant-modal .ant-picker").nth(0).click();
+    await page
+      .locator(`.ant-picker-dropdown:not(.ant-picker-dropdown-hidden) .ant-picker-cell[title="${tomorrowKt()}"]`)
+      .click();
+    await page.locator(".ant-modal .ant-picker").nth(1).click();
+    // Time panel cell KHÔNG có title attr → column-scoped text (cột 0 = giờ
+    // 00-23, cột 1 = phút step 5; "23" chỉ ở cột giờ, "30" cần scope cột phút).
+    const timePanel = page.locator(
+      ".ant-picker-dropdown:not(.ant-picker-dropdown-hidden)",
+    );
+    await timePanel
+      .locator(".ant-picker-time-panel-column")
+      .nth(0)
+      .locator(".ant-picker-time-panel-cell-inner", { hasText: /^23$/ })
+      .click();
+    await timePanel
+      .locator(".ant-picker-time-panel-column")
+      .nth(1)
+      .locator(".ant-picker-time-panel-cell-inner", { hasText: /^30$/ })
+      .click();
+    await page.locator(".ant-picker-ok > button").click();
     await page.getByTestId("ktv-reschedule-note").fill("e2e dời lịch sang ngày mai");
     await page.locator(".ant-modal-footer .ant-btn-primary").click();
     await expect(page.getByText("Đã dời lịch — đơn chuyển sang trạng thái đổi lịch.")).toBeVisible();
@@ -147,7 +166,7 @@ test.describe.serial("SF-25 ktv-mobile — KTV-001", () => {
 test.describe("SF-25 ktv-mobile — CTV-001 (storageState riêng)", () => {
   test.use({
     storageState:
-      process.env.E2E_CTV_STORAGE ?? resolve(__dirname, ".auth/ctv-001.json"),
+      process.env.E2E_CTV_STORAGE ?? resolve(__dirname, "../.auth/ctv-001.json"),
   });
 
   test("S7 · CTV-001 chỉ thấy đơn của mình (SO-0007)", async ({ page }) => {

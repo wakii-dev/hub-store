@@ -125,7 +125,7 @@ export function todayIso(now: Date = new Date()): string {
  */
 export async function fetchMyInstallations(
   username: string,
-  today: string,
+  today?: string,
 ): Promise<InstallationOrderDto[]> {
   const { data } = await getAxiosInstance().post<PaginationEnvelope<InstallationOrderDto>>(
     '/service-orders/filter',
@@ -147,7 +147,7 @@ export async function fetchMyInstallations(
  */
 export async function fetchMyDeliveries(
   driverName: string,
-  today: string,
+  today?: string,
 ): Promise<DeliveryOrderDto[]> {
   const { data } = await getAxiosInstance().post<PaginationEnvelope<DeliveryOrderDto>>(
     '/delivery-orders/filter',

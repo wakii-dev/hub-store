@@ -127,8 +127,9 @@ describe("OrderDetailPage — install SO-0004", () => {
     api.fetchMyDeliveries.mockResolvedValue([]);
     renderAt("/order/SO-0004");
     await screen.findByTestId("ktv-timeline");
-    expect(api.fetchMyInstallations).toHaveBeenCalledWith("KTV-001", "2026-09-03");
-    expect(api.fetchMyDeliveries).toHaveBeenCalledWith("Nguyễn Văn An", "2026-09-03");
+    // detail KHÔNG lọc date — đơn reschedule sang mai vẫn mở được từ URL.
+    expect(api.fetchMyInstallations).toHaveBeenCalledWith("KTV-001");
+    expect(api.fetchMyDeliveries).toHaveBeenCalledWith("Nguyễn Văn An");
     expect(screen.getByTestId("ktv-detail-actions")).toBeTruthy();
   });
 });

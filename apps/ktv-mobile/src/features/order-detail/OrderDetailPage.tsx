@@ -21,7 +21,6 @@ import type { MobileSession } from '../../auth/oidc';
 import {
   fetchMyDeliveries,
   fetchMyInstallations,
-  todayIso,
   type DeliveryOrderDto,
   type InstallationOrderDto,
 } from '../../api/ktvApi';
@@ -102,11 +101,12 @@ export default function OrderDetailPage(props: { session: MobileSession }) {
     const id = ++seq.current;
     setLoading(true);
     setError(false);
-    const today = todayIso();
     // 2 filter song song — URL trực tiếp không biết đơn thuộc tab nào.
+    // KHÔNG lọc date: đơn đã reschedule sang ngày mai/gia hạn expectedTime
+    // vẫn phải mở được từ URL (e2e S4 — detail = "đơn của mình", mọi ngày).
     void Promise.all([
-      fetchMyInstallations(props.session.sub, today),
-      fetchMyDeliveries(props.session.name ?? props.session.sub, today),
+      fetchMyInstallations(props.session.sub),
+      fetchMyDeliveries(props.session.name ?? props.session.sub),
     ]).then(
       ([installations, deliveries]) => {
         if (id !== seq.current) return;
