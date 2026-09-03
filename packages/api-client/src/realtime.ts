@@ -11,9 +11,12 @@
  * caller passes the same fn here).
  *
  * Status: 'connected' once the stream opens, 'offline' on error, 'polling'
- * when the fallback state machine kicks in. Transient drops are handled by
- * EventSource's native reconnect (onerror fires per failed attempt, onopen
- * fires again on success, which resets the counter). After more than
+ * when the fallback state machine kicks in. Transient drops (after a
+ * successful open) are handled by EventSource's native reconnect — onopen
+ * fires again on success, which resets the counter. Fatal connect failures
+ * (e.g. an expired token: the BFF answers 401 and EventSource gives up
+ * permanently, no native retry) are handled by a manual reconnect that
+ * re-reads `tokenGetter` for a FRESH token. After more than
  * MAX_SSE_FAILURES consecutive failures without a successful (re)open, the
  * stream degrades to 30s fallback polling (invalidateTags on an interval)
  * while a background timer retries SSE every SSE_RETRY_INTERVAL_MS; the
@@ -22,6 +25,7 @@
  * that counts as one failure toward polling and is never forwarded to the app.
  */
 import { useEffect, useRef, useState } from 'react';
+import { useDispatch } from 'react-redux';
 
 // ---- Types -------------------------------------------------------------------
 
@@ -32,6 +36,8 @@ import { useEffect, useRef, useState } from 'react';
 export const POLL_INTERVAL_MS = 30_000;
 export const SSE_RETRY_INTERVAL_MS = 60_000;
 export const MAX_SSE_FAILURES = 2;
+/** Delay between manual reconnects after a fatal connect failure (fresh token). */
+export const RECONNECT_DELAY_MS = 3_000;
 
 /** Synthetic BFF event — the BFF's Kafka consumer died; stream is degraded. */
 const DEGRADED_EVENT_TYPE = 'stream.degraded';
@@ -66,6 +72,13 @@ export interface UseRealtimeEventsOptions {
   eventTypes?: readonly string[];
   /** Returns the Keycloak access token for the `?access_token=` param. */
   tokenGetter?: () => string | null;
+  /**
+   * Redux dispatch used to dispatch `invalidateTags`. Optional override
+   * (tests); defaults to the app store's dispatch via `useDispatch` — the
+   * bridges are mounted inside the remote's `<Provider>` (store per-remote,
+   * spec §2).
+   */
+  dispatch?: RealtimeDispatch;
 }
 
 /** Subset of the EventSource surface the stream controller relies on. */
@@ -79,8 +92,6 @@ export interface RealtimeEventSourceLike {
 export type RealtimeEventSourceCtor = new (url: string) => RealtimeEventSourceLike;
 
 export interface CreateRealtimeStreamOptions extends UseRealtimeEventsOptions {
-  /** Where the token is attached (defaults to the app dispatch if provided). */
-  dispatch?: RealtimeDispatch;
   /** Status changes (connected / polling / offline). */
   onStatus?: (status: RealtimeStatus) => void;
   /** Test seam — defaults to globalThis.EventSource. */
@@ -114,8 +125,11 @@ export function createRealtimeStream(options: CreateRealtimeStreamOptions): Real
   let status: RealtimeStatus = 'offline';
   let connectFailures = 0;
   let source: RealtimeEventSourceLike | null = null;
+  /** Whether the current source ever reached onopen (fatal-failure heuristic). */
+  let sourceOpened = false;
   let pollingTimer: ReturnType<typeof setInterval> | null = null;
   let retryTimer: ReturnType<typeof setInterval> | null = null;
+  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   function setStatus(next: RealtimeStatus): void {
     status = next;
@@ -139,6 +153,10 @@ export function createRealtimeStream(options: CreateRealtimeStreamOptions): Real
     if (retryTimer !== null) {
       clearInterval(retryTimer);
       retryTimer = null;
+    }
+    if (reconnectTimer !== null) {
+      clearTimeout(reconnectTimer);
+      reconnectTimer = null;
     }
   }
 
@@ -173,20 +191,43 @@ export function createRealtimeStream(options: CreateRealtimeStreamOptions): Real
     const query = token ? `?access_token=${encodeURIComponent(token)}` : '';
     const es = new Ctor(`${API_BASE}/events${query}`);
     source = es;
+    sourceOpened = false;
     es.onopen = () => {
       // SSE is back (first connect, native reconnect, or polling-mode retry):
       // stop fallback polling and reset the failure counter.
+      sourceOpened = true;
       clearTimers();
       connectFailures = 0;
       setStatus('connected');
     };
     es.onmessage = (ev) => handleMessage(ev);
     es.onerror = () => {
-      // Transient: EventSource keeps retrying natively; each error without a
-      // subsequent open counts as one failure toward the polling threshold.
+      // Transient (after a successful open): EventSource keeps retrying
+      // natively; each error without a subsequent open counts as one failure
+      // toward the polling threshold.
       countFailure();
       if (pollingTimer === null) setStatus('offline');
+      // Fatal connect failure (error WITHOUT a prior open — e.g. expired
+      // token: the BFF 401s and EventSource gives up permanently, no native
+      // retry). Close the source and schedule a manual reconnect that
+      // re-reads tokenGetter for a FRESH token — bounded by the same failure
+      // counter (past MAX_SSE_FAILURES the polling state machine takes over;
+      // its retry tick also re-reads the token on every openConnection).
+      if (source === es && !sourceOpened && pollingTimer === null) {
+        closeSource();
+        scheduleReconnect();
+      }
     };
+  }
+
+  /** One-shot manual reconnect after a fatal connect failure (fresh token). */
+  function scheduleReconnect(): void {
+    if (pollingTimer !== null || reconnectTimer !== null) return;
+    if (connectFailures > MAX_SSE_FAILURES) return; // polling mode handles retries
+    reconnectTimer = setTimeout(() => {
+      reconnectTimer = null;
+      if (source === null) openConnection();
+    }, RECONNECT_DELAY_MS);
   }
 
   function handleMessage(raw: unknown): void {
@@ -232,18 +273,29 @@ export function createRealtimeStream(options: CreateRealtimeStreamOptions): Real
  * every matching event, returns the connection status. Cleanup on unmount
  * closes the EventSource. One EventSource per hook instance; StrictMode's
  * double-invoke is safe (cleanup closes the first connection before remount).
+ *
+ * The dispatch for `invalidateTags` resolves from the Redux context
+ * (`useDispatch` — must be rendered inside the remote's `<Provider>`);
+ * an explicit `options.dispatch` overrides it (tests).
  */
 export function useRealtimeEvents(options: UseRealtimeEventsOptions): RealtimeStatus {
+  const appDispatch = useDispatch() as unknown as RealtimeDispatch;
   const [status, setStatus] = useState<RealtimeStatus>('offline');
   // Latest-options ref: options identity changes per render must NOT reconnect.
   const optionsRef = useRef(options);
   optionsRef.current = options;
 
   useEffect(() => {
-    const stream = createRealtimeStream({ ...optionsRef.current, onStatus: setStatus });
+    const stream = createRealtimeStream({
+      ...optionsRef.current,
+      dispatch: optionsRef.current.dispatch ?? appDispatch,
+      onStatus: setStatus,
+    });
     stream.connect();
     return () => stream.close();
-  }, []);
+    // appDispatch is stable for a given store — a change means the store
+    // itself changed, so reconnecting (with the new dispatch) is correct.
+  }, [appDispatch]);
 
   return status;
 }
