@@ -451,6 +451,26 @@ describe('SF-25 — accept/complete/reschedule + read-side override', () => {
       note: 'Khách xin dời',
       technicianCode: 'KTV-001',
     });
+
+    // Security P0-1 adversarial (review 8a93350): body technicianCode ≠ token
+    // sub — BFF phải ÉP token sub, revert fix sẽ fail test này (body KTV-999
+    // nếu được trust → captured sai).
+    const adversarial = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-0004/reschedule',
+      payload: {
+        technicianCode: 'KTV-999',
+        expectedTime: '2026-09-04T09:00:00+07:00',
+      },
+      headers: await techAuth('InsideTechnician', 'KTV-001'),
+    });
+    expect(adversarial.statusCode).toBe(200);
+    expect(captured).toEqual({
+      serviceOrderCode: 'SO-0004',
+      newExpectedTime: '2026-09-04T09:00:00+07:00',
+      note: '',
+      technicianCode: 'KTV-001',
+    });
   });
 
   it('reschedule thiếu expectedTime → 422; SO lạ → 404', async () => {
