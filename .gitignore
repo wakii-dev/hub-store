@@ -24,5 +24,8 @@ e2e/.auth/
 e2e/.sf21-batch-code
 __pycache__/
 
+# SF-12 — pg_dump backups (dữ liệu thật, KHÔNG commit)
+backups/
+
 # Claude Code local settings
 .claude/

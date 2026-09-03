@@ -278,7 +278,53 @@ docker compose exec -T postgres psql -U hubstore -d batching < backup-batching-Y
 docker compose up orders-migrate batches-migrate
 ```
 
-Lưu ý: backup KHÔNG chứa volume keycloak-data (users/passwords nằm trong realm JSON dev — re-import khi up lại). Production thật: backup theo lịch (pg_dump cron) + đừng dùng `--import-realm`/dev password literals.
+Lưu ý: backup KHÔNG chứa volume keycloak-data (users/passwords nằm trong realm JSON dev — re-import khi up lại). Production thật: đừng dùng `--import-realm`/dev password literals.
+
+### Backup tự động (SF-12 — `scripts/backup-db.sh`)
+
+```bash
+# Dump cả 2 DB (fulfillment + batching) → gzip → backups/<db>-<ts>.sql.gz
+# Fail-loud nếu 1 DB lỗi; giữ BACKUP_KEEP bản/DB (default 7) — xóa bản cũ tự động.
+bash scripts/backup-db.sh
+
+# Env override (không bắt buộc): POSTGRES_CONTAINER, POSTGRES_USER, BACKUP_KEEP, BACKUP_DIR
+BACKUP_KEEP=14 bash scripts/backup-db.sh
+```
+
+**Crontab** (backup lúc 02:00 hằng ngày — `crontab -e`):
+
+```cron
+0 2 * * * cd /path/to/hub-store && BACKUP_KEEP=7 bash scripts/backup-db.sh >> backups/backup.log 2>&1
+```
+
+**Systemd user timer** (máy Linux — `~/.config/systemd/user/`, rồi `systemctl --user enable --now backup-db.timer`):
+
+```ini
+# ~/.config/systemd/user/backup-db.service
+[Unit]
+Description=hub-store pg_dump backup (fulfillment + batching)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/path/to/hub-store
+Environment=BACKUP_KEEP=7
+ExecStart=%h/path/to/hub-store/scripts/backup-db.sh
+```
+
+```ini
+# ~/.config/systemd/user/backup-db.timer
+[Unit]
+Description=Nightly hub-store backup 02:00
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Lưu ý systemd user timer cần `loginctl enable-linger <user>` để chạy khi không đăng nhập; thư mục `backups/` đã gitignore (dump chứa dữ liệu — KHÔNG commit).
 
 ## Tạo / đổi user Keycloak (SF-5 deploy guide)
 

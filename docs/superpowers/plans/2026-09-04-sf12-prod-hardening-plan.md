@@ -147,9 +147,12 @@ Tier 1: T1, T2, T6, T8. Tier 2: T3, T4, T7, T9. Tier 3: T5, T10. Cuối: T11. **
 - Create: `scripts/backup-db.sh` (pattern theo `scripts/seed-db.sh` — docker exec pg_dump)
 - Modify: README.md (cron wiring: systemd user timer + crontab)
 
-- [ ] **Step 8.1:** Script: `set -euo pipefail`; đọc POSTGRES_CONTAINER (default `hub-store-postgres-1` — verify tên container thật từ compose), POSTGRES_USER từ env; dump 2 DB: `docker exec <c> pg_dump -U <user> -d <db>` → gzip → `backups/<db>-$(date +%Y%m%d-%H%M%S).sql.gz`; mỗi DB fail-loud (set -e + check file size >0); retention: `ls -1t backups/<db>-*.sql.gz | tail -n +$((KEEP+1)) | xargs rm -f` với `BACKUP_KEEP=${BACKUP_KEEP:-7}`; tạo `backups/` nếu thiếu + gitignore `backups/`.
-- [ ] **Step 8.2:** README "Backup": crontab line (`0 2 * * * cd <repo> && BACKUP_KEEP=7 bash scripts/backup-db.sh >> backups/backup.log 2>&1`) + systemd user timer snippet (service + timer unit nội dung đầy đủ).
-- [ ] **Step 8.3:** Verify THẬT: compose postgres đang chạy → `bash scripts/backup-db.sh` → `gunzip -t backups/*.sql.gz` OK + `gunzip -c <file> | head -30` thấy CREATE TABLE. Commit: `feat(backup): SF-12 backup-db.sh pg_dump 2 DB gzip retention + cron/systemd doc (FI-257)`.
+- [x] **Step 8.1:** Script: `set -euo pipefail`; đọc POSTGRES_CONTAINER (default `hub-store-postgres-1` — verify tên container thật từ compose), POSTGRES_USER từ env; dump 2 DB: `docker exec <c> pg_dump -U <user> -d <db>` → gzip → `backups/<db>-$(date +%Y%m%d-%H%M%S).sql.gz`; mỗi DB fail-loud (set -e + check file size >0); retention: `ls -1t backups/<db>-*.sql.gz | tail -n +$((KEEP+1)) | xargs rm -f` với `BACKUP_KEEP=${BACKUP_KEEP:-7}`; tạo `backups/` nếu thiếu + gitignore `backups/`.
+  - Done: script + fallback resolve container qua `docker compose ps -q postgres`; pipefail giữ exit code pg_dump; retention while-read (an toàn hơn xargs BSD empty-input); fail per-DB ghi FAILED[] rồi exit 1.
+- [x] **Step 8.2:** README "Backup": crontab line (`0 2 * * * cd <repo> && BACKUP_KEEP=7 bash scripts/backup-db.sh >> backups/backup.log 2>&1`) + systemd user timer snippet (service + timer unit nội dung đầy đủ).
+  - Done: mục "### Backup tự động (SF-12)" trong section Backup / Restore — crontab + 2 unit systemd + linger note.
+- [x] **Step 8.3:** Verify THẬT: compose postgres đang chạy → `bash scripts/backup-db.sh` → `gunzip -t backups/*.sql.gz` OK + `gunzip -c <file> | head -30` thấy CREATE TABLE. Commit: `feat(backup): SF-12 backup-db.sh pg_dump 2 DB gzip retention + cron/systemd doc (FI-257)`.
+  - Verified: hub-store-postgres-1 healthy → fulfillment 13K (20 CREATE TABLE), batching 3.2K (8 CREATE TABLE); gunzip -t OK; BACKUP_KEEP=1 x2 → còn đúng 1 file/DB; POSTGRES_USER=bogus → exit 1 + message rõ + file rác dọn.
 
 ### Task 9: restore doc
 
