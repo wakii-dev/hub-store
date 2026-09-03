@@ -26,8 +26,10 @@ vi.mock("@hub-store/api-client", async (importOriginal) => {
   };
 });
 
-const preview = vi.fn(() => ({ unwrap: async () => ({ valid: [], errors: [] }) }));
-const confirmImport = vi.fn(() => ({ unwrap: async () => ({ fulfillCodes: [] }) }));
+const preview = vi.fn(() => ({
+  unwrap: async () => ({ valid: [] as unknown[], errors: [] as unknown[] }),
+}));
+const confirmImport = vi.fn(() => ({ unwrap: async () => ({ fulfillCodes: [] as string[] }) }));
 const axiosGet = vi.fn(async () => ({ data: new Blob(["col1,col2"]) }));
 
 const mockedPreview = vi.mocked(usePreviewImportMutation);

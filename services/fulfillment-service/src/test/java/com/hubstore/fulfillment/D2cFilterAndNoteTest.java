@@ -50,7 +50,8 @@ class D2cFilterAndNoteTest {
     void setUp() {
         repo = new InMemoryD2cRepo(D2cFixture.rows("D2C-"));
         service = new FulfillmentServiceImpl(
-                new InMemoryOrderRepository("../../api/seed/canonical-seed.json"), repo);
+                new InMemoryOrderRepository("../../api/seed/canonical-seed.json"),
+                new RecordingEventPublisher(), repo);
     }
 
     // ---------------- repo filter semantics ----------------

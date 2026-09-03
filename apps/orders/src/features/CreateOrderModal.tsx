@@ -115,7 +115,7 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
                   <Space key={field.key} align="baseline" style={{ display: "flex", marginBottom: 4 }}>
                     <Form.Item
                       name={[field.name, "productCode"]}
-                      fieldKey={[field.fieldKey, "productCode"]}
+                      fieldKey={[(field.fieldKey ?? field.name), "productCode"]}
                       rules={[{ required: true }]}
                       noStyle
                     >
@@ -127,7 +127,7 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
                     </Form.Item>
                     <Form.Item
                       name={[field.name, "productName"]}
-                      fieldKey={[field.fieldKey, "productName"]}
+                      fieldKey={[(field.fieldKey ?? field.name), "productName"]}
                       rules={[{ required: true }]}
                       noStyle
                     >
@@ -139,7 +139,7 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
                     </Form.Item>
                     <Form.Item
                       name={[field.name, "quantity"]}
-                      fieldKey={[field.fieldKey, "quantity"]}
+                      fieldKey={[(field.fieldKey ?? field.name), "quantity"]}
                       rules={[{ required: true }]}
                       noStyle
                     >

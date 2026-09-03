@@ -232,7 +232,8 @@ class FilterAndHydrationTest {
         return new SeedModels.OrderSeed(fulfillCode, "RSA-" + fulfillCode, 0, 0, batchCode,
                 null,
                 new SeedModels.TimeRangeSeed(originalTimeFrom, originalTimeFrom),
-                null, orderStatus, List.of(), 0, 1, false, "addr", null, null, List.of());
+                null, orderStatus, List.of(), 0, 1, false, "addr", null, null, List.of(),
+                null, null, null, null, null, null, null);
     }
 
     @Test

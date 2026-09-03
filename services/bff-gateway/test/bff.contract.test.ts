@@ -491,7 +491,7 @@ describe('SF-17 Task 7 — Admin role gate trên 4 write routes /service-employe
     },
   ];
 
-  it('Coordinator gọi 4 write routes → 403 error envelope code FORBIDDEN (không chạm gRPC)', async () => {
+  it('Coordinator gọi 4 write routes → 403 error envelope code PERMISSION_DENIED (không chạm gRPC)', async () => {
     for (const route of WRITE_ROUTES) {
       const res = await h.app.inject({
         method: route.method,
@@ -502,7 +502,7 @@ describe('SF-17 Task 7 — Admin role gate trên 4 write routes /service-employe
       expect(res.statusCode, route.url).toBe(403);
       const body = res.json();
       expect(body.statusCode).toBe(403);
-      expect(body.code).toBe('FORBIDDEN');
+      expect(body.code).toBe('PERMISSION_DENIED');
       expect(typeof body.message).toBe('string');
     }
   });
