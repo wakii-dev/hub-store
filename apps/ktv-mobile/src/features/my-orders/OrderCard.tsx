@@ -1,16 +1,17 @@
 /**
- * OrderCard — card đơn hôm nay trên MyOrdersPage (SF-25 T4): code + status
- * pill + khung giờ (expectedTime/deliveryDate) + địa chỉ ngắn (receiver/
- * province) + số món. Tap card → /order/:code (detail T7 dựng thật).
- *
- * KHÔNG render nút thao tác ở T4 — flags buttons.* BE-authoritative được
- * T5 (accept/complete) + T6 (reschedule) tiêu thụ trên component action
- * riêng; card giữ surface trung tính.
+ * OrderCard — card đơn hôm nay trên MyOrdersPage (SF-25 T4 + T5 actions):
+ * code + status pill + khung giờ (expectedTime/deliveryDate) + địa chỉ ngắn
+ * (receiver/province) + số món + nút thao tác install (Accept/Complete theo
+ * flags BE — BE-authoritative, flag false → không render). Tap card →
+ * /order/:code (detail T7). Sau mutate, page thay order trong state →
+ * card render lại pill + flags mới từ response.
  */
 import { useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { DESIGN_TOKENS } from '@hub-store/shared';
 import type { DeliveryOrderDto, InstallationOrderDto } from '../../api/ktvApi';
+import AcceptButton from '../actions/AcceptButton';
+import CompleteButton from '../actions/CompleteButton';
 import StatusPill from './StatusPill';
 
 export type OrderCardKind = 'install' | 'delivery';
@@ -43,7 +44,14 @@ function dateShort(date: string): string {
   }).format(d);
 }
 
-export default function OrderCard(props: OrderCardItem) {
+export type OrderCardProps = OrderCardItem & {
+  /** session.sub — body technicianCode (BFF vẫn ép từ token — defense-in-depth). */
+  technicianCode: string;
+  /** Sau mutate: page thay order trong list state (status + buttons mới). */
+  onOrderUpdated: (order: InstallationOrderDto) => void;
+};
+
+export default function OrderCard(props: OrderCardProps) {
   const { t } = useTranslation('ktvMobile');
   const navigate = useNavigate();
   const code =
@@ -118,6 +126,25 @@ export default function OrderCard(props: OrderCardItem) {
       <div style={{ fontSize: DESIGN_TOKENS.typography.caption.fontSize, color: DESIGN_TOKENS.color.textFaint }}>
         {t('myorders.items', { count: props.order.items.length })}
       </div>
+      {props.kind === 'install' &&
+      (props.order.buttons.allowAccept || props.order.buttons.allowComplete) ? (
+        <div
+          data-testid={`ktv-actions-${code}`}
+          onClick={(e) => e.stopPropagation()}
+          style={{ display: 'flex', gap: 8, marginTop: 2 }}
+        >
+          <AcceptButton
+            order={props.order}
+            technicianCode={props.technicianCode}
+            onUpdated={props.onOrderUpdated}
+          />
+          <CompleteButton
+            order={props.order}
+            technicianCode={props.technicianCode}
+            onUpdated={props.onOrderUpdated}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }

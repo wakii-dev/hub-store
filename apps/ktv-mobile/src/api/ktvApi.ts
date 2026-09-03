@@ -1,5 +1,5 @@
 /**
- * ktvApi — data layer mobile KTV/CTV (SF-25 T4).
+ * ktvApi — data layer mobile KTV/CTV (SF-25 T4 + T5 mutations).
  *
  * Dùng axios singleton của @hub-store/api-client (getAxiosInstance): token
  * getter + 401 interceptor đã wire ở main.tsx qua oidc.ts → mọi request tự
@@ -7,8 +7,7 @@
  *
  * DTO types mirror services/bff-gateway/src/mappers/tech.ts (contract
  * SF-19/SF-25) — services/** READ-ONLY nên không import chéo.
- * LƯU Ý allowComplete: proto + TechModels.java đã có flag thứ 6 (SF-25 T2)
- * nhưng mapper BFF (mappers/tech.ts) chưa map ra wire — FE khai báo field,
+ * allowComplete: mapper BFF đã map ra wire (SF-25 T2, commit f51fe2d) —
  * absent trên wire → false (an toàn, không tự suy).
  *
  * "Hôm nay" = Asia/Ho_Chi_Minh YYYY-MM-DD — khớp ::date BE (seed TODAY@
@@ -89,6 +88,11 @@ export interface DeliveryOrderDto {
   buttons: TechButtons;
 }
 
+/** Response mutate accept/complete/reschedule — {order} (MutateTechOrderResponse). */
+export interface MutateTechOrderResponse {
+  order: InstallationOrderDto | null;
+}
+
 /** Bỏ field rỗng — BFF nhận undefined → default upstream (pattern shell SF-20). */
 function compact(params: Record<string, unknown>): Record<string, unknown> {
   const out: Record<string, unknown> = {};
@@ -154,4 +158,43 @@ export async function fetchMyDeliveries(
     }),
   );
   return data.items ?? [];
+}
+
+/**
+ * POST accept/complete (SF-25 T5) — body {technicianCode} (BE ownership
+ * check: order.technicianCode != body → FAILED_PRECONDITION → 409).
+ * Response {order} là đơn SAU mutate (status + buttons mới) — FE thay state
+ * local bằng nó; order null (lạ) → throw thay vì âm thầm không cập nhật.
+ */
+async function mutateOrder(
+  path: string,
+  technicianCode: string,
+): Promise<InstallationOrderDto> {
+  const { data } = await getAxiosInstance().post<MutateTechOrderResponse>(path, {
+    technicianCode,
+  });
+  if (!data.order) throw new Error(`mutateOrder ${path}: BE trả order null`);
+  return data.order;
+}
+
+/** Nhận việc: CONFIRMED|RESCHEDULED → PROCESSING (flag allowAccept). */
+export async function acceptOrder(
+  serviceOrderCode: string,
+  technicianCode: string,
+): Promise<InstallationOrderDto> {
+  return mutateOrder(
+    `/service-orders/${encodeURIComponent(serviceOrderCode)}/accept`,
+    technicianCode,
+  );
+}
+
+/** Hoàn tất (ghi giờ hiện tại): PROCESSING → DELIVERED (flag allowComplete). */
+export async function completeOrder(
+  serviceOrderCode: string,
+  technicianCode: string,
+): Promise<InstallationOrderDto> {
+  return mutateOrder(
+    `/service-orders/${encodeURIComponent(serviceOrderCode)}/complete`,
+    technicianCode,
+  );
 }

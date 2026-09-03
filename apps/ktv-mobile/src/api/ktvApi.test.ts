@@ -1,9 +1,10 @@
 // Unit ktvApi (SF-25 T4) — payload shape 2 filter + todayIso timezone.
+// (SF-25 T5) — payload shape accept/complete mutations.
 // axios singleton được mock ở tầng @hub-store/api-client — capture body POST.
 import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const post = vi.hoisted(() =>
-  vi.fn(async (): Promise<{ data: { items: unknown[]; total: number; page: number; pageSize: number } }> => ({
+  vi.fn(async (): Promise<{ data: unknown }> => ({
     data: {
       items: [],
       total: 0,
@@ -17,7 +18,13 @@ vi.mock("@hub-store/api-client", () => ({
   getAxiosInstance: () => ({ post }),
 }));
 
-import { fetchMyDeliveries, fetchMyInstallations, todayIso } from "./ktvApi";
+import {
+  acceptOrder,
+  completeOrder,
+  fetchMyDeliveries,
+  fetchMyInstallations,
+  todayIso,
+} from "./ktvApi";
 
 beforeEach(() => {
   post.mockClear();
@@ -70,6 +77,34 @@ describe("ktvApi — my-orders filter payloads", () => {
     const one = await fetchMyInstallations("KTV-001", "2026-09-03");
     expect(one).toHaveLength(1);
     expect(one[0]?.serviceOrderCode).toBe("SO-0004");
+  });
+});
+
+describe("ktvApi — accept/complete mutations (T5)", () => {
+  it("acceptOrder: POST /service-orders/SO-0006/accept body {technicianCode} → trả order", async () => {
+    const updated = { serviceOrderCode: "SO-0006", status: "PROCESSING" };
+    post.mockResolvedValueOnce({ data: { order: updated } });
+    const out = await acceptOrder("SO-0006", "KTV-001");
+    expect(post).toHaveBeenCalledTimes(1);
+    const [url, body] = post.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(url).toBe("/service-orders/SO-0006/accept");
+    expect(body).toEqual({ technicianCode: "KTV-001" });
+    expect(out).toEqual(updated);
+  });
+
+  it("completeOrder: POST /service-orders/SO-0006/complete body {technicianCode} → trả order", async () => {
+    const updated = { serviceOrderCode: "SO-0006", status: "DELIVERED" };
+    post.mockResolvedValueOnce({ data: { order: updated } });
+    const out = await completeOrder("SO-0006", "KTV-001");
+    const [url, body] = post.mock.calls[0] as unknown as [string, Record<string, unknown>];
+    expect(url).toBe("/service-orders/SO-0006/complete");
+    expect(body).toEqual({ technicianCode: "KTV-001" });
+    expect(out).toEqual(updated);
+  });
+
+  it("response.order null → throw (không âm thầm bỏ qua cập nhật)", async () => {
+    post.mockResolvedValueOnce({ data: { order: null } });
+    await expect(acceptOrder("SO-XXXX", "KTV-001")).rejects.toThrow();
   });
 });
 

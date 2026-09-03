@@ -94,6 +94,18 @@ export default function MyOrdersPage(props: { session: MobileSession }) {
     void setSearchParams(value === "delivery" ? { tab: "delivery" } : {}, { replace: true });
   };
 
+  // SF-25 T5 — sau accept/complete: thay order trong state bằng response
+  // (status + buttons mới) → card render lại pill + nút, không refetch.
+  const applyUpdatedInstallation = (updated: InstallationOrderDto) => {
+    setInstallations((prev) =>
+      prev
+        ? prev.map((o) =>
+            o.serviceOrderCode === updated.serviceOrderCode ? updated : o,
+          )
+        : prev,
+    );
+  };
+
   const items: OrderCardItem[] =
     tab === "install"
       ? (installations ?? []).map((order) => ({ kind: "install" as const, order }))
@@ -194,9 +206,21 @@ export default function MyOrdersPage(props: { session: MobileSession }) {
         <div data-testid="ktv-order-list">
           {items.map((item) =>
             item.kind === "install" ? (
-              <OrderCard key={item.order.serviceOrderCode} kind="install" order={item.order} />
+              <OrderCard
+                key={item.order.serviceOrderCode}
+                kind="install"
+                order={item.order}
+                technicianCode={props.session.sub}
+                onOrderUpdated={applyUpdatedInstallation}
+              />
             ) : (
-              <OrderCard key={item.order.code} kind="delivery" order={item.order} />
+              <OrderCard
+                key={item.order.code}
+                kind="delivery"
+                order={item.order}
+                technicianCode={props.session.sub}
+                onOrderUpdated={applyUpdatedInstallation}
+              />
             ),
           )}
         </div>
