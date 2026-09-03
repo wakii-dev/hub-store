@@ -170,6 +170,22 @@ describe('GET /cod/settlement — guard Manager/Admin + kỳ D9', () => {
     expect(reversed.statusCode).toBe(400);
   });
 
+  it('ngày không tồn tại lịch → 400 (không roll-over tàng hình, không NaN epoch)', async () => {
+    // 2026-02-31 JS Date auto-roll thành 2026-03-03 — phải bị chặn.
+    const rollOver = await authedInject(h.app, 'GET', '/cod/settlement?from=2026-02-31&to=2026-08-31');
+    expect(rollOver.statusCode).toBe(400);
+    // Tháng 13 / ngày 00 → Invalid Date (NaN) — phải 400, không 500.
+    const month13 = await authedInject(h.app, 'GET', '/cod/settlement?from=2026-13-01&to=2026-13-28');
+    expect(month13.statusCode).toBe(400);
+    const day0 = await authedInject(h.app, 'GET', '/cod/settlement?from=2026-08-01&to=2026-00-10');
+    expect(day0.statusCode).toBe(400);
+    // Boundary hợp lệ: 28-02 năm thường vẫn OK.
+    h.fulfillment.override({ getSettlement: (_call, cb) => cb(null, { rows: [] }) });
+    const feb = await authedInject(h.app, 'GET', '/cod/settlement?from=2026-02-28&to=2026-02-28');
+    expect(feb.statusCode).toBe(200);
+    expect((feb.body as { total: number }).total).toBe(0);
+  });
+
   it('Manager → 200 envelope paginated + kỳ wrap [from 00:00+07, to EXCL ngày+1 00:00+07]', async () => {
     let captured: { from?: Date; to?: Date } | null = null;
     h.fulfillment.override({

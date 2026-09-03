@@ -1,19 +1,19 @@
 /**
  * SF-14 COD routes (FI-259, spec §5): confirm thu per-order + bulk theo phiếu,
  * badge pending (D2), đối soát theo shop theo kỳ (Manager) + drill-down.
- * Guard role-array server-side (D6 — pattern requireD2cRole routes/d2c.ts):
+ * Guard role-array server-side (D6 — reuse requireRole variadic plugins/auth):
  *   confirm paths = Coordinator/WarehouseOps/Manager/Admin;
  *   settlement paths = Manager/Admin.
  * Kỳ from/to date-only `YYYY-MM-DD` wrap full-day +07:00 (D9) — from inclusive
  * 00:00, to EXCLUSIVE (ngày+1 00:00) — convention riêng của SF-14 (khác d2c
  * inclusive 23:59:59) để kỳ [from, to) khớp aggregate SQL bên Java.
  */
-import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
+import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { SettlementDetailItem, SettlementShopRow } from '@hub-store/shared';
 import type { ConfirmCodResult } from '../../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import type { FulfillmentApi } from '../clients/index.js';
 import { SERVICE_NAMES } from '../config.js';
-import { requireUser } from '../plugins/auth.js';
+import { requireRole, requireUser } from '../plugins/auth.js';
 import { errorEnvelope, paginated } from '../lib/envelope.js';
 import { sendGrpcError } from '../lib/grpc-error.js';
 
@@ -25,38 +25,39 @@ export const COD_SETTLEMENT_ROLES = ['Manager', 'Admin'] as const;
 const DEFAULT_PAGE = 1;
 const DEFAULT_PAGE_SIZE = 20;
 
-/** Role guard role-array — 403 envelope khi role ngoài danh sách. */
-function requireRoles(
-  request: FastifyRequest,
-  reply: FastifyReply,
-  roles: readonly string[],
-): boolean {
-  const { role } = requireUser(request);
-  if (!roles.includes(role)) {
-    void reply.code(403).send(
-      errorEnvelope(403, 'Role của bạn không có quyền truy cập tính năng COD.', {
-        code: 'PERMISSION_DENIED',
-      }),
-    );
-    return false;
-  }
-  return true;
-}
-
 /** Date-only `YYYY-MM-DD` → Instant mốc 00:00 +07:00. */
 function startOfDayVn(date: string): Date {
   return new Date(`${date}T00:00:00+07:00`);
 }
 
+/** Formatter date-only ở Asia/Ho_Chi_Minh (en-CA → `YYYY-MM-DD`). */
+const VN_DATE = new Intl.DateTimeFormat('en-CA', {
+  timeZone: 'Asia/Ho_Chi_Minh',
+  year: 'numeric',
+  month: '2-digit',
+  day: '2-digit',
+});
+
 /**
- * from/to hợp lệ: đủ + đúng format + from ≤ to. Trả bounds [fromIncl, toExcl)
- * (D9) hoặc null khi sai — route map thành 400.
+ * Validate lịch thật: parse rồi format lại ở +07 phải khớp chuỗi gốc — chặn
+ * roll-over tàng hình (2026-02-31 → 2026-03-03) và ngày không tồn tại
+ * (2026-13-01, 2026-00-10 → Invalid Date).
+ */
+function isCalendarDate(date: string): boolean {
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) return false;
+  const d = new Date(`${date}T00:00:00+07:00`);
+  return !Number.isNaN(d.getTime()) && VN_DATE.format(d) === date;
+}
+
+/**
+ * from/to hợp lệ: đủ + đúng format + tồn tại trong lịch + from ≤ to. Trả
+ * bounds [fromIncl, toExcl) (D9) hoặc null khi sai — route map thành 400.
  */
 function parsePeriod(
   from: string,
   to: string,
 ): { from: Date; to: Date } | null {
-  if (!/^\d{4}-\d{2}-\d{2}$/.test(from) || !/^\d{4}-\d{2}-\d{2}$/.test(to)) return null;
+  if (!isCalendarDate(from) || !isCalendarDate(to)) return null;
   if (from > to) return null;
   // to exclusive = ngày kế 00:00 +07:00 (+07 không DST — cộng 1 ngày an toàn).
   const toExcl = new Date(startOfDayVn(to).getTime() + 86400000);
@@ -67,9 +68,11 @@ function badPeriod(reply: FastifyReply): FastifyReply {
   void reply
     .code(400)
     .send(
-      errorEnvelope(400, 'Kỳ đối soát yêu cầu from/to dạng YYYY-MM-DD và from ≤ to.', {
-        code: 'BAD_REQUEST',
-      }),
+      errorEnvelope(
+        400,
+        'Kỳ đối soát yêu cầu from/to là ngày hợp lệ dạng YYYY-MM-DD và from ≤ to.',
+        { code: 'BAD_REQUEST' },
+      ),
     );
   return reply;
 }
@@ -134,8 +137,10 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
   app.post<{ Body: { fulfillCode?: string; collectedAmount?: number } }>(
     '/cod/confirm',
     async (request, reply) => {
-      if (!requireRoles(request, reply, COD_CONFIRM_ROLES)) return reply;
-      const { role, sub } = requireUser(request);
+      const user = requireRole(request, reply, ...COD_CONFIRM_ROLES);
+      if (user === null) return reply;
+      const role = user.role;
+      const sub = user.sub;
       const body = request.body ?? {};
       if (typeof body.fulfillCode !== 'string' || body.fulfillCode.length === 0) {
         void reply
@@ -180,8 +185,10 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
 
   // POST /cod/confirm-batch — bulk confirm mọi PENDING của phiếu (collected=expected).
   app.post<{ Body: { batchCode?: string } }>('/cod/confirm-batch', async (request, reply) => {
-    if (!requireRoles(request, reply, COD_CONFIRM_ROLES)) return reply;
-    const { role, sub } = requireUser(request);
+    const user = requireRole(request, reply, ...COD_CONFIRM_ROLES);
+    if (user === null) return reply;
+    const role = user.role;
+    const sub = user.sub;
     const batchCode = (request.body as { batchCode?: string } | undefined)?.batchCode;
     if (typeof batchCode !== 'string' || batchCode.length === 0) {
       void reply
@@ -202,7 +209,8 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
 
   // GET /cod/pending?batchCode= — badge D2 "COD chờ thu (n)".
   app.get<{ Querystring: { batchCode?: string } }>('/cod/pending', async (request, reply) => {
-    if (!requireRoles(request, reply, COD_CONFIRM_ROLES)) return reply;
+    const user = requireRole(request, reply, ...COD_CONFIRM_ROLES);
+    if (user === null) return reply;
     const batchCode = request.query.batchCode ?? '';
     if (batchCode.length === 0) {
       void reply
@@ -211,10 +219,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
       return reply;
     }
     try {
-      const resp = await f.getCodPending(
-        { batchCode },
-        requireUser(request).role,
-      );
+      const resp = await f.getCodPending({ batchCode }, user.role);
       return await reply.send({
         pendingCount: Number(resp.pendingCount),
         totalAmount: Number(resp.totalAmount),
@@ -228,7 +233,8 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
   app.get<{ Querystring: { from?: string; to?: string; page?: string; pageSize?: string } }>(
     '/cod/settlement',
     async (request, reply) => {
-      if (!requireRoles(request, reply, COD_SETTLEMENT_ROLES)) return reply;
+      const user = requireRole(request, reply, ...COD_SETTLEMENT_ROLES);
+      if (user === null) return reply;
       const from = request.query.from ?? '';
       const to = request.query.to ?? '';
       const period = parsePeriod(from, to);
@@ -236,7 +242,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
       try {
         const resp = await f.getSettlement(
           { periodFrom: period.from, periodTo: period.to },
-          requireUser(request).role,
+          user.role,
         );
         // Upstream không phân trang — BFF slice trên rows (total = số shop).
         const page = Math.max(Number(request.query.page) || DEFAULT_PAGE, 1);
@@ -256,7 +262,8 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
   app.get<{ Querystring: { shopCode?: string; from?: string; to?: string; page?: string; pageSize?: string } }>(
     '/cod/settlement/detail',
     async (request, reply) => {
-      if (!requireRoles(request, reply, COD_SETTLEMENT_ROLES)) return reply;
+      const user = requireRole(request, reply, ...COD_SETTLEMENT_ROLES);
+      if (user === null) return reply;
       const shopCode = request.query.shopCode ?? '';
       const from = request.query.from ?? '';
       const to = request.query.to ?? '';
@@ -271,7 +278,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
       try {
         const resp = await f.getSettlementDetail(
           { shopCode, periodFrom: period.from, periodTo: period.to },
-          requireUser(request).role,
+          user.role,
         );
         const page = Math.max(Number(request.query.page) || DEFAULT_PAGE, 1);
         const pageSize = Math.max(Number(request.query.pageSize) || DEFAULT_PAGE_SIZE, 1);
