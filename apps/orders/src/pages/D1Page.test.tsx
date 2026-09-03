@@ -38,6 +38,8 @@ vi.mock("../api/ordersApi", () => ({
   useCreateTransferTicketMutation: () => [vi.fn(), { isLoading: false }],
   useGetTransferTicketsQuery: (codes: string) => getTickets(codes),
   useSearchShopsQuery: () => ({ data: undefined, isLoading: false }),
+}));
+
 // SF-16 (Task 6) — deliveryBatchApi hooks: nvc batch orders + search booking
 // detail (rebook gate) + các mutation NVC mà CreateBatchingModal dùng (inert —
 // tránh fetch thật khi modal mở trong test).
@@ -59,6 +61,9 @@ vi.mock("../batching/batchingApi", () => ({
   useRecalculateDistanceMutation: () => [vi.fn(), { isLoading: false }],
   useCreateBatchMutation: () => [vi.fn(), { isLoading: false }],
   useGetTimeDeliveryQuery: () => ({ data: undefined }),
+  // SF-28 T7 — wizard step 1 preset hooks (modal mount fetch khi open)
+  useGetCriteriaPresetsQuery: () => ({ data: undefined, isLoading: false, isError: false, refetch: vi.fn() }),
+  useSelectCriteriaPresetMutation: () => [vi.fn(), { isLoading: false }],
 }));
 
 const mocked = {
