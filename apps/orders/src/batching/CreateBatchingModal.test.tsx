@@ -863,6 +863,41 @@ describe("CreateBatchingModal", () => {
     expect((screen.getByTestId("batch-submit") as HTMLButtonElement).disabled).toBe(false);
   });
 
+  it("SF-16 T6 (P1 review g3): rebook prefill addons cũ theo entries — chỉ giữ mã còn catalog quote, stale-addon guard không xóa prefill", async () => {
+    // entries đồng nhất 1T + addons cũ: LOADINGS + INSURANCE còn catalog, GONE hết hạn
+    const withAddons: PlanningMapEntry[] = REBOOK_ENTRIES.map((e) => ({
+      ...e,
+      addons: ["LOADINGS", "INSURANCE", "GONE_FROM_CATALOG"],
+    }));
+    // quote 1T có catalog ADDONS (quote thường SIX_QUOTES không có addonServices)
+    quotesMock.mockReturnValue(
+      unwrapResult({ quotes: [{ ...SIX_QUOTES[2], addonServices: ADDONS }], meta: { mock: false } }),
+    );
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <CreateBatchingModal
+          open
+          mode="rebook"
+          orders={selection.slice(0, 2)}
+          batchCode="BATCH-9"
+          rebookEntries={withAddons}
+          onClose={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    await flush();
+    await flushDebounce();
+
+    expect((screen.getByTestId("quote-1T").querySelector("input") as HTMLInputElement).checked).toBe(true);
+    // addon cũ còn trong catalog → prefill tick (stale-addon guard đã skip lần prefill)
+    expect(addonInput("LOADINGS").checked).toBe(true);
+    expect(addonInput("INSURANCE").checked).toBe(true);
+    // mã không còn trong catalog + addon chưa từng chọn → không tick
+    expect(addonInput("EXPRESS_2H").checked).toBe(false);
+    // tổng phí gồm addon prefill: 50000 + LOADINGS 20000 + INSURANCE 3000
+    expect(screen.getByTestId("sum-shipping-fee").textContent).toContain(formatVnd(73000));
+  });
+
   it("SF-16 T6: rebook submit — KHÔNG createBatch; confirmPlanning batchCode hiện có (chỉ entries) + createBooking", async () => {
     quotesMock.mockReturnValue(unwrapResult({ quotes: SIX_QUOTES, meta: { mock: false } }));
     confirmPlanningMock.mockReturnValue(

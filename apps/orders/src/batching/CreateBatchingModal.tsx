@@ -226,6 +226,7 @@ export function CreateBatchingModal({
       setBookingResults(null);
       setNvcSubmitting(false);
       setPendingBatch(null); // P1: modal mở lại → không reuse phiếu cũ
+      prefillingAddonsRef.current = false; // P1 group-3: guard không trôi sang lần mở sau
       setShipperId(undefined);
       setDeliveryTime(null);
       setActiveSection(1);
@@ -237,12 +238,20 @@ export function CreateBatchingModal({
 
   // SF-16 rebook — prefill xe theo serviceId PHỔ BIẾN NHẤT khi đồng nhất
   // (entries cùng 1 serviceId → tick sẵn quote đó; khác nhau → NG tự chọn).
+  // P1 review (group 3): prefill CẢ addons cũ từ entries — nhưng chỉ giữ mã
+  // còn trong catalog của quote (catalog embed theo quote — mã hết hạn bỏ qua).
+  const prefillingAddonsRef = useRef(false);
   useEffect(() => {
     if (!rebook || quotes === null || entries.length === 0) return;
     const uniform = entries.every((e) => e.serviceId === entries[0].serviceId);
     if (!uniform) return;
     const serviceId = entries[0].serviceId;
-    if (quotes.some((q) => q.serviceId === serviceId)) setSelectedServiceId(serviceId);
+    const quote = quotes.find((q) => q.serviceId === serviceId);
+    if (!quote) return;
+    prefillingAddonsRef.current = true; // stale-addon guard không xóa prefill
+    setSelectedServiceId(serviceId);
+    const oldAddons = new Set(entries.flatMap((e) => e.addons ?? []));
+    setSelectedAddonCodes(quote.addonServices.filter((a) => oldAddons.has(a.code)).map((a) => a.code));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [quotes]);
 
@@ -251,7 +260,12 @@ export function CreateBatchingModal({
 
   // SF-16 §2.3 (Task 4) — stale-addon guard (CRITICAL): addonServices là CỦA
   // từng quote — đổi xe → mã addon cũ không còn hợp lệ → reset selection.
+  // Ngoại lệ: set serviceId do REBOOK PREFILL (effect trên) — giữ addon prefill.
   useEffect(() => {
+    if (prefillingAddonsRef.current) {
+      prefillingAddonsRef.current = false;
+      return;
+    }
     setSelectedAddonCodes([]);
   }, [selectedServiceId]);
 
