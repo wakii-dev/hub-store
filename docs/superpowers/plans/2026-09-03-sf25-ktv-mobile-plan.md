@@ -89,11 +89,11 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 
 ### Task 4: my-orders-today — danh sách đơn hôm nay
 **Files:** `apps/ktv-mobile/src/features/my-orders/**` (MyOrdersPage, OrderCard, StatusPill, TabBar), `apps/ktv-mobile/src/api/ktvApi.ts`, unit tests.
-- [ ] ktvApi.ts: axios singleton từ @hub-store/api-client; `fetchMyInstallations(username, today)` = POST `/service-orders/filter` `{technicianCode: username, dateFrom: today, dateTo: today, page:1, pageSize:50}`; `fetchMyDeliveries(name, today)` = POST `/delivery-orders/filter` `{driverName: name, dateFrom: today, dateTo: today}` (BE có today default nhưng gửi explicit cho chắc); DTO mirror mappers/tech.ts.
-- [ ] MyOrdersPage: header (chào user + ngày hôm nay vi-VN), segmented control Lắp đặt/Giao hàng (state URL param `tab` — pattern useUrlState shared), OrderCard list: code + status pill (TechStatusTag palette tokens) + địa chỉ ngắn + khung giờ + items count + nút thao tác theo `buttons` (chỉ render flag true — BE-authoritative; card tap → navigate `/order/:code`).
-- [ ] Empty state (EmptyState shared) cho tab trống; loading skeleton.
-- [ ] Unit tests: compact filter body, render flags mapping (mock data: card có nút Accept khi allowAccept, không khi false).
-- [ ] Browser verify 3 tầng (DOM→VISUAL→FLOW) trên seam local: login KTV-001 → thấy SO-0004/SO-0006, không thấy SO-0005.
+- [x] ktvApi.ts: axios singleton từ @hub-store/api-client; `fetchMyInstallations(username, today)` = POST `/service-orders/filter` `{technicianCode: username, dateFrom: today, dateTo: today, page:1, pageSize:50}`; `fetchMyDeliveries(name, today)` = POST `/delivery-orders/filter` `{driverName: name, dateFrom: today, dateTo: today}` (BE có today default nhưng gửi explicit cho chắc); DTO mirror mappers/tech.ts.
+- [x] MyOrdersPage: header (chào user + ngày hôm nay vi-VN), segmented control Lắp đặt/Giao hàng (state URL param `tab` — pattern useUrlState shared), OrderCard list: code + status pill (TechStatusTag palette tokens) + địa chỉ ngắn + khung giờ + items count + nút thao tác theo `buttons` (chỉ render flag true — BE-authoritative; card tap → navigate `/order/:code`).
+- [x] Empty state (EmptyState shared) cho tab trống; loading skeleton.
+- [x] Unit tests: compact filter body, render flags mapping (mock data: card có nút Accept khi allowAccept, không khi false).
+- [ ] Browser verify 3 tầng (DOM→VISUAL→FLOW) trên seam local: login KTV-001 → thấy SO-0004/SO-0006, không thấy SO-0005. — **VERIFY-PENDING (T4): docker daemon DOWN >90s poll; mini-stack script sẵn `/tmp/sf25/mini-stack.sh`, chạy khi docker lên (trước T5 verify).**
 - [ ] Commit: `feat(ktv-mobile): SF-25 my-orders hôm nay — 2 tabs + cards BE-authoritative`
 
 ### Task 5: accept-complete — FE thao tác theo flags
