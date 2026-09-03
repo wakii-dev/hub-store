@@ -8,6 +8,7 @@
  * MF singleton — batchCode link cross-remote navigate /hub-store-order/batch.
  */
 import { useEffect, useMemo, useState } from "react";
+import { DownloadOutlined } from "@ant-design/icons";
 import { Button, Space, Table, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useTranslation } from "react-i18next";
@@ -36,7 +37,10 @@ import {
   type ShopsResponse,
 } from "@hub-store/shared";
 import {
+  buildExportParams,
   createAppStore,
+  fetchOrdersExport,
+  isCsvHeaderOnly,
   useGetRegionsQuery,
   useGetShopsQuery,
   useListOrdersQuery,
@@ -221,6 +225,53 @@ function D1Content() {
     setFilters({ ...FILTER_URL_DEFAULTS });
   };
 
+  // --- SF-11 (Task 2) — Export CSV: derive querystring từ filter state (D5) ---
+  const exportDerive = useMemo(() => buildExportParams(filters), [filters]);
+  const [exporting, setExporting] = useState(false);
+
+  const exportTooltip = exportDerive.disabled
+    ? t(
+        exportDerive.reason === "createdRange"
+          ? "export.tooltip.createdRange"
+          : "export.tooltip.unsupportedFields",
+      )
+    : undefined;
+
+  const handleExport = async () => {
+    if (exportDerive.disabled || exporting) return;
+    setExporting(true);
+    try {
+      const result = await fetchOrdersExport(exportDerive.params);
+      if (!result.ok || !result.blob) {
+        message.error(result.message ?? t("export.error"));
+        return;
+      }
+      // Header-only (byte-precise — mọi byte sau newline đầu là whitespace/EOF)
+      // → KHÔNG tải file, chỉ báo rỗng (spec §4.2).
+      if (isCsvHeaderOnly(new Uint8Array(await result.blob.arrayBuffer()))) {
+        message.info(t("export.empty"));
+        return;
+      }
+      const p = (n: number) => String(n).padStart(2, "0");
+      const now = new Date();
+      const fallbackName = `orders-export-${now.getFullYear()}${p(now.getMonth() + 1)}${p(
+        now.getDate(),
+      )}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}.csv`;
+      const url = URL.createObjectURL(result.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename ?? fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      message.error(t("export.error"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const toggleExpand = (code: string) => {
     setExpandedRowKeys((keys) =>
       keys.includes(code) ? keys.filter((k) => k !== code) : [...keys, code],
@@ -357,7 +408,20 @@ function D1Content() {
             {t("page.subtitle", { total })}
           </div>
         </div>
-        <Button onClick={() => void refetch()}>{t("action.refresh")}</Button>
+        <Space>
+          <Tooltip title={exportTooltip}>
+            <Button
+              icon={<DownloadOutlined />}
+              loading={exporting}
+              disabled={exportDerive.disabled}
+              onClick={() => void handleExport()}
+              data-testid="export-csv-button"
+            >
+              {t("export.button")}
+            </Button>
+          </Tooltip>
+          <Button onClick={() => void refetch()}>{t("action.refresh")}</Button>
+        </Space>
       </div>
 
       {/* Stat-strip — SF-6 §2.2 (page-scoped, Deviation D2) */}
