@@ -114,7 +114,9 @@ public class PostgresTechOrderRepository implements TechOrderRepository {
             params.addAll(f.statuses());
         }
         if (isNotBlank(f.technicianCode())) {
-            where.append(" AND technician_code = ?");
+            // SF-25: token preferred_username lowercase (KC 26 import) vs DB
+            // 'KTV-001' — filter match case-insensitive cả 2 phía.
+            where.append(" AND LOWER(technician_code) = LOWER(?)");
             params.add(f.technicianCode());
         }
         if (present(f.categoryL1())) {
@@ -231,7 +233,9 @@ public class PostgresTechOrderRepository implements TechOrderRepository {
                 INSTALLATION_ROW_MAPPER, serviceOrderCode).stream().findFirst()
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Installation order không tồn tại: " + serviceOrderCode));
-        if (!technicianCode.equals(row.order().technicianCode())) {
+        // SF-25: KC 26 lowercase username khi import → token sub 'ktv-001' vs DB
+        // 'KTV-001' — owner check case-insensitive (e2e seam finding).
+        if (!technicianCode.equalsIgnoreCase(row.order().technicianCode())) {
             throw new IllegalStateException(
                     "Đơn " + serviceOrderCode + " không thuộc KTV " + technicianCode);
         }

@@ -277,6 +277,22 @@ class TechServiceLogicTest {
     }
 
     @Test
+    void sf25_lowercaseUsername_accept_and_filter_caseInsensitive() {
+        // KC 26 lowercase username khi import → token sub 'ktv-001' vs DB 'KTV-001'
+        // (e2e seam finding) — owner check + filter case-insensitive cả 2 phía.
+        TechModels.InstallationOrder updated = repo.acceptInstallation(
+                "SO-0006", "ktv-001", OffsetDateTime.now(ZoneOffset.of("+07:00")));
+        assertThat(updated.status()).isEqualTo("PROCESSING");
+        assertThat(updated.technicianCode()).isEqualTo("KTV-001"); // DB giữ stored case.
+
+        TechModels.InstallationFilter filter = new TechModels.InstallationFilter(
+                null, "ktv-001", null, null, null, null, null, null, 1, 50);
+        assertThat(repo.filterInstallation(filter).items())
+                .extracting(TechModels.InstallationOrder::serviceOrderCode)
+                .contains("SO-0004");
+    }
+
+    @Test
     void completeInstallation_processing_toDelivered_timelineAppended() {
         TechModels.InstallationOrder updated = repo.completeInstallation(
                 "SO-0004", "KTV-001", OffsetDateTime.now(ZoneOffset.of("+07:00")));

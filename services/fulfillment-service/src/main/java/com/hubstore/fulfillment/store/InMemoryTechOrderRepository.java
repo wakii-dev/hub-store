@@ -153,7 +153,8 @@ public class InMemoryTechOrderRepository implements TechOrderRepository {
         TechModels.InstallationOrder order = findInstallation(serviceOrderCode)
                 .orElseThrow(() -> new IllegalArgumentException(
                         "Installation order không tồn tại: " + serviceOrderCode));
-        if (!technicianCode.equals(order.technicianCode())) {
+        // SF-25: case-insensitive — parity với Postgres (KC 26 lowercase username).
+        if (!technicianCode.equalsIgnoreCase(order.technicianCode())) {
             throw new IllegalStateException("Đơn " + serviceOrderCode + " không thuộc KTV " + technicianCode);
         }
         if (!allowedFrom.contains(order.status())) {
@@ -224,7 +225,8 @@ public class InMemoryTechOrderRepository implements TechOrderRepository {
         if (present(f.statuses()) && !f.statuses().contains(o.status())) {
             return false;
         }
-        if (isNotBlank(f.technicianCode()) && !f.technicianCode().equals(o.technicianCode())) {
+        // SF-25: case-insensitive — parity với Postgres LOWER() (KC 26 lowercase username).
+        if (isNotBlank(f.technicianCode()) && !f.technicianCode().equalsIgnoreCase(o.technicianCode())) {
             return false;
         }
         if (present(f.categoryL1()) && !anyItemCategory(o.items(), f.categoryL1(), true)) {
