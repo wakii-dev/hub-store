@@ -65,10 +65,10 @@ describe('SF-28 T6 — GET /batching/criteria-presets', () => {
     const { statusCode, body } = await injectGet('/batching/criteria-presets');
     expect(statusCode).toBe(200);
     expect(body.items).toEqual([
-      { id: 'shortest', name: 'Ngắn nhất', description: 'Ưu tiên tổng quãng đường/stop ngắn nhất' },
-      { id: 'cod_priority', name: 'Ưu tiên COD', description: 'Ưu tiên đơn thu COD trước' },
-      { id: 'fewest_stops', name: 'Ưu tiên số dừng ít', description: 'Giảm số điểm dừng mỗi phiếu' },
-      { id: 'balanced', name: 'Cân bằng', description: 'Cân bằng quãng đường và số dừng' },
+      { id: 'shortest', name: 'Ngắn nhất', description: 'Ưu tiên tổng quãng đường di chuyển ít nhất giữa các điểm giao.' },
+      { id: 'cod_priority', name: 'Ưu tiên COD', description: 'Giao các đơn COD giá trị cao trước để thu tiền sớm trong ngày.' },
+      { id: 'fewest_stops', name: 'Ưu tiên số dừng', description: 'Giảm số điểm dừng mỗi chuyến — hợp đơn rải nhiều tòa, cùng tòa gộp trước.' },
+      { id: 'balanced', name: 'Cân bằng', description: 'Cân đối quãng đường, COD và số dừng — preset mặc định được đề xuất.' },
     ]);
   });
 
