@@ -48,9 +48,13 @@ Xem spec §5 — 17 files (2 NEW FE pages/slice, 3 NEW specs, 12 modify). Consum
 | 2 | export-ui | — | slices/fulfillment.ts, D1Page.tsx |
 | 3 | mobile-polish | 1 | sf6-antd-overrides.css, AppLayout hamburger, BatchListPage, PrintPage, CreateBatchingModal css, DashboardPage wrap |
 | 4 | design-harmonize | — | UsersPage.tsx, DashboardPage.tsx |
-| 5 | skeletons-empty | 1,4 | UsersPage, DashboardPage, AuditPage |
+| 5 | skeletons-empty | 1,3,4 | UsersPage, DashboardPage, AuditPage |
 | 6 | e2e-new-green | 1,2,3,5 | e2e/tests/08-*.spec.ts NEW + runner sf-11 private seam |
-| 7 | e2e-regression-15 | 6 | (chạy, không sửa) |
+| 7 | e2e-regression-15 | 6 | (chạy trên default-port stack + kafka profile, không sửa) |
+
+**E2E stack strategy (plan-critic P0 fix):**
+- T6 (specs MỚI): private seam sf-11 (ports 4010/4011/4012/4085/50071/50072, postgres `sf-11-postgres` :55442, keycloak `sf-11-keycloak` :8082, KAFKA_ENABLED=false — specs mới không phụ thuộc Kafka).
+- T7 (15 specs CŨ): specs cũ hardcode absolute URLs `:3000/:8080/:8085` (verified: 05-users, 05-area, 06-exception, 07-realtime, 05-kafka) + cần kafka-ui REST — chạy trên **default-port full compose stack** từ worktree này: `docker compose --profile kafka up -d` (postgres, keycloak :8081, kafka :9092, kafka-ui :8085) + boot apps default ports (shell :3000, BFF :8080) + auth.setup globalSetup — đúng path specs cũ được build cho từ SF-5 (E2E=1). KHÔNG sửa specs cũ. Port-guard trước boot: `lsof -nP -iTCP:3000,8080,8081,8085,9092 -sTCP:LISTEN` — nếu có process lạ chiếm → LIỆT KÊ owner + REPORT, không kill mù (đây là ports dùng chung; các SF song song được chỉ thị dùng seam riêng).
 
 ### File structure (conventions)
 - Shell page: `apps/shell/src/features/audit/AuditPage.tsx` (mirror `features/users/UsersPage.tsx`).
@@ -60,9 +64,8 @@ Xem spec §5 — 17 files (2 NEW FE pages/slice, 3 NEW specs, 12 modify). Consum
 - Tests: unit co-located `*.test.tsx` (pattern `CreateBatchingModal.test.tsx`).
 
 ### Testing strategy
-- Unit: audit slice params serialize; export param derive (createdFrom===createdTo mapping, unsupported disable logic); header-only CSV detection.
-- Component: AuditPage render table + filter; permission gate (Manager thấy, Coordinator/Admin không).
-- E2E: seam v2 private (runner `run-sf11.sh` adapt từ `/tmp/story/fi233/run-sf16-v2.sh`): postgres container `sf-11-postgres` :55442, keycloak `sf-11-keycloak` :8082 (realm import `docker/keycloak/`), shell :4010, orders :4011, fulfillment :4012, BFF :4085, Java :50071, Go :50072, print shared :50053; mint storageStates manager/coordinator/admin adapt `mint_sf16_v2.py` (BASE :8082, REDIRECT/ORIGIN :4010). Regression: 15 specs cũ `E2E_TEST_MATCH` qua cùng stack — all green, git diff 0.
+- E2E specs MỚI: seam v2 private (runner `run-sf11.sh` adapt từ `/tmp/story/fi233/run-sf16-v2.sh`): postgres container `sf-11-postgres` :55442, keycloak `sf-11-keycloak` :8082 (realm import `docker/keycloak/`), shell :4010, orders :4011, fulfillment :4012, BFF :4085, Java :50071, Go :50072, print shared :50053; mint storageStates manager/coordinator/admin adapt `mint_sf16_v2.py` (BASE :8082, REDIRECT/ORIGIN :4010).
+- E2E regression (T7): DEFAULT-port full compose stack + `--profile kafka` — xem Task 7 (KHÔNG chạy trên seam sf-11).
 
 ## 6. Risks & unknowns
 - Must verify: BFF audit/export routes exact shapes đã verify (spec-critic round 2); remotes.config ports khi boot seam.
@@ -118,16 +121,21 @@ Xem spec §5 — 17 files (2 NEW FE pages/slice, 3 NEW specs, 12 modify). Consum
 - [ ] Step 1: Infra — adapt `/tmp/story/fi233/run-sf16-v2.sh` → `run-sf11-stack.sh` (worktree sf-11-fe-convergence): docker run postgres `sf-11-postgres` :55442 (initdb 2 DB từ `services/` init scripts hoặc reuse compose initdb pattern — đọc `docker-compose.yml` postgres service) + migrate Java (Flyway boot) + seed `seed-db.sh`; docker run keycloak `sf-11-keycloak` :8082 (`quay.io/keycloak/keycloak:26.0 start-dev --import-realm`, volume `docker/keycloak/`); BFF env OIDC issuer/JWKS → localhost:8082, DB ports → 55442, KC admin secret từ realm JSON. Adapter mint_sf11.py (adapt mint_sf16_v2.py: BASE localhost:8082, REDIRECT/ORIGIN http://localhost:4010) mint `manager`, `coordinator`, `admin` storageStates → `e2e/.auth/sf11-*.json`.
 - [ ] Step 2: `08-audit-viewer.spec.ts` (config: baseURL :4010, storageState manager): login-role Manager → nav `/audit` → bảng render + cột đúng + phân trang hiện; tạo 1 mutation qua UI (tạo order flow ngắn hoặc dùng data seed đã có mutation log) → lọc actor → thấy entry; lọc action; lọc date wide (dateFrom = hôm nay trừ 7 ngày) → kết quả đúng; Coordinator storageState: nav entry `nav-audit` KHÔNG có + goto /audit → bị chặn (redirect); Admin: tương tự bị chặn.
 - [ ] Step 3: `08-export.spec.ts`: Manager → D1 → set filter (vd fulfillCode prefix có data) → click Export (testid mới `export-csv-button`) → download event → file tồn tại, content dòng đầu = header CSV; filter không match → KHÔNG download + message.info; set createdFrom≠createdTo → button disabled + tooltip text.
-- [ ] Step 4: `08-mobile.spec.ts`: viewport 768×1024 → hamburger click → `app-sidebar` visible + vẫn trong DOM (attached); click nav item → nav đóng; D1 → bảng scroll ngang hoạt động; `document.body` không horizontal overflow.
+- [ ] Step 4: `08-mobile.spec.ts`: viewport 768×1024 → hamburger click → `app-sidebar` visible + vẫn trong DOM (attached); click nav item → nav đóng; D1 → bảng scroll ngang hoạt động; `document.body` horizontal overflow ≤ 2px (tolerance scrollbar — tránh flaky 1px retry storm).
 - [ ] Step 5: Chạy 3 specs trên stack sf-11 → all green; commit `test(sf11): e2e specs audit/export/mobile + private seam sf-11`.
 - **Verify:** runner idempotent (chạy lại không port-conflict); specs không phụ thuộc thứ tự.
 
 ### Task 7: e2e-regression-15 — specs cũ all green KHÔNG sửa (FI-256) [deps: 6]
-**Files:** KHÔNG sửa gì (run-only). Modify duy nhất: không.
-- [ ] Step 1: Trên stack sf-11 đang chạy: `E2E_TEST_MATCH` (pattern sf16: `playwright.sf11.config.ts` testMatch override) hoặc config riêng — chạy 15 specs cũ: `01-main-flow, 02-role-matrix, 03-audit, 04-regression-8b, 05-area, 05-d2c, 05-dashboard, 05-intake, 05-kafka, 05-nvc-api, 05-tech-service, 05-users, 06-exception, 07-nvc-fe, 07-realtime` (05-nvc-api/07-realtime/05-kafka cần Kafka → nếu runner chưa bật kafka profile, chạy với KAFKA_ENABLED path đúng semantics specs — đọc từng spec trước khi chạy).
-- [ ] Step 2: Ghi kết quả từng file (pass/fail/skip-with-reason). FAIL → KHÔNG sửa spec; điều tra code SF-11 gây vỡ → fix code, rerun.
-- [ ] Step 3: `git diff --stat e2e/tests/` trên files cũ = 0 (chứng minh không sửa); commit chỉ nếu có fix code.
-- **Verify:** output playwright full — every file passing; `git status` sạch specs cũ.
+**Files:** KHÔNG sửa specs (run-only). Fix code được phép NẾU (và chỉ nếu) triage ra lỗi do code SF-11.
+- [ ] Step 1: Port-guard (lưu ý: `boot-all.sh` tự blind-kill listeners trên 50051/50052/50053/8080/3000/3001/3002 — guard thật sự cần cho docker ports): `lsof -nP -iTCP:8081,8085,9092,55432 -sTCP:LISTEN` sạch + xác nhận không sibling e2e đang chạy trên default ports → boot: `LOG_DIR=/tmp/story/fi245/sf11` + `export KAFKA_ENABLED=true` (inline env — KHÔNG sửa `.env` vì file này git-tracked; dotenv không ghi đè process.env nên inline thắng cho BFF host-run; kafka part chỉ cần `docker compose --profile kafka up -d kafka kafka-init kafka-ui` — postgres/keycloak boot-all tự lo) → `E2E=1 bash scripts/boot-all.sh` (reset-db → seed sạch, khớp intent "state cần seed sạch" của config). Không sạch (docker ports) → liệt kê owner, REPORT coordinator, KHÔNG kill.
+- [ ] Step 2: Chạy 15 specs cũ: `E2E_REUSE=1 KAFKA_ENABLED=true pnpm exec playwright test` trong e2e/ (E2E_REUSE=1 BẮT BUỘC — webServer reuse=false mặc định sẽ abort "port already used" vì stack đã boot tay; KAFKA_ENABLED=true trên e2e processenv BẮT BUỘC — 05-kafka test.skip nếu thiếu, false-green). Ghi kết quả từng file.
+- [ ] Step 3: Triage matrix khi FAIL (KHÔNG sửa spec trong mọi nhánh):
+  (i) Port/seam/env mismatch (lỗi connect, absolute URL) → sai stack — fix cách boot, rerun.
+  (ii) Data state (seed mutation, audit trống, đơn đếm sai) → re-seed DB (`seed-db.sh` / compose seed) rồi rerun.
+  (iii) Code SF-11 vỡ hành vi cũ (testid mất, DOM đổi, API shape đổi do FE) → fix code SF-11, rerun.
+  Nếu FAIL không vào 3 nhánh trên → REPORT coordinator kèm trace, không đoán fix.
+- [ ] Step 4: `git diff --stat e2e/tests/` files cũ = 0 (chứng minh không sửa specs); commit chỉ nếu có fix code (`fix(sf11): ...`).
+- **Verify:** playwright output full pass (hoặc skip có lý do rõ per-spec nếu spec tự gate env — vd 05-nvc-api theo E2E env của nó); specs cũ untouched.
 
 ## Testing checklist (Phase 5 inputs)
 - Unit/typecheck: shell, orders, fulfillment, api-client, shared — tất cả pass.
