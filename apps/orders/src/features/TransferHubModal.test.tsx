@@ -1,8 +1,8 @@
 /**
- * TransferHubModal tests — SF-28 T2 (design §2.1 hướng A):
- *  - render order strip + KV block + search suggest list (radio rows).
- *  - debt-block: isDebtSplittingOrder → banner chặn render NGAY (§3, không đợi
- *    confirm) + confirm disabled + footer hint đổi.
+ * TransferHubModal tests — SF-28 T2 (design §2.1 hướng B master-detail):
+ *  - render detail pane (mã đơn + KV) + search suggest list (radio rows).
+ *  - debt-block: isDebtSplittingOrder → debt-card chặn render NGAY (§3, không
+ *    đợi confirm) + confirm disabled + search/textarea disabled + footer hint đổi.
  *  - confirm payload: code/toHub/fromHub/reason từ target + reason.
  * Mutation + search query mock; debounce không assert (design §6 dev-decided).
  */
@@ -101,12 +101,14 @@ describe("TransferHubModal — tạo ticket chuyển kho (SF-28 T2)", () => {
     await waitFor(() => expect(confirm.textContent).toContain("✓ Đã tạo yêu cầu"));
   });
 
-  it("debt-block: đơn tách nợ → banner chặn render ngay + confirm disabled + search/textarea disabled", () => {
+  it("debt-block: đơn tách nợ → debt-card chặn render ngay + confirm disabled + search/textarea disabled", () => {
     renderModal(makeOrder({ isDebtSplittingOrder: true }));
     expect(screen.getByTestId("transfer-hub-debt-block")).toBeTruthy();
     expect(screen.getByTestId("transfer-hub-debt-block").textContent).toContain(
-      "Không thể chuyển kho đơn tách nợ.",
+      "Không thể chuyển kho — đơn tách nợ",
     );
+    // detail pane trái vẫn đọc được khi form bị khóa (design B §2.1)
+    expect(screen.getByTestId("transfer-hub-modal").textContent).toContain("ORD-30014");
     expect((screen.getByTestId("transfer-hub-confirm") as HTMLButtonElement).disabled).toBe(true);
     expect((screen.getByTestId("transfer-hub-search") as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByTestId("transfer-hub-reason") as HTMLTextAreaElement).disabled).toBe(true);

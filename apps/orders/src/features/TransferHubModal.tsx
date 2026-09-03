@@ -1,20 +1,26 @@
 /**
  * TransferHubModal — SF-28 T2 "YC chuyển kho" (ticket flow MỚI, KHÔNG đụng
  * HubStoreTransferModal D1c cũ). Design: docs/superpowers/designs/sf-28-direction.md
- * §2.1 — hướng A compact: modal 520px 1 cột.
+ * §2.1 — hướng B master-detail: modal 880px, 2 cột `292px 1fr`.
  *
- * - Order strip: mã đơn + shop + tag trạng thái (Chưa soạn / Tách nợ).
- * - KV 4 hàng: mã soạn hàng · shop · địa chỉ giao · kho hiện tại.
- * - Search kho đích debounce 300ms → GET /master-data/shops?q= → Radio list.
- * - Lý do chuyển kho required. isDebtSplittingOrder → state chặn ngay
- *   (error banner + disable input/confirm — §3, không đợi bấm confirm).
+ * - Cột trái — detail pane: mã đơn + tag (Chưa soạn / Tách nợ) + 5 D-row
+ *   (mã soạn · shop · địa chỉ giao · kho hiện tại · COD) — LUÔN hiển thị,
+ *   kể cả khi form bị khóa bởi debt-split.
+ * - Cột phải — form pane: search kho đích debounce 300ms → GET
+ *   /master-data/shops?q= → Radio suggest list + lý do chuyển kho required.
+ * - isDebtSplittingOrder → form pane thay bằng debt-card (§2.1) + disable
+ *   input/confirm — render ngay (§3, không đợi bấm confirm); cột trái giữ nguyên.
  * - Confirm → POST /fulfillment/{code}/transfer-tickets → "✓ Đã tạo yêu cầu"
  *   800ms → onClose (invalidate Fulfillment LIST → badge D1 refetch).
  */
 import { useEffect, useMemo, useState } from "react";
 import { Button, Input, Modal, Radio, message } from "antd";
 import { useTranslation } from "react-i18next";
-import { DESIGN_TOKENS, type HubStoreOrderFilterItem } from "@hub-store/shared";
+import {
+  DESIGN_TOKENS,
+  formatVnd,
+  type HubStoreOrderFilterItem,
+} from "@hub-store/shared";
 import { useCreateTransferTicketMutation, useSearchShopsQuery } from "../api/ordersApi";
 
 const DEBOUNCE_MS = 300;
@@ -133,22 +139,22 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
   const disabledControlStyle: React.CSSProperties = debtSplit
     ? {
         background: DESIGN_TOKENS.color.status.neutralBg,
+        borderColor: DESIGN_TOKENS.color.status.neutralLine,
         color: DESIGN_TOKENS.color.textFaint,
         cursor: "not-allowed",
       }
     : {};
 
-  const kvRows: Array<{ label: string; value: string; mono?: boolean }> = [
+  // D-row list — 5 hàng cố định (design §2.1 cột trái).
+  const assignment = order
+    ? `${order.shopAssignment.shopName} (${order.shopAssignment.shopCode})`
+    : "—";
+  const dRows: Array<{ label: string; value: string; mono?: boolean }> = [
     { label: t("transferHub.kv.batchCode"), value: order?.batchCode ?? "—", mono: true },
-    {
-      label: t("transferHub.kv.shop"),
-      value: order ? `${order.shopAssignment.shopName} (${order.shopAssignment.shopCode})` : "—",
-    },
+    { label: t("transferHub.kv.shop"), value: assignment },
     { label: t("transferHub.kv.address"), value: order?.customerAddress ?? "—" },
-    {
-      label: t("transferHub.kv.currentHub"),
-      value: order ? `${order.shopAssignment.shopName} (${order.shopAssignment.shopCode})` : "—",
-    },
+    { label: t("transferHub.kv.currentHub"), value: assignment },
+    { label: t("transferHub.kv.cod"), value: formatVnd(order?.codAmount ?? 0), mono: true },
   ];
 
   return (
@@ -167,8 +173,9 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
       }
       open={open}
       onCancel={resetAndClose}
-      width={520}
+      width={880}
       destroyOnClose
+      bodyStyle={{ padding: 0 }}
       footer={
         <div
           style={{
@@ -176,6 +183,11 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
             alignItems: "center",
             justifyContent: "space-between",
             gap: 12,
+            background: DESIGN_TOKENS.color.bgSoftWhite,
+            borderTop: `1px solid ${DESIGN_TOKENS.color.divider}`,
+            margin: "-10px -16px",
+            padding: "12px 24px",
+            borderRadius: `0 0 ${DESIGN_TOKENS.radius.modal}px ${DESIGN_TOKENS.radius.modal}px`,
           }}
         >
           {debtSplit ? (
@@ -193,7 +205,8 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
                 )}
               >
                 {t("transferHub.footerTagPending")}
-              </span>
+              </span>{" "}
+              {t("transferHub.footerHintSuffix")}
             </span>
           )}
           <div style={{ display: "flex", gap: 8 }}>
@@ -211,114 +224,122 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
         </div>
       }
     >
-      <div data-testid="transfer-hub-modal">
-        {order && (
-          <>
-            {/* 1. Order strip */}
-            <div
-              style={{
-                display: "flex",
-                alignItems: "center",
-                justifyContent: "space-between",
-                gap: 12,
-                borderRadius: DESIGN_TOKENS.radius.xl,
-                background: DESIGN_TOKENS.color.bgSoftWhite,
-                border: `1px solid ${DESIGN_TOKENS.color.divider}`,
-                padding: "13px 16px",
-              }}
-            >
-              <div>
-                <div
-                  style={{
-                    fontSize: 14,
-                    fontWeight: 700,
-                    color: DESIGN_TOKENS.color.textStrong,
-                    fontVariantNumeric: "tabular-nums",
-                  }}
-                >
-                  {order.fulfillCode}
-                </div>
-                <div style={{ fontSize: 12.5, color: DESIGN_TOKENS.color.textMuted, marginTop: 2 }}>
-                  {order.shopAssignment.shopName} · {order.shopAssignment.shopCode}
-                </div>
-              </div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {order.batchStatus === 0 && (
-                  <span
-                    style={tagPillStyle(
-                      DESIGN_TOKENS.color.status.info,
-                      DESIGN_TOKENS.color.status.infoBg,
-                      DESIGN_TOKENS.color.status.infoLine,
-                    )}
-                  >
-                    {t("transferHub.tagNotPrepared")}
-                  </span>
+      <div
+        data-testid="transfer-hub-modal"
+        style={{ display: "grid", gridTemplateColumns: "292px 1fr" }}
+      >
+        {/* Cột trái — detail pane: LUÔN hiển thị, kể cả khi form bị khóa (§2.1) */}
+        <div
+          style={{
+            background: DESIGN_TOKENS.color.bgSoftWhite,
+            borderRight: `1px solid ${DESIGN_TOKENS.color.dividerSoft}`,
+            padding: "18px 20px",
+          }}
+        >
+          <div
+            style={{
+              fontSize: DESIGN_TOKENS.typography.overline.fontSize,
+              fontWeight: DESIGN_TOKENS.typography.overline.fontWeight,
+              textTransform: "uppercase",
+              letterSpacing: "0.05em",
+              color: DESIGN_TOKENS.color.textFaint,
+            }}
+          >
+            {t("transferHub.orderKicker")}
+          </div>
+          <div
+            style={{
+              marginTop: 6,
+              fontSize: 19,
+              fontWeight: 700,
+              color: DESIGN_TOKENS.color.textStrong,
+              fontVariantNumeric: "tabular-nums",
+            }}
+          >
+            {order?.fulfillCode ?? "—"}
+          </div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+            {order?.batchStatus === 0 && (
+              <span
+                style={tagPillStyle(
+                  DESIGN_TOKENS.color.status.info,
+                  DESIGN_TOKENS.color.status.infoBg,
+                  DESIGN_TOKENS.color.status.infoLine,
                 )}
-                {debtSplit && (
-                  <span
-                    style={tagPillStyle(
-                      DESIGN_TOKENS.color.status.purple,
-                      DESIGN_TOKENS.color.status.purpleBg,
-                      DESIGN_TOKENS.color.status.purpleLine,
-                    )}
-                  >
-                    {t("transferHub.tagDebt")}
-                  </span>
-                )}
-              </div>
-            </div>
-
-            {/* 2. KV block — 4 hàng */}
-            <Overline>{t("transferHub.infoLabel")}</Overline>
-            <div
-              style={{
-                borderRadius: DESIGN_TOKENS.radius.xl,
-                border: `1px solid ${DESIGN_TOKENS.color.divider}`,
-                overflow: "hidden",
-              }}
-            >
-              {kvRows.map((row, i) => (
-                <div
-                  key={row.label}
-                  style={{
-                    display: "grid",
-                    gridTemplateColumns: "112px 1fr",
-                    gap: 8,
-                    padding: "10px 16px",
-                    borderTop: i === 0 ? undefined : `1px solid ${DESIGN_TOKENS.color.dividerSoft}`,
-                  }}
-                >
-                  <span style={{ fontSize: 13, fontWeight: 500, color: DESIGN_TOKENS.color.textMuted }}>
-                    {row.label}
-                  </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      fontWeight: 500,
-                      color: DESIGN_TOKENS.color.textStrong,
-                      fontVariantNumeric: row.mono ? "tabular-nums" : undefined,
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {row.value}
-                  </span>
-                </div>
-              ))}
-            </div>
-
-            {/* State bị chặn — đơn tách nợ: error banner thay block 3-4 (§2.1) */}
+              >
+                {t("transferHub.tagNotPrepared")}
+              </span>
+            )}
             {debtSplit && (
+              <span
+                style={tagPillStyle(
+                  DESIGN_TOKENS.color.status.purple,
+                  DESIGN_TOKENS.color.status.purpleBg,
+                  DESIGN_TOKENS.color.status.purpleLine,
+                )}
+              >
+                {t("transferHub.tagDebt")}
+              </span>
+            )}
+          </div>
+          <div style={{ marginTop: 12 }}>
+            {dRows.map((row, i) => (
               <div
-                data-testid="transfer-hub-debt-block"
+                key={row.label}
+                style={{
+                  padding: "9px 0",
+                  borderTop: i === 0 ? undefined : `1px solid ${DESIGN_TOKENS.color.dividerSoft}`,
+                }}
+              >
+                <div
+                  style={{
+                    fontSize: 11,
+                    fontWeight: 500,
+                    textTransform: "uppercase",
+                    letterSpacing: "0.04em",
+                    color: DESIGN_TOKENS.color.textMuted,
+                  }}
+                >
+                  {row.label}
+                </div>
+                <div
+                  style={{
+                    fontSize: 12.5,
+                    fontWeight: 500,
+                    lineHeight: 1.45,
+                    color: DESIGN_TOKENS.color.textStrong,
+                    fontVariantNumeric: row.mono ? "tabular-nums" : undefined,
+                    wordBreak: "break-word",
+                  }}
+                >
+                  {row.value}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+
+        {/* Cột phải — form pane (debt-split → debt-card thay block form, §2.1) */}
+        <div style={{ padding: "18px 22px 20px" }}>
+          {debtSplit && (
+            <div
+              data-testid="transfer-hub-debt-block"
+              style={{
+                marginTop: 16,
+                borderRadius: DESIGN_TOKENS.radius.xl,
+                background: DESIGN_TOKENS.color.status.errorBg,
+                border: `1px solid ${DESIGN_TOKENS.color.status.errorLine}`,
+                padding: "14px 16px",
+              }}
+            >
+              <div
                 style={{
                   display: "flex",
                   gap: 10,
-                  alignItems: "flex-start",
-                  marginTop: 16,
-                  borderRadius: DESIGN_TOKENS.radius.lg,
-                  background: DESIGN_TOKENS.color.status.errorBg,
-                  border: `1px solid ${DESIGN_TOKENS.color.status.errorLine}`,
-                  padding: "12px 14px",
+                  alignItems: "center",
+                  fontSize: 13.5,
+                  fontWeight: 700,
+                  color: DESIGN_TOKENS.color.status.error,
                 }}
               >
                 <span
@@ -338,23 +359,32 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
                 >
                   !
                 </span>
-                <div style={{ fontSize: 13, lineHeight: 1.45, color: DESIGN_TOKENS.color.textPrimary }}>
-                  <div style={{ fontWeight: 700 }}>{t("transferHub.debtTitle")}</div>
-                  <div>{t("transferHub.debtBody")}</div>
-                </div>
+                {t("transferHub.debtTitle")}
               </div>
-            )}
+              <div
+                style={{
+                  marginTop: 6,
+                  fontSize: 12.5,
+                  lineHeight: 1.5,
+                  color: DESIGN_TOKENS.color.status.error,
+                }}
+              >
+                {t("transferHub.debtBody")}
+              </div>
+            </div>
+          )}
 
-            {/* 3. Kho đích — search + suggest list */}
-            <Overline>{t("transferHub.targetLabel")}</Overline>
-            <Input
-              placeholder={t("transferHub.searchPlaceholder")}
-              value={search}
-              disabled={debtSplit}
-              onChange={(e) => setSearch(e.target.value)}
-              data-testid="transfer-hub-search"
-              style={debtSplit ? disabledControlStyle : undefined}
-            />
+          {/* Kho đích — search + suggest list */}
+          <Overline>{t("transferHub.targetLabel")}</Overline>
+          <Input
+            placeholder={t("transferHub.searchPlaceholder")}
+            value={search}
+            disabled={debtSplit}
+            onChange={(e) => setSearch(e.target.value)}
+            data-testid="transfer-hub-search"
+            style={debtSplit ? disabledControlStyle : undefined}
+          />
+          {!debtSplit && (
             <div
               style={{
                 marginTop: 10,
@@ -364,7 +394,7 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
                 background: DESIGN_TOKENS.color.bgWhite,
               }}
             >
-              {debtSplit ? null : shopsLoading ? (
+              {shopsLoading ? (
                 [0, 1].map((i) => (
                   <div key={i} style={{ height: 44, padding: "11px 14px" }}>
                     <div
@@ -377,11 +407,13 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
                   </div>
                 ))
               ) : candidates.length === 0 ? (
-                <div style={{ padding: "11px 14px", fontSize: 12.5, color: DESIGN_TOKENS.color.textFaint }}>
+                <div
+                  style={{ padding: "11px 14px", fontSize: 12.5, color: DESIGN_TOKENS.color.textFaint }}
+                >
                   {t("transferHub.noResult")}
                 </div>
               ) : (
-                candidates.map((shop, i) => (
+                candidates.map((shop) => (
                   <div
                     key={shop.shopCode}
                     onClick={() => setTargetCode(shop.shopCode)}
@@ -389,19 +421,25 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
                       display: "flex",
                       alignItems: "center",
                       gap: 10,
-                      padding: "11px 14px",
+                      padding: "12px 14px",
                       cursor: "pointer",
                       background:
                         targetCode === shop.shopCode
                           ? DESIGN_TOKENS.color.primaryBg
                           : DESIGN_TOKENS.color.bgWhite,
-                      borderTop: i === 0 ? undefined : `1px solid ${DESIGN_TOKENS.color.dividerSoft}`,
+                      boxShadow:
+                        targetCode === shop.shopCode
+                          ? `inset 3px 0 0 ${DESIGN_TOKENS.color.primary}`
+                          : undefined,
+                      borderTop: `1px solid ${DESIGN_TOKENS.color.dividerSoft}`,
                     }}
                     data-testid="transfer-hub-target"
                   >
                     <Radio checked={targetCode === shop.shopCode} />
                     <div>
-                      <div style={{ fontSize: 13.5, fontWeight: 600, color: DESIGN_TOKENS.color.textStrong }}>
+                      <div
+                        style={{ fontSize: 13.5, fontWeight: 600, color: DESIGN_TOKENS.color.textStrong }}
+                      >
                         {shop.shopName}
                       </div>
                       <div style={{ fontSize: 12, color: DESIGN_TOKENS.color.textMuted }}>
@@ -412,19 +450,19 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
                 ))
               )}
             </div>
+          )}
 
-            {/* 4. Lý do chuyển kho */}
-            <Overline>{t("transferHub.reasonLabel")}</Overline>
-            <Input.TextArea
-              value={reason}
-              disabled={debtSplit}
-              onChange={(e) => setReason(e.target.value)}
-              placeholder={t("transferHub.reasonPlaceholder")}
-              style={{ minHeight: 74, ...(debtSplit ? disabledControlStyle : {}) }}
-              data-testid="transfer-hub-reason"
-            />
-          </>
-        )}
+          {/* Lý do chuyển kho */}
+          <Overline>{t("transferHub.reasonLabel")}</Overline>
+          <Input.TextArea
+            value={reason}
+            disabled={debtSplit}
+            onChange={(e) => setReason(e.target.value)}
+            placeholder={t("transferHub.reasonPlaceholder")}
+            style={{ minHeight: 80, ...(debtSplit ? disabledControlStyle : {}) }}
+            data-testid="transfer-hub-reason"
+          />
+        </div>
       </div>
     </Modal>
   );
