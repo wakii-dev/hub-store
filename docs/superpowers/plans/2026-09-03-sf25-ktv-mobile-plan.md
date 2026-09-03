@@ -98,12 +98,12 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 
 ### Task 5: accept-complete — FE thao tác theo flags
 **Files:** `apps/ktv-mobile/src/features/actions/**` (AcceptButton, CompleteButton, useTechAction), `apps/ktv-mobile/src/api/ktvApi.ts` (+3 mutations), unit tests.
-- [ ] ktvApi: `acceptOrder(code, technicianCode)` POST `/service-orders/:code/accept`; `completeOrder(code, technicianCode)`; response `{order}` → cập nhật state.
-- [ ] AcceptButton/CompleteButton: render theo order.buttons (flag true), loading state, sau mutate → cập nhật card/page state (status pill + flags mới từ response), success message antd.
-- [ ] Flow: accept SO-0006 → PROCESSING + CompleteButton hiện; complete → DELIVERED + timeline mới. Complete confirm modal (Modal.confirm "Xác nhận hoàn tất — ghi giờ hiện tại").
-- [ ] Unit tests: buttons render matrix + api payloads.
-- [ ] Browser verify: accept + complete thật trên seam.
-- [ ] Commit: `feat(ktv-mobile): SF-25 accept/complete actions theo flags BE`
+- [x] ktvApi: `acceptOrder(code, technicianCode)` POST `/service-orders/:code/accept`; `completeOrder(code, technicianCode)`; response `{order}` → cập nhật state.
+- [x] AcceptButton/CompleteButton: render theo order.buttons (flag true), loading state, sau mutate → cập nhật card/page state (status pill + flags mới từ response), success message antd.
+- [x] Flow: accept SO-0006 → PROCESSING + CompleteButton hiện; complete → DELIVERED + timeline mới. Complete confirm modal (Modal.confirm "Xác nhận hoàn tất — ghi giờ hiện tại").
+- [x] Unit tests: buttons render matrix + api payloads.
+- [ ] Browser verify: accept + complete thật trên seam. — **VERIFY-PENDING (T5): docker daemon DOWN; mini-stack script sẵn `/tmp/sf25/mini-stack.sh`, chạy khi docker lên.**
+- [x] Commit: `feat(ktv-mobile): SF-25 accept/complete actions theo flags BE`
 
 ### Task 6: reschedule — modal dời lịch + ghi chú
 **Files:** `apps/ktv-mobile/src/features/actions/RescheduleModal.tsx`, ktvApi `rescheduleOrder`, unit tests.
