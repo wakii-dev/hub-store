@@ -83,10 +83,11 @@ apps/ktv-mobile/
 
 ### 4.2 BE — status machine + buttons (additive, matrix mở rộng có chủ đích)
 
-**Matrix mở rộng (spec-critic P0 fix — decision):**
-- `reschedulable` += `PROCESSING` → `{NEW, CONFIRMED, PROCESSING, REDELIVERY, RESCHEDULED}` (KTV đang làm cần dời lịch — use case chính của mobile).
-- `allowAccept` = assigned && (`CONFIRMED` || `RESCHEDULED`) — xử lý dead-end: sau reschedule (→ RESCHEDULED), KTV nhận việc lại → PROCESSING → complete → DELIVERED. Không trạng thái dead-end mới.
+**Matrix mở rộng (spec-critic P0 fix — decision) — CHỈ installation, delivery giữ nguyên (T2 review note: desktop contract test `filterDelivery_byStatus` yêu cầu delivery matrix không đổi):**
+- Installation `reschedulable` += `PROCESSING` → `{NEW, CONFIRMED, PROCESSING, REDELIVERY, RESCHEDULED}` (KTV đang làm cần dời lịch — use case chính của mobile).
+- Installation `allowAccept` = assigned && (`CONFIRMED` || `RESCHEDULED`) — xử lý dead-end: sau reschedule (→ RESCHEDULED), KTV nhận việc lại → PROCESSING → complete → DELIVERED. Không trạng thái dead-end mới.
 - Desktop SF-20 đọc cùng flags BE → thấy matrix mới tự động (BE-authoritative, không vỡ — desktop e2e 05 assert theo flag, matrix assign không đổi).
+- Read-side override: technicianCode ép từ token; driverName KHÔNG ép được (`request.user` = {sub, role} không có name claim) → FE mobile tự gửi `user.profile.name`; accepted dev-risk (flag security-audit).
 
 **RPC semantics:**
 - **accept** (installation): CONFIRMED|RESCHEDULED → PROCESSING. Timeline append `{at, status:"PROCESSING", note:"KTV nhận việc", actor:<technician_code>}` — **reuse schema timeline hiện có** `{at,status,note,actor}` (spec-critic P0 fix; KHÔNG dùng vocabulary {type,by} mới).
