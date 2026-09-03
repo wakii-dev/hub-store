@@ -7,7 +7,7 @@
  */
 import { useState, type CSSProperties, type HTMLAttributes } from "react";
 import {
-  Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, message,
+  Alert, Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, message,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
@@ -49,7 +49,7 @@ const ROLE_OPTIONS = ROLES.map((r) => ({ value: r, label: r }));
 function UsersContent(props: { currentUsername: string }) {
   const { t } = useTranslation("shell");
   const [messageApi, contextHolder] = message.useMessage();
-  const { data, isLoading } = useListUsersQuery();
+  const { data, isLoading, isError, refetch } = useListUsersQuery();
   const [createUser, { isLoading: creating }] = useCreateUserMutation();
   const [setPassword] = useSetUserPasswordMutation();
   const [setEnabled] = useSetUserEnabledMutation();
@@ -213,6 +213,18 @@ function UsersContent(props: { currentUsername: string }) {
       >
         {isLoading ? (
           <TableSkeleton />
+        ) : isError ? (
+          /* Lỗi API ≠ dữ liệu rỗng — không được ngụy trang thành EmptyState (review P1, pattern AuditPage). */
+          <Alert
+            type="error"
+            showIcon
+            message={t("users.error")}
+            action={
+              <Button size="small" onClick={() => void refetch()}>
+                {t("users.errorRetry")}
+              </Button>
+            }
+          />
         ) : users.length === 0 ? (
           <EmptyState
             title={t("users.empty")}

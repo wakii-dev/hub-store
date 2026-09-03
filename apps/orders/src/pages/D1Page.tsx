@@ -410,15 +410,18 @@ function D1Content() {
         </div>
         <Space>
           <Tooltip title={exportTooltip}>
-            <Button
-              icon={<DownloadOutlined />}
-              loading={exporting}
-              disabled={exportDerive.disabled}
-              onClick={() => void handleExport()}
-              data-testid="export-csv-button"
-            >
-              {t("export.button")}
-            </Button>
+            {/* span wrapper — antd4 disabled button không fire mouse event → tooltip không hiện */}
+            <span>
+              <Button
+                icon={<DownloadOutlined />}
+                loading={exporting}
+                disabled={exportDerive.disabled}
+                onClick={() => void handleExport()}
+                data-testid="export-csv-button"
+              >
+                {t("export.button")}
+              </Button>
+            </span>
           </Tooltip>
           <Button onClick={() => void refetch()}>{t("action.refresh")}</Button>
         </Space>
