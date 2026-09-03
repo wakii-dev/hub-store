@@ -15,6 +15,7 @@ import {
 } from "./auth/oidc";
 import { LANG_STORAGE_KEY, shellResources } from "./i18n";
 import { registerServiceWorker } from "./lib/pwa";
+import { initOneSignal } from "./lib/push";
 import App from "./App";
 
 // SF-11 convergence fix: pre-warm MF share cache cho react/jsx-runtime.
@@ -51,3 +52,5 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 
 // SF-23 T1: PWA — đăng ký service worker (silent no-op khi không hỗ trợ).
 registerServiceWorker();
+// SF-23 T6: OneSignal web push (env-gated — VITE_ONESIGNAL_APP_ID trống → no-op).
+initOneSignal();

@@ -1,5 +1,5 @@
 import { lazy, useEffect, useRef, useState } from "react";
-import { ConfigProvider, Result, Spin } from "antd";
+import { ConfigProvider, notification, Result, Spin } from "antd";
 import enUS from "antd/es/locale/en_US";
 import viVN from "antd/es/locale/vi_VN";
 import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
@@ -14,6 +14,8 @@ import {
   type ShellSession,
 } from "./auth/oidc";
 import { LANG_STORAGE_KEY } from "./i18n";
+import { pollNotifications, type NewNotification } from "./lib/notificationPoller";
+import { pushLogin, pushLogout } from "./lib/push";
 import { firstPathForRole } from "./nav";
 import AppLayout from "./features/layout/AppLayout";
 import LoginPage from "./features/login/LoginPage";
@@ -130,6 +132,30 @@ export default function App() {
       .then((user) => setSession(user ? sessionFromUser(user) : null))
       .finally(() => setBooted(true));
   }, []);
+
+  // SF-23 T6 ⚠ MECHANISM (plan-critic P1): onSessionChange KHÔNG fire khi
+  // restore từ storage (boot đi qua loadCurrentUser() → setSession, bypass
+  // manager events) — hook pushLogin/pushLogout + polling trên session STATE
+  // ở đây che phủ CẢ login mới LẪN boot-restore (external_id sống qua reload).
+  // ShellSession = {sub, role} — external_id = sub (preferred_username).
+  useEffect(() => {
+    if (!session) {
+      pushLogout();
+      return;
+    }
+    pushLogin(session.sub);
+    const show = (items: NewNotification[]) =>
+      items.forEach((n) => notification.info({ message: n.title, description: n.body }));
+    const poll = () => pollNotifications().then(show).catch(() => {
+      /* poll fail (BFF chưa lên / mạng) — im lặng, chu kỳ sau thử lại */
+    });
+    void poll();
+    const timer = setInterval(() => void poll(), 30_000);
+    return () => {
+      clearInterval(timer);
+      pushLogout();
+    };
+  }, [session]);
 
   const toggleLanguage = () => {
     const next = lang.startsWith("vi") ? "en" : "vi";
