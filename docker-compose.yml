@@ -157,6 +157,10 @@ services:
       FULFILLMENT_DB_NAME: fulfillment
       FULFILLMENT_DB_USER: ${POSTGRES_USER:-hubstore}
       FULFILLMENT_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
+      # SF-12 s2s token passthrough — Java verify JWT độc lập (FULL realm URL, KHÁC BFF OIDC_ISSUER base)
+      OIDC_ISSUER: http://keycloak:8081/realms/hubstore
+      OIDC_JWKS_URL: http://keycloak:8081/realms/hubstore/protocol/openid-connect/certs
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-} # Go→Java + reconciler x-internal-token
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092 # internal listener (host view = localhost:9092)
     depends_on:
@@ -176,6 +180,10 @@ services:
       BATCHING_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
       FULFILLMENT_ADDR: fulfillment-service:50051
       BATCHING_PORT: "50052"
+      # SF-12 s2s token passthrough — Go verify JWT độc lập (FULL realm URL, KHÁC BFF OIDC_ISSUER base)
+      OIDC_ISSUER: http://keycloak:8081/realms/hubstore
+      OIDC_JWKS_URL: http://keycloak:8081/realms/hubstore/protocol/openid-connect/certs
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-} # Go→Java x-internal-token
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092 # internal listener (host view = localhost:9092)
     depends_on:
@@ -201,9 +209,10 @@ services:
       GRPC_BATCHING: batching-service:50052
       GRPC_PRINT: print-service:50053
       BFF_CORS_ORIGINS: http://localhost:3000
-      OIDC_ISSUER: http://localhost:8081 # claim iss + browser redirect (public)
+      OIDC_ISSUER: http://localhost:8081 # claim iss + browser redirect (public) — BASE URL, KHÁC Go/Java FULL realm URL
       OIDC_AUDIENCE: hubstore-api
       OIDC_JWKS_URL: http://keycloak:8081 # JWKS fetch trong network compose — URL riêng (gotcha Keycloak-in-Docker)
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-} # SF-12 — webhooks machine-call qua gRPC (x-internal-token)
       KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID:-hubstore-admin} # SF-8 — Users management
       KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:-hubstore-admin-dev-secret}
       ENABLE_DEV_RESET_PASSWORD: "1" # DEV-ONLY — bật /auth/reset-password (prod không set → 404)

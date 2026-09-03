@@ -3,6 +3,8 @@ dist/
 .turbo/
 *.tsbuildinfo
 coverage/
+# SF-12 — secrets local-only, KHÔNG track (mẫu: .env.example → cp → điền local)
+.env
 .env.local
 .env.*.local
 .vite/
