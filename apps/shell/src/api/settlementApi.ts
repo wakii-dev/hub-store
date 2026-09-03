@@ -60,13 +60,17 @@ export const settlementApi = {
   },
 
   /**
-   * URL export CSV của kỳ (endpoint /cod/settlement.csv thuộc Task 5 — để sẵn).
-   * Dùng baseURL của axios singleton để khớp môi trường; window.open tự mang
-   * cookie/session của origin (endpoint Task 5 quyết định auth surface).
+   * Export CSV kỳ đối soát (SF-14 T5): GET /cod/settlement.csv qua axios
+   * singleton → Authorization Bearer tự gắn (window.open trần KHÔNG mang
+   * header — endpoint guard Manager/Admin sẽ 403). responseType blob để FE
+   * trigger download qua object URL (pattern D2CPage / ImportOrdersModal).
    */
-  exportUrl(from: string, to: string): string {
-    const base = http().defaults.baseURL ?? '';
-    const qs = new URLSearchParams({ from, to }).toString();
-    return `${base}/cod/settlement.csv?${qs}`;
+  exportCsv(from: string, to: string): Promise<Blob> {
+    return http()
+      .get('/cod/settlement.csv', {
+        params: { from, to },
+        responseType: 'blob',
+      })
+      .then((r) => r.data as Blob);
   },
 };

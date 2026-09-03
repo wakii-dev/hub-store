@@ -152,8 +152,8 @@ Envelope: `reply.send(paginated(rows, total, page, pageSize))` cho `/cod/settlem
 - Test: BFF test CSV (content-type `text/csv; charset=utf-8`, `Content-Disposition` filename `settlement_<from>_<to>.csv`, số dòng = shops + header)
 
 **CSV shape:** mirror `/fulfillment/orders/export.csv` pattern (`routes/fulfillment.ts:171-214` buffer-then-send): header `shop_code,shop_name,total_orders,total_expected,total_collected,diff_amount,pending_count,mismatch_count` + section `# Drilled mismatch orders` (fulfill_code,batch_code,expected,collected,status) khi có. UTF-8 BOM để Excel mở tiếng Việt đúng (check export.csv hiện có đã làm BOM chưa — mirror).
-- [ ] Step 1: endpoint + guard `[Manager, Admin]` + test.
-- [ ] Step 2: FE button wiring. Commit `feat(cod): settlement CSV export`.
+- [x] Step 1: endpoint + guard `[Manager, Admin]` + test.
+- [x] Step 2: FE button wiring. Commit `feat(cod): settlement CSV export`.
 
 ### Task 6: e2e-settlement-spec — `e2e/tests/05-settlement.spec.ts`
 

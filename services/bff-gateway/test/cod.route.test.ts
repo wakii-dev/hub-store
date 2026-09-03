@@ -6,7 +6,7 @@
  * Harness pattern d2c.route.test.
  */
 import { afterEach, beforeEach, describe, expect, it } from 'vitest';
-import { authedInject, signTestToken, startHarness, type Harness } from './harness.js';
+import { authedInject, mockGrpcError, signTestToken, startHarness, type Harness } from './harness.js';
 
 let h: Harness;
 
@@ -278,6 +278,109 @@ describe('GET /cod/settlement/detail — guard + drill-down', () => {
     expect(body.items[1].status).toBe(0);
   });
 });
+
+describe('GET /cod/settlement.csv — export CSV kỳ đối soát (T5)', () => {
+  const shopRow = (over: Partial<Record<string, unknown>> = {}) => ({
+    shopCode: 'S1', shopName: 'Shop 1', totalOrders: 3, totalExpected: 300000,
+    totalCollected: 150000, diffAmount: 150000, pendingCount: 1, mismatchCount: 1,
+    ...over,
+  });
+
+  it('Coordinator → 403 (settlement guard)', async () => {
+    const res = await authedInject(h.app, 'GET', '/cod/settlement.csv?from=2026-08-01&to=2026-08-31', undefined, 'Coordinator');
+    expect(res.statusCode).toBe(403);
+  });
+
+  it('thiếu from/to → 400; kỳ sai lịch → 400 (reuse parsePeriod D9)', async () => {
+    const missing = await authedInject(h.app, 'GET', '/cod/settlement.csv');
+    expect(missing.statusCode).toBe(400);
+    const rollOver = await authedInject(h.app, 'GET', '/cod/settlement.csv?from=2026-02-31&to=2026-08-31');
+    expect(rollOver.statusCode).toBe(400);
+  });
+
+  it('Manager → CSV đúng: content-type, BOM, header 8 cột, row shop, filename settlement_<from>_<to>', async () => {
+    h.fulfillment.override({
+      getSettlement: (_call, cb) => cb(null, { rows: [shopRow(), shopRow({ shopCode: 'S2', shopName: 'Shop 2', pendingCount: 0, mismatchCount: 0, totalOrders: 1, totalExpected: 90000, totalCollected: 90000, diffAmount: 0 })] }),
+      getSettlementDetail: (_call, cb) =>
+        cb(null, {
+          confirmations: [
+            { fulfillCode: 'ORD-M', batchCode: 'B1', shopCode: 'S1', shopName: 'Shop 1', expectedAmount: 150000, collectedAmount: 100000, collectedBy: 'ops1', status: 1 },
+          ],
+        }),
+    });
+    const res = await authedInject(h.app, 'GET', '/cod/settlement.csv?from=2026-08-01&to=2026-08-31');
+    expect(res.statusCode).toBe(200);
+    expect(res.headers['content-type']).toBe('text/csv; charset=utf-8');
+    expect(res.headers['content-disposition']).toBe('attachment; filename="settlement_2026-08-01_2026-08-31.csv"');
+    const text = res.rawPayload.toString('utf8');
+    expect(text.startsWith('\uFEFF')).toBe(true); // BOM — Excel mở tiếng Việt đúng
+    const lines = text.slice(1).split('\r\n');
+    expect(lines[0]).toBe('shop_code,shop_name,total_orders,total_expected,total_collected,diff_amount,pending_count,mismatch_count');
+    expect(lines[1]).toBe('S1,Shop 1,3,300000,150000,150000,1,1');
+    expect(lines[2]).toBe('S2,Shop 2,1,90000,90000,0,0,0');
+    // S1 pending=1 + detail trả đơn lệch → section drill xuất hiện sau các row shop.
+    expect(lines[3]).toBe('# Drilled mismatch orders');
+  });
+
+  it('kỳ sạch (không pending/lech) → KHÔNG section drill; upstream KHÔNG bị gọi detail', async () => {
+    let detailCalled = 0;
+    h.fulfillment.override({
+      getSettlement: (_call, cb) => cb(null, { rows: [shopRow({ pendingCount: 0, mismatchCount: 0 })] }),
+      getSettlementDetail: (_call, cb) => {
+        detailCalled += 1;
+        cb(null, { confirmations: [] });
+      },
+    });
+    const res = await authedInject(h.app, 'GET', '/cod/settlement.csv?from=2026-08-01&to=2026-08-31');
+    expect(res.statusCode).toBe(200);
+    expect(detailCalled).toBe(0);
+    const text = res.rawPayload.toString('utf8');
+    expect(text).not.toContain('Drilled');
+    // Header + 1 shop + dòng rỗng cuối (join split) = 3 phần.
+    expect(text.slice(1).split('\r\n')).toHaveLength(3);
+  });
+
+  it('shop pending/lech → section drill đúng cột + lọc chỉ PENDING/lech (đủ bị bỏ)', async () => {
+    h.fulfillment.override({
+      getSettlement: (_call, cb) => cb(null, { rows: [shopRow()] }),
+      getSettlementDetail: (_call, cb) =>
+        cb(null, {
+          confirmations: [
+            { fulfillCode: 'ORD-P', batchCode: 'B1', shopCode: 'S1', shopName: 'Shop 1', expectedAmount: 90000, collectedBy: '', status: 0 },
+            { fulfillCode: 'ORD-M', batchCode: 'B1', shopCode: 'S1', shopName: 'Shop 1', expectedAmount: 150000, collectedAmount: 100000, collectedBy: 'ops1', status: 1 },
+            { fulfillCode: 'ORD-OK', batchCode: 'B1', shopCode: 'S1', shopName: 'Shop 1', expectedAmount: 60000, collectedAmount: 60000, collectedBy: 'ops1', status: 1 },
+          ],
+        }),
+    });
+    const res = await authedInject(h.app, 'GET', '/cod/settlement.csv?from=2026-08-01&to=2026-08-31');
+    expect(res.statusCode).toBe(200);
+    const lines = res.rawPayload.toString('utf8').slice(1).split('\r\n');
+    const idx = lines.indexOf('# Drilled mismatch orders');
+    expect(idx).toBeGreaterThan(0);
+    expect(lines[idx + 1]).toBe('fulfill_code,batch_code,expected,collected,status');
+    expect(lines[idx + 2]).toBe('ORD-P,B1,90000,,COD_PENDING');
+    expect(lines[idx + 3]).toBe('ORD-M,B1,150000,100000,COD_CONFIRMED');
+    expect(lines[idx + 4]).toBe(''); // EOF
+    expect(lines.length).toBe(idx + 5);
+    expect(textOf(lines)).not.toContain('ORD-OK'); // đơn đủ — không nằm trong drill
+  });
+
+  it('lỗi gRPC ở detail drill → sendGrpcError TRƯỚC khi send (buffer-then-send)', async () => {
+    h.fulfillment.override({
+      getSettlement: (_call, cb) => cb(null, { rows: [shopRow()] }),
+      getSettlementDetail: (_call, cb) => cb(mockGrpcError(13, 'drill boom')),
+    });
+    const res = await authedInject(h.app, 'GET', '/cod/settlement.csv?from=2026-08-01&to=2026-08-31');
+    expect(res.statusCode).toBe(500);
+    expect((res.body as { code: string }).code).not.toBeUndefined();
+    expect(res.headers['content-type']).not.toContain('text/csv');
+  });
+});
+
+/** Helper test-local — text lowercase cho assert contain. */
+function textOf(lines: string[]): string {
+  return lines.join('\n');
+}
 
 describe('Guard thống nhất — token sai role từng endpoint (ma trận D6)', () => {
   it('confirm paths: 4 role được phép, WarehouseEmployee chặn', async () => {

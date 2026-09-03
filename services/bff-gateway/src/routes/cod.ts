@@ -10,10 +10,11 @@
  */
 import type { FastifyInstance, FastifyReply } from 'fastify';
 import type { SettlementDetailItem, SettlementShopRow } from '@hub-store/shared';
-import type { ConfirmCodResult } from '../../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
+import { CodCollectionStatus, type ConfirmCodResult } from '../../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import type { FulfillmentApi } from '../clients/index.js';
 import { SERVICE_NAMES } from '../config.js';
 import { requireRole, requireUser } from '../plugins/auth.js';
+import { csvRow } from '../lib/csv.js';
 import { errorEnvelope, paginated } from '../lib/envelope.js';
 import { sendGrpcError } from '../lib/grpc-error.js';
 
@@ -255,6 +256,105 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
       }
+    },
+  );
+
+  // GET /cod/settlement.csv?from=&to= — export CSV kỳ đối soát (Manager/Admin,
+  // pattern SF-7 mirror /fulfillment/orders/export.csv): header 8 cột khớp màn
+  // hình + section `# Drilled mismatch orders` khi có shop pending/lech (drill
+  // per-order qua GetSettlementDetail từng shop). BOM UTF-8 để Excel mở tiếng
+  // Việt đúng (như export.csv). Buffer-then-send: mọi lỗi gRPC (aggregate lẫn
+  // drill) bắt TRƯỚC khi send — không bao giờ trả CSV đứt giữa chừng.
+  app.get<{ Querystring: { from?: string; to?: string } }>(
+    '/cod/settlement.csv',
+    async (request, reply) => {
+      const user = requireRole(request, reply, ...COD_SETTLEMENT_ROLES);
+      if (user === null) return reply;
+      const from = request.query.from ?? '';
+      const to = request.query.to ?? '';
+      const period = parsePeriod(from, to);
+      if (!period) return badPeriod(reply);
+      let rows: SettlementShopRow[];
+      try {
+        const resp = await f.getSettlement(
+          { periodFrom: period.from, periodTo: period.to },
+          user.role,
+        );
+        rows = resp.rows.map(mapSettlementRow); // export đầy đủ — KHÔNG slice trang
+      } catch (err) {
+        return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
+      }
+      // Drill đơn cần xử lý (PENDING / CONFIRMED lệch tiền — cùng semantics
+      // itemState FE): chỉ shop có pendingCount/mismatchCount > 0.
+      const drill: Array<{
+        fulfillCode: string;
+        batchCode: string;
+        expected: number;
+        collected: number | '';
+        status: string;
+      }> = [];
+      try {
+        for (const r of rows) {
+          if (r.pendingCount === 0 && r.mismatchCount === 0) continue;
+          const resp = await f.getSettlementDetail(
+            { shopCode: r.shopCode, periodFrom: period.from, periodTo: period.to },
+            user.role,
+          );
+          for (const c of resp.confirmations) {
+            const pending = c.status === CodCollectionStatus.COD_PENDING;
+            // CONFIRMED + thiếu collectedAmount = server đã set collected=expected → đủ.
+            const mismatch =
+              c.status === CodCollectionStatus.COD_CONFIRMED &&
+              c.collectedAmount !== undefined &&
+              c.collectedAmount !== null &&
+              Number(c.collectedAmount) !== Number(c.expectedAmount);
+            if (!pending && !mismatch) continue;
+            drill.push({
+              fulfillCode: c.fulfillCode,
+              batchCode: c.batchCode,
+              expected: Number(c.expectedAmount),
+              collected: pending ? '' : Number(c.collectedAmount),
+              status: pending ? 'COD_PENDING' : 'COD_CONFIRMED',
+            });
+          }
+        }
+      } catch (err) {
+        return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
+      }
+      const lines = [
+        csvRow([
+          'shop_code',
+          'shop_name',
+          'total_orders',
+          'total_expected',
+          'total_collected',
+          'diff_amount',
+          'pending_count',
+          'mismatch_count',
+        ]),
+        ...rows.map((r) =>
+          csvRow([
+            r.shopCode,
+            r.shopName,
+            r.totalOrders,
+            r.totalExpected,
+            r.totalCollected,
+            r.diffAmount,
+            r.pendingCount,
+            r.mismatchCount,
+          ]),
+        ),
+      ];
+      if (drill.length > 0) {
+        lines.push('# Drilled mismatch orders\r\n');
+        lines.push(csvRow(['fulfill_code', 'batch_code', 'expected', 'collected', 'status']));
+        for (const d of drill) {
+          lines.push(csvRow([d.fulfillCode, d.batchCode, d.expected, d.collected, d.status]));
+        }
+      }
+      reply.type('text/csv; charset=utf-8');
+      reply.header('Content-Disposition', `attachment; filename="settlement_${from}_${to}.csv"`);
+      return await reply.send('\uFEFF' + lines.join(''));
     },
   );
 

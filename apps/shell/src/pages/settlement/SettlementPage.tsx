@@ -101,11 +101,22 @@ export default function SettlementPage() {
     return list.filter((r) => shopHealth(r) === segment);
   }, [rows, segment]);
 
-  const handleExport = () => {
+  const handleExport = async () => {
     setExporting(true);
-    // Endpoint /cod/settlement.csv thuộc Task 5 — button để sẵn theo plan T4.
     try {
-      window.open(settlementApi.exportUrl(from, to), '_blank');
+      // Axios singleton mang Authorization Bearer (window.open trần sẽ 403) →
+      // blob → object URL → anchor click download (pattern D2CPage export).
+      const blob = await settlementApi.exportCsv(from, to);
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `settlement_${from}_${to}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      message.error(t('settlement.error.export'));
     } finally {
       setExporting(false);
     }
