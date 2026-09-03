@@ -84,6 +84,21 @@ export interface BffConfig {
   devResetPassword: boolean;
   /** SF-27 — Kafka side-channel consumer. */
   kafka: BffKafkaConfig;
+  /** SF-23 — OneSignal REST push (dual-mode). */
+  onesignal: BffOnesignalConfig;
+}
+
+export interface BffOnesignalConfig {
+  /**
+   * REST API key — rỗng → mock mode (sendOneSignalPush trả false ngay,
+   * chỉ notification_log; KHÔNG gọi OneSignal).
+   */
+  restApiKey: string;
+  /**
+   * OneSignal App ID (BFF-side env ONESIGNAL_APP_ID — KHÔNG nhầm
+   * VITE_ONESIGNAL_APP_ID build-time của FE). Thiếu → mock mode.
+   */
+  appId: string;
 }
 
 export interface BffKafkaConfig {
@@ -159,6 +174,10 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
     kafka: {
       enabled: env.KAFKA_ENABLED === 'true', // 'true' duy nhất — thống nhất Go/Java/e2e (review SF-27)
       bootstrapServers: env.KAFKA_BOOTSTRAP_SERVERS ?? 'localhost:9092',
+    },
+    onesignal: {
+      restApiKey: env.ONESIGNAL_REST_API_KEY ?? '',
+      appId: env.ONESIGNAL_APP_ID ?? '',
     },
   };
 }
