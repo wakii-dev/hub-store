@@ -26,11 +26,18 @@ import './slices/batches';
 import './slices/masterData';
 import './slices/users';
 import './slices/intake';
+import './slices/d2c';
 
 // Re-export the stub hooks for convenience (remotes can deep-import the slice
 // files directly too).
 export { useListOrdersQuery, useGetDashboardStatsQuery } from './slices/fulfillment';
 export { useListBatchesQuery } from './slices/batches';
+export {
+  useListD2cOrdersQuery,
+  useUpdateD2cNoteMutation,
+  fetchD2cOrdersExport,
+  type D2cExportResult,
+} from './slices/d2c';
 export {
   useGetRegionsQuery,
   useGetShopsQuery,

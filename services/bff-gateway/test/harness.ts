@@ -22,6 +22,7 @@ import { buildApp } from '../src/app.js';
 import type { BffConfig } from '../src/config.js';
 import {
   fulfillmentResponses,
+  d2cResponses,
   batchingResponses,
   printResponses,
   deliveryBatchResponses,
@@ -289,6 +290,10 @@ const fulfillmentDefaults: Record<string, UnaryHandler> = {
   listDeliveryStaff: (_c, cb) => cb(null, fulfillmentResponses.listDeliveryStaff),
   listDistinctShops: (_c, cb) => cb(null, fulfillmentResponses.listDistinctShops),
   getTimeDelivery: (_c, cb) => cb(null, fulfillmentResponses.getTimeDelivery),
+  // SF-18 D2C (FI-263) — defaults cho RPC additive mới (key camelize ts-proto:
+  // "FilterD2cOrders" → filterD2COrders — chữ C hoa).
+  filterD2COrders: (_c, cb) => cb(null, d2cResponses.filterD2cOrders),
+  updateD2COrderNote: (_c, cb) => cb(null, d2cResponses.updateD2cOrderNote),
 };
 
 const techDefaults: Record<string, UnaryHandler> = {

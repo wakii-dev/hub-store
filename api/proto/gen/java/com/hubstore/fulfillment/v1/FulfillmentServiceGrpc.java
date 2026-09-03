@@ -418,6 +418,68 @@ public final class FulfillmentServiceGrpc {
     return getGetDashboardStatsMethod;
   }
 
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.FilterD2cOrdersRequest,
+      com.hubstore.fulfillment.v1.FilterD2cOrdersResponse> getFilterD2cOrdersMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "FilterD2cOrders",
+      requestType = com.hubstore.fulfillment.v1.FilterD2cOrdersRequest.class,
+      responseType = com.hubstore.fulfillment.v1.FilterD2cOrdersResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.FilterD2cOrdersRequest,
+      com.hubstore.fulfillment.v1.FilterD2cOrdersResponse> getFilterD2cOrdersMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.FilterD2cOrdersRequest, com.hubstore.fulfillment.v1.FilterD2cOrdersResponse> getFilterD2cOrdersMethod;
+    if ((getFilterD2cOrdersMethod = FulfillmentServiceGrpc.getFilterD2cOrdersMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getFilterD2cOrdersMethod = FulfillmentServiceGrpc.getFilterD2cOrdersMethod) == null) {
+          FulfillmentServiceGrpc.getFilterD2cOrdersMethod = getFilterD2cOrdersMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.FilterD2cOrdersRequest, com.hubstore.fulfillment.v1.FilterD2cOrdersResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "FilterD2cOrders"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.FilterD2cOrdersRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.FilterD2cOrdersResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("FilterD2cOrders"))
+              .build();
+        }
+      }
+    }
+    return getFilterD2cOrdersMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest,
+      com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse> getUpdateD2cOrderNoteMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "UpdateD2cOrderNote",
+      requestType = com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest.class,
+      responseType = com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest,
+      com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse> getUpdateD2cOrderNoteMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest, com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse> getUpdateD2cOrderNoteMethod;
+    if ((getUpdateD2cOrderNoteMethod = FulfillmentServiceGrpc.getUpdateD2cOrderNoteMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getUpdateD2cOrderNoteMethod = FulfillmentServiceGrpc.getUpdateD2cOrderNoteMethod) == null) {
+          FulfillmentServiceGrpc.getUpdateD2cOrderNoteMethod = getUpdateD2cOrderNoteMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest, com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "UpdateD2cOrderNote"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("UpdateD2cOrderNote"))
+              .build();
+        }
+      }
+    }
+    return getUpdateD2cOrderNoteMethod;
+  }
+
   /**
    * Creates a new async stub that supports all call types for the service
    */
@@ -596,6 +658,26 @@ public final class FulfillmentServiceGrpc {
         io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetDashboardStatsResponse> responseObserver) {
       io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getGetDashboardStatsMethod(), responseObserver);
     }
+
+    /**
+     * <pre>
+     * SF-18: D2C/Dropship list — filter đa chiều + pagination.
+     * </pre>
+     */
+    default void filterD2cOrders(com.hubstore.fulfillment.v1.FilterD2cOrdersRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.FilterD2cOrdersResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getFilterD2cOrdersMethod(), responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
+     * </pre>
+     */
+    default void updateD2cOrderNote(com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getUpdateD2cOrderNoteMethod(), responseObserver);
+    }
   }
 
   /**
@@ -768,6 +850,28 @@ public final class FulfillmentServiceGrpc {
       io.grpc.stub.ClientCalls.asyncUnaryCall(
           getChannel().newCall(getGetDashboardStatsMethod(), getCallOptions()), request, responseObserver);
     }
+
+    /**
+     * <pre>
+     * SF-18: D2C/Dropship list — filter đa chiều + pagination.
+     * </pre>
+     */
+    public void filterD2cOrders(com.hubstore.fulfillment.v1.FilterD2cOrdersRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.FilterD2cOrdersResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getFilterD2cOrdersMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
+     * </pre>
+     */
+    public void updateD2cOrderNote(com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getUpdateD2cOrderNoteMethod(), getCallOptions()), request, responseObserver);
+    }
   }
 
   /**
@@ -915,6 +1019,26 @@ public final class FulfillmentServiceGrpc {
     public com.hubstore.fulfillment.v1.GetDashboardStatsResponse getDashboardStats(com.hubstore.fulfillment.v1.GetDashboardStatsRequest request) {
       return io.grpc.stub.ClientCalls.blockingUnaryCall(
           getChannel(), getGetDashboardStatsMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-18: D2C/Dropship list — filter đa chiều + pagination.
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.FilterD2cOrdersResponse filterD2cOrders(com.hubstore.fulfillment.v1.FilterD2cOrdersRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getFilterD2cOrdersMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse updateD2cOrderNote(com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getUpdateD2cOrderNoteMethod(), getCallOptions(), request);
     }
   }
 
@@ -1077,6 +1201,28 @@ public final class FulfillmentServiceGrpc {
       return io.grpc.stub.ClientCalls.futureUnaryCall(
           getChannel().newCall(getGetDashboardStatsMethod(), getCallOptions()), request);
     }
+
+    /**
+     * <pre>
+     * SF-18: D2C/Dropship list — filter đa chiều + pagination.
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.FilterD2cOrdersResponse> filterD2cOrders(
+        com.hubstore.fulfillment.v1.FilterD2cOrdersRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getFilterD2cOrdersMethod(), getCallOptions()), request);
+    }
+
+    /**
+     * <pre>
+     * SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse> updateD2cOrderNote(
+        com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getUpdateD2cOrderNoteMethod(), getCallOptions()), request);
+    }
   }
 
   private static final int METHODID_FILTER_ORDERS = 0;
@@ -1092,6 +1238,8 @@ public final class FulfillmentServiceGrpc {
   private static final int METHODID_LIST_DISTINCT_SHOPS = 10;
   private static final int METHODID_GET_TIME_DELIVERY = 11;
   private static final int METHODID_GET_DASHBOARD_STATS = 12;
+  private static final int METHODID_FILTER_D2C_ORDERS = 13;
+  private static final int METHODID_UPDATE_D2C_ORDER_NOTE = 14;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -1161,6 +1309,14 @@ public final class FulfillmentServiceGrpc {
         case METHODID_GET_DASHBOARD_STATS:
           serviceImpl.getDashboardStats((com.hubstore.fulfillment.v1.GetDashboardStatsRequest) request,
               (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetDashboardStatsResponse>) responseObserver);
+          break;
+        case METHODID_FILTER_D2C_ORDERS:
+          serviceImpl.filterD2cOrders((com.hubstore.fulfillment.v1.FilterD2cOrdersRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.FilterD2cOrdersResponse>) responseObserver);
+          break;
+        case METHODID_UPDATE_D2C_ORDER_NOTE:
+          serviceImpl.updateD2cOrderNote((com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -1271,6 +1427,20 @@ public final class FulfillmentServiceGrpc {
               com.hubstore.fulfillment.v1.GetDashboardStatsRequest,
               com.hubstore.fulfillment.v1.GetDashboardStatsResponse>(
                 service, METHODID_GET_DASHBOARD_STATS)))
+        .addMethod(
+          getFilterD2cOrdersMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.FilterD2cOrdersRequest,
+              com.hubstore.fulfillment.v1.FilterD2cOrdersResponse>(
+                service, METHODID_FILTER_D2C_ORDERS)))
+        .addMethod(
+          getUpdateD2cOrderNoteMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest,
+              com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse>(
+                service, METHODID_UPDATE_D2C_ORDER_NOTE)))
         .build();
   }
 
@@ -1332,6 +1502,8 @@ public final class FulfillmentServiceGrpc {
               .addMethod(getListDistinctShopsMethod())
               .addMethod(getGetTimeDeliveryMethod())
               .addMethod(getGetDashboardStatsMethod())
+              .addMethod(getFilterD2cOrdersMethod())
+              .addMethod(getUpdateD2cOrderNoteMethod())
               .build();
         }
       }

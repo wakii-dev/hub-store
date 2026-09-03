@@ -1,11 +1,21 @@
 package com.hubstore.fulfillment.service;
 
+import com.google.protobuf.Timestamp;
 import com.hubstore.fulfillment.events.OrderEventPublisher;
 import com.hubstore.fulfillment.seed.SeedModels;
+import com.hubstore.fulfillment.store.D2cFilterResult;
+import com.hubstore.fulfillment.store.D2cOrderFilter;
+import com.hubstore.fulfillment.store.D2cOrderRecord;
+import com.hubstore.fulfillment.store.D2cOrderRepository;
 import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.FilterResult;
 import com.hubstore.fulfillment.store.OrderFilter;
 import com.hubstore.fulfillment.store.OrderRepository;
+import com.hubstore.fulfillment.v1.D2cOrder;
+import com.hubstore.fulfillment.v1.FilterD2cOrdersRequest;
+import com.hubstore.fulfillment.v1.FilterD2cOrdersResponse;
+import com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest;
+import com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse;
 import com.hubstore.fulfillment.v1.AssignShopHubRequest;
 import com.hubstore.fulfillment.v1.AssignShopHubResponse;
 import com.hubstore.fulfillment.v1.BatchOrderCount;
@@ -77,10 +87,13 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
 
     private final OrderRepository repo;
     private final OrderEventPublisher events;
+    private final D2cOrderRepository d2cRepo;
 
-    public FulfillmentServiceImpl(OrderRepository repo, OrderEventPublisher events) {
+    public FulfillmentServiceImpl(OrderRepository repo, OrderEventPublisher events,
+            D2cOrderRepository d2cRepo) {
         this.repo = repo;
         this.events = events;
+        this.d2cRepo = d2cRepo;
     }
 
     // ---------------- D1 list + detail + hydration ----------------
@@ -316,6 +329,63 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
         }
     }
 
+    // ---------------- D2C/Dropship (SF-18, FI-263) ----------------
+
+    /** List + filter đa chiều — normalize paging trong D2cOrderFilter; total từ repo. */
+    @Override
+    public void filterD2cOrders(FilterD2cOrdersRequest request, StreamObserver<FilterD2cOrdersResponse> responseObserver) {
+        try {
+            D2cOrderFilter filter = new D2cOrderFilter(
+                    request.getSearch(),
+                    request.getStatusesList(),
+                    request.getCarriersList(),
+                    request.getShopsList(),
+                    request.getExportEmployeesList(),
+                    request.getProductCategory(),
+                    request.getProductType(),
+                    instantOf(request.hasCreatedFrom(), request.getCreatedFrom()),
+                    instantOf(request.hasCreatedTo(), request.getCreatedTo()),
+                    instantOf(request.hasPushFrom(), request.getPushFrom()),
+                    instantOf(request.hasPushTo(), request.getPushTo()),
+                    request.getPushSlotFrom(),
+                    request.getPushSlotTo(),
+                    request.getPage(),
+                    request.getPageSize());
+            D2cFilterResult result = d2cRepo.filter(filter);
+            FilterD2cOrdersResponse.Builder resp = FilterD2cOrdersResponse.newBuilder()
+                    .setTotal(result.total());
+            result.items().forEach(o -> resp.addItems(toD2cOrder(o)));
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /** Note khóa order_code; không thấy → NOT_FOUND (precedent UpdateNote). */
+    @Override
+    public void updateD2cOrderNote(UpdateD2cOrderNoteRequest request, StreamObserver<UpdateD2cOrderNoteResponse> responseObserver) {
+        try {
+            if (request.getOrderCode().isBlank()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "orderCode", "orderCode bắt buộc.")));
+            }
+            // actor_role chỉ phục vụ audit BFF — repo không dùng (giữ contract proto).
+            D2cOrderRecord updated = d2cRepo.updateNote(request.getOrderCode(), request.getNote())
+                    .orElseThrow(() -> GrpcErrors.notFound("orderCode", request.getOrderCode()));
+            responseObserver.onNext(UpdateD2cOrderNoteResponse.newBuilder()
+                    .setOrder(toD2cOrder(updated))
+                    .build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
     // ---------------- Master data / order-promising ----------------
 
     @Override
@@ -492,6 +562,47 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
 
     private static String orEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    // ---------------- D2C mapping helpers (SF-18) ----------------
+
+    /** proto3 getter trả default instance (không null) — có field → Instant. */
+    private static Instant instantOf(boolean has, Timestamp t) {
+        return has ? Instant.ofEpochSecond(t.getSeconds(), t.getNanos()) : null;
+    }
+
+    private static Timestamp tsOf(Instant i) {
+        return Timestamp.newBuilder().setSeconds(i.getEpochSecond()).setNanos(i.getNano()).build();
+    }
+
+    private static D2cOrder toD2cOrder(D2cOrderRecord o) {
+        D2cOrder.Builder b = D2cOrder.newBuilder()
+                .setOrderCode(orEmpty(o.orderCode()))
+                .setOrderIdInter(orEmpty(o.orderIdInter()))
+                .setDeliveryId(orEmpty(o.deliveryId()))
+                .setCarrier(orEmpty(o.carrier()))
+                .setShop(orEmpty(o.shop()))
+                .setExportEmployee(orEmpty(o.exportEmployee()))
+                .setReceiverName(orEmpty(o.receiverName()))
+                .setReceiverPhone(orEmpty(o.receiverPhone()))
+                .setReceiverAddress(orEmpty(o.receiverAddress()))
+                .setServiceType(orEmpty(o.serviceType()))
+                .setProductCategory(orEmpty(o.productCategory()))
+                .setProductType(orEmpty(o.productType()))
+                .setIsDebtSplitting(o.isDebtSplitting())
+                .setNote(orEmpty(o.note()))
+                .setStatus(orEmpty(o.status()))
+                .setId(o.id());
+        if (o.exportTime() != null) {
+            b.setExportTime(tsOf(o.exportTime()));
+        }
+        if (o.pushTime() != null) {
+            b.setPushTime(tsOf(o.pushTime()));
+        }
+        if (o.createdAt() != null) {
+            b.setCreatedAt(tsOf(o.createdAt()));
+        }
+        return b.build();
     }
 
     private static <E extends Enum<E>> Set<Integer> enumsOf(List<E> values, Class<E> type,

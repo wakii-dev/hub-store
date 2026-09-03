@@ -12,6 +12,12 @@ declare module "orders/D1Page" {
   export default D1Page;
 }
 
+declare module "orders/D2CPage" {
+  import type { ComponentType } from "react";
+  const D2CPage: ComponentType;
+  export default D2CPage;
+}
+
 declare module "fulfillment/BatchListPage" {
   import type { ComponentType } from "react";
   const BatchListPage: ComponentType;

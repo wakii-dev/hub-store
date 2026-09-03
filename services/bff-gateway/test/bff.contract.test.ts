@@ -320,6 +320,16 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     expect(res.json().code).toBe('UNAUTHENTICATED');
   });
 
+  it('WarehouseEmployee (SF-18) nằm trong KNOWN_ROLES → guard cho qua', async () => {
+    const token = await signTestToken('WarehouseEmployee', 'warehouse-emp');
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/master-data/regions',
+      headers: { authorization: `Bearer ${token}` },
+    });
+    expect(res.statusCode).toBe(200);
+  });
+
   it('JWKS refetch khi gặp unknown kid (SF-4): key mới thêm → token verify 200', async () => {
     // Ký bằng keypair-2 CHƯA có trong JWKS → 401 (kid lạ).
     const second = await generateSecondIdentity();

@@ -25,6 +25,7 @@ describe('api singleton', () => {
           { type: 'Fulfillment', id: 'LIST' },
           { type: 'Batches', id: 'LIST' },
           { type: 'MasterData', id: 'SHOPS' },
+          { type: 'D2c', id: 'LIST' }, // SF-18 D2C slice
         ]),
       );
       expect(errorSpy).not.toHaveBeenCalledWith(
@@ -34,7 +35,7 @@ describe('api singleton', () => {
     } finally {
       errorSpy.mockRestore();
     }
-    expect(tagTypes).toEqual(['Fulfillment', 'Batches', 'MasterData']);
+    expect(tagTypes).toEqual(['Fulfillment', 'Batches', 'MasterData', 'D2c']);
   });
 
   it('ships the refetchOnMount:"always" default via the api config (spec §2)', () => {

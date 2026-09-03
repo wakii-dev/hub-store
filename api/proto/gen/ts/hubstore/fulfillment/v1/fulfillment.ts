@@ -18,6 +18,7 @@ import {
   type ServiceError,
   type UntypedServiceImplementation,
 } from "@grpc/grpc-js";
+import { Timestamp } from "../../../google/protobuf/timestamp";
 
 export const protobufPackage = "hubstore.fulfillment.v1";
 
@@ -485,6 +486,66 @@ export interface GetDashboardStatsResponse {
   pendingApproval: number;
   /** Đơn ĐÃ vào phiếu: GROUP BY batch_code (batch_code ≠ ''). */
   ordersPerBatch: BatchOrderCount[];
+}
+
+/** --- SF-18 D2C/Dropship (additive only) --- */
+export interface D2cOrder {
+  orderCode: string;
+  orderIdInter: string;
+  deliveryId: string;
+  carrier: string;
+  shop: string;
+  exportEmployee: string;
+  exportTime: Date | undefined;
+  pushTime: Date | undefined;
+  receiverName: string;
+  receiverPhone: string;
+  receiverAddress: string;
+  serviceType: string;
+  productCategory: string;
+  productType: string;
+  isDebtSplitting: boolean;
+  note: string;
+  status: string;
+  createdAt: Date | undefined;
+  id: number;
+}
+
+export interface FilterD2cOrdersRequest {
+  /** orderCode/deliveryId LIKE */
+  search: string;
+  statuses: string[];
+  carriers: string[];
+  shops: string[];
+  exportEmployees: string[];
+  productCategory: string;
+  productType: string;
+  createdFrom: Date | undefined;
+  createdTo: Date | undefined;
+  pushFrom: Date | undefined;
+  pushTo:
+    | Date
+    | undefined;
+  /** "HH:mm" time-of-day VN */
+  pushSlotFrom: string;
+  pushSlotTo: string;
+  page: number;
+  pageSize: number;
+}
+
+export interface FilterD2cOrdersResponse {
+  items: D2cOrder[];
+  total: number;
+}
+
+export interface UpdateD2cOrderNoteRequest {
+  orderCode: string;
+  note: string;
+  actorRole: string;
+}
+
+export interface UpdateD2cOrderNoteResponse {
+  order: D2cOrder | undefined;
 }
 
 function createBaseTimeRange(): TimeRange {
@@ -3727,6 +3788,904 @@ export const GetDashboardStatsResponse: MessageFns<GetDashboardStatsResponse> = 
   },
 };
 
+function createBaseD2cOrder(): D2cOrder {
+  return {
+    orderCode: "",
+    orderIdInter: "",
+    deliveryId: "",
+    carrier: "",
+    shop: "",
+    exportEmployee: "",
+    exportTime: undefined,
+    pushTime: undefined,
+    receiverName: "",
+    receiverPhone: "",
+    receiverAddress: "",
+    serviceType: "",
+    productCategory: "",
+    productType: "",
+    isDebtSplitting: false,
+    note: "",
+    status: "",
+    createdAt: undefined,
+    id: 0,
+  };
+}
+
+export const D2cOrder: MessageFns<D2cOrder> = {
+  encode(message: D2cOrder, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.orderCode !== "") {
+      writer.uint32(10).string(message.orderCode);
+    }
+    if (message.orderIdInter !== "") {
+      writer.uint32(18).string(message.orderIdInter);
+    }
+    if (message.deliveryId !== "") {
+      writer.uint32(26).string(message.deliveryId);
+    }
+    if (message.carrier !== "") {
+      writer.uint32(34).string(message.carrier);
+    }
+    if (message.shop !== "") {
+      writer.uint32(42).string(message.shop);
+    }
+    if (message.exportEmployee !== "") {
+      writer.uint32(50).string(message.exportEmployee);
+    }
+    if (message.exportTime !== undefined) {
+      Timestamp.encode(toTimestamp(message.exportTime), writer.uint32(58).fork()).join();
+    }
+    if (message.pushTime !== undefined) {
+      Timestamp.encode(toTimestamp(message.pushTime), writer.uint32(66).fork()).join();
+    }
+    if (message.receiverName !== "") {
+      writer.uint32(74).string(message.receiverName);
+    }
+    if (message.receiverPhone !== "") {
+      writer.uint32(82).string(message.receiverPhone);
+    }
+    if (message.receiverAddress !== "") {
+      writer.uint32(90).string(message.receiverAddress);
+    }
+    if (message.serviceType !== "") {
+      writer.uint32(98).string(message.serviceType);
+    }
+    if (message.productCategory !== "") {
+      writer.uint32(106).string(message.productCategory);
+    }
+    if (message.productType !== "") {
+      writer.uint32(114).string(message.productType);
+    }
+    if (message.isDebtSplitting !== false) {
+      writer.uint32(120).bool(message.isDebtSplitting);
+    }
+    if (message.note !== "") {
+      writer.uint32(130).string(message.note);
+    }
+    if (message.status !== "") {
+      writer.uint32(138).string(message.status);
+    }
+    if (message.createdAt !== undefined) {
+      Timestamp.encode(toTimestamp(message.createdAt), writer.uint32(146).fork()).join();
+    }
+    if (message.id !== 0) {
+      writer.uint32(152).int64(message.id);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): D2cOrder {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseD2cOrder();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.orderCode = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.orderIdInter = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.deliveryId = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.carrier = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.shop = reader.string();
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.exportEmployee = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.exportTime = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.pushTime = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.receiverName = reader.string();
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.receiverPhone = reader.string();
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.receiverAddress = reader.string();
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.serviceType = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.productCategory = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 114) {
+            break;
+          }
+
+          message.productType = reader.string();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.isDebtSplitting = reader.bool();
+          continue;
+        }
+        case 16: {
+          if (tag !== 130) {
+            break;
+          }
+
+          message.note = reader.string();
+          continue;
+        }
+        case 17: {
+          if (tag !== 138) {
+            break;
+          }
+
+          message.status = reader.string();
+          continue;
+        }
+        case 18: {
+          if (tag !== 146) {
+            break;
+          }
+
+          message.createdAt = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 19: {
+          if (tag !== 152) {
+            break;
+          }
+
+          message.id = longToNumber(reader.int64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): D2cOrder {
+    return {
+      orderCode: isSet(object.orderCode) ? globalThis.String(object.orderCode) : "",
+      orderIdInter: isSet(object.orderIdInter) ? globalThis.String(object.orderIdInter) : "",
+      deliveryId: isSet(object.deliveryId) ? globalThis.String(object.deliveryId) : "",
+      carrier: isSet(object.carrier) ? globalThis.String(object.carrier) : "",
+      shop: isSet(object.shop) ? globalThis.String(object.shop) : "",
+      exportEmployee: isSet(object.exportEmployee) ? globalThis.String(object.exportEmployee) : "",
+      exportTime: isSet(object.exportTime) ? fromJsonTimestamp(object.exportTime) : undefined,
+      pushTime: isSet(object.pushTime) ? fromJsonTimestamp(object.pushTime) : undefined,
+      receiverName: isSet(object.receiverName) ? globalThis.String(object.receiverName) : "",
+      receiverPhone: isSet(object.receiverPhone) ? globalThis.String(object.receiverPhone) : "",
+      receiverAddress: isSet(object.receiverAddress) ? globalThis.String(object.receiverAddress) : "",
+      serviceType: isSet(object.serviceType) ? globalThis.String(object.serviceType) : "",
+      productCategory: isSet(object.productCategory) ? globalThis.String(object.productCategory) : "",
+      productType: isSet(object.productType) ? globalThis.String(object.productType) : "",
+      isDebtSplitting: isSet(object.isDebtSplitting) ? globalThis.Boolean(object.isDebtSplitting) : false,
+      note: isSet(object.note) ? globalThis.String(object.note) : "",
+      status: isSet(object.status) ? globalThis.String(object.status) : "",
+      createdAt: isSet(object.createdAt) ? fromJsonTimestamp(object.createdAt) : undefined,
+      id: isSet(object.id) ? globalThis.Number(object.id) : 0,
+    };
+  },
+
+  toJSON(message: D2cOrder): unknown {
+    const obj: any = {};
+    if (message.orderCode !== "") {
+      obj.orderCode = message.orderCode;
+    }
+    if (message.orderIdInter !== "") {
+      obj.orderIdInter = message.orderIdInter;
+    }
+    if (message.deliveryId !== "") {
+      obj.deliveryId = message.deliveryId;
+    }
+    if (message.carrier !== "") {
+      obj.carrier = message.carrier;
+    }
+    if (message.shop !== "") {
+      obj.shop = message.shop;
+    }
+    if (message.exportEmployee !== "") {
+      obj.exportEmployee = message.exportEmployee;
+    }
+    if (message.exportTime !== undefined) {
+      obj.exportTime = message.exportTime.toISOString();
+    }
+    if (message.pushTime !== undefined) {
+      obj.pushTime = message.pushTime.toISOString();
+    }
+    if (message.receiverName !== "") {
+      obj.receiverName = message.receiverName;
+    }
+    if (message.receiverPhone !== "") {
+      obj.receiverPhone = message.receiverPhone;
+    }
+    if (message.receiverAddress !== "") {
+      obj.receiverAddress = message.receiverAddress;
+    }
+    if (message.serviceType !== "") {
+      obj.serviceType = message.serviceType;
+    }
+    if (message.productCategory !== "") {
+      obj.productCategory = message.productCategory;
+    }
+    if (message.productType !== "") {
+      obj.productType = message.productType;
+    }
+    if (message.isDebtSplitting !== false) {
+      obj.isDebtSplitting = message.isDebtSplitting;
+    }
+    if (message.note !== "") {
+      obj.note = message.note;
+    }
+    if (message.status !== "") {
+      obj.status = message.status;
+    }
+    if (message.createdAt !== undefined) {
+      obj.createdAt = message.createdAt.toISOString();
+    }
+    if (message.id !== 0) {
+      obj.id = Math.round(message.id);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<D2cOrder>, I>>(base?: I): D2cOrder {
+    return D2cOrder.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<D2cOrder>, I>>(object: I): D2cOrder {
+    const message = createBaseD2cOrder();
+    message.orderCode = object.orderCode ?? "";
+    message.orderIdInter = object.orderIdInter ?? "";
+    message.deliveryId = object.deliveryId ?? "";
+    message.carrier = object.carrier ?? "";
+    message.shop = object.shop ?? "";
+    message.exportEmployee = object.exportEmployee ?? "";
+    message.exportTime = object.exportTime ?? undefined;
+    message.pushTime = object.pushTime ?? undefined;
+    message.receiverName = object.receiverName ?? "";
+    message.receiverPhone = object.receiverPhone ?? "";
+    message.receiverAddress = object.receiverAddress ?? "";
+    message.serviceType = object.serviceType ?? "";
+    message.productCategory = object.productCategory ?? "";
+    message.productType = object.productType ?? "";
+    message.isDebtSplitting = object.isDebtSplitting ?? false;
+    message.note = object.note ?? "";
+    message.status = object.status ?? "";
+    message.createdAt = object.createdAt ?? undefined;
+    message.id = object.id ?? 0;
+    return message;
+  },
+};
+
+function createBaseFilterD2cOrdersRequest(): FilterD2cOrdersRequest {
+  return {
+    search: "",
+    statuses: [],
+    carriers: [],
+    shops: [],
+    exportEmployees: [],
+    productCategory: "",
+    productType: "",
+    createdFrom: undefined,
+    createdTo: undefined,
+    pushFrom: undefined,
+    pushTo: undefined,
+    pushSlotFrom: "",
+    pushSlotTo: "",
+    page: 0,
+    pageSize: 0,
+  };
+}
+
+export const FilterD2cOrdersRequest: MessageFns<FilterD2cOrdersRequest> = {
+  encode(message: FilterD2cOrdersRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.search !== "") {
+      writer.uint32(10).string(message.search);
+    }
+    for (const v of message.statuses) {
+      writer.uint32(18).string(v!);
+    }
+    for (const v of message.carriers) {
+      writer.uint32(26).string(v!);
+    }
+    for (const v of message.shops) {
+      writer.uint32(34).string(v!);
+    }
+    for (const v of message.exportEmployees) {
+      writer.uint32(42).string(v!);
+    }
+    if (message.productCategory !== "") {
+      writer.uint32(50).string(message.productCategory);
+    }
+    if (message.productType !== "") {
+      writer.uint32(58).string(message.productType);
+    }
+    if (message.createdFrom !== undefined) {
+      Timestamp.encode(toTimestamp(message.createdFrom), writer.uint32(66).fork()).join();
+    }
+    if (message.createdTo !== undefined) {
+      Timestamp.encode(toTimestamp(message.createdTo), writer.uint32(74).fork()).join();
+    }
+    if (message.pushFrom !== undefined) {
+      Timestamp.encode(toTimestamp(message.pushFrom), writer.uint32(82).fork()).join();
+    }
+    if (message.pushTo !== undefined) {
+      Timestamp.encode(toTimestamp(message.pushTo), writer.uint32(90).fork()).join();
+    }
+    if (message.pushSlotFrom !== "") {
+      writer.uint32(98).string(message.pushSlotFrom);
+    }
+    if (message.pushSlotTo !== "") {
+      writer.uint32(106).string(message.pushSlotTo);
+    }
+    if (message.page !== 0) {
+      writer.uint32(112).int32(message.page);
+    }
+    if (message.pageSize !== 0) {
+      writer.uint32(120).int32(message.pageSize);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FilterD2cOrdersRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFilterD2cOrdersRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.search = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.statuses.push(reader.string());
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.carriers.push(reader.string());
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.shops.push(reader.string());
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.exportEmployees.push(reader.string());
+          continue;
+        }
+        case 6: {
+          if (tag !== 50) {
+            break;
+          }
+
+          message.productCategory = reader.string();
+          continue;
+        }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.productType = reader.string();
+          continue;
+        }
+        case 8: {
+          if (tag !== 66) {
+            break;
+          }
+
+          message.createdFrom = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 9: {
+          if (tag !== 74) {
+            break;
+          }
+
+          message.createdTo = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 10: {
+          if (tag !== 82) {
+            break;
+          }
+
+          message.pushFrom = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 11: {
+          if (tag !== 90) {
+            break;
+          }
+
+          message.pushTo = fromTimestamp(Timestamp.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 12: {
+          if (tag !== 98) {
+            break;
+          }
+
+          message.pushSlotFrom = reader.string();
+          continue;
+        }
+        case 13: {
+          if (tag !== 106) {
+            break;
+          }
+
+          message.pushSlotTo = reader.string();
+          continue;
+        }
+        case 14: {
+          if (tag !== 112) {
+            break;
+          }
+
+          message.page = reader.int32();
+          continue;
+        }
+        case 15: {
+          if (tag !== 120) {
+            break;
+          }
+
+          message.pageSize = reader.int32();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FilterD2cOrdersRequest {
+    return {
+      search: isSet(object.search) ? globalThis.String(object.search) : "",
+      statuses: globalThis.Array.isArray(object?.statuses) ? object.statuses.map((e: any) => globalThis.String(e)) : [],
+      carriers: globalThis.Array.isArray(object?.carriers) ? object.carriers.map((e: any) => globalThis.String(e)) : [],
+      shops: globalThis.Array.isArray(object?.shops) ? object.shops.map((e: any) => globalThis.String(e)) : [],
+      exportEmployees: globalThis.Array.isArray(object?.exportEmployees)
+        ? object.exportEmployees.map((e: any) => globalThis.String(e))
+        : [],
+      productCategory: isSet(object.productCategory) ? globalThis.String(object.productCategory) : "",
+      productType: isSet(object.productType) ? globalThis.String(object.productType) : "",
+      createdFrom: isSet(object.createdFrom) ? fromJsonTimestamp(object.createdFrom) : undefined,
+      createdTo: isSet(object.createdTo) ? fromJsonTimestamp(object.createdTo) : undefined,
+      pushFrom: isSet(object.pushFrom) ? fromJsonTimestamp(object.pushFrom) : undefined,
+      pushTo: isSet(object.pushTo) ? fromJsonTimestamp(object.pushTo) : undefined,
+      pushSlotFrom: isSet(object.pushSlotFrom) ? globalThis.String(object.pushSlotFrom) : "",
+      pushSlotTo: isSet(object.pushSlotTo) ? globalThis.String(object.pushSlotTo) : "",
+      page: isSet(object.page) ? globalThis.Number(object.page) : 0,
+      pageSize: isSet(object.pageSize) ? globalThis.Number(object.pageSize) : 0,
+    };
+  },
+
+  toJSON(message: FilterD2cOrdersRequest): unknown {
+    const obj: any = {};
+    if (message.search !== "") {
+      obj.search = message.search;
+    }
+    if (message.statuses?.length) {
+      obj.statuses = message.statuses;
+    }
+    if (message.carriers?.length) {
+      obj.carriers = message.carriers;
+    }
+    if (message.shops?.length) {
+      obj.shops = message.shops;
+    }
+    if (message.exportEmployees?.length) {
+      obj.exportEmployees = message.exportEmployees;
+    }
+    if (message.productCategory !== "") {
+      obj.productCategory = message.productCategory;
+    }
+    if (message.productType !== "") {
+      obj.productType = message.productType;
+    }
+    if (message.createdFrom !== undefined) {
+      obj.createdFrom = message.createdFrom.toISOString();
+    }
+    if (message.createdTo !== undefined) {
+      obj.createdTo = message.createdTo.toISOString();
+    }
+    if (message.pushFrom !== undefined) {
+      obj.pushFrom = message.pushFrom.toISOString();
+    }
+    if (message.pushTo !== undefined) {
+      obj.pushTo = message.pushTo.toISOString();
+    }
+    if (message.pushSlotFrom !== "") {
+      obj.pushSlotFrom = message.pushSlotFrom;
+    }
+    if (message.pushSlotTo !== "") {
+      obj.pushSlotTo = message.pushSlotTo;
+    }
+    if (message.page !== 0) {
+      obj.page = Math.round(message.page);
+    }
+    if (message.pageSize !== 0) {
+      obj.pageSize = Math.round(message.pageSize);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<FilterD2cOrdersRequest>, I>>(base?: I): FilterD2cOrdersRequest {
+    return FilterD2cOrdersRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<FilterD2cOrdersRequest>, I>>(object: I): FilterD2cOrdersRequest {
+    const message = createBaseFilterD2cOrdersRequest();
+    message.search = object.search ?? "";
+    message.statuses = object.statuses?.map((e) => e) || [];
+    message.carriers = object.carriers?.map((e) => e) || [];
+    message.shops = object.shops?.map((e) => e) || [];
+    message.exportEmployees = object.exportEmployees?.map((e) => e) || [];
+    message.productCategory = object.productCategory ?? "";
+    message.productType = object.productType ?? "";
+    message.createdFrom = object.createdFrom ?? undefined;
+    message.createdTo = object.createdTo ?? undefined;
+    message.pushFrom = object.pushFrom ?? undefined;
+    message.pushTo = object.pushTo ?? undefined;
+    message.pushSlotFrom = object.pushSlotFrom ?? "";
+    message.pushSlotTo = object.pushSlotTo ?? "";
+    message.page = object.page ?? 0;
+    message.pageSize = object.pageSize ?? 0;
+    return message;
+  },
+};
+
+function createBaseFilterD2cOrdersResponse(): FilterD2cOrdersResponse {
+  return { items: [], total: 0 };
+}
+
+export const FilterD2cOrdersResponse: MessageFns<FilterD2cOrdersResponse> = {
+  encode(message: FilterD2cOrdersResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.items) {
+      D2cOrder.encode(v!, writer.uint32(10).fork()).join();
+    }
+    if (message.total !== 0) {
+      writer.uint32(16).int64(message.total);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): FilterD2cOrdersResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseFilterD2cOrdersResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.items.push(D2cOrder.decode(reader, reader.uint32()));
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.total = longToNumber(reader.int64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): FilterD2cOrdersResponse {
+    return {
+      items: globalThis.Array.isArray(object?.items) ? object.items.map((e: any) => D2cOrder.fromJSON(e)) : [],
+      total: isSet(object.total) ? globalThis.Number(object.total) : 0,
+    };
+  },
+
+  toJSON(message: FilterD2cOrdersResponse): unknown {
+    const obj: any = {};
+    if (message.items?.length) {
+      obj.items = message.items.map((e) => D2cOrder.toJSON(e));
+    }
+    if (message.total !== 0) {
+      obj.total = Math.round(message.total);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<FilterD2cOrdersResponse>, I>>(base?: I): FilterD2cOrdersResponse {
+    return FilterD2cOrdersResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<FilterD2cOrdersResponse>, I>>(object: I): FilterD2cOrdersResponse {
+    const message = createBaseFilterD2cOrdersResponse();
+    message.items = object.items?.map((e) => D2cOrder.fromPartial(e)) || [];
+    message.total = object.total ?? 0;
+    return message;
+  },
+};
+
+function createBaseUpdateD2cOrderNoteRequest(): UpdateD2cOrderNoteRequest {
+  return { orderCode: "", note: "", actorRole: "" };
+}
+
+export const UpdateD2cOrderNoteRequest: MessageFns<UpdateD2cOrderNoteRequest> = {
+  encode(message: UpdateD2cOrderNoteRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.orderCode !== "") {
+      writer.uint32(10).string(message.orderCode);
+    }
+    if (message.note !== "") {
+      writer.uint32(18).string(message.note);
+    }
+    if (message.actorRole !== "") {
+      writer.uint32(26).string(message.actorRole);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UpdateD2cOrderNoteRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUpdateD2cOrderNoteRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.orderCode = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.note = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.actorRole = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UpdateD2cOrderNoteRequest {
+    return {
+      orderCode: isSet(object.orderCode) ? globalThis.String(object.orderCode) : "",
+      note: isSet(object.note) ? globalThis.String(object.note) : "",
+      actorRole: isSet(object.actorRole) ? globalThis.String(object.actorRole) : "",
+    };
+  },
+
+  toJSON(message: UpdateD2cOrderNoteRequest): unknown {
+    const obj: any = {};
+    if (message.orderCode !== "") {
+      obj.orderCode = message.orderCode;
+    }
+    if (message.note !== "") {
+      obj.note = message.note;
+    }
+    if (message.actorRole !== "") {
+      obj.actorRole = message.actorRole;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<UpdateD2cOrderNoteRequest>, I>>(base?: I): UpdateD2cOrderNoteRequest {
+    return UpdateD2cOrderNoteRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<UpdateD2cOrderNoteRequest>, I>>(object: I): UpdateD2cOrderNoteRequest {
+    const message = createBaseUpdateD2cOrderNoteRequest();
+    message.orderCode = object.orderCode ?? "";
+    message.note = object.note ?? "";
+    message.actorRole = object.actorRole ?? "";
+    return message;
+  },
+};
+
+function createBaseUpdateD2cOrderNoteResponse(): UpdateD2cOrderNoteResponse {
+  return { order: undefined };
+}
+
+export const UpdateD2cOrderNoteResponse: MessageFns<UpdateD2cOrderNoteResponse> = {
+  encode(message: UpdateD2cOrderNoteResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.order !== undefined) {
+      D2cOrder.encode(message.order, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): UpdateD2cOrderNoteResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseUpdateD2cOrderNoteResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.order = D2cOrder.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): UpdateD2cOrderNoteResponse {
+    return { order: isSet(object.order) ? D2cOrder.fromJSON(object.order) : undefined };
+  },
+
+  toJSON(message: UpdateD2cOrderNoteResponse): unknown {
+    const obj: any = {};
+    if (message.order !== undefined) {
+      obj.order = D2cOrder.toJSON(message.order);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<UpdateD2cOrderNoteResponse>, I>>(base?: I): UpdateD2cOrderNoteResponse {
+    return UpdateD2cOrderNoteResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<UpdateD2cOrderNoteResponse>, I>>(object: I): UpdateD2cOrderNoteResponse {
+    const message = createBaseUpdateD2cOrderNoteResponse();
+    message.order = (object.order !== undefined && object.order !== null)
+      ? D2cOrder.fromPartial(object.order)
+      : undefined;
+    return message;
+  },
+};
+
 export type FulfillmentServiceService = typeof FulfillmentServiceService;
 export const FulfillmentServiceService = {
   /** D1 list — filter + pagination. exclude_fulfill_codes = extension pin v1. */
@@ -3882,6 +4841,30 @@ export const FulfillmentServiceService = {
       Buffer.from(GetDashboardStatsResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): GetDashboardStatsResponse => GetDashboardStatsResponse.decode(value),
   },
+  /** SF-18: D2C/Dropship list — filter đa chiều + pagination. */
+  filterD2COrders: {
+    path: "/hubstore.fulfillment.v1.FulfillmentService/FilterD2cOrders",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: FilterD2cOrdersRequest): Buffer =>
+      Buffer.from(FilterD2cOrdersRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): FilterD2cOrdersRequest => FilterD2cOrdersRequest.decode(value),
+    responseSerialize: (value: FilterD2cOrdersResponse): Buffer =>
+      Buffer.from(FilterD2cOrdersResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): FilterD2cOrdersResponse => FilterD2cOrdersResponse.decode(value),
+  },
+  /** SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code. */
+  updateD2COrderNote: {
+    path: "/hubstore.fulfillment.v1.FulfillmentService/UpdateD2cOrderNote",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: UpdateD2cOrderNoteRequest): Buffer =>
+      Buffer.from(UpdateD2cOrderNoteRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): UpdateD2cOrderNoteRequest => UpdateD2cOrderNoteRequest.decode(value),
+    responseSerialize: (value: UpdateD2cOrderNoteResponse): Buffer =>
+      Buffer.from(UpdateD2cOrderNoteResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): UpdateD2cOrderNoteResponse => UpdateD2cOrderNoteResponse.decode(value),
+  },
 } as const;
 
 export interface FulfillmentServiceServer extends UntypedServiceImplementation {
@@ -3914,6 +4897,10 @@ export interface FulfillmentServiceServer extends UntypedServiceImplementation {
   getTimeDelivery: handleUnaryCall<GetTimeDeliveryRequest, GetTimeDeliveryResponse>;
   /** GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay. */
   getDashboardStats: handleUnaryCall<GetDashboardStatsRequest, GetDashboardStatsResponse>;
+  /** SF-18: D2C/Dropship list — filter đa chiều + pagination. */
+  filterD2COrders: handleUnaryCall<FilterD2cOrdersRequest, FilterD2cOrdersResponse>;
+  /** SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code. */
+  updateD2COrderNote: handleUnaryCall<UpdateD2cOrderNoteRequest, UpdateD2cOrderNoteResponse>;
 }
 
 export interface FulfillmentServiceClient extends Client {
@@ -4128,6 +5115,38 @@ export interface FulfillmentServiceClient extends Client {
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: GetDashboardStatsResponse) => void,
   ): ClientUnaryCall;
+  /** SF-18: D2C/Dropship list — filter đa chiều + pagination. */
+  filterD2COrders(
+    request: FilterD2cOrdersRequest,
+    callback: (error: ServiceError | null, response: FilterD2cOrdersResponse) => void,
+  ): ClientUnaryCall;
+  filterD2COrders(
+    request: FilterD2cOrdersRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: FilterD2cOrdersResponse) => void,
+  ): ClientUnaryCall;
+  filterD2COrders(
+    request: FilterD2cOrdersRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: FilterD2cOrdersResponse) => void,
+  ): ClientUnaryCall;
+  /** SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code. */
+  updateD2COrderNote(
+    request: UpdateD2cOrderNoteRequest,
+    callback: (error: ServiceError | null, response: UpdateD2cOrderNoteResponse) => void,
+  ): ClientUnaryCall;
+  updateD2COrderNote(
+    request: UpdateD2cOrderNoteRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: UpdateD2cOrderNoteResponse) => void,
+  ): ClientUnaryCall;
+  updateD2COrderNote(
+    request: UpdateD2cOrderNoteRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: UpdateD2cOrderNoteResponse) => void,
+  ): ClientUnaryCall;
 }
 
 export const FulfillmentServiceClient = makeGenericClientConstructor(
@@ -4150,6 +5169,28 @@ export type DeepPartial<T> = T extends Builtin ? T
 type KeysOfUnion<T> = T extends T ? keyof T : never;
 export type Exact<P, I extends P> = P extends Builtin ? P
   : P & { [K in keyof P]: Exact<P[K], I[K]> } & { [K in Exclude<keyof I, KeysOfUnion<P>>]: never };
+
+function toTimestamp(date: Date): Timestamp {
+  const seconds = Math.trunc(date.getTime() / 1_000);
+  const nanos = (date.getTime() % 1_000) * 1_000_000;
+  return { seconds, nanos };
+}
+
+function fromTimestamp(t: Timestamp): Date {
+  let millis = (t.seconds || 0) * 1_000;
+  millis += (t.nanos || 0) / 1_000_000;
+  return new globalThis.Date(millis);
+}
+
+function fromJsonTimestamp(o: any): Date {
+  if (o instanceof globalThis.Date) {
+    return o;
+  } else if (typeof o === "string") {
+    return new globalThis.Date(o);
+  } else {
+    return fromTimestamp(Timestamp.fromJSON(o));
+  }
+}
 
 function longToNumber(int64: { toString(): string }): number {
   const num = globalThis.Number(int64.toString());

@@ -2,7 +2,8 @@
   "orders": {
     "url": "http://localhost:3001/remoteEntry.js",
     "exposes": {
-      "D1Page": "./D1Page"
+      "D1Page": "./D1Page",
+      "D2CPage": "./D2CPage"
     }
   },
   "fulfillment": {

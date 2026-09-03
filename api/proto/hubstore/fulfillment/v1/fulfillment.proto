@@ -6,6 +6,8 @@ option go_package = "hubstore/gen/go/hubstore/fulfillment/v1;fulfillmentv1";
 option java_multiple_files = true;
 option java_package = "com.hubstore.fulfillment.v1";
 
+import "google/protobuf/timestamp.proto"; // SF-18 D2C (additive)
+
 // ============================================================================
 // Envelope convention (SF-2 contract decision, spec §3.1/§3.2):
 // - NO shared wrapper response message. Every RPC owns its own
@@ -188,6 +190,10 @@ service FulfillmentService {
   rpc GetTimeDelivery(GetTimeDeliveryRequest) returns (GetTimeDeliveryResponse);
   // GET /fulfillment/dashboard-stats (SF-9) — aggregate 30 ngày + hôm nay.
   rpc GetDashboardStats(GetDashboardStatsRequest) returns (GetDashboardStatsResponse);
+  // SF-18: D2C/Dropship list — filter đa chiều + pagination.
+  rpc FilterD2cOrders(FilterD2cOrdersRequest) returns (FilterD2cOrdersResponse);
+  // SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
+  rpc UpdateD2cOrderNote(UpdateD2cOrderNoteRequest) returns (UpdateD2cOrderNoteResponse);
 }
 
 // --- Filter ---
@@ -365,4 +371,59 @@ message GetDashboardStatsResponse {
   int32 pending_approval = 3;
   // Đơn ĐÃ vào phiếu: GROUP BY batch_code (batch_code ≠ '').
   repeated BatchOrderCount orders_per_batch = 4;
+}
+
+// --- SF-18 D2C/Dropship (additive only) ---
+message D2cOrder {
+  string order_code = 1;
+  string order_id_inter = 2;
+  string delivery_id = 3;
+  string carrier = 4;
+  string shop = 5;
+  string export_employee = 6;
+  google.protobuf.Timestamp export_time = 7;
+  google.protobuf.Timestamp push_time = 8;
+  string receiver_name = 9;
+  string receiver_phone = 10;
+  string receiver_address = 11;
+  string service_type = 12;
+  string product_category = 13;
+  string product_type = 14;
+  bool is_debt_splitting = 15;
+  string note = 16;
+  string status = 17;
+  google.protobuf.Timestamp created_at = 18;
+  int64 id = 19;
+}
+
+message FilterD2cOrdersRequest {
+  string search = 1;                 // orderCode/deliveryId LIKE
+  repeated string statuses = 2;
+  repeated string carriers = 3;
+  repeated string shops = 4;
+  repeated string export_employees = 5;
+  string product_category = 6;
+  string product_type = 7;
+  google.protobuf.Timestamp created_from = 8;
+  google.protobuf.Timestamp created_to = 9;
+  google.protobuf.Timestamp push_from = 10;
+  google.protobuf.Timestamp push_to = 11;
+  string push_slot_from = 12;        // "HH:mm" time-of-day VN
+  string push_slot_to = 13;
+  int32 page = 14;
+  int32 page_size = 15;
+}
+
+message FilterD2cOrdersResponse {
+  repeated D2cOrder items = 1;
+  int64 total = 2;
+}
+
+message UpdateD2cOrderNoteRequest {
+  string order_code = 1;
+  string note = 2;
+  string actor_role = 3;
+}
+message UpdateD2cOrderNoteResponse {
+  D2cOrder order = 1;
 }

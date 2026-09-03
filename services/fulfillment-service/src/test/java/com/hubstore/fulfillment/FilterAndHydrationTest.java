@@ -55,7 +55,8 @@ class FilterAndHydrationTest {
         seed = SeedLoader.load(Path.of("../../api/seed/canonical-seed.json"));
         repo = new InMemoryOrderRepository(seed);
         publisher = new RecordingEventPublisher();
-        service = new FulfillmentServiceImpl(repo, publisher);
+        service = new FulfillmentServiceImpl(repo, publisher,
+                new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()));
     }
 
     private FilterOrdersResponse filter(FilterOrdersRequest.Builder req) {

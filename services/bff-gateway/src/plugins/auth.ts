@@ -2,7 +2,8 @@
  * OIDC guard (SF-4): verify Keycloak access token bằng JWKS RS256 (jose
  * createRemoteJWKSet — TỰ REFETCH khi gặp unknown kid). issuer/audience từ
  * BffOidcConfig (config.ts derive /realms/hubstore). Role lấy từ claim
- * `realm_access.roles` ∩ KNOWN_ROLES (Coordinator/WarehouseOps/Manager) →
+ * `realm_access.roles` ∩ KNOWN_ROLES (Coordinator/WarehouseOps/Manager/
+ * WarehouseEmployee) →
  * request.user; gRPC calls truyền metadata { x-user-role: role } — services
  * KHÔNG đổi (vẫn tin BFF, zero-trust s2s = M-3 out-of-scope).
  *
@@ -15,8 +16,15 @@ import type { ErrorEnvelope } from '@hub-store/shared';
 import type { BffOidcConfig } from '../config.js';
 
 /** Roles mà app nhận — khớp role matrix shell (nav.ts / PERMISSION_MATRIX).
- *  Admin (SF-17): role write của StaffArea — gate per-route qua requireRole. */
-export const KNOWN_ROLES = ['Coordinator', 'WarehouseOps', 'Manager', 'Admin'] as const;
+ *  Admin (SF-17): role write của StaffArea — gate per-route qua requireRole.
+ *  WarehouseEmployee (SF-18): role D2C consumer-trực-tiếp. */
+export const KNOWN_ROLES = [
+  'Coordinator',
+  'WarehouseOps',
+  'Manager',
+  'Admin',
+  'WarehouseEmployee',
+] as const;
 
 export interface RequestUser {
   sub: string;

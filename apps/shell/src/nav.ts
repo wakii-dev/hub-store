@@ -20,6 +20,9 @@ export const NAV_ROUTES: NavRoute[] = [
   { path: '/hub-store-order/tech', labelKey: 'nav.tech', permission: 'orders.view' },
   { path: '/users', labelKey: 'nav.users', permission: 'users.manage' }, // SF-8 — append CUỐI (NAV_ROUTES[2] là fallback hardcode)
   { path: '/area-staff', labelKey: 'nav.areaStaff', permission: 'areastaff.view' },
+  // SF-18 — đặt CUỐI mảng: firstPathForRole lấy entry ĐẦU TIÊN role được phép,
+  // d2c cuối để không đổi landing path của Coordinator/Manager/WarehouseOps.
+  { path: '/hub-store-order/d2c', labelKey: 'nav.d2c', permission: 'd2c.view' },
 ];
 
 // Fallback theo permission (KHÔNG hard-code index — mảng có thể thêm entry đầu).
@@ -29,7 +32,8 @@ const FALLBACK_ROUTE = NAV_ROUTES.find((item) => item.permission === 'fulfillmen
 export function firstPathForRole(role: Role): string {
   const perms = PERMISSION_MATRIX[role] as readonly Permission[];
   const first = NAV_ROUTES.find((item) => perms.includes(item.permission));
-  // Mọi role đều có fulfillment.print → không bao giờ rơi vào đây.
+  // WarehouseEmployee → /hub-store-order/d2c; còn lại đều có fulfillment.print
+  // → không bao giờ rơi vào FALLBACK.
   return first?.path ?? FALLBACK_ROUTE.path;
 }
 

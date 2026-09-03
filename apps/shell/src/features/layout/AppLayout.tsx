@@ -10,6 +10,7 @@ import {
   ToolOutlined,
   TeamOutlined,
   EnvironmentOutlined,
+  SendOutlined,
   LogoutOutlined,
 } from '@ant-design/icons';
 import { DESIGN_TOKENS, usePermissions, sharedCssVariables } from '@hub-store/shared';
@@ -29,6 +30,7 @@ const NAV_ICONS: Record<string, ReactNode> = {
   '/hub-store-order/tech': <ToolOutlined />,
   '/users': <TeamOutlined />,
   '/area-staff': <EnvironmentOutlined />,
+  '/hub-store-order/d2c': <SendOutlined />,
 };
 
 /** Logo gradient cam — hand-off §2.1 (34×34 header, 36×36 rail). */

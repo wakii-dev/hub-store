@@ -103,6 +103,16 @@ class FulfillmentServiceStub:
                 request_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsRequest.SerializeToString,
                 response_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsResponse.FromString,
                 _registered_method=True)
+        self.FilterD2cOrders = channel.unary_unary(
+                '/hubstore.fulfillment.v1.FulfillmentService/FilterD2cOrders',
+                request_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.FilterD2cOrdersRequest.SerializeToString,
+                response_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.FilterD2cOrdersResponse.FromString,
+                _registered_method=True)
+        self.UpdateD2cOrderNote = channel.unary_unary(
+                '/hubstore.fulfillment.v1.FulfillmentService/UpdateD2cOrderNote',
+                request_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.UpdateD2cOrderNoteRequest.SerializeToString,
+                response_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.UpdateD2cOrderNoteResponse.FromString,
+                _registered_method=True)
 
 
 class FulfillmentServiceServicer:
@@ -204,6 +214,20 @@ class FulfillmentServiceServicer:
         context.set_details('Method not implemented!')
         raise NotImplementedError('Method not implemented!')
 
+    def FilterD2cOrders(self, request, context):
+        """SF-18: D2C/Dropship list — filter đa chiều + pagination.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
+    def UpdateD2cOrderNote(self, request, context):
+        """SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
+        """
+        context.set_code(grpc.StatusCode.UNIMPLEMENTED)
+        context.set_details('Method not implemented!')
+        raise NotImplementedError('Method not implemented!')
+
 
 def add_FulfillmentServiceServicer_to_server(servicer, server):
     rpc_method_handlers = {
@@ -271,6 +295,16 @@ def add_FulfillmentServiceServicer_to_server(servicer, server):
                     servicer.GetDashboardStats,
                     request_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsRequest.FromString,
                     response_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsResponse.SerializeToString,
+            ),
+            'FilterD2cOrders': grpc.unary_unary_rpc_method_handler(
+                    servicer.FilterD2cOrders,
+                    request_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.FilterD2cOrdersRequest.FromString,
+                    response_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.FilterD2cOrdersResponse.SerializeToString,
+            ),
+            'UpdateD2cOrderNote': grpc.unary_unary_rpc_method_handler(
+                    servicer.UpdateD2cOrderNote,
+                    request_deserializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.UpdateD2cOrderNoteRequest.FromString,
+                    response_serializer=hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.UpdateD2cOrderNoteResponse.SerializeToString,
             ),
     }
     generic_handler = grpc.method_handlers_generic_handler(
@@ -628,6 +662,60 @@ class FulfillmentService:
             '/hubstore.fulfillment.v1.FulfillmentService/GetDashboardStats',
             hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsRequest.SerializeToString,
             hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.GetDashboardStatsResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def FilterD2cOrders(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hubstore.fulfillment.v1.FulfillmentService/FilterD2cOrders',
+            hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.FilterD2cOrdersRequest.SerializeToString,
+            hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.FilterD2cOrdersResponse.FromString,
+            options,
+            channel_credentials,
+            insecure,
+            call_credentials,
+            compression,
+            wait_for_ready,
+            timeout,
+            metadata,
+            _registered_method=True)
+
+    @staticmethod
+    def UpdateD2cOrderNote(request,
+            target,
+            options=(),
+            channel_credentials=None,
+            call_credentials=None,
+            insecure=False,
+            compression=None,
+            wait_for_ready=None,
+            timeout=None,
+            metadata=None):
+        return grpc.experimental.unary_unary(
+            request,
+            target,
+            '/hubstore.fulfillment.v1.FulfillmentService/UpdateD2cOrderNote',
+            hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.UpdateD2cOrderNoteRequest.SerializeToString,
+            hubstore_dot_fulfillment_dot_v1_dot_fulfillment__pb2.UpdateD2cOrderNoteResponse.FromString,
             options,
             channel_credentials,
             insecure,

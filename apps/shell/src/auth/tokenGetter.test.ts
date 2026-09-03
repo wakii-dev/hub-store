@@ -71,6 +71,8 @@ describe('mapRole — realm_access.roles ∩ KNOWN ROLES', () => {
   it('lấy role đầu tiên khớp role matrix', () => {
     expect(mapRole({ realm_access: { roles: ['default-roles-hubstore', 'Manager', 'Coordinator'] } })).toBe('Manager');
     expect(mapRole({ realm_access: { roles: ['Coordinator'] } })).toBe('Coordinator');
+    // SF-18: WarehouseEmployee mới — map được như các role cũ.
+    expect(mapRole({ realm_access: { roles: ['WarehouseEmployee'] } })).toBe('WarehouseEmployee');
     expect(mapRole({ realm_access: { roles: ['default-roles-hubstore'] } })).toBeNull();
     expect(mapRole(null)).toBeNull();
   });

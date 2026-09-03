@@ -4,6 +4,8 @@
 # Đọc api/seed/canonical-seed.json (GIỮ NGUYÊN) → nạp:
 #   DB fulfillment : orders, shop_assignment_history, regions, delivery_staff (theo SeedModels.java)
 #   DB batching    : batches, batch_items (theo seed struct Go store.go)
+# Đọc api/seed/d2c-sample.json (SEED_D2C_JSON, SF-18 FI-263) → nạp:
+#   DB fulfillment : d2c_orders
 #
 # Idempotent theo EMPTINESS-GATE: DB rỗng → nạp; có data → KHÔNG đụng (KHÔNG upsert).
 # Seed file đổi sau này = reset thủ công (bash scripts/reset-db.sh).
@@ -270,4 +272,49 @@ FROM jsonb_array_elements(:'tech_json'::jsonb->'installationOrders') AS i;
 SQL
 fi
 
-echo "seed-db: HOÀN TẤT (fulfillment + batching + tech). Emptiness-gate: KHÔNG upsert — seed file đổi thì bash scripts/reset-db.sh."
+# --- SF-18 (FI-263): D2C/Dropship orders — seed file riêng, cùng pattern emptiness-gate ---
+SEED_D2C_JSON="${SEED_D2C_JSON:-$ROOT/api/seed/d2c-sample.json}"
+[[ -f "$SEED_D2C_JSON" ]] || { echo "ERROR: không thấy seed file: $SEED_D2C_JSON" >&2; exit 1; }
+
+echo "seed-db: nạp DB fulfillment D2C ← $(basename "$SEED_D2C_JSON") ..."
+psql_cmd -d fulfillment -v ON_ERROR_STOP=1 -v d2c_json="$(cat "$SEED_D2C_JSON")" <<'SQL'
+SELECT to_regclass('public.d2c_orders') IS NULL AS missing \gset
+\if :missing
+DO $err$ BEGIN
+  RAISE EXCEPTION 'fulfillment: thiếu bảng seed (d2c_orders) — chạy migration trước (V7)';
+END $err$;
+\endif
+SELECT EXISTS (SELECT 1 FROM public.d2c_orders) AS has_data \gset
+\if :has_data
+\echo 'd2c_orders đã có data — BỎ QUA nạp (emptiness-gate, không upsert)'
+\else
+INSERT INTO public.d2c_orders (
+  order_code, order_id_inter, delivery_id, carrier, shop, export_employee,
+  export_time, push_time, receiver_name, receiver_phone, receiver_address,
+  service_type, product_category, product_type, is_debt_splitting,
+  note, status, created_at)
+SELECT
+  d->>'orderCode',
+  d->>'orderIdInter',
+  d->>'deliveryId',
+  d->>'carrier',
+  d->>'shop',
+  d->>'exportEmployee',
+  (d->>'exportTime')::timestamptz,
+  (d->>'pushTime')::timestamptz,
+  d->>'receiverName',
+  d->>'receiverPhone',
+  d->>'receiverAddress',
+  d->>'serviceType',
+  d->>'productCategory',
+  d->>'productType',
+  COALESCE((d->>'isDebtSplitting')::boolean, FALSE),
+  d->>'note',
+  d->>'status',
+  (d->>'createdAt')::timestamptz
+FROM jsonb_array_elements(:'d2c_json'::jsonb->'d2cOrders') AS d;
+\echo 'd2c_orders: seeded D2C orders'
+\endif
+SQL
+
+echo "seed-db: HOÀN TẤT (fulfillment + batching + tech + d2c). Emptiness-gate: KHÔNG upsert — seed file đổi thì bash scripts/reset-db.sh."

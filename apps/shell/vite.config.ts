@@ -84,6 +84,7 @@ export default defineConfig({
     alias: {
       "orders/DashboardPage": resolve(configDir, "src/testing/unavailableRemote.ts"),
       "orders/D1Page": resolve(configDir, "src/testing/unavailableRemote.ts"),
+      "orders/D2CPage": resolve(configDir, "src/testing/unavailableRemote.ts"),
       "fulfillment/BatchListPage": resolve(configDir, "src/testing/unavailableRemote.ts"),
       "fulfillment/PrintPage": resolve(configDir, "src/testing/unavailableRemote.ts"),
     },

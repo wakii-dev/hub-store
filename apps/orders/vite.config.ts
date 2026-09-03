@@ -34,6 +34,7 @@ export default defineConfig({
       exposes: {
         "./D1Page": "./src/pages/D1Page.tsx",
         "./DashboardPage": "./src/pages/DashboardPage.tsx",
+        "./D2CPage": "./src/pages/D2CPage.tsx",
       },
       shared: mfShared,
     }),
