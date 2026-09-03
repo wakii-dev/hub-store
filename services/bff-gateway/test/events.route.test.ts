@@ -60,6 +60,8 @@ function buildTestApp(): FastifyInstance {
     },
     devResetPassword: false,
     kafka: { enabled: false, bootstrapServers: 'localhost:9092' },
+    webhookHmacSecret: '', // SF-26 — test auth/events không chạm webhook
+    webhookMapping: '',
   };
   return buildApp(config);
 }

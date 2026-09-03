@@ -86,6 +86,13 @@ export interface BffConfig {
   kafka: BffKafkaConfig;
   /** SF-23 — OneSignal REST push (dual-mode). */
   onesignal: BffOnesignalConfig;
+  /** SF-26 — HMAC secret cho webhook sàn (rỗng → 503 fail-closed). */
+  webhookHmacSecret: string;
+  /**
+   * SF-26 — raw WEBHOOK_MAPPING env (JSON flat rename map canonical→payload
+   * field). Parse ở lib/webhook-mapping (Task 4) — invalid JSON → warn + default.
+   */
+  webhookMapping: string;
 }
 
 export interface BffOnesignalConfig {
@@ -179,5 +186,8 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       restApiKey: env.ONESIGNAL_REST_API_KEY ?? '',
       appId: env.ONESIGNAL_APP_ID ?? '',
     },
+    // SF-26 — webhook sàn (FI-271): secret rỗng → verifyHmac 503 fail-closed.
+    webhookHmacSecret: env.WEBHOOK_HMAC_SECRET ?? '',
+    webhookMapping: env.WEBHOOK_MAPPING ?? '',
   };
 }

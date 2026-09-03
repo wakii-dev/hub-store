@@ -480,6 +480,9 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     },
     devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
     kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 side-channel — off trong test
+    // SF-26 — webhook HMAC; secret test để route chạm được nhánh verifyHmac.
+    webhookHmacSecret: 'test-webhook-secret',
+    webhookMapping: '',
   };
   const app = buildApp(config);
 

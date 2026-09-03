@@ -37,6 +37,7 @@ import { registerBatchingPresetRoutes } from './routes/batching-presets.js';
 import { registerCodRoutes } from './routes/cod.js';
 import { registerEventsRoutes } from './routes/events.js';
 import { registerNotificationsRoutes } from './routes/notifications.js';
+import { registerWebhookRoutes } from './routes/webhooks.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -119,6 +120,9 @@ export function buildApp(config: BffConfig): FastifyInstance {
   // SF-23 — notifications feed cho FE polling (không cần gRPC client; nguồn
   // là notification_log DB trực tiếp — pattern audit pool).
   registerNotificationsRoutes(app);
+  // SF-26 — webhook nhận đơn từ sàn (public, auth HMAC trong route; scoped
+  // raw-body parser tự encapsulate trong app.register scope con).
+  registerWebhookRoutes(app, { intake, config });
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });
