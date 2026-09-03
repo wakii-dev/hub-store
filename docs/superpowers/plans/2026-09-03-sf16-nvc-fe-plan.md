@@ -107,7 +107,7 @@ export function toStopOrders(rows: BatchingRow[]): DeliveryStopOrderDto[] {
 - Modify: `apps/fulfillment/src/i18n.ts`
 
 **Steps:**
-- [ ] 2.1 `shipmentStatuses.ts` — pattern `apps/shell/src/features/tech/techHelpers.ts`:
+- [x] 2.1 `shipmentStatuses.ts` — pattern `apps/shell/src/features/tech/techHelpers.ts`:
 ```ts
 export const SHIPMENT_STATUSES = ['ORDER_CREATED','ASSIGNING','ASSIGN_FAILED','DRIVER_FOUND','DRIVER_REASSIGNING','ARRIVED','WAITING_CONFIRM','DELIVERING','DELIVERED','COMPLETED','FAILED','CANCELLED','RETURNING','RETURNED','LOST'] as const;
 export type ShipmentStatus = (typeof SHIPMENT_STATUSES)[number] | (string & {});
@@ -116,10 +116,10 @@ export const isKnownShipmentStatus = (s: string): s is (typeof SHIPMENT_STATUSES
 export function shipmentStatusLabel(s: string, locale: 'vi'|'en'): string // i18n `fulfillment:shipment.status.<code>`; unknown → return s (code gốc)
 ```
   Tone colors từ `DESIGN_TOKENS.color.status` (copy pattern `toneColors` techHelpers — KHÔNG hex cứng).
-- [ ] 2.2 `ShipmentStatusTag.tsx`: `{status: string}` → pill class `sf6-status-tag` + tone class, `data-testid={'shipment-status-' + status}`; unknown → tone info + label = code.
-- [ ] 2.3 i18n `fulfillment:shipment.status.*` đủ 15 mã vi/en (VD `ORDER_CREATED`: vi "Đã tạo vận đơn" / en "Order created"; `DRIVER_REASSIGNING`: vi "Đang đổi tài xế" / en "Reassigning driver").
-- [ ] 2.4 Test: known status → label vi/en đúng; unknown status → trả code, tone info; đủ 15 mã có label.
-- [ ] 2.5 `pnpm --filter fulfillment test && tsc --noEmit` → commit `feat(sf16): master map 15 trạng thái vận đơn + ShipmentStatusTag`.
+- [x] 2.2 `ShipmentStatusTag.tsx`: `{status: string}` → pill class `sf6-status-tag` + tone class, `data-testid={'shipment-status-' + status}`; unknown → tone info + label = code.
+- [x] 2.3 i18n `fulfillment:shipment.status.*` đủ 15 mã vi/en (VD `ORDER_CREATED`: vi "Đã tạo vận đơn" / en "Order created"; `DRIVER_REASSIGNING`: vi "Đang đổi tài xế" / en "Reassigning driver").
+- [x] 2.4 Test: known status → label vi/en đúng; unknown status → trả code, tone info; đủ 15 mã có label.
+- [x] 2.5 `pnpm --filter fulfillment test && tsc --noEmit` → commit `feat(sf16): master map 15 trạng thái vận đơn + ShipmentStatusTag`.
 
 ### Task 3: quotes-display-recalc — bảng quotes 6 xe + recalc
 
