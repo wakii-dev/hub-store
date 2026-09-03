@@ -1,4 +1,4 @@
-import type { CSSProperties, ReactNode } from 'react';
+import { useState, type CSSProperties, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button, Tooltip } from 'antd';
@@ -12,6 +12,7 @@ import {
   EnvironmentOutlined,
   SendOutlined,
   LogoutOutlined,
+  KeyOutlined,
 } from '@ant-design/icons';
 import { DESIGN_TOKENS, usePermissions, sharedCssVariables } from '@hub-store/shared';
 import type { ShellSession } from '../../auth/oidc';
@@ -19,6 +20,7 @@ import { NAV_ROUTES } from '../../nav';
 import { AvatarUpload } from './AvatarUpload';
 import FontSizeSlider from './FontSizeSlider';
 import FullscreenToggle from './FullscreenToggle';
+import HotkeyHelperModal from './HotkeyHelperModal';
 import VersionCheck from './VersionCheck';
 
 // Tokens SF-6 §1.4 — rail 64px #101828, header 60px trắng, FPT orange gradient.
@@ -83,6 +85,7 @@ export default function AppLayout(props: {
   const { can } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
+  const [hotkeyHelpOpen, setHotkeyHelpOpen] = useState(false);
 
   const visibleNav = NAV_ROUTES.filter((item) => can(item.permission));
 
@@ -138,6 +141,16 @@ export default function AppLayout(props: {
           <FontSizeSlider />
           {/* SF-21 D7/D8: fullscreen toggle + version badge/prompt — nodes MỚI. */}
           <FullscreenToggle />
+          {/* SF-21 D5: hotkey helper — node MỚI, mở bảng phím tắt. */}
+          <Tooltip title="Phím tắt">
+            <Button
+              type="text"
+              icon={<KeyOutlined />}
+              onClick={() => setHotkeyHelpOpen(true)}
+              data-testid="hotkey-helper-button"
+              aria-label="Phím tắt"
+            />
+          </Tooltip>
           <VersionCheck />
           <span
             style={{ ...langPillStyle }}
@@ -252,6 +265,7 @@ export default function AppLayout(props: {
           {props.children}
         </main>
       </div>
+      <HotkeyHelperModal open={hotkeyHelpOpen} onClose={() => setHotkeyHelpOpen(false)} />
     </div>
   );
 }

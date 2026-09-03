@@ -200,8 +200,8 @@ body { font-size: var(--app-font-size); }
 - Modify: `apps/shell/src/features/layout/AppLayout.tsx` (nút mở modal — icon keyboard, cạnh fullscreen button)
 
 **Steps:**
-- [ ] Đọc `hotkeyRegistry` (Task 6) → render bảng (phím | mô tả | context màn). Ô search filter theo text. KHÔNG đổi DOM/testid header hiện có — chỉ THÊM node mới.
-- [ ] Test: render modal qua click nút; search filter; `pnpm -F shell test` → PASS.
+- [x] Đọc `hotkeyRegistry` (Task 6) → render bảng (phím | mô tả | context màn). Ô search filter theo text. KHÔNG đổi DOM/testid header hiện có — chỉ THÊM node mới.
+- [x] Test: render modal qua click nút; search filter; `pnpm -F shell test` → PASS.
 - [ ] Commit `feat(sf-21): hotkey helper modal`.
 
 ### Task 11: fullscreen-version-check
