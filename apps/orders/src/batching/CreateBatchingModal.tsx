@@ -46,6 +46,8 @@ import {
   useRecalculateDistanceMutation,
 } from "./batchingApi";
 import { buildAddOrderFilterRequest, extractRejectMessages } from "./batchingHelpers";
+import { CarrierSection } from "./CarrierSection";
+import type { CarrierGroup } from "./carrierHelpers";
 import "./batching-modal.css";
 
 const GROUP_COLORS: Array<{ bg: string; border: string }> = [
@@ -114,19 +116,28 @@ const SortableRows = SortableContainer(({ items }: { items: SortableRowValue[] }
   </ul>
 )) as unknown as ComponentClass<{ items: SortableRowValue[] } & SortableContainerProps>;
 
+export type CreateBatchingModalMode = "create" | "replan" | "rebook";
+
 export interface CreateBatchingModalProps {
   open: boolean;
   /** Đơn đã chọn trên D1 — snapshot khi mở modal (KHÔNG re-fetch). */
   orders: HubStoreOrderFilterItem[];
   onClose: () => void;
+  /**
+   * SF-16 (spec §2.5): 'create' (default — flow legacy byte-for-byte) ·
+   * 'replan' (tạo lại phiếu) · 'rebook' (book lại vận đơn — Task 6 lắp behavior).
+   */
+  mode?: CreateBatchingModalMode;
 }
 
-export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingModalProps) {
+export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: CreateBatchingModalProps) {
   const { t } = useTranslation("orders");
 
   // Rows state — sync khi MỞ modal (snapshot selection); DnD/thêm đơn/recalc đổi state.
   const [rows, setRows] = useState<HubStoreOrderFilterItem[]>([]);
   const [groups, setGroups] = useState<PackingGroup[] | null>(null);
+  // SF-16 §2.1 — nhóm vận chuyển: KHO_CN default → flow cũ byte-for-byte.
+  const [carrierGroup, setCarrierGroup] = useState<CarrierGroup>("KHO_CN");
   const [shipperId, setShipperId] = useState<string | undefined>(undefined);
   const [deliveryTime, setDeliveryTime] = useState<TimeRange | null>(null);
   // SF-6 §2.3 stepper — NON-BLOCKING (Deviation D1): content không bao giờ ẩn,
@@ -156,6 +167,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
       clearCloseTimer(); // P1: hủy timer version trước trước khi reset state
       setRows(orders);
       setGroups(null);
+      setCarrierGroup("KHO_CN");
       setShipperId(undefined);
       setDeliveryTime(null);
       setActiveSection(1);
@@ -294,13 +306,16 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
     { n: 2, label: t("createBatch.step2"), done: step2Done },
     { n: 3, label: t("createBatch.step3"), done: false },
   ];
+  // SF-16 §2.5 — title theo mode (create giữ key cũ byte-for-byte).
+  const titleKey =
+    mode === "replan" ? "createBatch.titleReplan" : mode === "rebook" ? "createBatch.titleRebook" : "createBatch.title";
 
   return (
     <Modal
       title={
         <div>
           <div style={{ fontSize: 17, fontWeight: 700, color: DESIGN_TOKENS.color.textStrong }}>
-            {t("createBatch.title")}
+            {t(titleKey)}
           </div>
           <div style={{ fontSize: 12.5, fontWeight: 400, color: DESIGN_TOKENS.color.textMuted }}>
             {t("createBatch.selectedCount", { count: rows.length })}
@@ -417,8 +432,10 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
         )}
       </div>
 
-      {/* ─── Section 2: shipper & thời gian giao + sumbar ─── */}
+      {/* ─── Section 2: carrier & shipper & thời gian giao + sumbar ─── */}
       <div className="batch-form" ref={section2Ref}>
+        {/* SF-16 §2.1 — nhóm vận chuyển, chèn TRÊN shipper-select (testid cũ nguyên vẹn) */}
+        <CarrierSection value={carrierGroup} onChange={setCarrierGroup} />
         <div className="batch-form-row">
           <div className="sf6-form-card">
             <Typography.Text strong>{t("createBatch.shipper")}</Typography.Text>

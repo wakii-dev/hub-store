@@ -82,8 +82,8 @@ Coordinator/warehouse tạo phiếu giao cần NVC (xe tải) nhưng FE không c
 **Key types (import từ `@hub-store/shared` → `api-contracts/delivery-batch`):** `DeliveryQuoteDto`, `DeliveryQuotesRequest/Response`, `DeliveryConfirmPlanningRequest/Response`, `DeliveryBookingRequest/Response`, `DeliveryCancelOrderRequest/Response`, `DeliveryCancelBatchRequest/Response`, `DeliverySearchBookingDetailResponse`, `MetaDto`.
 
 **Steps:**
-- [ ] 1.1 `deliveryBatchApi.ts`: `api.injectEndpoints` — mutation `getQuotes` (POST `/delivery-batch/quotes`), `confirmPlanning` (POST `/delivery-batch/planning/confirm`), `createBooking` (POST `/delivery-batch/booking`). Export hooks `useGetQuotesMutation` v.v. Pattern: copy error/typing style từ `batchingApi.ts` (axiosBaseQuery `{url, method, data}`).
-- [ ] 1.2 `carrierHelpers.ts`:
+- [x] 1.1 `deliveryBatchApi.ts`: `api.injectEndpoints` — mutation `getQuotes` (POST `/delivery-batch/quotes`), `confirmPlanning` (POST `/delivery-batch/planning/confirm`), `createBooking` (POST `/delivery-batch/booking`). Export hooks `useGetQuotesMutation` v.v. Pattern: copy error/typing style từ `batchingApi.ts` (axiosBaseQuery `{url, method, data}`).
+- [x] 1.2 `carrierHelpers.ts`:
 ```ts
 export const CARRIER_GROUPS = ['KHO_CN', 'TRUCK', 'FPT_DELIVERY'] as const;
 export type CarrierGroup = (typeof CARRIER_GROUPS)[number];
@@ -94,11 +94,11 @@ export function toStopOrders(rows: BatchingRow[]): DeliveryStopOrderDto[] {
 }
 ```
   (kiểm field thật của `BatchingRow` trong `batchingHelpers.ts` — dùng đúng tên field hiện có, KHÔNG bịa).
-- [ ] 1.3 `CarrierSection.tsx`: `Radio.Group` data-testid `carrier-group` với 3 option `carrier-group-KHO_CN` / `-TRUCK` / `-FPT_DELIVERY` (FPT: `disabled` + Tooltip "Sắp ra mắt"). Props: `{ value: CarrierGroup; onChange: (g: CarrierGroup) => void }`. CSS class `.sf6-form-card` + label i18n `orders:batching.carrierGroup.*`. Slot children cho phần quotes (Task 3).
-- [ ] 1.4 Modal wiring: state `carrierGroup: CarrierGroup = 'KHO_CN'` (default — flow cũ KHÔNG đổi); render `<CarrierSection>` trong section 2 trên `batch-shipper-select`; `mode` prop mới `mode?: 'create' | 'replan' | 'rebook'` (default `'create'`) — Task 1 chỉ thêm prop + tiêu đề i18n theo mode (behavior replan/rebook ở Task 6). Khi `carrierGroup !== 'KHO_CN'`: submit hiện chưa làm gì thêm (Task 3-5 nối tiếp) — **nhưng** `batch-submit` flow KHO_CN phải chạy y cũ.
-- [ ] 1.5 i18n keys `orders:batching.carrier*` (vi + en). CSS: `.carrier-section` dùng tokens.
-- [ ] 1.6 Test `carrierHelpers.test.ts`: `isGroupEnabled`, `toStopOrders` mapping. Update `CreateBatchingModal.test.tsx`: default KHO_CN → submit flow cũ không đổi (regression test).
-- [ ] 1.7 `pnpm --filter orders test && pnpm --filter orders exec tsc --noEmit` → commit `feat(sf16): carrier section 3 nhóm trong D1b + delivery-batch RTKQ api`.
+- [x] 1.3 `CarrierSection.tsx`: `Radio.Group` data-testid `carrier-group` với 3 option `carrier-group-KHO_CN` / `-TRUCK` / `-FPT_DELIVERY` (FPT: `disabled` + Tooltip "Sắp ra mắt"). Props: `{ value: CarrierGroup; onChange: (g: CarrierGroup) => void }`. CSS class `.sf6-form-card` + label i18n `orders:batching.carrierGroup.*`. Slot children cho phần quotes (Task 3).
+- [x] 1.4 Modal wiring: state `carrierGroup: CarrierGroup = 'KHO_CN'` (default — flow cũ KHÔNG đổi); render `<CarrierSection>` trong section 2 trên `batch-shipper-select`; `mode` prop mới `mode?: 'create' | 'replan' | 'rebook'` (default `'create'`) — Task 1 chỉ thêm prop + tiêu đề i18n theo mode (behavior replan/rebook ở Task 6). Khi `carrierGroup !== 'KHO_CN'`: submit hiện chưa làm gì thêm (Task 3-5 nối tiếp) — **nhưng** `batch-submit` flow KHO_CN phải chạy y cũ.
+- [x] 1.5 i18n keys `orders:batching.carrier*` (vi + en). CSS: `.carrier-section` dùng tokens.
+- [x] 1.6 Test `carrierHelpers.test.ts`: `isGroupEnabled`, `toStopOrders` mapping. Update `CreateBatchingModal.test.tsx`: default KHO_CN → submit flow cũ không đổi (regression test).
+- [x] 1.7 `pnpm --filter orders test && pnpm --filter orders exec tsc --noEmit` → commit `feat(sf16): carrier section 3 nhóm trong D1b + delivery-batch RTKQ api`.
 
 ### Task 2: status-master-map — 15 trạng thái vận đơn
 

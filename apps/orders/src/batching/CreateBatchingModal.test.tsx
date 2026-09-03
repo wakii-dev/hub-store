@@ -341,4 +341,79 @@ describe("CreateBatchingModal", () => {
     const firstRowDistance = document.querySelector("[data-testid='batch-row-ORD-3001'] .batch-cell-distance")!;
     expect(firstRowDistance.textContent).toContain("4.2");
   });
+
+  // ─── SF-16: carrier section (3 nhóm, spec §2.1) ───
+  it("SF-16: 3 nhóm carrier — KHO_CN default, FPT disabled, slot quotes chỉ hiện khi TRUCK", () => {
+    renderModal();
+
+    const kho = screen.getByTestId("carrier-group-KHO_CN") as HTMLInputElement;
+    const truck = screen.getByTestId("carrier-group-TRUCK") as HTMLInputElement;
+    const fpt = screen.getByTestId("carrier-group-FPT_DELIVERY") as HTMLInputElement;
+    expect(kho.checked).toBe(true); // default Tự giao → flow legacy byte-for-byte
+    expect(truck.checked).toBe(false);
+    expect(fpt.disabled).toBe(true); // chưa có BE (RG epic)
+    expect(screen.queryByTestId("carrier-quotes-slot")).toBeNull();
+
+    // TRUCK → slot quotes xuất hiện (placeholder — bảng lắp ở Task 3)
+    fireEvent.click(truck);
+    expect((screen.getByTestId("carrier-group-TRUCK") as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByTestId("carrier-quotes-slot")).toBeTruthy();
+
+    // Về KHO_CN → slot ẩn lại
+    fireEvent.click(kho);
+    expect(screen.queryByTestId("carrier-quotes-slot")).toBeNull();
+  });
+
+  it("SF-16: legacy regression — default KHO_CN, submit flow cũ KHÔNG đổi (payload như trước SF-16)", async () => {
+    createMock.mockReturnValue(unwrapResult({ batchCode: "BATCH-1" }));
+    timeDeliveryHook = createTimeDelivery([{ from: "2026-09-05T01:00:00.000Z", to: "2026-09-05T05:00:00.000Z" }]);
+
+    renderModal();
+    await flush();
+
+    // Không đụng carrier group — vẫn KHO_CN checked
+    expect((screen.getByTestId("carrier-group-KHO_CN") as HTMLInputElement).checked).toBe(true);
+
+    const shipperSelector = document.querySelector<HTMLElement>("[data-testid='batch-shipper-select'] .ant-select-selector")!;
+    fireEvent.mouseDown(shipperSelector);
+    await waitFor(() => document.querySelector(".ant-select-item-option"));
+    const option = document.querySelector<HTMLElement>(".ant-select-item-option")!;
+    fireEvent.mouseDown(option);
+    fireEvent.mouseUp(option);
+    fireEvent.click(option);
+    fireEvent.click(screen.getByTestId("batch-time-hint-0"));
+    fireEvent.click(screen.getByTestId("batch-submit"));
+    await flush();
+
+    // Payload create giống hệt flow SF-8 — carrier section KHÔNG đổi gì
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(createMock.mock.calls[0][0]).toEqual({
+      orderCodes: ["ORD-3001", "ORD-3002", "ORD-3003"],
+      shipperId: "S1",
+      deliveryTime: { from: "2026-09-05T01:00:00.000Z", to: "2026-09-05T05:00:00.000Z" },
+    });
+  });
+
+  it("SF-16: mode prop — default 'create' giữ title cũ; replan/rebook đổi title", () => {
+    const view = render(
+      <I18nextProvider i18n={testI18n}>
+        <CreateBatchingModal open orders={selection} onClose={vi.fn()} />
+      </I18nextProvider>,
+    );
+    expect(screen.getByText("Tạo phiếu soạn hàng")).toBeTruthy();
+
+    view.rerender(
+      <I18nextProvider i18n={testI18n}>
+        <CreateBatchingModal open orders={selection} onClose={vi.fn()} mode="replan" />
+      </I18nextProvider>,
+    );
+    expect(screen.getByText("Tạo lại phiếu giao")).toBeTruthy();
+
+    view.rerender(
+      <I18nextProvider i18n={testI18n}>
+        <CreateBatchingModal open orders={selection} onClose={vi.fn()} mode="rebook" />
+      </I18nextProvider>,
+    );
+    expect(screen.getByText("Book lại vận đơn")).toBeTruthy();
+  });
 });

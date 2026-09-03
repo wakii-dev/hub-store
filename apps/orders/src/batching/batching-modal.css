@@ -368,3 +368,22 @@
   font-size: 12.5px;
   color: #667085;
 }
+
+/* ─── Carrier section (SF-16 D1b — mirror DESIGN_TOKENS theo convention file này) ─── */
+.carrier-section {
+  margin-bottom: 12px;
+}
+.carrier-group-radios {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.carrier-quotes-slot {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed #d0d5dd; /* border */
+  border-radius: 10px;
+  color: #667085; /* textMuted */
+  font-size: 12.5px;
+}
