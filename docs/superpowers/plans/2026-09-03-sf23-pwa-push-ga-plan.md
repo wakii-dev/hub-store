@@ -261,7 +261,7 @@ export async function sendOneSignalPush(restApiKey: string, payload: PushPayload
 ### Task T5: push-events
 **Files:** Create `services/bff-gateway/src/lib/push-triggers.ts`; Modify `services/bff-gateway/src/server.ts`; Test `services/bff-gateway/test/push-triggers.spec.ts`.
 
-- [ ] **Step 1: push-triggers.ts**
+- [x] **Step 1: push-triggers.ts**
 
 ```ts
 import { bffEvents, type KafkaEventMessage } from '../kafka/events.js';
@@ -296,7 +296,7 @@ export function startPushTriggers(config: BffConfig, env: NodeJS.ProcessEnv = pr
 ```
 
 (Executor: điều chỉnh signature sendOneSignalPush nhận cả config.onesignal object — nhất quán T4.)
-- [ ] **Step 2: server.ts** — import + wire cạnh kafka consumer:
+- [x] **Step 2: server.ts** — import + wire cạnh kafka consumer:
 
 ```ts
 const stopPushTriggers = startPushTriggers(config);
