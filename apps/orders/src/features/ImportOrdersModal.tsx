@@ -17,6 +17,7 @@ import {
   usePreviewImportMutation,
 } from "@hub-store/api-client";
 import type { ImportErrorDto, ImportPreviewResponse } from "@hub-store/shared";
+import { trackEvent } from "@hub-store/shared"; // SF-23 T7
 
 interface ErrorRow extends ImportErrorDto {
   key: string;
@@ -82,6 +83,7 @@ export function ImportOrdersModal({ open, onClose }: ImportOrdersModalProps) {
         fulfillCodes: string[];
       };
       const codes = res.fulfillCodes ?? [];
+      trackEvent("orders_imported", { count: codes.length }); // SF-23 T7
       message.success(
         t("intake.import.confirmSuccess", { count: codes.length, codes: codes.join(", ") }),
       );

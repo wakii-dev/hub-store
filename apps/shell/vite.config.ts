@@ -16,8 +16,13 @@ interface RemoteEntryConfig {
 }
 
 const configDir = dirname(fileURLToPath(import.meta.url));
+// REMOTES_CONFIG — private-port seam (SF-15/SF-14 precedent): trỏ file remotes
+// riêng khi chạy stack private, không đụng remotes.config.json chung.
 const remotesConfig: Record<string, RemoteEntryConfig> = JSON.parse(
-  readFileSync(resolve(configDir, "../../remotes.config.json"), "utf-8"),
+  readFileSync(
+    process.env.REMOTES_CONFIG ?? resolve(configDir, "../../remotes.config.json"),
+    "utf-8",
+  ),
 );
 
 /** Spike verdict: remote declarations PHẢI có `type: 'module'`; remoteEntry ở ROOT. */

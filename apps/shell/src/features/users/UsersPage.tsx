@@ -1,30 +1,55 @@
 /**
  * SF-8 — Users management (Manager-only). antd4 sạch. Data qua RTKQ slice users.
+ * SF-11 (FI-256, Task 4): reskin 100% design system SF-6 — page-head + table card
+ * + semantic status tags (pattern AuditPage/D1Page). Logic/API/testid giữ nguyên.
  * testids: users-page, users-table, users-add-button, users-add-modal,
  * user-row-<username>, user-toggle-<username>, user-set-password-<username>.
  */
-import { useState, type HTMLAttributes } from "react";
+import { useState, type CSSProperties, type HTMLAttributes } from "react";
 import {
-  Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, message,
+  Alert, Button, Form, Input, Modal, Popconfirm, Select, Space, Table, Tag, message,
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
+import { Provider } from "react-redux";
 import type { ColumnsType } from "antd/es/table";
 import {
+  createAppStore,
   useCreateUserMutation,
   useListUsersQuery,
   useSetUserEnabledMutation,
   useSetUserPasswordMutation,
+  type AppStore,
   type UserListItem,
 } from "@hub-store/api-client";
-import { ROLES } from "@hub-store/shared";
+import { DESIGN_TOKENS, ROLES, TableSkeleton, EmptyState } from "@hub-store/shared";
+
+/**
+ * Store per-remote (spec §2) — shell KHÔNG share store qua MF boundary.
+ * UsersPage dùng RTKQ hooks → tự wrap Provider với store riêng (pattern D1Page
+ * + AuditPage: module singleton của bundle shell).
+ */
+const usersStore: AppStore = createAppStore();
+
+/** Semantic tag SF-6 §1.1 — pastel bg + line + solid text, pill (class sf6-status-tag). */
+function statusTagStyle(tone: "success" | "neutral"): CSSProperties {
+  const s = DESIGN_TOKENS.color.status;
+  if (tone === "success") {
+    return {
+      color: s.success,
+      background: s.successBg,
+      borderColor: s.successLine,
+    };
+  }
+  return { color: s.neutral, background: s.neutralBg, borderColor: s.neutralLine };
+}
 
 const ROLE_OPTIONS = ROLES.map((r) => ({ value: r, label: r }));
 
-export default function UsersPage(props: { currentUsername: string }) {
+function UsersContent(props: { currentUsername: string }) {
   const { t } = useTranslation("shell");
   const [messageApi, contextHolder] = message.useMessage();
-  const { data, isLoading } = useListUsersQuery();
+  const { data, isLoading, isError, refetch } = useListUsersQuery();
   const [createUser, { isLoading: creating }] = useCreateUserMutation();
   const [setPassword] = useSetUserPasswordMutation();
   const [setEnabled] = useSetUserEnabledMutation();
@@ -83,9 +108,13 @@ export default function UsersPage(props: { currentUsername: string }) {
       dataIndex: "enabled",
       render: (enabled: boolean) =>
         enabled ? (
-          <Tag color="green">{t("users.enabled")}</Tag>
+          <Tag className="sf6-status-tag" style={statusTagStyle("success")}>
+            {t("users.enabled")}
+          </Tag>
         ) : (
-          <Tag color="red">{t("users.disabled")}</Tag>
+          <Tag className="sf6-status-tag" style={statusTagStyle("neutral")}>
+            {t("users.disabled")}
+          </Tag>
         ),
     },
     {
@@ -140,7 +169,26 @@ export default function UsersPage(props: { currentUsername: string }) {
   return (
     <div data-testid="users-page">
       {contextHolder}
-      <Space direction="vertical" size={16} style={{ width: "100%" }}>
+      {/* Page-head — SF-6 §2.2: h1 21/700 trái + nút chính phải (mirror D1). */}
+      <div
+        style={{
+          display: "flex",
+          alignItems: "flex-end",
+          justifyContent: "space-between",
+          marginBottom: 18,
+        }}
+      >
+        <h1
+          style={{
+            fontSize: DESIGN_TOKENS.typography.h1.fontSize,
+            fontWeight: DESIGN_TOKENS.typography.h1.fontWeight,
+            letterSpacing: DESIGN_TOKENS.typography.h1.letterSpacing,
+            color: DESIGN_TOKENS.color.textStrong,
+            margin: 0,
+          }}
+        >
+          {t("users.title")}
+        </h1>
         <Button
           type="primary"
           icon={<PlusOutlined />}
@@ -149,19 +197,53 @@ export default function UsersPage(props: { currentUsername: string }) {
         >
           {t("users.add")}
         </Button>
-        <div data-testid="users-table">
+      </div>
+
+      {/* Table card — SF-6 §2.2: radius 16, border, shadow.sm (pattern AuditPage/D1).
+          SF-11 (FI-256, Task 5): initial load → TableSkeleton (không spinner); list rỗng → EmptyState. */}
+      <div
+        data-testid="users-table"
+        style={{
+          background: DESIGN_TOKENS.color.bgWhite,
+          border: `1px solid ${DESIGN_TOKENS.color.divider}`,
+          borderRadius: DESIGN_TOKENS.radius.card,
+          boxShadow: DESIGN_TOKENS.shadow.sm,
+          overflow: "hidden",
+        }}
+      >
+        {isLoading ? (
+          <TableSkeleton />
+        ) : isError ? (
+          /* Lỗi API ≠ dữ liệu rỗng — không được ngụy trang thành EmptyState (review P1, pattern AuditPage). */
+          <Alert
+            type="error"
+            showIcon
+            message={t("users.error")}
+            action={
+              <Button size="small" onClick={() => void refetch()}>
+                {t("users.errorRetry")}
+              </Button>
+            }
+          />
+        ) : users.length === 0 ? (
+          <EmptyState
+            title={t("users.empty")}
+            sub={t("users.emptyHint")}
+            actionLabel={t("users.add")}
+            onAction={() => setAddOpen(true)}
+          />
+        ) : (
           <Table
             rowKey="id"
             size="middle"
-            loading={isLoading}
             dataSource={users}
             columns={columns}
             onRow={(record): HTMLAttributes<HTMLTableRowElement> =>
               ({ "data-testid": `user-row-${record.username}` } as HTMLAttributes<HTMLTableRowElement>)
             }
           />
-        </div>
-      </Space>
+        )}
+      </div>
 
       <Modal
         title={t("users.add")}
@@ -216,5 +298,13 @@ export default function UsersPage(props: { currentUsername: string }) {
         </Form>
       </Modal>
     </div>
+  );
+}
+
+export default function UsersPage(props: { currentUsername: string }) {
+  return (
+    <Provider store={usersStore}>
+      <UsersContent {...props} />
+    </Provider>
   );
 }

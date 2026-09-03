@@ -28,6 +28,7 @@ import {
   MultiSelect,
   StatusTag,
   TextSearch,
+  trackEvent,
   formatPeriodOfTime,
   formatVnd,
   loadPlanningMap,
@@ -521,6 +522,7 @@ function BatchListPageInner() {
         try {
           await completePicking({ batchCode: batch.batchCode }).unwrap();
           message.success(t("complete.success", { code: batch.batchCode }));
+          trackEvent("batch_completed"); // SF-23 T7
         } catch (err) {
           message.error(`${t("complete.failed")}: ${errMessage(err)}`);
         }
@@ -738,6 +740,10 @@ function BatchListPageInner() {
           loading={isLoading || isFetching}
           dataSource={rows}
           columns={columns}
+          /* SF-11 (FI-256 D2) — scroll ngang ≤768px: tổng cột cố định
+             90+130+100+260+130+100+140+230 = 1180 + ~220 (address ellipsis)
+             = 1400 (mirror D1). */
+          scroll={{ x: 1400 }}
           locale={{
             emptyText: (
               <EmptyState

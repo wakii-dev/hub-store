@@ -58,6 +58,7 @@ async function startMockKeycloak(): Promise<void> {
 function buildTestApp(opts: { devResetPassword?: boolean } = {}): ReturnType<typeof buildApp> {
   const config: BffConfig = {
     port: 0,
+    onesignal: { appId: '', restApiKey: '' },
     oidc: {
       issuer: TEST_ISSUER,
       audience: TEST_AUDIENCE,

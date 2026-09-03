@@ -94,7 +94,7 @@ test.describe("Coordinator — view-only (không nút tạo + API 403)", () => {
     const token = JSON.parse(oidcEntry.value).access_token;
     expect(typeof token).toBe("string");
 
-    const res = await request.post("http://localhost:8080/service-employees", {
+    const res = await request.post(`${process.env.E2E_BFF_URL ?? "http://localhost:8080"}/service-employees`, {
       data: {
         employeeCode: "NV-403",
         fullName: "Coordinator Bị Chặn",

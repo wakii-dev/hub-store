@@ -456,6 +456,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
 
   const config: BffConfig = {
     port: 0,
+    onesignal: { appId: '', restApiKey: '' },
     oidc: {
       issuer: TEST_ISSUER,
       audience: TEST_AUDIENCE,
