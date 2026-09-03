@@ -172,7 +172,7 @@ CREATE TABLE user_avatars (
 - FE: upload input → load image → crop canvas native (drawImage với crop rect vuông giữa — KHÔNG thêm thư viện) → toBlob(jpeg/png) → POST. Sau upload thành công refresh avatar URL với cache-buster (`?v=updated_at`).
 
 **Steps:**
-- [ ] V10 migration. [ ] BFF routes + register + test (mock pg hoặc integration theo pattern test hiện có của bff — check `services/bff-gateway/src/**/*.test.ts`). [ ] FE crop component + wire header avatar (img src `GET /avatar/<userId>` fallback initials khi 404). [ ] Tests + run → PASS. Commit `feat(sf-21): avatar upload crop + persist`.
+- [x] V10 migration. [x] BFF routes + register + test (mock pg hoặc integration theo pattern test hiện có của bff — check `services/bff-gateway/src/**/*.test.ts`). [x] FE crop component + wire header avatar (img src `GET /avatar/<userId>` fallback initials khi 404). [x] Tests + run → PASS. Commit `feat(sf-21): avatar upload crop + persist`.
 
 ### Task 9: font-size-slider
 
