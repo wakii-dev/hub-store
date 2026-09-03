@@ -29,6 +29,7 @@ import {
   techResponses,
   intakeResponses,
   staffAreaResponses,
+  transferResponses,
 } from './fixtures.js';
 import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import { TechServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
@@ -37,6 +38,7 @@ import { DeliveryBatchServiceService } from '../../../api/proto/gen/ts/hubstore/
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
 import { IntakeServiceService } from '../../../api/proto/gen/ts/hubstore/intake/v1/intake';
 import { StaffAreaServiceService } from '../../../api/proto/gen/ts/hubstore/staffarea/v1/staffarea';
+import { TransferServiceService } from '../../../api/proto/gen/ts/hubstore/transfer/v1/transfer';
 
 export const TEST_ISSUER = 'https://keycloak.test/realms/hubstore';
 export const TEST_AUDIENCE = 'hubstore-api';
@@ -174,6 +176,8 @@ export interface Harness {
   deliverybatch: MockUpstream;
   print: MockUpstream;
   intake: MockUpstream;
+  /** SF-28 — cùng server/addr với fulfillment (override qua chung current). */
+  transfer: MockUpstream;
   app: FastifyInstance;
   identity: TestIdentity;
   kc: MockKcAdmin;
@@ -338,6 +342,11 @@ const intakeDefaults: Record<string, UnaryHandler> = {
   getOrderAudit: (_c, cb) => cb(null, intakeResponses.getOrderAudit),
 };
 
+const transferDefaults: Record<string, UnaryHandler> = {
+  createTransferTicket: (_c, cb) => cb(null, transferResponses.createTransferTicket),
+  listTransferTickets: (_c, cb) => cb(null, transferResponses.listTransferTickets),
+};
+
 /** Port "chắc chắn chết": bind rồi đóng — dùng cho test 503 conn-refused. */
 async function grabDeadPort(): Promise<number> {
   const s = new Server();
@@ -362,6 +371,7 @@ export interface HarnessOptions {
   deliverybatchHandlers?: Record<string, UnaryHandler>;
   printHandlers?: Record<string, UnaryHandler>;
   intakeHandlers?: Record<string, UnaryHandler>;
+  transferHandlers?: Record<string, UnaryHandler>;
 }
 
 export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> {
@@ -393,9 +403,19 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
           verifyPaymentAccount: (_c, cb) => cb(null, staffAreaResponses.verifyPaymentAccount),
         },
       },
+      {
+        definition: TransferServiceService,
+        defaults: { ...transferDefaults, ...opts.transferHandlers },
+      },
     ],
   );
   const tech: MockUpstream = {
+    addr: fulfillment.addr,
+    close: async () => {}, // đóng chung qua fulfillment.close()
+    override: fulfillment.override,
+  };
+  // SF-28 — TransferService sống cùng fulfillment-service → chung mock server.
+  const transfer: MockUpstream = {
     addr: fulfillment.addr,
     close: async () => {}, // đóng chung qua fulfillment.close()
     override: fulfillment.override,
@@ -463,6 +483,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     deliverybatch,
     print,
     intake,
+    transfer,
     app,
     identity,
     kc,

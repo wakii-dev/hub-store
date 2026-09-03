@@ -5,6 +5,8 @@ import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.store.OrderRepository;
 import com.hubstore.fulfillment.store.PostgresD2cOrderRepository;
 import com.hubstore.fulfillment.store.PostgresOrderRepository;
+import com.hubstore.fulfillment.store.PostgresTransferTicketRepository;
+import com.hubstore.fulfillment.store.TransferTicketRepository;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.context.annotation.Bean;
@@ -36,6 +38,13 @@ public class OrderRepositoryConfig {
     @ConditionalOnProperty(name = "fulfillment.store", havingValue = "postgres", matchIfMissing = true)
     public D2cOrderRepository postgresD2cOrderRepository(JdbcTemplate jdbcTemplate) {
         return new PostgresD2cOrderRepository(jdbcTemplate);
+    }
+
+    /** SF-28 (FI-279): transfer_tickets store — Postgres impl duy nhất (pattern D2C). */
+    @Bean
+    @ConditionalOnProperty(name = "fulfillment.store", havingValue = "postgres", matchIfMissing = true)
+    public TransferTicketRepository postgresTransferTicketRepository(JdbcTemplate jdbcTemplate) {
+        return new PostgresTransferTicketRepository(jdbcTemplate);
     }
 
     @Bean

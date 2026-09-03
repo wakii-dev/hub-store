@@ -45,6 +45,10 @@ import type {
   ValidateImportOrdersResponse,
 } from '../../../api/proto/gen/ts/hubstore/intake/v1/intake';
 import type {
+  CreateTransferTicketResponse,
+  ListTransferTicketsResponse,
+} from '../../../api/proto/gen/ts/hubstore/transfer/v1/transfer';
+import type {
   CancelDeliveryBatchResponse,
   CancelDeliveryOrderResponse,
   ConfirmPlanningResponse,
@@ -461,4 +465,38 @@ export const staffAreaResponses = {
   updateServiceEmployee: { employee: fixtureServiceEmployee },
   setServiceEmployeeActive: { employee: { ...fixtureServiceEmployee, isActive: false } },
   verifyPaymentAccount: { valid: true, source: 'MOCK', message: '[MOCK] Số TK hợp lệ.' },
+};
+
+/** SF-28 transfer — happy-path defaults (per-test override khi cần fail). */
+export const transferResponses = {
+  createTransferTicket: {
+    ticket: {
+      ticketCode: 'TT-0001',
+      orderFulfillCode: 'ORD-3001',
+      fromHub: '',
+      toHub: 'Hub Đà Nẵng',
+      reason: 'Gần kho giao hơn',
+      status: 'PENDING',
+      createdBy: 'tester',
+      createdAt: '2026-09-03T10:00:00+07:00',
+      confirmedBy: '',
+      confirmedAt: '',
+    },
+  } as CreateTransferTicketResponse,
+  listTransferTickets: {
+    tickets: [
+      {
+        ticketCode: 'TT-0001',
+        orderFulfillCode: 'ORD-3001',
+        fromHub: '',
+        toHub: 'Hub Đà Nẵng',
+        reason: 'Gần kho giao hơn',
+        status: 'PENDING',
+        createdBy: 'tester',
+        createdAt: '2026-09-03T10:00:00+07:00',
+        confirmedBy: '',
+        confirmedAt: '',
+      },
+    ],
+  } as ListTransferTicketsResponse,
 };

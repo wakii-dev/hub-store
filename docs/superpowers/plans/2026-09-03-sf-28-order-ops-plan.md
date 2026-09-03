@@ -34,7 +34,7 @@
 - Modify: BFF route registration (file đăng ký routes — soát index/server entry)
 - Test: Java unit test TransferServiceImpl + BFF contract test `test/transfer.route.test.ts`
 
-- [ ] **Step 1: Proto mới (pattern intake/v1/intake.proto)**
+- [x] **Step 1: Proto mới (pattern intake/v1/intake.proto)**
 
 ```proto
 syntax = "proto3";
@@ -65,8 +65,8 @@ message TransferTicket {
 }
 ```
 
-- [ ] **Step 2: Regen 4 ngôn ngữ CHỈ file mới.** `protoc --java_out` + grpc-java plugin (`~/bin` hoặc /tmp/sf1-spikes — spike docs/superpowers/spikes/grpc-codegen-multilang.md) + ts-proto (pnpm dlx ts-proto 2.7.7 pin — xem plans/2026-09-02-sf17-area-staff-plan.md:69). Go không cần (fulfillment-only). Verify: `git status` sạch ngoài file gen mới.
-- [ ] **Step 3: V8 migration**
+- [x] **Step 2: Regen 4 ngôn ngữ CHỈ file mới.** `protoc --java_out` + grpc-java plugin (`~/bin` hoặc /tmp/sf1-spikes — spike docs/superpowers/spikes/grpc-codegen-multilang.md) + ts-proto (pnpm dlx ts-proto 2.7.7 pin — xem plans/2026-09-02-sf17-area-staff-plan.md:69). Go không cần (fulfillment-only). Verify: `git status` sạch ngoài file gen mới.
+- [x] **Step 3: V8 migration**
 
 ```sql
 -- V8__transfer_tickets.sql — SF-28 (V3 reserved SF-14)
@@ -87,13 +87,13 @@ CREATE INDEX idx_transfer_tickets_order ON transfer_tickets(order_fulfill_code);
 CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 ```
 
-- [ ] **Step 4: Java TransferServiceImpl** — JDBC pattern store/PostgresOrderRepository. `CreateTransferTicket`: (1) SELECT order + `is_debt_splitting_order` → nếu tách nợ → `GrpcErrors.invalidArgument` (KHRÔNG dùng FAILED_PRECONDITION — mapper hiện tại default 409, sẽ trùng 409 của trùng-PENDING; INVALID_ARGUMENT khớp pattern `assignShopHub` FulfillmentServiceImpl:228 → 422 tự nhiên); (2) tồn tại ticket PENDING cùng order → `ALREADY_EXISTS` + **thêm case `ALREADY_EXISTS → 409 CONFLICT` vào grpc-error.ts** (file đã ở Files list); (3) INSERT với `ticket_code = 'TT-' || lpad(nextval('transfer_ticket_code_seq')::text, 4, '0')` trong 1 transaction. `ListTransferTickets`: SELECT WHERE code = ANY(?) [+ status] ORDER BY created_at DESC. Audit: BFF-side logActivity (Java không cần).
-- [ ] **Step 5: Java unit test** — pattern test SF-2 (InMemory/DB-skip): tách nợ reject, duplicate PENDING → ALREADY_EXISTS, happy path sinh TT-0001, list filter codes.
-- [ ] **Step 6: BFF clients/transfer.ts (pattern clients/intake.ts — callUnary + metadata {x-user-role, x-user-name}) + mappers/transfer.ts + routes/transfer.ts:**
+- [x] **Step 4: Java TransferServiceImpl** — JDBC pattern store/PostgresOrderRepository. `CreateTransferTicket`: (1) SELECT order + `is_debt_splitting_order` → nếu tách nợ → `GrpcErrors.invalidArgument` (KHRÔNG dùng FAILED_PRECONDITION — mapper hiện tại default 409, sẽ trùng 409 của trùng-PENDING; INVALID_ARGUMENT khớp pattern `assignShopHub` FulfillmentServiceImpl:228 → 422 tự nhiên); (2) tồn tại ticket PENDING cùng order → `ALREADY_EXISTS` + **thêm case `ALREADY_EXISTS → 409 CONFLICT` vào grpc-error.ts** (file đã ở Files list); (3) INSERT với `ticket_code = 'TT-' || lpad(nextval('transfer_ticket_code_seq')::text, 4, '0')` trong 1 transaction. `ListTransferTickets`: SELECT WHERE code = ANY(?) [+ status] ORDER BY created_at DESC. Audit: BFF-side logActivity (Java không cần).
+- [x] **Step 5: Java unit test** — pattern test SF-2 (InMemory/DB-skip): tách nợ reject, duplicate PENDING → ALREADY_EXISTS, happy path sinh TT-0001, list filter codes.
+- [x] **Step 6: BFF clients/transfer.ts (pattern clients/intake.ts — callUnary + metadata {x-user-role, x-user-name}) + mappers/transfer.ts + routes/transfer.ts:**
   - `POST /fulfillment/:code/transfer-tickets` body `{toHub, reason, fromHub?}` — requireRole 3 role → client.createTransferTicket → 409 → HTTP 409, FAILED_PRECONDITION → 422; audit `order.transfer_ticket_create`
   - `GET /fulfillment/transfer-tickets?codes=a,b` — requireRole; map comma → repeated; audit không cần (read)
-- [ ] **Step 7: BFF contract test** — pattern test/intake.route.test.ts: 403 non-role, 422 tách nợ, 409 trùng, happy path envelope. Mock client theo pattern file test cũ.
-- [ ] **Step 8: Chạy test + commit** `feat(transfer): transfer tickets API — V8 + proto transfer + Java impl + BFF routes`
+- [x] **Step 7: BFF contract test** — pattern test/intake.route.test.ts: 403 non-role, 422 tách nợ, 409 trùng, happy path envelope. Mock client theo pattern file test cũ.
+- [x] **Step 8: Chạy test + commit** `feat(transfer): transfer tickets API — V8 + proto transfer + Java impl + BFF routes`
 
 ### Task 2: transfer-hub-modal — FE modal tạo ticket + nút D1 + badge
 
