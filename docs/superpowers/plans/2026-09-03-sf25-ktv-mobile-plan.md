@@ -107,11 +107,11 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 
 ### Task 6: reschedule — modal dời lịch + ghi chú
 **Files:** `apps/ktv-mobile/src/features/actions/RescheduleModal.tsx`, ktvApi `rescheduleOrder`, unit tests.
-- [ ] Modal: DatePicker + TimePicker (antd vi locale) + TextArea ghi chú; validate: thời gian mới > hiện tại (chặn quá khứ), note optional; submit → POST `/service-orders/:code/reschedule` `{technicianCode, expectedTime, note}`.
-- [ ] Render từ RescheduleButton theo `buttons.allowReschedule`; sau mutate → status RESCHEDULED + expectedTime mới hiển thị; sau đó AcceptButton xuất hiện lại (dead-end fix — verify).
-- [ ] Unit tests: validation quá khứ, payload shape.
-- [ ] Browser verify: reschedule SO-0004 → status + note trong timeline + nút Accept lại.
-- [ ] Commit: `feat(ktv-mobile): SF-25 reschedule modal — thời gian mới + ghi chú`
+- [x] Modal: DatePicker + TimePicker (antd vi locale) + TextArea ghi chú; validate: thời gian mới > hiện tại (chặn quá khứ), note optional; submit → POST `/service-orders/:code/reschedule` `{technicianCode, expectedTime, note}`.
+- [x] Render từ RescheduleButton theo `buttons.allowReschedule`; sau mutate → status RESCHEDULED + expectedTime mới hiển thị; sau đó AcceptButton xuất hiện lại (dead-end fix — verify).
+- [x] Unit tests: validation quá khứ, payload shape.
+- [ ] Browser verify: reschedule SO-0004 → status + note trong timeline + nút Accept lại. — **VERIFY-PENDING (T6): docker daemon DOWN; mini-stack `/tmp/sf25/mini-stack.sh` chạy khi docker lên (T5/T6 dùng chung).**
+- [x] Commit: `feat(ktv-mobile): SF-25 reschedule modal — thời gian mới + ghi chú`
 
 ### Task 7: order-detail-map-tel — chi tiết đơn + map + gọi KH
 **Files:** `apps/ktv-mobile/src/features/order-detail/**` (OrderDetailPage, Timeline, AddressMapCard), unit tests.
