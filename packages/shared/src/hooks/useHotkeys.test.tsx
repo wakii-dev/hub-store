@@ -55,7 +55,8 @@ describe('useHotkeys', () => {
     const handler = vi.fn();
     renderHook(() => useHotkeys('test-ctx', 'Test', bindingsFor(handler)));
     const div = document.createElement('div');
-    div.isContentEditable = true;
+    // isContentEditable là readonly trong lib.dom — ghi qua defineProperty (SF-12 CI tsc --noEmit).
+    Object.defineProperty(div, 'isContentEditable', { value: true, configurable: true });
     document.body.appendChild(div);
 
     act(() => {
