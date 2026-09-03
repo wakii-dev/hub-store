@@ -174,8 +174,8 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 **Files:**
 - Test: bổ sung contract test role-gate note (đã trong Task 4 Step 3) — task này VERIFY + ghi nhận, không code mới.
 
-- [ ] **Step 1: Verify** — `PUT /fulfillment/:code/note` hoạt động: boot stack → curl/BFF test happy path + audit row `order.update_note` trong activity_log. Ghi kết quả (đã tồn tại từ SF-2 — proto:182, route :369, Java updateNote).
-- [ ] **Step 2: Commit** `test(order-note): verify existing note endpoint — no changes needed` (chỉ khi có test thêm; nếu thuần verify → ghi kết quả vào Linear comment thay commit rỗng).
+- [x] **Step 1: Verify** — `PUT /fulfillment/:code/note` hoạt động: boot stack → curl/BFF test happy path + audit row `order.update_note` trong activity_log. Ghi kết quả (đã tồn tại từ SF-2 — proto:182, route :369, Java updateNote).
+- [x] **Step 2: Commit** `test(order-note): verify existing note endpoint — no changes needed` (chỉ khi có test thêm; nếu thuần verify → ghi kết quả vào Linear comment thay commit rỗng).
 
 ### Task 9: e2e-order-ops — Playwright spec mới
 
