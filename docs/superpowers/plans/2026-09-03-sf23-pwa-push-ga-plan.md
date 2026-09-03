@@ -71,8 +71,8 @@ Testing strategy: vitest unit (BFF libs mirror audit.spec.ts pattern; ga off/on;
 ### Task T1: pwa-manifest-sw
 **Files:** Create `apps/shell/public/manifest.webmanifest`, `apps/shell/public/sw.js`, `apps/shell/public/icons/icon-192.png`, `icon-512.png`, `apps/shell/src/lib/pwa.ts`; Modify `apps/shell/index.html`, `apps/shell/src/main.tsx`; Test `apps/shell/src/lib/__tests__/pwa.test.ts` (theme token assert — pattern `shared-theme.test.ts`).
 
-- [ ] **Step 1: Icons.** Script 1 lần /tmp (không vào repo): Node zlib viết PNG solid #EB6E09 (192/512, RGBA) — minimal PNG encoder ~30 dòng (IHDR+IDAT+IEND, CRC32 table). Commit 2 PNG kết quả vào `apps/shell/public/icons/`.
-- [ ] **Step 2: manifest.webmanifest**
+- [x] **Step 1: Icons.** Script 1 lần /tmp (không vào repo): Node zlib viết PNG solid #EB6E09 (192/512, RGBA) — minimal PNG encoder ~30 dòng (IHDR+IDAT+IEND, CRC32 table). Commit 2 PNG kết quả vào `apps/shell/public/icons/`.
+- [x] **Step 2: manifest.webmanifest**
 
 ```json
 {
@@ -90,7 +90,7 @@ Testing strategy: vitest unit (BFF libs mirror audit.spec.ts pattern; ga off/on;
 }
 ```
 
-- [ ] **Step 3: sw.js** — PRECACHE + fetch-guard ĐÚNG THỨ TỰ (guard 3 `/api` là biênemode sống-của-SSE):
+- [x] **Step 3: sw.js** — PRECACHE + fetch-guard ĐÚNG THỨ TỰ (guard 3 `/api` là biênemode sống-của-SSE):
 
 ```js
 const CACHE = 'hubstore-v1';
@@ -135,7 +135,7 @@ self.addEventListener('fetch', (e) => {
 });
 ```
 
-- [ ] **Step 4: pwa.ts**
+- [x] **Step 4: pwa.ts**
 
 ```ts
 export function registerServiceWorker(): void {
@@ -148,10 +148,10 @@ export function registerServiceWorker(): void {
 }
 ```
 
-- [ ] **Step 5: index.html** — trong `<head>`: `<link rel="manifest" href="/manifest.webmanifest" />`, `<meta name="theme-color" content="#EB6E09" />`, `<link rel="apple-touch-icon" href="/icons/icon-192.png" />`. main.tsx: import + gọi `registerServiceWorker()` sau render.
-- [ ] **Step 6: test** — `pwa.test.ts` assert: manifest literal `theme_color` === design-tokens `primary` (import từ `@hub-store/shared`); sw.js source chứa guard `/api/` + `text/event-stream` không cần (guard 3 theo path đủ); index.html chứa link manifest.
-- [ ] **Step 7: Run** `pnpm --filter @hub-store/shell test` → PASS; **smoke curl-level**: boot shell dev server (hoặc boot-all) → `curl -s -o /dev/null -w "%{http_code} %{content_type}" http://localhost:3000/manifest.webmanifest` = `200 application/manifest+json` (hoặc JSON), `/sw.js` = 200 `text/javascript`.
-- [ ] **Step 8: Commit** `feat(pwa): manifest + service worker + icons (SF-23 T1)`
+- [x] **Step 5: index.html** — trong `<head>`: `<link rel="manifest" href="/manifest.webmanifest" />`, `<meta name="theme-color" content="#EB6E09" />`, `<link rel="apple-touch-icon" href="/icons/icon-192.png" />`. main.tsx: import + gọi `registerServiceWorker()` sau render.
+- [x] **Step 6: test** — `pwa.test.ts` assert: manifest literal `theme_color` === design-tokens `primary` (import từ `@hub-store/shared`); sw.js source chứa guard `/api/` + `text/event-stream` không cần (guard 3 theo path đủ); index.html chứa link manifest.
+- [x] **Step 7: Run** `pnpm --filter @hub-store/shell test` → PASS; **smoke curl-level**: boot shell dev server (hoặc boot-all) → `curl -s -o /dev/null -w "%{http_code} %{content_type}" http://localhost:3000/manifest.webmanifest` = `200 application/manifest+json` (hoặc JSON), `/sw.js` = 200 `text/javascript`.
+- [x] **Step 8: Commit** `feat(pwa): manifest + service worker + icons (SF-23 T1)`
 
 ### Task T2: offline-fallback
 **Files:** Create `apps/shell/public/offline.html`; Modify `apps/shell/public/sw.js` (precache offline.html — đã có từ T1; thêm fallback đã có ở network-first); Test qua e2e T9.
