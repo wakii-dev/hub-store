@@ -64,7 +64,7 @@ describe("deriveStopCoord", () => {
 });
 ```
 
-`packages/shared/src/map/map.test.ts`: test `sortStops(stops)` sắp theo stopOrder tăng dần; test `numberedStopIcon(n, color)` trả HTML chứa `sf24-stop-marker` + `data-stop-order="n"`; test `statusPinIcon(color)` chứa `sf24-status-pin` + màu được truyền (KHÔNG hardcode màu trong shared).
+`packages/shared/src/map/map.test.ts`: test `sortStops(stops)` sắp theo stopOrder tăng dần; test `numberedStopIcon(n, color, testId?)` trả HTML chứa `sf24-stop-marker` + `data-stop-order="n"` (+ `data-testid` khi truyền testId); test `statusPinIcon(color, testId?)` chứa `sf24-status-pin` + màu được truyền (KHÔNG hardcode màu trong shared).
 
 - [ ] **Step 1.3: Chạy test → FAIL**
 
@@ -104,7 +104,7 @@ export function deriveStopCoord(orderCode: string): LatLng | undefined {
 }
 ```
 
-`markers.ts` — `L.divIcon` factories (`import L from "leaflet"`): `numberedStopIcon(n: number, color: string)` → HTML `<span class="sf24-stop-marker" data-stop-order="${n}" style="background:${color}">${n}</span>` (iconSize [26,26]); `warehouseIcon(color: string)` → `<span class="sf24-warehouse-marker">▲? no — SVG inline box nhỏ</span>` (dùng ký tự/svg home đơn giản, data-testid="warehouse-marker"); `statusPinIcon(color: string)` → giọt nước CSS (border-radius 50% 50% 50% 0, rotate -45deg, background=color, class `sf24-status-pin`). Màu TRUYỀN VÀO — shared không import DESIGN_TOKENS vào icon (icon nhận string; app truyền `DESIGN_TOKENS.color.status.*`).
+`markers.ts` — `L.divIcon` factories (`import L from "leaflet"`): `numberedStopIcon(n: number, color: string, testId?: string)` → HTML `<span class="sf24-stop-marker" data-stop-order="${n}"${testId ? ` data-testid="${testId}"` : ""} style="background:${color}">${n}</span>` (iconSize [26,26]); `warehouseIcon(color: string, testId?: string)` → `<span class="sf24-warehouse-marker"${testId ? ` data-testid="${testId}"` : ""}>SVG inline home/box nhỏ</span>`; `statusPinIcon(color: string, testId?: string)` → giọt nước CSS (border-radius 50% 50% 50% 0, rotate -45deg, background=color, class `sf24-status-pin`, testId khi truyền). Màu TRUYỀN VÀO — shared không import DESIGN_TOKENS vào icon (icon nhận string; app truyền `DESIGN_TOKENS.color.status.*`).
 
 `mapController.ts`:
 
@@ -116,16 +116,25 @@ import type { LatLng } from "./routeFixture";
 export interface StopSpec extends LatLng {
   stopOrder: number;
   orderCode: string;
+  /** Có color → pin trạng thái (statusPinIcon); không → numbered stop (primary). */
+  color?: string;
+  /** DOM testid trên marker element (vd tech-map-pin-<code>). */
+  testId?: string;
   popupHtml?: string;
 }
 
 export interface MapController {
-  setWarehouse(p: LatLng & { popupHtml?: string }): void;
+  setWarehouse(p: LatLng & { popupHtml?: string; testId?: string }): void;
   setStops(stops: StopSpec[]): void;
   setPolyline(points: LatLng[]): void;
   fitToData(): void;
   invalidateSize(): void;
   destroy(): void;
+}
+
+/** Sắp stops theo stopOrder tăng dần — nguồn sự thật duy nhất về thứ tự. */
+export function sortStops<T extends { stopOrder: number }>(stops: T[]): T[] {
+  return [...stops].sort((a, b) => a.stopOrder - b.stopOrder);
 }
 
 export function createMap(container: HTMLElement, opts?: { scrollWheelZoom?: boolean }): MapController {
@@ -143,13 +152,18 @@ export function createMap(container: HTMLElement, opts?: { scrollWheelZoom?: boo
 
   const api: MapController = {
     setWarehouse(p) {
-      L.marker([p.lat, p.long], { icon: warehouseIcon("#475467") })
+      layer.clearLayers();
+      L.marker([p.lat, p.long], { icon: warehouseIcon("#475467", p.testId) })
         .bindPopup(p.popupHtml ?? "Kho")
         .addTo(layer);
     },
     setStops(stops) {
+      layer.clearLayers(); // chống marker trùng khi effect re-run (prop identity đổi)
       for (const s of stops) {
-        L.marker([s.lat, s.long], { icon: numberedStopIcon(s.stopOrder, "#EB6E09") })
+        const icon = s.color
+          ? statusPinIcon(s.color, s.testId)
+          : numberedStopIcon(s.stopOrder, "#EB6E09" /* DESIGN_TOKENS.color.primary */, s.testId);
+        L.marker([s.lat, s.long], { icon })
           .bindPopup(s.popupHtml ?? s.orderCode)
           .addTo(layer);
       }
@@ -274,8 +288,10 @@ describe("BatchRouteMap.buildStops", () => {
     expect(stops[1].popupHtml).toContain("ORD-A");
     expect(stops[1].popupHtml).toContain("12 ABC");
   });
-  it("planningMap rỗng → stops rỗng (fallback EmptyState ở caller)", () => {
-    // loadPlanningMap mock trả [] ở test riêng
+  it("planningMap rỗng → stops rỗng (fallback EmptyState ở caller)", async () => {
+    const { loadPlanningMap } = await import("@hub-store/shared");
+    (loadPlanningMap as ReturnType<typeof vi.fn>).mockReturnValueOnce([]);
+    expect(buildStops("B-EMPTY")).toEqual({ stops: [], missing: 0 });
   });
 });
 ```
@@ -296,9 +312,9 @@ import "./batchRouteMap.css"; // nếu cần style popup riêng
 export interface StopMeta { address?: string; cod?: number }
 
 /** stops từ planningMap (nguồn stopOrder — RG #5) + mock coords fixture.
- * orderCode="": fallback chưa có tọa độ → loại + đếm. */
+ * orderCode="": fallback chưa có tọa độ → loại + đếm. Dùng sortStops shared. */
 export function buildStops(batchCode: string, stopMeta?: Record<string, StopMeta>) {
-  const entries = [...loadPlanningMap(batchCode)].sort((a, b) => a.stopOrder - b.stopOrder);
+  const entries = sortStops(loadPlanningMap(batchCode));
   const stops: { lat: number; long: number; stopOrder: number; orderCode: string; popupHtml: string }[] = [];
   let missing = 0;
   for (const e of entries) {
@@ -326,7 +342,7 @@ export function BatchRouteMap({ batchCode, perOrderCode, stopMeta }: {
     <div>
       <MapView
         testId="tracking-route-map"
-        warehouse={{ ...MOCK_WAREHOUSE, popupHtml: "Kho" }}
+        warehouse={{ ...MOCK_WAREHOUSE, popupHtml: "Kho", testId: "warehouse-marker" }}
         stops={visible}
         polyline={perOrderCode ? undefined : [MOCK_WAREHOUSE, ...visible]}
         scrollWheelZoom={false}
@@ -351,7 +367,7 @@ import { Tabs } from "antd";
   defaultActiveKey="timeline"
   items={[
     { key: "timeline", label: t("tracking.tabTimeline"), children: <TimelineContent /> },
-    { key: "map", label: t("tracking.tabMap"), children: <BatchRouteMap batchCode={batchCode} perOrderCode={orderCode} stopMeta={stopMeta} /> },
+    { key: "map", label: <span data-testid="tracking-map-tab">{t("tracking.tabMap")}</span>, children: <BatchRouteMap batchCode={batchCode} perOrderCode={orderCode} stopMeta={stopMeta} /> },
   ]}
 />
 ```
@@ -399,7 +415,7 @@ vi.mock("@hub-store/shared", async (importOriginal) => ({
 }));
 ```
 
-Assert: render sau fetch — `tech-map-pin-<code1>` tồn tại; `map-no-coords-note` chứa "1"; màu pin của order1 = toneColors(statusTone(status)).text (assert qua style hoặc qua helper buildPins).
+Assert TRÊN HELPER (không assert DOM pin — MapView đã stub, plan-critic P0-2): export `buildPins(orders)` từ `MapTab.tsx` và assert output — pin của order có location: `color === toneColors(statusTone(status)).text`, `testId === "tech-map-pin-<code>"`, `popupHtml` chứa code + status + address + receiver + `tech-map-call-<code>`; order thiếu location không có pin; đếm `missing === 1`. Test render (MapView stub) chỉ assert `map-no-coords-note` chứa "1" + `tech-map-view` visible.
 
 - [ ] **Step 3.3: Implement MapTab**
 
@@ -419,24 +435,31 @@ function pinColor(status: string): string {
   return toneColors(statusTone(status)).text;
 }
 
+/** Pure helper — unit test target (plan-critic P0-2): pins có color (tone) +
+ * testId `tech-map-pin-<code>` + popupHtml đủ code/status/address/receiver/tel. */
+export function buildPins(orders: DeliveryOrderDto[], callLabel: string) {
+  const pinned = orders.filter((o) => o.receiver?.location).map((o) => ({
+    lat: o.receiver!.location!.lat,
+    long: o.receiver!.location!.long,
+    stopOrder: 0,
+    orderCode: o.code,
+    color: pinColor(o.status),
+    testId: `tech-map-pin-${o.code}`,
+    popupHtml: `<div class="sf24-tech-popup" data-testid="tech-map-popup-${o.code}"><strong>${o.code}</strong><div>${o.status}</div>${o.receiver?.address ? `<div>${o.receiver.address}</div>` : ""}${o.receiver?.name ? `<div>${o.receiver.name}</div>` : ""}${o.receiver?.phone ? `<a href="tel:${o.receiver.phone}" data-testid="tech-map-call-${o.code}">${callLabel}</a>` : ""}</div>`,
+  }));
+  return { pinned, missing: orders.filter((o) => !o.receiver?.location).length };
+}
+
 export function MapTab() {
   const { t } = useTranslation("tech"); // đọc đúng namespace tech.i18n.ts đang dùng
   const { data, loading } = useTechFetch<DeliveryOrderDto[]>(
     () => filterDeliveryOrders({ page: 1, pageSize: PAGE_SIZE }).then((r) => r.items ?? []),
     [],
   );
-  const { pinned, missing } = useMemo(() => {
-    const list = data ?? [];
-    return {
-      pinned: list.filter((o) => o.receiver?.location).map((o) => ({
-        lat: o.receiver.location!.lat, long: o.receiver.location!.long,
-        stopOrder: 0, orderCode: o.code,
-        color: pinColor(o.status),
-        popupHtml: `<div class="sf24-tech-popup" data-testid="tech-map-popup-${o.code}"><strong>${o.code}</strong><div>${o.status}</div>${o.receiver?.phone ? `<a href="tel:${o.receiver.phone}" data-testid="tech-map-call-${o.code}">${t("tech.map.call")}</a>` : ""}</div>`,
-      })),
-      missing: list.filter((o) => !o.receiver?.location).length,
-    };
-  }, [data, t]);
+  const { pinned, missing } = useMemo(
+    () => buildPins(data ?? [], t("tech.map.call")),
+    [data, t],
+  );
 
   if (loading) return null; // theo pattern loading của các tab khác — đọc DeliveryTab
   return (
@@ -448,7 +471,7 @@ export function MapTab() {
 }
 ```
 
-(LƯU Ý executor: đọc `useTechFetch` + `DeliveryTab` thật để khớp hook signature + loading pattern + `DeliveryOrderDto` fields (`code`/`fulfillCode`, `status`, `receiver.name/phone/location`) — snippet trên là shape mục tiêu, sửa tên field theo DTO thật. Màu pin: `toneColors(tone).text` — KHÔNG copy hex. Testid pin trên divIcon: truyền qua `stops[].popupHtml` không đủ — cần marker element có `data-testid`: nếu MapView shared chưa hỗ trợ, mở rộng `StopSpec` thêm `testId?` → `numberedStopIcon`/`statusPinIcon` set `data-testid` trong HTML.)
+(LƯU Ý executor: đọc `useTechFetch` + `DeliveryTab` thật để khớp hook signature + loading pattern + `DeliveryOrderDto` fields (`code`/`fulfillCode`, `status`, `receiver.name/phone/address/location`) — snippet trên là shape mục tiêu, sửa tên field theo DTO thật. Màu pin: `toneColors(tone).text` — KHÔNG copy hex. StopSpec shared ĐÃ có `color`/`testId` từ Task 1 — KHÔNG cần chạm shared trong task này.)
 
 `TechServicePage.tsx`: thêm Tab item `{ key: 'map', label: t('tech.tabMap'), children: <MapTab /> }` với `data-testid="tech-tab-map"` trên label (antd Tabs label accept node). KHÔNG đổi tabs cũ.
 
@@ -501,9 +524,11 @@ const stopMeta = useMemo(() => {
 
 (Executor đọc field names thật của `HubStoreOrderFilterItem` trong `packages/shared/src/types/order.ts` — `customerAddress` + `codAmount` đã được spec-critic verify tồn tại dòng 31/35.)
 
-- [ ] **Step 4.3: Build/typecheck cả 3 apps + test smoke**
+- [ ] **Step 4.3: Build/typecheck cả 3 apps + test smoke + verify CSP**
 
 Run: `pnpm install` (nếu chưa) → `pnpm --filter fulfillment build && pnpm --filter shell build && pnpm --filter orders build` (hoặc typecheck script tương đương — đọc scripts) → tất cả sạch. Run unit tests 3 apps → PASS (test cũ không vỡ).
+
+Verify CSP (spec §4.6 — plan-critic P1): grep CSP headers trong BFF (`services/bff-gateway/**` — `Content-Security-Policy`) + shell index.html. Kết quả (có/không CSP; nếu có → `img-src`/`connect-src` có `tile.openstreetmap.org` chưa) ghi vào commit message + comment Linear cuối task.
 
 - [ ] **Step 4.4: Commit**
 
@@ -536,7 +561,8 @@ import { test, expect } from "@playwright/test";
 test("tracking modal → tab bản đồ: warehouse + stops theo stopOrder", async ({ page }) => {
   // Route-abort tiles OSM — không phụ thuộc mạng:
   await page.route("**://*.tile.openstreetmap.org/**", (r) => r.abort());
-  // Seed planningMap TRƯỚC app load (key format internal — shared convention):
+  // Seed planningMap TRƯỚC app load — key format `nvc.plannings.${batchCode}`
+  // (đã verify planningMap.ts:20; nếu format đổi → spec 08 fail rõ ràng, sửa đây):
   await page.addInitScript(() => {
     localStorage.setItem("nvc.plannings.B-E2E-24", JSON.stringify([
       { planningId: "pl-1", orderCode: "ORD-E2E-A", stopOrder: 1, serviceId: "svc", vehicleType: "truck", addons: [] },
