@@ -3,7 +3,12 @@
  * 3 nhóm carrier (Tự giao / Xe tải NVC / FPT_DELIVERY) + map rows D1 →
  * DeliveryStopOrderDto cho POST /delivery-batch/quotes.
  */
-import type { DeliveryStopOrderDto, HubStoreOrderFilterItem } from "@hub-store/shared";
+import type {
+  DeliveryAddonDto,
+  DeliveryQuoteDto,
+  DeliveryStopOrderDto,
+  HubStoreOrderFilterItem,
+} from "@hub-store/shared";
 
 /** 3 nhóm carrier — KHO_CN = default (Tự giao, flow legacy byte-for-byte). */
 export const CARRIER_GROUPS = ["KHO_CN", "TRUCK", "FPT_DELIVERY"] as const;
@@ -25,4 +30,13 @@ export function toStopOrders(rows: HubStoreOrderFilterItem[]): DeliveryStopOrder
     codAmount: r.codAmount ?? 0,
     totalBill: 0,
   }));
+}
+
+/**
+ * computeTotalFee — tổng phí TRUCK = quote.fee + Σ addon.fee (SF-16 §2.2).
+ * quote.fee là BE-authoritative (đã gồm base + per-km × distance);
+ * addons cộng trên (Task 4 nối AddonSelector — Task 3 truyền []).
+ */
+export function computeTotalFee(quote: DeliveryQuoteDto, addons: DeliveryAddonDto[]): number {
+  return quote.fee + addons.reduce((sum, a) => sum + (a.fee ?? 0), 0);
 }

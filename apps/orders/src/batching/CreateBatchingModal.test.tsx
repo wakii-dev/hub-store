@@ -12,7 +12,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
-import { initI18n, type HubStoreOrderFilterItem, type TimeRange } from "@hub-store/shared";
+import { formatVnd, initI18n, type DeliveryQuoteDto, type HubStoreOrderFilterItem, type TimeRange } from "@hub-store/shared";
 import { useGetDeliveryStaffQuery, useListOrdersQuery } from "@hub-store/api-client";
 import { ordersResources } from "../i18n";
 import { CreateBatchingModal } from "./CreateBatchingModal";
@@ -45,6 +45,18 @@ vi.mock("./batchingApi", () => ({
   useRecalculateDistanceMutation: () => [recalcMock, { isLoading: false }],
   useCreateBatchMutation: () => [createMock, { isLoading: false }],
   useGetTimeDeliveryQuery: (arg: { shopCode: string }) => timeDeliveryHook(arg),
+}));
+
+// Mock hooks NVC (SF-16 Task 3 — deliveryBatchApi). quotesLoading qua flag let.
+const quotesMock = vi.fn();
+const confirmPlanningMock = vi.fn();
+const bookingMock = vi.fn();
+let quotesLoadingFlag = false;
+
+vi.mock("./deliveryBatchApi", () => ({
+  useGetQuotesMutation: () => [quotesMock, { isLoading: quotesLoadingFlag }],
+  useConfirmPlanningMutation: () => [confirmPlanningMock, { isLoading: false }],
+  useCreateBookingMutation: () => [bookingMock, { isLoading: false }],
 }));
 
 let timeDeliveryHook: (arg: { shopCode: string }) => { data?: { timeSlots: TimeRange[] } } = () => ({});
@@ -170,6 +182,10 @@ beforeEach(() => {
   suggestMock.mockReset();
   recalcMock.mockReset();
   createMock.mockReset();
+  quotesMock.mockReset();
+  confirmPlanningMock.mockReset();
+  bookingMock.mockReset();
+  quotesLoadingFlag = false;
   mocked.useListOrdersQuery.mockReturnValue({ data: undefined, isFetching: false, isLoading: false } as never);
   mocked.useGetDeliveryStaffQuery.mockReturnValue({ data: staff } as never);
   timeDeliveryHook = createTimeDelivery([]);
@@ -392,6 +408,166 @@ describe("CreateBatchingModal", () => {
       shipperId: "S1",
       deliveryTime: { from: "2026-09-05T01:00:00.000Z", to: "2026-09-05T05:00:00.000Z" },
     });
+  });
+
+  // ─── SF-16 Task 3: quotes NVC (fetch + render + chọn + submit sequence) ───
+
+  const flushDebounce = () => new Promise((r) => setTimeout(r, 350)); // vượt debounce 300ms
+
+  function makeQuote(
+    serviceId: string,
+    name: string,
+    vehicleType: string,
+    fee: number,
+    etaMinutes = 45,
+  ): DeliveryQuoteDto {
+    return { serviceId, name, vehicleType, fee, baseFee: fee, etaMinutes, isExceedFeeLimit: false, addonServices: [] };
+  }
+
+  // 6 xe mock (spec §2.2): SGCN/500KG/1T/2T/3.5T/8T
+  const SIX_QUOTES: DeliveryQuoteDto[] = [
+    makeQuote("SGCN", "Xe máy giao hàng", "SGCN", 20000, 30),
+    makeQuote("500KG", "Xe tải nhỏ", "500KG", 35000, 40),
+    makeQuote("1T", "Xe tải 1 tấn", "1T", 50000, 45),
+    makeQuote("2T", "Xe tải 2 tấn", "2T", 80000, 50),
+    makeQuote("3.5T", "Xe tải 3.5 tấn", "3.5T", 120000, 60),
+    makeQuote("8T", "Xe tải 8 tấn", "8T", 200000, 75),
+  ];
+
+  async function selectTruckAndGetQuotes(stops: unknown[]) {
+    fireEvent.click(screen.getByTestId("carrier-group-TRUCK"));
+    expect(quotesMock).not.toHaveBeenCalled(); // debounce 300ms — chưa fetch
+    await flushDebounce();
+    expect(quotesMock).toHaveBeenCalledTimes(1);
+    expect(quotesMock.mock.calls[0][0]).toMatchObject({
+      shopCode: "30201",
+      stopOrders: stops,
+    });
+  }
+
+  const ALL_STOPS = [
+    { address: "Địa chỉ ORD-3001", distance: 3.5, codAmount: 15000000, totalBill: 0 },
+    { address: "Địa chỉ ORD-3002", distance: 5, codAmount: 15000000, totalBill: 0 },
+    { address: "Địa chỉ ORD-3003", distance: 8.25, codAmount: 15000000, totalBill: 0 },
+  ];
+
+  it("SF-16 T3: TRUCK → fetch quotes debounce + render 6 radio + chọn 1T → tổng cập nhật (sumbar + review)", async () => {
+    quotesMock.mockReturnValue(unwrapResult({ quotes: SIX_QUOTES, meta: { mock: true } }));
+    renderModal();
+    await flush();
+
+    // KHO_CN — chưa fetch quotes
+    expect(screen.queryByTestId("quote-list")).toBeNull();
+
+    await selectTruckAndGetQuotes(ALL_STOPS);
+
+    // 6 quote render theo testid quote-{serviceId} + [MOCK] tag (meta.mock=true)
+    for (const q of SIX_QUOTES) {
+      expect(screen.getByTestId(`quote-${q.serviceId}`)).toBeTruthy();
+    }
+    expect(screen.getAllByText("[MOCK]")).toHaveLength(6);
+    // chưa chọn → chưa có dòng Phí vận chuyển
+    expect(screen.queryByTestId("sum-shipping-fee")).toBeNull();
+
+    // chọn 1T (click input radio trong label)
+    const radio1T = screen.getByTestId("quote-1T").querySelector("input")!;
+    fireEvent.click(radio1T);
+    expect((radio1T as HTMLInputElement).checked).toBe(true);
+
+    // tổng cập nhật — sumbar + review (dòng MỚI, formatVnd(50000))
+    expect(screen.getByTestId("sum-shipping-fee").textContent).toContain(formatVnd(50000));
+    expect(screen.getByTestId("review-shipping-fee").textContent).toContain(formatVnd(50000));
+    // dòng cũ còn nguyên (sum + review — 2 ô Tổng COD legacy)
+    expect(screen.getAllByText("Tổng COD")).toHaveLength(2);
+  });
+
+  it("SF-16 T3: submit TRUCK → sequence create → confirmPlanning → createBooking (payload shape + call order)", async () => {
+    const onClose = vi.fn();
+    quotesMock.mockReturnValue(unwrapResult({ quotes: SIX_QUOTES, meta: { mock: false } }));
+    createMock.mockReturnValue(
+      unwrapResult({
+        batchCode: "BATCH-9",
+        items: [
+          { batchCode: "BATCH-9", stopOrder: 1, orderCode: "ORD-3001", customerAddress: "Địa chỉ ORD-3001", distance: 3.5, fromDeliveryTime: "", toDeliveryTime: "", orderStatus: 1, orderType: 0, items: [], totalQuantity: 2, codAmount: 15000000 },
+          { batchCode: "BATCH-9", stopOrder: 2, orderCode: "ORD-3002", customerAddress: "Địa chỉ ORD-3002", distance: 5, fromDeliveryTime: "", toDeliveryTime: "", orderStatus: 1, orderType: 0, items: [], totalQuantity: 2, codAmount: 15000000 },
+        ],
+      }),
+    );
+    confirmPlanningMock.mockReturnValue(
+      unwrapResult({
+        plannings: [
+          { planningId: "101", batchCode: "BATCH-9", stopOrder: 1, orderCode: "ORD-3001", vehicleType: "1T", serviceId: "1T", addons: [], status: "CONFIRMED", codAmount: 15000000, totalBill: 0, fee: 50000 },
+          { planningId: "102", batchCode: "BATCH-9", stopOrder: 2, orderCode: "ORD-3002", vehicleType: "1T", serviceId: "1T", addons: [], status: "CONFIRMED", codAmount: 15000000, totalBill: 0, fee: 50000 },
+        ],
+        meta: { mock: false },
+      }),
+    );
+    bookingMock.mockReturnValue(
+      unwrapResult({
+        bookings: [
+          { planningId: "101", carrierBookingId: "CB-1", driver: "Nam - 0901", licensePlate: "30K-123.45", status: "ACTIVE" },
+          { planningId: "102", carrierBookingId: "CB-2", driver: "Bình - 0902", licensePlate: "30K-678.90", status: "ACTIVE" },
+        ],
+        meta: { mock: false },
+      }),
+    );
+    timeDeliveryHook = createTimeDelivery([{ from: "2026-09-05T01:00:00.000Z", to: "2026-09-05T05:00:00.000Z" }]);
+
+    renderModal(selection.slice(0, 2), onClose);
+    await flush();
+
+    await selectTruckAndGetQuotes(ALL_STOPS.slice(0, 2));
+    const radio1T = screen.getByTestId("quote-1T").querySelector("input")!;
+    fireEvent.click(radio1T);
+
+    // Shipper + ngày (pattern Select + hint slot của test cũ)
+    const shipperSelector = document.querySelector<HTMLElement>("[data-testid='batch-shipper-select'] .ant-select-selector")!;
+    fireEvent.mouseDown(shipperSelector);
+    await waitFor(() => document.querySelector(".ant-select-item-option"));
+    const option = document.querySelector<HTMLElement>(".ant-select-item-option")!;
+    fireEvent.mouseDown(option);
+    fireEvent.mouseUp(option);
+    fireEvent.click(option);
+    fireEvent.click(screen.getByTestId("batch-time-hint-0"));
+
+    fireEvent.click(screen.getByTestId("batch-submit"));
+    await flush();
+
+    // 1) create (phiếu)
+    expect(createMock).toHaveBeenCalledWith({
+      orderCodes: ["ORD-3001", "ORD-3002"],
+      shipperId: "S1",
+      deliveryTime: { from: "2026-09-05T01:00:00.000Z", to: "2026-09-05T05:00:00.000Z" },
+    });
+    // 2) confirmPlanning (chốt giá — vehicleType/serviceId từ quote đã chọn)
+    expect(confirmPlanningMock).toHaveBeenCalledWith({
+      batchCode: "BATCH-9",
+      plannings: [
+        { stopOrder: 1, orderCode: "ORD-3001", vehicleType: "1T", serviceId: "1T", addons: [] },
+        { stopOrder: 2, orderCode: "ORD-3002", vehicleType: "1T", serviceId: "1T", addons: [] },
+      ],
+    });
+    // 3) createBooking (book xe — totalBill: 0 theo contract §3.6)
+    expect(bookingMock).toHaveBeenCalledWith({
+      batchCode: "BATCH-9",
+      shipmentPlannings: [
+        { planningId: "101", codAmount: 15000000, totalBill: 0, stopOrder: 1 },
+        { planningId: "102", codAmount: 15000000, totalBill: 0, stopOrder: 2 },
+      ],
+    });
+    // Call order: create → confirm → booking
+    expect(createMock.mock.invocationCallOrder[0]).toBeLessThan(confirmPlanningMock.mock.invocationCallOrder[0]);
+    expect(confirmPlanningMock.mock.invocationCallOrder[0]).toBeLessThan(bookingMock.mock.invocationCallOrder[0]);
+
+    // Booking results hiển thị ở review section (driver · biển số · booking id)
+    const review = screen.getByTestId("review-booking").textContent ?? "";
+    expect(review).toContain("Nam - 0901");
+    expect(review).toContain("30K-123.45");
+    expect(review).toContain("CB-1");
+
+    // KHÔNG auto-close (khác legacy) — NG cần xem booking results
+    await new Promise((r) => setTimeout(r, 900));
+    expect(onClose).not.toHaveBeenCalled();
   });
 
   it("SF-16: mode prop — default 'create' giữ title cũ; replan/rebook đổi title", () => {

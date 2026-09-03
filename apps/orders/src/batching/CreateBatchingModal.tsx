@@ -16,7 +16,7 @@
  *   success → micro-interaction "✓" 800ms → đóng + invalidate Fulfillment LIST.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, DatePicker, Empty, Modal, Select, Space, Tag, Tooltip, Typography, message } from "antd";
+import { Button, DatePicker, Empty, Modal, Radio, Select, Space, Spin, Tag, Tooltip, Typography, message } from "antd";
 import {
   SortableContainer,
   SortableElement,
@@ -33,6 +33,9 @@ import {
   StatusTag,
   formatPeriodOfTime,
   formatVnd,
+  type DeliveryAddonDto,
+  type DeliveryBookingDto,
+  type DeliveryQuoteDto,
   type DeliveryStaffResponse,
   type HubStoreOrderFilterItem,
   type PackingGroup,
@@ -45,7 +48,13 @@ import {
   usePackingSuggestMutation,
   useRecalculateDistanceMutation,
 } from "./batchingApi";
+import {
+  useConfirmPlanningMutation,
+  useCreateBookingMutation,
+  useGetQuotesMutation,
+} from "./deliveryBatchApi";
 import { buildAddOrderFilterRequest, extractRejectMessages } from "./batchingHelpers";
+import { computeTotalFee, toStopOrders } from "./carrierHelpers";
 import { CarrierSection } from "./CarrierSection";
 import type { CarrierGroup } from "./carrierHelpers";
 import "./batching-modal.css";
@@ -138,6 +147,13 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
   const [groups, setGroups] = useState<PackingGroup[] | null>(null);
   // SF-16 §2.1 — nhóm vận chuyển: KHO_CN default → flow cũ byte-for-byte.
   const [carrierGroup, setCarrierGroup] = useState<CarrierGroup>("KHO_CN");
+  // SF-16 §2.2 — quotes NVC (Task 3): fetch khi nhóm TRUCK, debounce 300ms;
+  // refetch khi rows đổi (recalc distance → km mới → báo giá mới).
+  const [quotes, setQuotes] = useState<DeliveryQuoteDto[] | null>(null);
+  const [metaMock, setMetaMock] = useState(false);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  const [bookingResults, setBookingResults] = useState<DeliveryBookingDto[] | null>(null);
+  const [nvcSubmitting, setNvcSubmitting] = useState(false);
   const [shipperId, setShipperId] = useState<string | undefined>(undefined);
   const [deliveryTime, setDeliveryTime] = useState<TimeRange | null>(null);
   // SF-6 §2.3 stepper — NON-BLOCKING (Deviation D1): content không bao giờ ẩn,
@@ -168,6 +184,11 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
       setRows(orders);
       setGroups(null);
       setCarrierGroup("KHO_CN");
+      setQuotes(null);
+      setMetaMock(false);
+      setSelectedServiceId(null);
+      setBookingResults(null);
+      setNvcSubmitting(false);
       setShipperId(undefined);
       setDeliveryTime(null);
       setActiveSection(1);
@@ -186,6 +207,31 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
   const [packingSuggest, { isLoading: suggesting }] = usePackingSuggestMutation();
   const [recalculate, { isLoading: recalculating }] = useRecalculateDistanceMutation();
   const [createBatch, { isLoading: creating }] = useCreateBatchMutation();
+
+  // ---- Quotes NVC (SF-16 §2.2 — Task 3) -----------------------------------------
+  const [getQuotes, { isLoading: quotesLoading }] = useGetQuotesMutation();
+  const [confirmPlanning] = useConfirmPlanningMutation();
+  const [createBooking] = useCreateBookingMutation();
+
+  useEffect(() => {
+    if (carrierGroup !== "TRUCK" || rows.length === 0) return;
+    // Debounce 300ms — gộp burst (thêm nhiều đơn / recalc): chỉ fetch lần cuối.
+    const timer = setTimeout(() => {
+      getQuotes({ shopCode, stopOrders: toStopOrders(rows) })
+        .unwrap()
+        .then((resp) => {
+          setQuotes(resp.quotes ?? []);
+          setMetaMock(resp.meta?.mock ?? false);
+        })
+        .catch(() => {
+          setQuotes(null);
+          message.error(t("batching.quotes.fetchError"));
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+    // refetch khi rows đổi (DnD/thêm đơn/recalc distance); getQuotes/t ổn định.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carrierGroup, rows, shopCode, getQuotes]);
 
   const handlePackingSuggest = async () => {
     try {
@@ -259,10 +305,20 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
   const pickedFromHint = deliveryTime !== null && hintSlots.some((s) => s.from === deliveryTime.from && s.to === deliveryTime.to);
 
   // ---- Submit -------------------------------------------------------------------
-  const canSubmit = rows.length > 0 && !!shipperId && deliveryTime !== null;
+  // TRUCK: phải chọn quote trước khi submit (fee gates chi tiết ở Task 5).
+  const canSubmit = rows.length > 0 && !!shipperId && deliveryTime !== null && (carrierGroup !== "TRUCK" || !!selectedServiceId);
+
+  // SF-16 §2.2 — addons Task 4 nối AddonSelector; Task 3 truyền [] (tổng = quote.fee).
+  const selectedAddons: DeliveryAddonDto[] = [];
+  const selectedQuote = (quotes ?? []).find((q) => q.serviceId === selectedServiceId) ?? null;
+  const shippingFee = selectedQuote !== null ? computeTotalFee(selectedQuote, selectedAddons) : null;
 
   const handleCreate = async () => {
     if (!canSubmit) return;
+    if (carrierGroup === "TRUCK") {
+      await handleCreateTruck();
+      return;
+    }
     try {
       await createBatch({
         orderCodes: rows.map((r) => r.fulfillCode), // theo THỨ TỰ GIAO hiện hành
@@ -276,6 +332,53 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
     } catch (err) {
       // Error UX: backend reject (khác kho / đơn ≠0) → message, modal GIỮ state.
       message.error(extractRejectMessages(err, t("createBatch.error")).join("; "));
+    }
+  };
+
+  /**
+   * Submit TRUCK (SF-16 §2.4 — Task 3): sequence 3 bước NVC —
+   * createBatch (tạo phiếu) → confirmPlanning (chốt giá + plannings) →
+   * createBooking (book xe — driver/biển số). 422 ở bất kỳ bước → message từ
+   * details[], modal GIỮ state. Success KHÔNG auto-close (khác legacy):
+   * booking results hiển thị ở review section cho NG xem trước khi tự đóng.
+   */
+  const handleCreateTruck = async () => {
+    if (selectedQuote === null || deliveryTime === null || !shipperId) return;
+    setNvcSubmitting(true);
+    try {
+      const batch = await createBatch({
+        orderCodes: rows.map((r) => r.fulfillCode), // theo THỨ TỰ GIAO hiện hành
+        shipperId,
+        deliveryTime,
+      }).unwrap();
+      const batchCode = batch?.batchCode ?? "";
+      const confirmResp = await confirmPlanning({
+        batchCode,
+        plannings: (batch?.items ?? []).map((it) => ({
+          stopOrder: it.stopOrder,
+          orderCode: it.orderCode,
+          vehicleType: selectedQuote.vehicleType,
+          serviceId: selectedQuote.serviceId,
+          addons: [], // Task 4 nối AddonSelector
+        })),
+      }).unwrap();
+      const plannings = confirmResp.plannings ?? [];
+      const bookingResp = await createBooking({
+        batchCode,
+        shipmentPlannings: plannings.map((p) => ({
+          planningId: p.planningId,
+          codAmount: p.codAmount,
+          totalBill: 0, // FE chưa có field totalBill (contract §3.6) — 0 như toStopOrders
+          stopOrder: p.stopOrder,
+        })),
+      }).unwrap();
+      setBookingResults(bookingResp.bookings ?? []);
+      message.success(t("batching.quotes.bookingSuccess"));
+      setCreated(true); // disable nút submit — modal mở để NG xem booking results
+    } catch (err) {
+      message.error(extractRejectMessages(err, t("batching.quotes.error")).join("; "));
+    } finally {
+      setNvcSubmitting(false);
     }
   };
 
@@ -435,7 +538,34 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
       {/* ─── Section 2: carrier & shipper & thời gian giao + sumbar ─── */}
       <div className="batch-form" ref={section2Ref}>
         {/* SF-16 §2.1 — nhóm vận chuyển, chèn TRÊN shipper-select (testid cũ nguyên vẹn) */}
-        <CarrierSection value={carrierGroup} onChange={setCarrierGroup} />
+        <CarrierSection value={carrierGroup} onChange={setCarrierGroup}>
+          {carrierGroup === "TRUCK" &&
+            (quotesLoading ? (
+              <Spin size="small" data-testid="quotes-loading" />
+            ) : quotes === null ? (
+              <Typography.Text type="secondary">{t("batching.carrierGroup.quotesPlaceholder")}</Typography.Text>
+            ) : (
+              <div className="quote-list" data-testid="quote-list">
+                {quotes.map((q) => (
+                  <label
+                    key={q.serviceId}
+                    className={`quote-item${q.serviceId === selectedServiceId ? " quote-item-selected" : ""}`}
+                    data-testid={`quote-${q.serviceId}`}
+                  >
+                    <Radio
+                      checked={q.serviceId === selectedServiceId}
+                      onChange={() => setSelectedServiceId(q.serviceId)}
+                    />
+                    <span className="quote-name">{q.name}</span>
+                    <Tag className="quote-vehicle">{q.vehicleType}</Tag>
+                    <span className="quote-eta">{t("batching.quotes.eta", { minutes: q.etaMinutes })}</span>
+                    {metaMock && <Tag className="quote-mock-tag">[MOCK]</Tag>}
+                    <span className="quote-fee">{formatVnd(computeTotalFee(q, selectedAddons))}</span>
+                  </label>
+                ))}
+              </div>
+            ))}
+        </CarrierSection>
         <div className="batch-form-row">
           <div className="sf6-form-card">
             <Typography.Text strong>{t("createBatch.shipper")}</Typography.Text>
@@ -507,6 +637,13 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
             <span className="sf6-sum-key">{t("createBatch.sum.cod")}</span>
             <span className="sf6-sum-val">{formatVnd(totalCod)}</span>
           </div>
+          {/* SF-16 §2.2 — Phí vận chuyển (dòng MỚI, KHÔNG đụng 4 ô cũ) */}
+          {shippingFee !== null && (
+            <div className="sf6-sum-cell" data-testid="sum-shipping-fee">
+              <span className="sf6-sum-key">{t("batching.quotes.sumShippingFee")}</span>
+              <span className="sf6-sum-val">{formatVnd(shippingFee)}</span>
+            </div>
+          )}
         </div>
 
         {/* ─── Section 3: review + note banner ─── */}
@@ -533,6 +670,21 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
             <span className="sf6-review-key">{t("createBatch.review.cod")}</span>
             <span className="sf6-review-val">{formatVnd(totalCod)}</span>
           </div>
+          {/* SF-16 §2.2 — Phí vận chuyển (dòng MỚI) + booking results (sau submit TRUCK) */}
+          {shippingFee !== null && (
+            <div className="sf6-review-row" data-testid="review-shipping-fee">
+              <span className="sf6-review-key">{t("batching.quotes.reviewShippingFee")}</span>
+              <span className="sf6-review-val">{formatVnd(shippingFee)}</span>
+            </div>
+          )}
+          {bookingResults !== null && bookingResults.length > 0 && (
+            <div className="sf6-review-row" data-testid="review-booking">
+              <span className="sf6-review-key">{t("batching.quotes.reviewBooking")}</span>
+              <span className="sf6-review-val">
+                {bookingResults.map((b) => `${b.driver} · ${b.licensePlate} · ${b.carrierBookingId}`).join(" | ")}
+              </span>
+            </div>
+          )}
           <div className="sf6-review-row">
             <span className="sf6-review-key">{t("createBatch.review.note")}</span>
             <span className="sf6-review-val">—</span>
@@ -571,7 +723,7 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
           <Button
             type="primary"
             disabled={!canSubmit || created}
-            loading={creating}
+            loading={creating || nvcSubmitting}
             onClick={() => void handleCreate()}
             data-testid="batch-submit"
           >

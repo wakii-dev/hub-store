@@ -3,8 +3,8 @@
  * DeliveryStopOrderDto (quotes payload). Mock-free.
  */
 import { describe, expect, it } from "vitest";
-import type { HubStoreOrderFilterItem } from "@hub-store/shared";
-import { CARRIER_GROUPS, isGroupEnabled, toStopOrders } from "./carrierHelpers";
+import type { DeliveryAddonDto, DeliveryQuoteDto, HubStoreOrderFilterItem } from "@hub-store/shared";
+import { CARRIER_GROUPS, computeTotalFee, isGroupEnabled, toStopOrders } from "./carrierHelpers";
 
 const shop = { shopCode: "30201", shopName: "FPT Shop Cầu Giấy", address: "124 Xuân Thủy" };
 
@@ -55,5 +55,30 @@ describe("toStopOrders", () => {
 
   it("rows rỗng → mảng rỗng", () => {
     expect(toStopOrders([])).toEqual([]);
+  });
+});
+
+describe("computeTotalFee", () => {
+  const baseQuote: DeliveryQuoteDto = {
+    serviceId: "1T",
+    name: "Xe tải 1 tấn",
+    vehicleType: "1T",
+    fee: 50000,
+    baseFee: 30000,
+    etaMinutes: 45,
+    isExceedFeeLimit: false,
+    addonServices: [],
+  };
+
+  it("addons rỗng → total = quote.fee", () => {
+    expect(computeTotalFee(baseQuote, [])).toBe(50000);
+  });
+
+  it("total = quote.fee + Σ addon.fee", () => {
+    const addons: DeliveryAddonDto[] = [
+      { code: "ROUTE", name: "Qua nhiều điểm", grp: "ROUTE", fee: 10000 },
+      { code: "DOCUMENT", name: "Trả chứng từ", grp: "DOCUMENT", fee: 5000 },
+    ];
+    expect(computeTotalFee(baseQuote, addons)).toBe(65000);
   });
 });

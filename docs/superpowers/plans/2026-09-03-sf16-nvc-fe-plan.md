@@ -128,13 +128,13 @@ export function shipmentStatusLabel(s: string, locale: 'vi'|'en'): string // i18
 - Create: (tests mở rộng `CreateBatchingModal.test.tsx`)
 
 **Steps:**
-- [ ] 3.1 State trong modal (hoặc CarrierSection): `quotes: DeliveryQuoteDto[] | null`, `quotesLoading`, `selectedServiceId: string | null`, `metaMock: boolean`. Chọn nhóm TRUCK → gọi `useGetQuotesMutation` với `{shopCode: rows[0].shopAssignment.shopCode, stopOrders: toStopOrders(rows)}` (debounce 300ms; refetch khi rows distance đổi — kết hợp signal `batch-recalc-distance` đã có). Loading → `TableSkeleton`/Spin.
-- [ ] 3.2 Render radio list `quote-{serviceId}` (testid mới — được phép): name + vehicleType badge + fee `formatVnd` + `etaMinutes` phút + `[MOCK]` tag khi `metaMock`. Chọn quote → `selectedServiceId`.
-- [ ] 3.3 Recalc tổng: `totalFee = selectedQuote.fee + Σ selectedAddon.fee` (helper `computeTotalFee(quote, addons: DeliveryAddonDto[])` trong `carrierHelpers.ts` + test) — hiển thị ở sumbar (dòng "Phí vận chuyển") + review section (dòng mới, KHÔNG đụng dòng cũ).
-- [ ] 3.4 Submit TRUCK (wiring thô, gates chi tiết Task 5): `batch-submit` khi TRUCK → sequence: `POST /fulfillment/batches/create` (hook `useCreateBatchMutation` có sẵn — orderCodes từ rows, shipperId, deliveryTime) → `confirmPlanning` (mỗi row: `{stopOrder, orderCode, vehicleType: selectedQuote.vehicleType, serviceId, addons: []}` — addons nối vào Task 4) → `createBooking` (`{planningId, codAmount, totalBill, stopOrder}` từ create response + confirm response). Kết quả bookings hiển thị review section (driver, licensePlate, carrierBookingId). Lỗi 422 → message qua `error.data.details[].message` + i18n wrapper.
-- [ ] 3.5 i18n + CSS (`.quote-list`, `.quote-item` — tokens only).
-- [ ] 3.6 Test: computeTotalFee; modal TRUCK → mock api (msw hoặc mock hook theo pattern test hiện có) → quotes render 6 radio, chọn → tổng cập nhật.
-- [ ] 3.7 test + tsc → commit `feat(sf16): quotes display + recalc + submit truck sequence`.
+- [x] 3.1 State trong modal (hoặc CarrierSection): `quotes: DeliveryQuoteDto[] | null`, `quotesLoading`, `selectedServiceId: string | null`, `metaMock: boolean`. Chọn nhóm TRUCK → gọi `useGetQuotesMutation` với `{shopCode: rows[0].shopAssignment.shopCode, stopOrders: toStopOrders(rows)}` (debounce 300ms; refetch khi rows distance đổi — kết hợp signal `batch-recalc-distance` đã có). Loading → `TableSkeleton`/Spin.
+- [x] 3.2 Render radio list `quote-{serviceId}` (testid mới — được phép): name + vehicleType badge + fee `formatVnd` + `etaMinutes` phút + `[MOCK]` tag khi `metaMock`. Chọn quote → `selectedServiceId`.
+- [x] 3.3 Recalc tổng: `totalFee = selectedQuote.fee + Σ selectedAddon.fee` (helper `computeTotalFee(quote, addons: DeliveryAddonDto[])` trong `carrierHelpers.ts` + test) — hiển thị ở sumbar (dòng "Phí vận chuyển") + review section (dòng mới, KHÔNG đụng dòng cũ).
+- [x] 3.4 Submit TRUCK (wiring thô, gates chi tiết Task 5): `batch-submit` khi TRUCK → sequence: `POST /fulfillment/batches/create` (hook `useCreateBatchMutation` có sẵn — orderCodes từ rows, shipperId, deliveryTime) → `confirmPlanning` (mỗi row: `{stopOrder, orderCode, vehicleType: selectedQuote.vehicleType, serviceId, addons: []}` — addons nối vào Task 4) → `createBooking` (`{planningId, codAmount, totalBill, stopOrder}` từ create response + confirm response). Kết quả bookings hiển thị review section (driver, licensePlate, carrierBookingId). Lỗi 422 → message qua `error.data.details[].message` + i18n wrapper.
+- [x] 3.5 i18n + CSS (`.quote-list`, `.quote-item` — tokens only).
+- [x] 3.6 Test: computeTotalFee; modal TRUCK → mock api (msw hoặc mock hook theo pattern test hiện có) → quotes render 6 radio, chọn → tổng cập nhật.
+- [x] 3.7 test + tsc → commit `feat(sf16): quotes display + recalc + submit truck sequence`.
 
 ### Task 4: addon-selector — ROUTE/LOADING radio, DOCUMENT/ROUND_TRIP checkbox
 
