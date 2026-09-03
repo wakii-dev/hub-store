@@ -31,8 +31,8 @@ D1 thiếu 4 nghiệp vụ vận hành mà app gốc có: yêu cầu chuyển kh
 2. Delivery time: BFF `GET /fulfillment/time-slots?date=` (synthesize slots tĩnh theo ngày, TZ Asia/Ho_Chi_Minh, chặn quá khứ server-side), FE `DeliveryTimeCell` widen (DatePicker disabledDate + slot radio), Java publish `order.updated` (best-effort, KAFKA_ENABLED=false → no-op)
 3. Criteria presets: BFF `GET /batching/criteria-presets` (static list), wizard step 1 radio preset trong `CreateBatchingModal` stepper
 4. Order note: verify endpoint + e2e API coverage
-5. Roles: BFF `requireRole('Coordinator','Manager','Admin')` cho mọi mutation mới; FE ẩn nút qua `usePermissions`; non-role → 403
-6. E2E `xx-order-ops.spec.ts` mới
+5. Roles: BFF `requireRole('Coordinator','Manager','Admin')` cho mutation mới **VÀ thêm gate cho 2 PUT cũ hiện chỉ `requireUser`**: `PUT /fulfillment/:code/note` + `PUT /fulfillment/:code/delivery-time` (BFF-only, không proto change). Plan-time check: đọc `02-role-matrix.spec.ts` + `01-main-flow.spec.ts` xem có role non-gated nào đang gọi 2 route này không trước khi thêm gate. FE ẩn nút qua `usePermissions`; non-role → 403
+6. E2E `e2e/tests/07-order-ops.spec.ts` mới (numeric-prefix convention, tests/ dir)
 
 **OUT (boundary):**
 - KHÔNG flow duyệt ticket (status giữ `PENDING`; hiển thị "Chờ duyệt")
@@ -46,13 +46,15 @@ D1 thiếu 4 nghiệp vụ vận hành mà app gốc có: yêu cầu chuyển kh
 
 **Q2 — Role map cho "Coordinator nhóm"?** Coordinator + Manager + Admin (holder của `orders.view`). SubCoordinator/FulfillmentStaff không tồn tại trong realm → REQUIREMENT-GAP comment lên FI-245, không block.
 
-**Q3 — Preset có persist kèm phiếu?** KHÔNG (batching READ-ONLY, "KHÔNG đổi proto cũ"). Preset = FE state wizard, hiển thị ở header step 2/3, audit-log selection qua BFF (fire-and-forget). Persist thật = thay đổi batching proto/schema — cần quyết epic-level nếu muốn.
+**Q3 — Preset có persist kèm phiếu?** KHÔNG (batching READ-ONLY, "KHÔNG đổi proto cũ"). Preset = FE state wizard, hiển thị ở header step 2/3. Audit selection qua **`POST /batching/criteria-preset-select`** (fire-and-forget `logActivity`, không đụng batching service). Persist thật = thay đổi batching proto/schema — cần quyết epic-level nếu muốn.
 
-**Q4 — Slots nguồn?** BFF static config (morning/afternoon slots 2h, Tomorrow→+7 ngày, VN timezone). Đủ ACCEPTANCE ("chọn slot từ ngày mai"); bảng DB/env-config là YAGNI ở đây.
+**Q3b — Wizard step insertion?** Insert preset selection as **first section với renumber 1→2, 2→3, 3→4** trong `CreateBatchingModal` stepper (state type `1|2|3` → `1|2|3|4`, footer `activeSection < 3` → `< 4`, scrollToSection union mở rộng). Giữ nguyên **Deviation D1** (content không bị ẩn — E2E-safe theo sf6-direction §0). Testid mới `wizard-step1-preset`; KHÔNG đổi testid control cũ (DnD list, shipper select, date picker).
 
-**Q5 — Badge ticket trên D1 row?** FE secondary fetch: sau khi page load, gọi `GET /fulfillment/transfer-tickets?codes=<page codes>` → map badge. Tránh proto change trên filter response, tránh N+1 (1 call/page).
+**Q4 — Slots nguồn + contract?** BFF static config (slots 2h: 08-10 / 10-12 / 14-16 / 16-18, ngày mai→+7, TZ Asia/Ho_Chi_Minh). **Slot→PUT mapping**: chọn slot (date + slot) → FE gọi PUT `/fulfillment/:code/delivery-time` (endpoint CŨ) với `from`=slotStart, `to`=slotEnd, ISO string **offset +07:00** tường minh (không browser-TZ/UTC ngầm). **Chặn quá khứ ở mutation side**: BFF PUT delivery-time thêm guard (from/hoặc date < hôm nay VN → 422) TRƯỚC khi proxy sang Java — GET slots 422 chỉ là UX; guard thật nằm ở PUT. Java giữ nguyên (không proto change).
 
-**Q6 — Schema `transfer_tickets`** (V8): `id BIGSERIAL PK`, `ticket_code VARCHAR UNIQUE` (TT-0001, DB sequence), `order_fulfill_code VARCHAR NOT NULL` (FK orders pattern như `shop_assignment_history` V1), `from_hub VARCHAR`, `to_hub VARCHAR NOT NULL`, `reason TEXT`, `status VARCHAR DEFAULT 'PENDING'`, `created_by VARCHAR`, `created_at TIMESTAMPTZ`, `confirmed_by VARCHAR NULL`, `confirmed_at TIMESTAMPTZ NULL`. Index trên `order_fulfill_code`.
+**Q5 — Badge ticket trên D1 row?** FE secondary fetch sau page load: `GET /fulfillment/transfer-tickets?codes=CODE1,CODE2` (comma-joined, skip khi page rỗng, 1 call/page) → map badge (đếm ticket PENDING; nếu order có ticket → badge "YC chuyển kho" status màu theo ticket mới nhất). RTKQ invalidates tag `transfer-tickets` khi tạo ticket mới → badge refresh. Tránh proto change trên filter response, tránh N+1.
+
+**Q6 — Schema `transfer_tickets`** (V8): `id BIGSERIAL PK`, `ticket_code VARCHAR UNIQUE` (TT-0001, DB sequence), `order_fulfill_code VARCHAR NOT NULL` (FK `orders(fulfill_code)` đúng pattern `shop_assignment_history` V1), `from_hub VARCHAR`, `to_hub VARCHAR NOT NULL`, `reason TEXT`, `status VARCHAR NOT NULL DEFAULT 'PENDING'` — **enum: `PENDING` (duy nhất trong scope này; `APPROVED`/`REJECTED` reserved cho epic sau)**, `created_by VARCHAR`, `created_at TIMESTAMPTZ`, `confirmed_by VARCHAR NULL`, `confirmed_at TIMESTAMPTZ NULL`. Index trên `order_fulfill_code`. **Lifecycle: tối đa 1 ticket PENDING/order — tạo trùng khi đang PENDING → 409 CONFLICT** (order đã có ticket APPROVED/REJECTED thì tạo được ticket mới).
 
 **Q7 — tách nợ chặn?** Server-side bắt buộc: `CreateTransferTicket` reject khi order `is_debt_splitting_order` (re-use cùng validation `assignShopHub` Impl:228) + FE disable/warning (pattern `transfer-debt-warning` cũ). Chặn cả chọn nhiều đơn (bulk chỉ cho phép 1).
 
@@ -60,12 +62,14 @@ D1 thiếu 4 nghiệp vụ vận hành mà app gốc có: yêu cầu chuyển kh
 
 ```
 FE (apps/orders/src)                    BFF (services/bff-gateway)              Java (fulfillment-service)
-D1Page: nút YC chuyển kho ──────────► POST /fulfillment/:code/transfer-tickets ─► CreateTransferTicket (chặn tách nợ, audit)
-TransferHubModal (mới)                    GET  /fulfillment/transfer-tickets      ListTransferTickets (filter codes/status)
-TicketHistoryModal (mới)                    ?codes= | ?order_code=
-Badge cột ticket ◄─────────────────────   GET  /master-data/shops?q=  (additive)
-DeliveryTimeCell (widen) ◄──────────►    GET  /fulfillment/time-slots?date=   (BFF synthesize; PUT delivery-time CŨ giữ nguyên)
-CreateBatchingModal step1 ◄─────────►    GET  /batching/criteria-presets      (static list; audit selection)
+D1Page: nút YC chuyển kho ──────────► POST /fulfillment/:code/transfer-tickets ─► CreateTransferTicket (chặn tách nợ, 409 trùng PENDING, audit)
+TransferHubModal (mới)                    GET  /fulfillment/transfer-tickets      ListTransferTickets (filter codes)
+TicketHistoryModal (mới)                    ?codes= (comma-joined)
+Badge cột ticket ◄─────────────────────   GET  /master-data/shops?q=  (BFF in-memory filter: code OR name)
+DeliveryTimeCell (widen) ◄──────────►    GET  /fulfillment/time-slots?date=   (BFF synthesize)
+                                        PUT /fulfillment/:code/delivery-time (CŨ + thêm role gate + 422 quá-khứ guard)
+CreateBatchingModal step1 ◄─────────►    GET  /batching/criteria-presets      (static list)
+                                        POST /batching/criteria-preset-select (audit fire-and-forget)
                                         PUT /fulfillment/:code/note  (CŨ — verify-only)
 Java: Kafka publish "order.updated" khi updateDeliveryTime (best-effort, pattern order.assigned:248)
 ```
@@ -77,7 +81,7 @@ Audit: mọi mutation mới qua BFF `logActivity` (pattern SF-7): `order.transfe
 - Java: unit test service CreateTransferTicket (tách nợ reject + success + seq code) + ListTransferTickets; integration skip-when-no-DB (pattern SF-2)
 - BFF: contract tests route mới (pattern `test/intake.route.test.ts`): 403 non-role, 422 tách nợ, happy path, slots quá khứ 422
 - FE: existing vitest nếu có pattern; manual browser walkthrough Rule 0 (3 tầng)
-- E2E: `e2e/tests/07-order-ops.spec.ts` — transfer ticket flow (Coordinator storageState), badge hiện, history có ticket, delivery-time slot chọn ngày mai + ngày quá khứ blocked, wizard step1 preset radio, order note PUT, role 403 (warehouse storageState). E2E cũ 01/04 phải vẫn xanh.
+- E2E: `e2e/tests/07-order-ops.spec.ts` — transfer ticket flow (Coordinator storageState), badge hiện, history có ticket, delivery-time slot chọn ngày mai + ngày quá khứ blocked, wizard step1 preset radio, order note PUT, role 403 (warehouse storageState). E2E cũ 01/02/04 phải vẫn xanh (regression chính cho DeliveryTimeCell widen = specs nào đụng testid `edit-delivery-*` — plan-time xác định, khả năng cao 01-main-flow).
 
 ## 6. Risks
 
