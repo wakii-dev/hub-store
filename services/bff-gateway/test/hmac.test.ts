@@ -101,11 +101,11 @@ describe('SF-26 HMAC route-level (harness, secret đã set)', () => {
     });
   }
 
-  it('signature đúng → qua auth (503 skeleton mapping — Task 4 wire)', async () => {
+  it('signature đúng → qua auth (Task 4: tới mapping — payload thiếu field → 422)', async () => {
     const raw = JSON.stringify({ externalId: 'H10' });
     const res = await injectPost(raw, { 'x-source': 'shopee', 'x-signature': sign(raw) });
-    expect(res.statusCode).toBe(503); // qua HMAC, chạm skeleton
-    expect(JSON.parse(res.payload).message).toBe('not implemented yet');
+    expect(res.statusCode).toBe(422); // qua HMAC, chạm mapping (không còn skeleton 503)
+    expect(JSON.parse(res.payload).code).toBe('VALIDATION_ERROR');
   });
 
   it('signature sai → 401; raw khác 1 byte → 401', async () => {
@@ -124,7 +124,7 @@ describe('SF-26 HMAC route-level (harness, secret đã set)', () => {
     expect(res1.statusCode).toBe(401);
     expect(JSON.parse(res1.payload).message).toBe('missing X-Signature');
     const res2 = await injectPost(raw, { 'x-signature': `sha256=${sign(raw)}` });
-    expect(res2.statusCode).toBe(503); // qua auth
+    expect(res2.statusCode).toBe(422); // qua auth → tới mapping (payload thiếu field)
   });
 });
 

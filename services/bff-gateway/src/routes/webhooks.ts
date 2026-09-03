@@ -7,14 +7,23 @@
  * vỡ import CSV SF-13 >1MB. Parser scoped này chỉ shadow các route trong
  * scope con — giữ raw bytes cho HMAC đúng bytes.
  *
- * Task 1 skeleton: HMAC verify wired (verifyHmac fail-closed); mapping +
- * RPC CreateWebhookOrder do Task 2/4 wire — hiện trả 503 sau auth.
+ * Task 4: mapping + RPC CreateWebhookOrder wired — HMAC (verifyHmac fail-closed)
+ * → X-Source check → mapWebhookPayload (lỗi → 422 details[]) → intake RPC
+ * (role MANAGER, actor 'webhook:<source>') → 200 { fulfillCode, replayed };
+ * lỗi upstream qua mapGrpcError (INVALID_ARGUMENT→422, UNAVAILABLE→503).
  */
 import type { FastifyInstance } from 'fastify';
 import type { IntakeApi } from '../clients/index.js';
 import type { BffConfig } from '../config.js';
+import { SERVICE_NAMES } from '../config.js';
 import { verifyHmac } from '../lib/hmac.js';
 import { errorEnvelope } from '../lib/envelope.js';
+import { sendGrpcError } from '../lib/grpc-error.js';
+import {
+  WebhookMappingValidationError,
+  mapWebhookPayload,
+  resolveFieldMap,
+} from '../lib/webhook-mapping.js';
 
 /**
  * Fail-closed warn-once flag (spec §3): secret rỗng → log warn MỘT LẦN duy
@@ -69,8 +78,41 @@ export function registerWebhookRoutes(
           .code(auth.status)
           .send(errorEnvelope(auth.status, auth.message, { code: 'UNAUTHORIZED' }));
       }
-      // mapping + RPC — Task 4 wire đầy đủ; skeleton 503.
-      return reply.code(503).send(errorEnvelope(503, 'not implemented yet'));
+      // X-Source bắt buộc (spec §3) — sàn KHÔNG tự đặt tên mình trong payload.
+      if (!source) {
+        return reply.code(422).send(
+          errorEnvelope(422, 'Dữ liệu đơn không hợp lệ', {
+            code: 'VALIDATION_ERROR',
+            details: [{ field: 'X-Source', message: 'Header X-Source là bắt buộc.' }],
+          }),
+        );
+      }
+      // Mapping — thu gom MỌI lỗi field vào details[] (không fail-fast).
+      try {
+        const { externalId, order } = mapWebhookPayload(
+          request.body,
+          resolveFieldMap(deps.config.webhookMapping),
+        );
+        const r = await deps.intake.createWebhookOrder(
+          { source, externalId, order },
+          'MANAGER',
+          'webhook:' + source,
+        );
+        return reply.code(200).send({ fulfillCode: r.fulfillCode, replayed: r.replayed });
+      } catch (err) {
+        if (err instanceof WebhookMappingValidationError) {
+          return reply.code(422).send(
+            errorEnvelope(422, 'Dữ liệu đơn không hợp lệ', {
+              code: 'VALIDATION_ERROR',
+              // ErrorDetail (shared, FROZEN) = {field, message} — plan ghi thêm
+              // `row` nhưng contract không có; webhook 1 row nên bỏ row.
+              details: err.errors.map((e) => ({ field: e.field, message: e.message })),
+            }),
+          );
+        }
+        sendGrpcError(reply, err, SERVICE_NAMES.intake);
+        return reply;
+      }
     });
   });
 }

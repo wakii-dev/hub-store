@@ -249,8 +249,8 @@ export function verifyHmac(rawBody: Buffer | string, signature: unknown, secret:
 - Create: `services/bff-gateway/src/lib/webhook-mapping.ts` + `services/bff-gateway/src/test/webhook-mapping.test.ts`
 - Modify: `services/bff-gateway/src/routes/webhooks.ts` (wire mapping + RPC call thật, bỏ skeleton 503)
 
-- [ ] **Step 1: Test trước**: default mapping đúng mọi field; `quantity` tự tính = Σ items[].quantity (validator SF-13 bắt buộc); externalId missing → lỗi có message rõ (422); items rỗng/không phải mảng → lỗi; codAmount string số → number coerce; WEBHOOK_MAPPING flat rename map (`{"externalId":"orderNumber"}`) override đúng; override sai kiểu env (JSON invalid) → config-time warn + dùng default (KHÔNG crash boot).
-- [ ] **Step 2: Implement**:
+- [x] **Step 1: Test trước**: default mapping đúng mọi field; `quantity` tự tính = Σ items[].quantity (validator SF-13 bắt buộc); externalId missing → lỗi có message rõ (422); items rỗng/không phải mảng → lỗi; codAmount string số → number coerce; WEBHOOK_MAPPING flat rename map (`{"externalId":"orderNumber"}`) override đúng; override sai kiểu env (JSON invalid) → config-time warn + dùng default (KHÔNG crash boot).
+- [x] **Step 2: Implement**:
 ```ts
 export interface WebhookMappingConfig { [payloadField: string]: string } // canonical → payload field name
 export const DEFAULT_FIELD_MAP: WebhookMappingConfig = {
@@ -262,9 +262,9 @@ export interface MappedOrder { externalId: string; order: IntakeOrderLike }
 export function mapWebhookPayload(payload: unknown, fieldMap?: WebhookMappingConfig): MappedOrder;
 ```
 (IntakeOrderLike đủ field tạo `CreateWebhookOrderRequest` — items[] `{productCode, productName, quantity}` quantity>=1, `quantity = Σ`.)
-- [ ] **Step 3: Wire route**: mapping errors → 422 `errorEnvelope(422, 'Dữ liệu đơn không hợp lệ', { code: 'VALIDATION_ERROR', details: errors.map(e => ({ row: 1, field: e.field, message: e.message })) })`; OK → `intake.createWebhookOrder({ source, externalId, order }, 'MANAGER', 'webhook:' + source)` → 200 `{ fulfillCode: r.fulfillCode, replayed: r.replayed }` (camelCase theo DTO convention — check mappers/); `mapGrpcError` catch (INVALID_ARGUMENT→422 details, UNAVAILABLE→503).
-- [ ] **Step 4: Docs mapping mặc định** — comment block trong `.env.example` (đã Task 1) đủ; thêm bảng field vào `docs/superpowers/contexts/fi245-sf-26.md` mục mapping (5-10 dòng) + known-limitations (KHÔNG rate-limit, KHÔNG retention webhook_events).
-- [ ] **Step 5: Commit** `feat(sf26): webhook payload mapping — default + WEBHOOK_MAPPING override, quantity=sum(items)`
+- [x] **Step 3: Wire route**: mapping errors → 422 `errorEnvelope(422, 'Dữ liệu đơn không hợp lệ', { code: 'VALIDATION_ERROR', details: errors.map(e => ({ row: 1, field: e.field, message: e.message })) })`; OK → `intake.createWebhookOrder({ source, externalId, order }, 'MANAGER', 'webhook:' + source)` → 200 `{ fulfillCode: r.fulfillCode, replayed: r.replayed }` (camelCase theo DTO convention — check mappers/); `mapGrpcError` catch (INVALID_ARGUMENT→422 details, UNAVAILABLE→503).
+- [x] **Step 4: Docs mapping mặc định** — comment block trong `.env.example` (đã Task 1) đủ; thêm bảng field vào `docs/superpowers/contexts/fi245-sf-26.md` mục mapping (5-10 dòng) + known-limitations (KHÔNG rate-limit, KHÔNG retention webhook_events).
+- [x] **Step 5: Commit** `feat(sf26): webhook payload mapping — default + WEBHOOK_MAPPING override, quantity=sum(items)`
 
 ### Task 5: order-created-publish-kafka — publish sau commit
 

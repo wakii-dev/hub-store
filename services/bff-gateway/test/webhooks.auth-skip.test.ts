@@ -5,7 +5,8 @@
  *     auth chuyển sang HMAC (verifyHmac) → thiếu/sai signature 401.
  *   - POST /webhooks/other (cùng prefix) VẪN bị 401-JWT — guard KHÔNG skip
  *     prefix /webhooks.
- *   - Signature đúng qua raw bytes → qua HMAC → skeleton 503 (mapping Task 4).
+ *   - Signature đúng qua raw bytes → qua HMAC → tới mapping (Task 4; 422 nếu
+ *     payload thiếu field — chi tiết ở webhooks.mapping.test.ts).
  *   - JSON malformed → 400 errorEnvelope (scoped setErrorHandler).
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
@@ -54,7 +55,7 @@ describe('SF-26 webhook skeleton — auth skip + scoped parser', () => {
     expect(body.message).toBe('Missing Authorization: Bearer <token> header.');
   });
 
-  it('Signature đúng trên raw bytes → qua HMAC → skeleton 503', async () => {
+  it('Signature đúng trên raw bytes → qua HMAC → tới mapping (payload thiếu field → 422)', async () => {
     const raw = JSON.stringify({ externalId: 'X2', customerName: 'A' });
     const res = await h.app.inject({
       method: 'POST',
@@ -62,8 +63,11 @@ describe('SF-26 webhook skeleton — auth skip + scoped parser', () => {
       payload: raw, // string → bytes đúng như đã sign
       headers: { 'content-type': 'application/json', 'x-source': 'shopee', 'x-signature': sign(raw) },
     });
-    expect(res.statusCode).toBe(503);
-    expect(JSON.parse(res.payload).message).toBe('not implemented yet');
+    // Task 4 wire mapping: qua HMAC + X-Source OK → payload thiếu field → 422
+    // (KHÔNG còn 503 skeleton; chi tiết mapping test ở webhooks.mapping.test.ts).
+    expect(res.statusCode).toBe(422);
+    const body = JSON.parse(res.payload);
+    expect(body.code).toBe('VALIDATION_ERROR');
   });
 
   it('Sai signature (đổi 1 ký tự) → 401 invalid signature', async () => {

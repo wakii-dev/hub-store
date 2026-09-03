@@ -343,6 +343,8 @@ const intakeDefaults: Record<string, UnaryHandler> = {
   validateImportOrders: (_c, cb) => cb(null, intakeResponses.validateImportOrders),
   confirmImportOrders: (_c, cb) => cb(null, intakeResponses.confirmImportOrders),
   createManualOrder: (_c, cb) => cb(null, intakeResponses.createManualOrder),
+  // SF-26 — webhook sàn (FI-27); test chi tiết override qua intakeHandlers.
+  createWebhookOrder: (_c, cb) => cb(null, intakeResponses.createWebhookOrder),
   markOrderFailed: (_c, cb) => cb(null, intakeResponses.markOrderFailed),
   redeliverOrder: (_c, cb) => cb(null, intakeResponses.redeliverOrder),
   getOrderAudit: (_c, cb) => cb(null, intakeResponses.getOrderAudit),
