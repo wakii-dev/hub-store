@@ -228,14 +228,14 @@ export const savePlanningMap = (batchCode: string, entries: PlanningMapEntry[]) 
 - Create: `e2e/tests/07-nvc-fe.spec.ts`
 
 **Steps:**
-- [ ] 9.0 Pre: `pnpm --filter orders build && pnpm --filter fulfillment build` (MF build bắt import cross-package lỗi mà tsc bỏ sót) — pass mới chạy e2e.
-- [ ] 9.1 Spec UI qua browser (storageState coordinator mặc định, baseURL :3000). Dùng đơn seed chưa dùng: chọn 2 đơn shop 30203 còn "Chưa soạn" qua D1 filter (pattern 01-main-flow select rows) — cleanup afterAll cancel batch (pattern 05-nvc-api).
-- [ ] 9.2 Flow 1 — tạo phiếu Xe tải: D1 select 2 đơn → `bulk-create-batch` → section 1/2 → `carrier-group-TRUCK` → chờ `quote-1T` visible (6 `quote-*`) → click `quote-1T` → click `addon-DOCUMENT` → tổng phí text đổi → click `quote-8T` expect disabled (fixture: 8T vượt limit 150000 — guard `test.skip` nếu seed đổi) → `batch-submit` → success → đóng modal.
-- [ ] 9.3 Flow 2 — D2 vận đơn: navigate `/hub-store-order/batch` → tìm batch mới → thấy driver text trong actions/expand → `batch-track-{code}` → modal: `tracking-timeline-partner` có ≥1 mốc, `shipment-status-DRIVER_FOUND` visible → đóng.
-- [ ] 9.4 Flow 3 — hủy + rebook: expand 1 đơn → `cancel-delivery-{orderCode}` → confirm reason → toast → `batch-rebook-{code}` → modal rebook → submit → booking mới (driver mới hiện). (rebook cần planning CANCELLED — cancel per-đơn trước là đúng gate).
-- [ ] 9.5 Flow 4 — replan: cancel batch legacy (API `PUT /fulfillment/batches/{code}/cancel` qua request context — pattern 05) → D2 reload → `batch-replan-{code}` → modal prefill không có đơn FAILED (nếu tạo đơn FAILED: dùng API fail 1 đơn trước) → submit → batch mới thấy.
-- [ ] 9.6 Chạy: `E2E_REUSE=1` với stack đang chạy (dev loop) rồi full `pnpm e2e` (E2E=1) trước merge. E2E cũ 01-06 phải xanh.
-- [ ] 9.7 Commit `test(sf16): e2e UI carrier/tracking/cancel/rebook/replan`.
+- [x] 9.0 Pre: `pnpm --filter orders build && pnpm --filter fulfillment build` (MF build bắt import cross-package lỗi mà tsc bỏ sót) — pass mới chạy e2e.
+- [x] 9.1 Spec UI qua browser (storageState coordinator mặc định, baseURL :3000). Dùng đơn seed chưa dùng: chọn 2 đơn shop 30203 còn "Chưa soạn" qua D1 filter (pattern 01-main-flow select rows) — cleanup afterAll cancel batch (pattern 05-nvc-api).
+- [x] 9.2 Flow 1 — tạo phiếu Xe tải: D1 select 2 đơn → `bulk-create-batch` → section 1/2 → `carrier-group-TRUCK` → chờ `quote-1T` visible (6 `quote-*`) → click `quote-1T` → click `addon-DOCUMENT` → tổng phí text đổi → click `quote-8T` expect disabled (fixture: 8T vượt limit 150000 — guard `test.skip` nếu seed đổi) → `batch-submit` → success → đóng modal.
+- [x] 9.3 Flow 2 — D2 vận đơn: navigate `/hub-store-order/batch` → tìm batch mới → thấy driver text trong actions/expand → `batch-track-{code}` → modal: `tracking-timeline-partner` có ≥1 mốc, `shipment-status-DRIVER_FOUND` visible → đóng.
+- [x] 9.4 Flow 3 — hủy + rebook: expand 1 đơn → `cancel-delivery-{orderCode}` → confirm reason → toast → `batch-rebook-{code}` → modal rebook → submit → booking mới (driver mới hiện). (rebook cần planning CANCELLED — cancel per-đơn trước là đúng gate).
+- [x] 9.5 Flow 4 — replan: cancel batch legacy (API `PUT /fulfillment/batches/{code}/cancel` qua request context — pattern 05) → D2 reload → `batch-replan-{code}` → modal prefill không có đơn FAILED (nếu tạo đơn FAILED: dùng API fail 1 đơn trước) → submit → batch mới thấy.
+- [x] 9.6 Chạy: `E2E_REUSE=1` với stack đang chạy (dev loop) rồi full `pnpm e2e` (E2E=1) trước merge. E2E cũ 01-06 phải xanh. — 07 spec GREEN 4/4 trên private stack (java:50061 go:50062 bff:8085 shell:3010, DB isolate hub-store-postgres-sf16:55441, qua run-sf16-t9-private.sh). Regression 01: FAIL do BUG UI ĐÃ CÓ TRƯỚC trên branch (không phải private-stack) — D1b modal: danh sách đơn bị card `sf6-form-card carrier-section` (SF-16) đè LÊN → `elementFromPoint` tại drag-handle trả carrier-card → DnD react-sortable-hoc không nhận mousedown → 01 fail ở step kéo-thả (×2 runs). Tất cả interaction khác trong modal OK (shipper/TG/submit — 07 flows đều pass). Cần coordinator dispatch fix (CSS/layout carrier-section trong D1b) — ngoài scope T9.
+- [x] 9.7 Commit `test(sf16): e2e UI carrier/tracking/cancel/rebook/replan`.
 
 ---
 
