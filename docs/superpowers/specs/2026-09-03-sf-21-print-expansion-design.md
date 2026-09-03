@@ -35,8 +35,11 @@ có sẵn (additive) — KHÔNG thay format/template có sẵn của D3.
 - Print errors per-đơn per-type: bảng `print_errors` (cùng V8), BFF record khi print fail,
   API list + badge + sort đơn nhiều lỗi nhất lên đầu trên PrintPage.
 - Preview: giữ react-pdf (E2E cũ pin `.print-preview-area canvas`), widen zoom **25–200%**.
-- Print-all gate: chỉ cho phép in khi batch/order status hợp lệ (status không hợp lệ → disable
-  + lý do); vẫn FE-loop 5 lần per type (giữ pin §3.7).
+- Print-all gate: định nghĩa "status hợp lệ" = batch KHÔNG ở trạng thái CANCELLED
+  (BATCH_ENTITY_STATUS, packages/shared/src/enums.ts) — print-all VÀ single-type print cùng
+  gate (re-print sau hoàn tất vẫn cho phép; hủy là trạng thái duy nhất chặn). Disable + tooltip
+  lý do. Vẫn FE-loop 5 lần per type (giữ pin §3.7). Chọn gate hẹp này để KHÔNG vỡ E2E cũ
+  (01-main-flow in khi batch đang ASSIGNED/PREPARING).
 - print-types-5: **verify 5 loại render đúng data + E2E spec mới** (KHÔNG build mới — đã có từ SF-10).
 - Platform polish: hotkey hook dùng chung (F4 save/F6 create/F8 cancel, bỏ qua khi đang gõ
   input/textarea) đăng ký tại form chính; EmptyState component dùng chung (SF-6 đã có
@@ -53,15 +56,15 @@ có sẵn (additive) — KHÔNG thay format/template có sẵn của D3.
   application/pdf — không có path tạo ảnh).
 - KHÔNG đổi testid/DOM mà E2E cũ phụ thuộc (`app-header`, `nav-*`, `lang-toggle`,
   `logout-button`, `header-user`, `data-probe="fulfillment-print"`, `.print-preview-area canvas`).
-- KHÔNG đổi gRPC contract print-service theo cách breaking (registry feed qua fat-payload).
+- KHÔNG đổi print-service (không proto change, không code change — printerId validate ở BFF).
 
 ## 3. Touch map
 
 | Area | Files |
 |---|---|
-| BE fulfillment | `services/fulfillment-service/.../db/migration/V8__printers.sql` (printers + print_errors); entity/repo/controller printers CRUD + print-errors record/list; audit integration |
-| print-service | `print_service/printers.py` + `servicer.py` — registry fed từ fulfillment (fat-payload/BFF) thay seed cứng; tests/test_printers.py rework |
-| BFF | `services/bff-gateway/src/routes/` — printers CRUD (Admin gate), print-error record/list, `POST /avatar` + `GET /avatar/:userId` (multipart đã có @fastify/multipart), `GET /version`; print.ts record lỗi trên failure path |
+| BE fulfillment | `services/fulfillment-service/.../db/migration/V8__printers.sql` (printers + seed canonical + print_errors + user_avatars); entity/repo/controller printers CRUD + print-errors record/list; audit integration |
+| print-service | KHÔNG ĐỔI (read-only trong SF này — registry warn-only giữ nguyên, không proto change) |
+| BFF | `services/bff-gateway/src/routes/` — printers list (đổi nguồn sang fulfillment-service) + CRUD (Admin gate), print-error record/list, `POST /avatar` + `GET /avatar/:userId` (multipart đã có @fastify/multipart; ghi DB trực tiếp qua pg Pool như lib/audit.ts), `GET /version`; print.ts record lỗi trên failure path print-thật |
 | FE fulfillment | `PrintPage.tsx` (zoom min 25, printer select filter theo type+shop, print-all status gate, error badge + sort); printApi.ts |
 | FE shell | `AppLayout.tsx` (avatar chip, font slider, fullscreen nút, hotkey modal nút, version badge); pages/features đăng ký hotkeys; empty-states tại screens mới |
 | shared | `packages/shared`: api-contracts (PrinterDto additive `printerIp?/mac?/type?`; PrintErrorDto mới), hotkey hook mới, PERMISSION_MATRIX + `printers.manage` (Admin) — additive |
@@ -72,30 +75,59 @@ chỉ additive field được phép).
 
 ## 4. Design (decisions)
 
-- **D1 — printers authority = fulfillment-service** (DB là nguồn chân lý; print-service giữ
-  stateless, registry được feed từ BFF fat-payload/lookup; lý do: tránh Python DB dep, giữ
-  migration một nhà, giữ pin stateless của print-service).
-- **D2 — print errors = bảng fulfillment DB; BFF record trên failure path** (server-side truth;
-  FE chỉ hiển thị). Schema: `print_errors(id, order_code, batch_code, print_type, error_message,
-  occurred_at)`; badge = count per order; sort orders theo count desc. Retention: KHÔNG cleanup
-  job trong SF này (dev-scale; ghi chú cho SF-12).
-- **D3 — avatar = DB bytea** (bảng trong fulfillment DB hoặc BFF-owned — chọn fulfillment DB
-  V8 cùng migration: `user_avatars(user_id, content_type, data bytea, updated_at)`), serve qua
-  `GET /avatar/:userId` auth-required, upload qua multipart + validate: content-type
-  allowlist (image/jpeg, image/png) + magic bytes + size ≤5MB server-side; tên file KHÔNG do
-  user điều khiển (không path traversal — lưu DB nên không có filesystem path).
-- **D4 — preview zoom**: giữ react-pdf + canvas; Slider min 50→25. KHÔNG rewrite (bảo vệ E2E pin).
+- **D1 — printers authority = fulfillment-service; print-service KHÔNG đổi.** Bảng `printers`
+  ở fulfillment DB; BFF `GET /fulfillment/print/printers` đọc trực tiếp fulfillment-service
+  (Java) thay vì print-service ListPrinters; BFF validate printerId trước khi proxy print
+  (invalid → 400). print-service giữ nguyên registry in-memory + warn-only validation (không
+  proto change, không test rework — blast radius nhỏ nhất). V8 seed: INSERT canonical-seed
+  printers (set shop 30201 pin bởi api-contracts.test.ts + e2e print flow) với ON CONFLICT
+  DO NOTHING — bảng không rỗng sau migration.
+- **D2 — print errors = bảng fulfillment DB; BFF record trên failure path của lệnh IN THẬT.**
+  Phân biệt print thật vs preview: preview gọi với `printerId: ''` (seam có sẵn —
+  PrintPage.tsx:105); BFF CHỈ record khi `printerId` khác rỗng. Record khi: (a) printerId
+  không có trong printers (400 kèm record), (b) upstream print-service fail (throw/non-2xx).
+  Preview fail KHÔNG record. "Máy off" vật lý KHÔNG detect được trong kiến trúc này
+  (boundary: không socket máy in) — failure trigger thực tế là failure của print pipeline;
+  E2E mô phỏng fail qua print-service down/invalid printerId. Ghi REQUIREMENT-GAP lên epic
+  FI-245 về semantic này. Schema: `print_errors(id, order_code, batch_code, print_type,
+  printer_id NULLABLE, error_message, occurred_at)`; badge = count per order; sort orders
+  theo count desc. Record-write fail (DB down) → log-and-continue, KHÔNG mask lỗi print gốc
+  trả về FE. Retention: KHÔNG cleanup job trong SF này (dev-scale; ghi chú cho SF-12).
+- **D3 — avatar = DB bytea trong fulfillment DB (V8): `user_avatars(user_id PK,
+  content_type, data bytea, updated_at)`.** Route do BFF sở hữu, ghi/đọc trực tiếp fulfillment
+  DB qua pg Pool (precedent: `services/bff-gateway/src/lib/audit.ts`). Upload multipart:
+  content-type allowlist (image/jpeg, image/png) + magic-byte check + ≤5MB server-side; crop
+  client-side bằng canvas native (drawImage crop → toBlob — KHÔNG thêm dependency).
+  `GET /avatar/:userId`: mọi user đã authenticate đọc được (avatar không nhạy cảm); headers:
+  `X-Content-Type-Options: nosniff`, `Cache-Control: private, max-age=300`; content-type từ
+  giá trị lưu DB.
+- **D4 — preview zoom**: giữ react-pdf + canvas; Slider min 50→25, step 5 (stops
+  25/50/75/100/125/150/175/200 — E2E assert stop 25). KHÔNG rewrite (bảo vệ E2E pin).
 - **D5 — hotkey hook**: `useHotkeys(bindings)` trong packages/shared — window keydown listener,
   bỏ qua khi target là input/textarea/contenteditable; unregister đúng lifecycle
-  (StrictMode-safe). Đăng ký: F4 save (form có save), F6 create, F8 cancel. Helper modal liệt kê
-  bindings đang active + ô search.
-- **D6 — font-size slider**: localStorage key `sf.fontSize` (clamp 12–20 FE-side), áp qua
-  CSS variable/DESIGN_TOKENS của theme SF-6 (không inline style loang lổ).
+  (StrictMode-safe); preventDefault (lưu ý F6 bị browser chrome dùng ở vài context —
+  best-effort, không block release). Đăng ký cụ thể: F6 = nút "Tạo đơn" D1 + nút create
+  trang Users; F4 save + F8 cancel trong modals/form: users create/edit modal, manual
+  order-create form (SF-13), printer add/edit modal (SF-21). Helper modal liệt kê bindings
+  đang active + ô search.
+- **D6 — font-size slider (antd4 không có runtime token — LESS compile build-time)**:
+  CSS variable `--app-font-size` set trên `<html>` từ slider (clamp 12–20, localStorage
+  `sf.fontSize`); global stylesheet trong shared theme: body font-size = var + override
+  `font-size: inherit` cho các text-bearing antd selectors chính (`.ant-btn`, `.ant-table`,
+  `.ant-form-item`, `.ant-modal`, `.ant-select`, `.ant-menu`, `.ant-descriptions-item`,
+  `.ant-card`). Phạm vi: main text surfaces scale — KHÔNG promise pixel-perfect mọi
+  sub-component. E2E assert computed font-size của table cell + button đổi theo slider và
+  giữ sau reload.
 - **D7 — fullscreen**: F11 keydown + nút header → `document.documentElement.requestFullscreen()`
-  toggle; F11 preventDefault để không đụng browser-native (note: browser có thể chặn — graceful).
-- **D8 — version check**: BFF `GET /version` trả `{version}` (từ env `APP_VERSION` fallback
-  package.json); shell poll khi focus/interval nhẹ, so với localStorage `sf.seenVersion`, khác →
-  Modal prompt reload. Version badge hiển thị ở header.
+  (webkit prefix fallback Safari) toggle; F11 preventDefault; macOS Fn-intercept = graceful
+  (nút header luôn hoạt động).
+- **D8 — version check**: BFF `GET /version` trả `{version}` từ env `APP_VERSION` (deploy gán
+  = version FE shell build; monorepo — một version duy nhất cho bộ deploy). Shell check khi
+  window focus + interval 5 phút, so với localStorage `sf.seenVersion`, khác → Modal prompt
+  reload. Version badge hiển thị ở header.
+- **D9 — printer CRUD semantics**: `printerId` + `shopCode` là identity — KHÔNG sửa sau tạo;
+  sửa được: name/location/printerIp/mac/type. Unique constraint (shopCode, printerId);
+  duplicate add → 409. KHÔNG có delete trong SF này (context pack: CRUD nhẹ list+thêm/sửa).
 - **Permissions**: `printers.manage` chỉ Admin; list printers dùng cho in = ai có
   `fulfillment.print`. Server-side role check tại BFF (pattern hiện có — verifyrequireUser).
 
@@ -114,10 +146,12 @@ Thứ tự (12 tasks — DAG chi tiết ở plan):
 
 ## 6. Risks
 
-- Flyway V8 collision với sibling SF đang chạy — re-check trước merge + testdb pattern.
+- Flyway V8 collision với sibling SF đang chạy (SF-17..28 có branch riêng có thể chọn V8) —
+  re-check `db/migration/` trên parent ngay trước merge.
 - PERMISSION_MATRIX recurring merge conflict — additive entry, merge parent vào branch sớm.
 - E2E cũ pin canvas/testids — mọi thay đổi PrintPage phải giữ selector.
-- print-service tests pin seed registry — rework kèm D1.
+- Font-slider: antd4 LESS build-time — override CSS chỉ phủ main text surfaces (D6), không
+  promise pixel-perfect mọi sub-component.
 - localStorage user-writable — clamp mọi giá trị FE-side.
 - Avatar validation thiếu magic-byte check = rủi ro XSS qua content sniffing — magic bytes bắt buộc.
 
@@ -125,7 +159,8 @@ Thứ tự (12 tasks — DAG chi tiết ở plan):
 
 - Chọn đơn → in được cả 5 loại; preview từng loại với zoom 25–200%.
 - Chọn máy in bill vs A4 → layout đúng; thêm máy in mới (Admin) → chọn được.
-- In fail (máy off) → lỗi ghi nhận, màn print sort đơn lỗi lên đầu.
+- In fail (print pipeline fail — invalid printerId hoặc print-service down; "máy off" vật lý
+  ngoài kiến trúc —见 D2) → lỗi ghi nhận, màn print sort đơn lỗi lên đầu.
 - F4/F6/F8 hoạt động tại form tương ứng; screens mới có empty-state dùng chung.
 - Upload avatar (crop) → header hiện avatar mới sau reload; font-size slider đổi cỡ chữ toàn
   app và giữ sau reload; F11 fullscreen; hotkey helper mở được.
