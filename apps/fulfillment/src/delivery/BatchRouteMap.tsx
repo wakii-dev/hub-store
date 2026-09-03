@@ -45,9 +45,13 @@ export function BatchRouteMap({ batchCode, perOrderCode, stopMeta }: {
   const { stops, missing } = useMemo(() => buildStops(batchCode, stopMeta), [batchCode, stopMeta]);
   const visible = perOrderCode ? stops.filter((s) => s.orderCode === perOrderCode) : stops;
   if (visible.length === 0 && missing === 0) {
+    // Per-order: planning map CÓ stops nhưng đơn này không có → message riêng
+    // (noRoute "batch chưa xác nhận planning" sai ngữ nghĩa — review P2).
+    const noRouteMessage =
+      perOrderCode && stops.length > 0 ? t("tracking.noRouteForOrder") : t("tracking.noRoute");
     return (
       <div data-testid="map-no-coords-note">
-        <EmptyState title={t("tracking.noRoute")} />
+        <EmptyState title={noRouteMessage} />
       </div>
     );
   }

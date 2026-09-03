@@ -77,6 +77,7 @@ export const fulfillmentResources: I18nResources = {
       "tracking.tabTimeline": "Timeline",
       "tracking.tabMap": "Bản đồ",
       "tracking.noRoute": "Chưa có lộ trình — batch chưa xác nhận planning",
+      "tracking.noRouteForOrder": "Đơn không có điểm dừng trên lộ trình này",
       "tracking.noCoordsNote": "{{count}} điểm chưa có tọa độ",
 
       "complete.title": "Hoàn tất soạn hàng",
@@ -218,6 +219,7 @@ export const fulfillmentResources: I18nResources = {
       "tracking.tabTimeline": "Timeline",
       "tracking.tabMap": "Map",
       "tracking.noRoute": "No route — planning not confirmed in this session",
+      "tracking.noRouteForOrder": "Order has no stops on this route",
       "tracking.noCoordsNote": "{{count}} stop(s) without coordinates",
 
       "complete.title": "Complete picking",
