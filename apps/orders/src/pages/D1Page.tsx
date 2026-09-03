@@ -55,6 +55,7 @@ import { OrdersExpandContent } from "../features/OrdersExpandContent";
 import { DeliveryTimeCell } from "../features/DeliveryTimeCell";
 import { HubStoreTransferModal } from "../features/HubStoreTransferModal";
 import { TransferHubModal } from "../features/TransferHubModal";
+import { TransferTicketHistoryModal } from "../features/TransferTicketHistoryModal";
 import type { TransferTicket } from "../api/ordersApi";
 import { useGetTransferTicketsQuery } from "../api/ordersApi";
 import { CreateOrderModal } from "../features/CreateOrderModal";
@@ -90,7 +91,13 @@ const TICKET_TAG_META: Record<string, { color: string; bg: string; line: string 
   },
 };
 
-function TransferTicketBadge({ ticket }: { ticket: TransferTicket }) {
+function TransferTicketBadge({
+  ticket,
+  onOpenHistory,
+}: {
+  ticket: TransferTicket;
+  onOpenHistory: () => void;
+}) {
   const { t } = useTranslation("orders");
   const meta = TICKET_TAG_META[ticket.status] ?? TICKET_TAG_META.PENDING;
   const label =
@@ -102,6 +109,7 @@ function TransferTicketBadge({ ticket }: { ticket: TransferTicket }) {
   return (
     <Tag
       data-testid={`transfer-badge-${ticket.orderFulfillCode}`}
+      onClick={onOpenHistory}
       style={{
         borderRadius: DESIGN_TOKENS.radius.pill,
         marginInlineEnd: 0,
@@ -111,6 +119,7 @@ function TransferTicketBadge({ ticket }: { ticket: TransferTicket }) {
         color: meta.color,
         background: meta.bg,
         border: `1px solid ${meta.line}`,
+        cursor: "pointer",
       }}
     >
       {label}
@@ -195,6 +204,8 @@ function D1Content() {
   // Modals
   const [transferOrder, setTransferOrder] = useState<HubStoreOrderFilterItem | null>(null);
   const [transferTicketOrder, setTransferTicketOrder] = useState<HubStoreOrderFilterItem | null>(null);
+  // SF-28 T3 — history modal (mở bằng click badge transfer-badge-${code})
+  const [historyOrderCode, setHistoryOrderCode] = useState<string | null>(null);
   const [createBatchOpen, setCreateBatchOpen] = useState(false);
   // SF-13 — tạo đơn tay + nhập đơn file
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
@@ -299,7 +310,12 @@ function D1Content() {
       width: 130,
       render: (_: unknown, record) => {
         const ticket = latestTicketByCode.get(record.fulfillCode);
-        return ticket ? <TransferTicketBadge ticket={ticket} /> : null;
+        return ticket ? (
+          <TransferTicketBadge
+            ticket={ticket}
+            onOpenHistory={() => setHistoryOrderCode(record.fulfillCode)}
+          />
+        ) : null;
       },
     },
     {
@@ -548,6 +564,11 @@ function D1Content() {
         open={transferTicketOrder !== null}
         order={transferTicketOrder}
         onClose={() => setTransferTicketOrder(null)}
+      />
+      <TransferTicketHistoryModal
+        open={historyOrderCode !== null}
+        orderCode={historyOrderCode}
+        onClose={() => setHistoryOrderCode(null)}
       />
       <CreateBatchingModal
         open={createBatchOpen}

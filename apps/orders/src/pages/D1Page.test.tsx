@@ -267,6 +267,35 @@ describe("D1Page", () => {
     setRole(null);
   });
 
+  it("SF-28 T3: click badge transfer-badge → mở history modal với ticket của đơn", { timeout: 20000 }, () => {
+    getTickets.mockReturnValue({
+      data: {
+        items: [
+          {
+            ticketCode: "TT-0002",
+            orderFulfillCode: "ORD-3001",
+            fromHub: "FPT Shop Cầu Giấy (30201)",
+            toHub: "Kho CN Hà Đông (30205)",
+            reason: "Sai khu vực",
+            status: "APPROVED",
+            createdBy: "op1",
+            createdAt: "2026-09-03T02:00:00Z",
+            confirmedBy: "mg1",
+            confirmedAt: "2026-09-03T03:00:00Z",
+          },
+        ],
+      },
+    });
+    setRole("Coordinator");
+    renderD1();
+    fireEvent.click(screen.getByTestId("transfer-badge-ORD-3001"));
+    const modal = screen.getByTestId("transfer-ticket-history-modal");
+    expect(modal.textContent).toContain("TT-0002");
+    expect(modal.textContent).toContain("Đã duyệt");
+    expect(modal.textContent).toContain("Người duyệt: mg1");
+    setRole(null);
+  });
+
   it("useUrlState round-trip: filter → URL → remount giữ nguyên", { timeout: 20000 }, () => {
     const { unmount } = renderD1();
     const input = screen.getByPlaceholderText("Số đơn hàng") as HTMLInputElement;

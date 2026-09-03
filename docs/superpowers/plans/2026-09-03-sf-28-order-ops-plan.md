@@ -116,10 +116,10 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - Create: `apps/orders/src/features/TransferTicketHistoryModal.tsx`
 - Modify: `apps/orders/src/pages/D1Page.tsx` (entry mở history — link/icon trên badge hoặc menu row)
 
-- [ ] **Step 1: Modal bảng** — cột: ticket # (TT-xxxx), trạng thái duyệt (Tag: PENDING warning-pastel / APPROVED success / REJECTED error — tokens sf6 semantic), kho đích, lý do, thời gian (format VN), người xác nhận (created_by — confirmed_by null khi PENDING). Empty state `data-testid="transfer-history-empty"`: Empty component sf6. Table `data-testid="transfer-history-table"`. **Chạy vitest apps/orders sau khi sửa D1Page (entry mới) — cập nhật test nếu DOM thay đổi.**
-- [ ] **Step 2: D1Page entry** — click badge → mở history modal cho order đó (reuse getTransferTickets). Modal `data-testid="transfer-ticket-history-modal"`.
+- [x] **Step 1: Modal bảng** — cột: ticket # (TT-xxxx), trạng thái duyệt (Tag: PENDING warning-pastel / APPROVED success / REJECTED error — tokens sf6 semantic), kho đích, lý do, thời gian (format VN), người xác nhận (created_by — confirmed_by null khi PENDING). Empty state `data-testid="transfer-history-empty"`: Empty component sf6. Table `data-testid="transfer-history-table"`. **Chạy vitest apps/orders sau khi sửa D1Page (entry mới) — cập nhật test nếu DOM thay đổi.**
+- [x] **Step 2: D1Page entry** — click badge → mở history modal cho order đó (reuse getTransferTickets). Modal `data-testid="transfer-ticket-history-modal"`.
 - [ ] **Step 3: Verify browser** — tạo ticket qua modal Task 2 → mở history → thấy row đúng data. Screenshot.
-- [ ] **Step 4: Commit** `feat(transfer): ticket history modal + D1 entry`
+- [x] **Step 4: Commit** `feat(transfer): ticket history modal + D1 entry`
 
 ### Task 4: delivery-time-adjust-api — slots endpoint + PUT guard + role gates + Kafka order.updated
 
