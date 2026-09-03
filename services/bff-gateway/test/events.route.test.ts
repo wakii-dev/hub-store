@@ -375,7 +375,7 @@ describe('per-user connection cap (review P1 audit)', () => {
     expect(openListeners()).toBe(MAX_SSE_CONNECTIONS_PER_USER);
 
     // sub KHÁC (u2) vẫn mở được — cap per-user, không phải global bucket.
-    const u2Token = await identity.signToken('Manager', 'u2');
+    const u2Token = await identity.signToken('Coordinator', 'u2');
     const u2ResP = app.inject({
       method: 'GET',
       url: `/events?access_token=${encodeURIComponent(u2Token)}`,
