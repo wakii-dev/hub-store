@@ -218,6 +218,7 @@ export const shellResources: I18nResources = {
       "export.error": "Export thất bại",
       "pagination.total": "Tổng {{total}} đơn",
       "common.empty": "—",
+      "common.cancel": "Hủy",
     },
   },
   en: {
@@ -433,6 +434,7 @@ export const shellResources: I18nResources = {
       "export.error": "Export failed",
       "pagination.total": "Total {{total}} orders",
       "common.empty": "—",
+      "common.cancel": "Cancel",
     },
   },
 };

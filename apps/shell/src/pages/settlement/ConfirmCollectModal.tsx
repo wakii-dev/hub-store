@@ -6,8 +6,8 @@
 import { useState } from 'react';
 import { Input, message, Modal, Typography } from 'antd';
 import { useTranslation } from 'react-i18next';
-import { formatVnd } from '@hub-store/shared';
-import type { SettlementDetailItem } from '@hub-store/shared';
+import { COD_COLLECTION_STATUS, formatVnd } from '@hub-store/shared';
+import type { ConfirmCodBody, SettlementDetailItem } from '@hub-store/shared';
 import { settlementApi } from '../../api/settlementApi';
 
 export interface ConfirmCollectTarget {
@@ -15,6 +15,34 @@ export interface ConfirmCollectTarget {
   expectedAmount: number;
   /** undefined với đơn PENDING — modal prefill expected, để trống = đủ. */
   collectedAmount?: number;
+}
+
+/**
+ * Parse input thực thu → `number | undefined` (review P1-3: tách pure function
+ * để unit test semantics). Trống/whitespace → undefined = OMIT key (server lấy
+ * expected — D3). "0" → 0 = thu thật 0 đồng (KHÔNG phải absence). Grouping
+ * "450.000"/"450,000" được chấp nhận. Sai định dạng (âm, thập phân, chữ) → throw.
+ */
+export function parseCollectedAmount(amountText: string): number | undefined {
+  const cleaned = amountText.trim();
+  if (cleaned.length === 0) return undefined;
+  // Chỉ nhận số nguyên hoặc grouping chuẩn (450000 | 450.000 | 450,000).
+  // KHÔNG strip-then-Number mù quáng: '450000.5' → '4500005' là sai tiền im lặng.
+  if (!/^\d+([.,]\d{3})*$/.test(cleaned)) {
+    throw new Error(`Invalid collected amount: ${amountText}`);
+  }
+  return Number(cleaned.replace(/[.,]/g, ''));
+}
+
+/**
+ * Body POST /cod/confirm — collectedAmount được OMIT (không phải gửi null/0)
+ * khi undefined để server phân biệt absence (lấy expected) vs 0 (thu 0 đồng).
+ */
+export function buildConfirmBody(fulfillCode: string, collected?: number): ConfirmCodBody {
+  return {
+    fulfillCode,
+    ...(collected !== undefined ? { collectedAmount: collected } : {}),
+  };
 }
 
 export function ConfirmCollectModal(props: {
@@ -29,19 +57,16 @@ export function ConfirmCollectModal(props: {
 
   const handleOk = async () => {
     if (!target) return;
-    // Trống → omit (server lấy expected); nhập → số nguyên ≥ 0 (BFF chốt gate).
-    const trimmed = amountText.trim().replace(/[.,\s]/g, '');
-    const collected = trimmed.length > 0 ? Number(trimmed) : undefined;
-    if (collected !== undefined && (!Number.isInteger(collected) || collected < 0)) {
+    let collected: number | undefined;
+    try {
+      collected = parseCollectedAmount(amountText);
+    } catch {
       message.error(t('settlement.confirm.failed'));
       return;
     }
     setSubmitting(true);
     try {
-      const resp = await settlementApi.confirm({
-        fulfillCode: target.fulfillCode,
-        ...(collected !== undefined ? { collectedAmount: collected } : {}),
-      });
+      const resp = await settlementApi.confirm(buildConfirmBody(target.fulfillCode, collected));
       const failed = resp.results.find((r) => !r.success);
       if (failed) {
         message.error(`${t('settlement.confirm.failed')}: ${failed.message}`);
@@ -63,7 +88,7 @@ export function ConfirmCollectModal(props: {
       open={target !== null}
       title={t('settlement.confirm.title')}
       okText={t('settlement.confirm.ok')}
-      cancelText="Hủy"
+      cancelText={t('common.cancel')}
       confirmLoading={submitting}
       onOk={() => void handleOk()}
       onCancel={() => {
@@ -108,7 +133,8 @@ export function ConfirmCollectModal(props: {
 
 /** Thuộc tính phục vụ phân loại card trong drill-down. */
 export function itemState(item: SettlementDetailItem): 'pending' | 'mismatch' | 'ok' {
-  if (item.status === 0) return 'pending'; // COD_COLLECTION_STATUS.COD_PENDING
+  // Wire code qua enum (review P2) — mirror hubstore.fulfillment.v1 enum.
+  if (item.status === COD_COLLECTION_STATUS.PENDING) return 'pending';
   if (item.collectedAmount !== undefined && item.collectedAmount !== item.expectedAmount) {
     return 'mismatch';
   }

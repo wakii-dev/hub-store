@@ -19,15 +19,32 @@ import type {
 
 const http = () => getAxiosInstance();
 
+/**
+ * Fetch-all pageSize (review P1-1): BFF paginate default 20 — FE lúc đầu bỏ qua
+ * envelope.total nên shop thứ 21+ biến mất và KPI undercount. Màn đối soát là
+ * báo cáo tổng hợp (số shop/đơn của 1 kỳ luôn ≤ vài trăm) → giải pháp đúng đơn
+ * giản nhất là xin 1 page lớn thay vì dựng pagination UI; envelope vẫn Paginated
+ * nên nếu sau này cần paging thật, callers chỉ đổi chỗ này.
+ */
+export const SETTLEMENT_FETCH_PAGE_SIZE = 500;
+
 export const settlementApi = {
   /** GET /cod/settlement?from=&to=&page=&pageSize= — aggregate theo shop. */
   list(query: SettlementQuery): Promise<Paginated<SettlementShopRow>> {
-    return http().get('/cod/settlement', { params: query }).then((r) => r.data);
+    return http()
+      .get('/cod/settlement', {
+        params: { ...query, pageSize: SETTLEMENT_FETCH_PAGE_SIZE },
+      })
+      .then((r) => r.data);
   },
 
   /** GET /cod/settlement/detail?shopCode=&from=&to= — drill-down confirmations. */
   detail(query: SettlementDetailQuery): Promise<Paginated<SettlementDetailItem>> {
-    return http().get('/cod/settlement/detail', { params: query }).then((r) => r.data);
+    return http()
+      .get('/cod/settlement/detail', {
+        params: { ...query, pageSize: SETTLEMENT_FETCH_PAGE_SIZE },
+      })
+      .then((r) => r.data);
   },
 
   /** POST /cod/confirm — collectedAmount optional (absence = lấy expected). */
