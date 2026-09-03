@@ -17,6 +17,19 @@ export {
   type ListQueryDefinition,
 } from './api';
 export { createAppStore, type AppStore, type AppDispatch, type RootState } from './store';
+export {
+  createRealtimeStream,
+  useRealtimeEvents,
+  type CreateRealtimeStreamOptions,
+  type RealtimeApiSlice,
+  type RealtimeDispatch,
+  type RealtimeEvent,
+  type RealtimeEventSourceCtor,
+  type RealtimeEventSourceLike,
+  type RealtimeStatus,
+  type RealtimeStream,
+  type UseRealtimeEventsOptions,
+} from './realtime';
 
 // Side-effect imports: inject the stub endpoints into the api singleton at
 // package import time. SF-7/SF-9 edit the slice files in place — never
