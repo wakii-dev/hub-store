@@ -6,12 +6,16 @@
  * Style shape/size nằm trong map.css (import side-effect từ MapView.tsx).
  */
 import L from "leaflet";
+import { escapeHtml } from "./escapeHtml";
+
+/** testId nội suy vào attr HTML — escape chống attribute injection (review P1). */
+const attr = (testId?: string) => (testId ? ` data-testid="${escapeHtml(testId)}"` : "");
 
 /** Stop đánh số thứ tự — tròn 26px, chữ trắng (style trong map.css). */
 export function numberedStopIcon(n: number, color: string, testId?: string): L.DivIcon {
   return L.divIcon({
     className: "sf24-stop-marker-wrapper",
-    html: `<span class="sf24-stop-marker" data-stop-order="${n}"${testId ? ` data-testid="${testId}"` : ""} style="background:${color}">${n}</span>`,
+    html: `<span class="sf24-stop-marker" data-stop-order="${n}"${attr(testId)} style="background:${color}">${n}</span>`,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
     popupAnchor: [0, -14],
@@ -22,7 +26,7 @@ export function numberedStopIcon(n: number, color: string, testId?: string): L.D
 export function statusPinIcon(color: string, testId?: string): L.DivIcon {
   return L.divIcon({
     className: "sf24-status-pin-wrapper",
-    html: `<span class="sf24-status-pin"${testId ? ` data-testid="${testId}"` : ""} style="background:${color}"></span>`,
+    html: `<span class="sf24-status-pin"${attr(testId)} style="background:${color}"></span>`,
     iconSize: [22, 30],
     iconAnchor: [11, 30],
     popupAnchor: [0, -26],
@@ -33,7 +37,7 @@ export function statusPinIcon(color: string, testId?: string): L.DivIcon {
 export function warehouseIcon(color: string, testId?: string): L.DivIcon {
   return L.divIcon({
     className: "sf24-warehouse-marker-wrapper",
-    html: `<span class="sf24-warehouse-marker"${testId ? ` data-testid="${testId}"` : ""}><svg width="16" height="16" viewBox="0 0 24 24" fill="${color}" aria-hidden="true"><path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3L12 3z"/></svg></span>`,
+    html: `<span class="sf24-warehouse-marker"${attr(testId)}><svg width="16" height="16" viewBox="0 0 24 24" fill="${color}" aria-hidden="true"><path d="M12 3 2 11h3v10h6v-6h2v6h6V11h3L12 3z"/></svg></span>`,
     iconSize: [26, 26],
     iconAnchor: [13, 13],
     popupAnchor: [0, -14],

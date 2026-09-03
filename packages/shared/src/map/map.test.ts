@@ -55,6 +55,12 @@ describe("numberedStopIcon", () => {
     const icon = numberedStopIcon(1, "#EB6E09");
     expect((icon.options.html ?? "") as string).not.toContain("data-testid");
   });
+  it("testId chứa payload injection → escape trong attr (review P1 regression)", () => {
+    const payload = `x" onmouseover="alert(1)`;
+    const html = (numberedStopIcon(1, "#EB6E09", payload).options.html ?? "") as string;
+    expect(html).toContain('data-testid="x&quot; onmouseover=&quot;alert(1)"');
+    expect(html).not.toContain('onmouseover="alert');
+  });
 });
 
 describe("statusPinIcon", () => {
