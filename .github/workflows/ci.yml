@@ -201,10 +201,9 @@ jobs:
       # GOTCHA base-vs-full (T1): Go/Java interceptor so khớp claim `iss` =
       # FULL realm URL (như compose wiring), BFF withRealm() IDEMPOTENT với
       # full URL → dùng FULL cho cả 3 qua 1 env chung. FE (VITE_*) cần base.
-      # NOTE follow-up (chỉ ảnh hưởng 05-users Admin API khi widen E2E_CI_SPECS):
-      # BFF adminBaseUrl derive sai khi OIDC_JWKS_URL là FULL (thừa prefix
-      # /realms/hubstore trước /admin) — nếu cần users spec, tách env riêng
-      # cho BFF process. JWKS fetch + mọi spec khác hoạt động đúng với FULL.
+      # RESOLVED (611924f): BFF strip suffix certs + derive admin* từ origin —
+      # FULL certs URL cho cả 3 env không còn sai adminBaseUrl (test
+      # config.oidc.test.ts khóa contract).
       OIDC_ISSUER: http://localhost:8081/realms/hubstore
       OIDC_JWKS_URL: http://localhost:8081/realms/hubstore/protocol/openid-connect/certs
       VITE_OIDC_AUTHORITY: http://localhost:8081
