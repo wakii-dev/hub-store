@@ -115,7 +115,11 @@
 }
 .batch-list {
   flex: 1;
-  min-height: 0;
+  /* min-height đủ header + 3 rows (~55px/row) — carrier-section (SF-16) làm form
+     cao hơn → flex bóp list còn ~1 row, handle row 2+ bị clip ra ngoài vùng
+     hit-test (boundingBox nằm dưới carrier-card → mousedown không tới handle,
+     DnD chết — regression e2e 01). min-height ép form shrink (đã overflow auto). */
+  min-height: 202px;
   overflow-y: auto;
   border: 1px solid #eaecf0;
   border-radius: 16px;
