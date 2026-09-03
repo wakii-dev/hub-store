@@ -320,9 +320,9 @@ function PrintPageInner() {
           <Typography.Text>{t('print.zoom.label')}</Typography.Text>
           <Slider
             style={{ width: 140, marginBottom: 0 }}
-            min={50}
+            min={25}
             max={200}
-            step={10}
+            step={5}
             value={zoomPct}
             onChange={setZoomPct}
             tooltip={{ formatter: (v) => `${v}%` }}

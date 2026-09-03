@@ -105,9 +105,9 @@ Dispatch discipline (orca task deps không sửa được — coordinator enforc
 - Modify: `apps/fulfillment/src/pages/PrintPage.test.tsx`
 
 **Steps:**
-- [ ] Đổi slider min 50→25, step 10→5 (stops 25/50/75/.../200). KHÔNG đổi PdfPreview internals (canvas + worker wiring giữ nguyên).
-- [ ] Test: slider set 25 → preview container transform/zoom = 0.25 (theo cơ chế zoom hiện có trong file — đọc trước khi sửa).
-- [ ] Run `pnpm -F fulfillment test -- PrintPage` → PASS. Commit `feat(sf-21): preview zoom 25-200%`.
+- [x] Đổi slider min 50→25, step 10→5 (stops 25/50/75/.../200). KHÔNG đổi PdfPreview internals (canvas + worker wiring giữ nguyên).
+- [x] Test: slider set 25 → preview container transform/zoom = 0.25 (theo cơ chế zoom hiện có trong file — đọc trước khi sửa).
+- [x] Run `pnpm -F fulfillment test -- PrintPage` → PASS. Commit `feat(sf-21): preview zoom 25-200%`.
 
 ### Task 5: print-all — status gate
 

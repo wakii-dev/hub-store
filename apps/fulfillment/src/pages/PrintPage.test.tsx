@@ -143,13 +143,38 @@ describe("PrintPage (D3)", () => {
       printerId: "",
     });
 
-    // Zoom slider → scale thay đổi (50% = 0.5).
+    // Zoom slider → scale thay đổi (SF-21 T4: step 5 → 100 − 5 = 95).
     const slider = document.querySelector(".ant-slider-handle") as HTMLElement;
     fireEvent.keyDown(slider, { key: "ArrowLeft", keyCode: 37 });
     await waitFor(
-      () => expect(screen.getByTestId("pdf-preview").getAttribute("data-scale")).toBe("0.9"),
+      () => expect(screen.getByTestId("pdf-preview").getAttribute("data-scale")).toBe("0.95"),
       { timeout: 5000 },
     );
+  });
+
+  it("SF-21 T4 — zoom step 5: 100→25 qua 15 nhịp, chặn tại min 25 / max 200", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy(), { timeout: 5000 });
+    const preview = () => screen.getByTestId("pdf-preview").getAttribute("data-scale");
+    const slider = document.querySelector(".ant-slider-handle") as HTMLElement;
+    const press = (key: string, keyCode: number, times: number) => {
+      for (let i = 0; i < times; i += 1) {
+        fireEvent.keyDown(slider, { key, keyCode });
+      }
+    };
+
+    // 15 × ArrowLeft (step 5): 100 → 25 — các stop 25/50/…/200 đều bội của 5.
+    press("ArrowLeft", 37, 15);
+    await waitFor(() => expect(preview()).toBe("0.25"));
+    // Vượt min → kẹt ở 25.
+    press("ArrowLeft", 37, 3);
+    expect(preview()).toBe("0.25");
+    // 35 × ArrowRight: 25 → 200 (max).
+    press("ArrowRight", 39, 35);
+    await waitFor(() => expect(preview()).toBe("2"));
+    // Vượt max → kẹt ở 200.
+    press("ArrowRight", 39, 2);
+    expect(preview()).toBe("2");
   });
 
   it("tab switching — tab mới trigger load printType tương ứng (cache tab cũ)", async () => {
