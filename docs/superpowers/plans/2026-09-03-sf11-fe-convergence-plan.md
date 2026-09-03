@@ -94,10 +94,10 @@ Xem spec §5 — 17 files (2 NEW FE pages/slice, 3 NEW specs, 12 modify). Consum
 
 ### Task 3: mobile-polish — ≤768px shell nav + screens (FI-256) [deps: T1]
 **Files:** Modify `packages/shared/src/theme/sf6-antd-overrides.css`, `apps/shell/src/features/layout/AppLayout.tsx` (hamburger), `apps/fulfillment/src/pages/BatchListPage.tsx`, `apps/fulfillment/src/pages/PrintPage.tsx`, `apps/orders/src/batching/batching-modal.css` (+ tsx nếu cần), `apps/orders/src/pages/DashboardPage.tsx` (wrap part), `apps/orders/src/pages/D1Page.tsx` (wrap filters nếu chưa).
-- [ ] Step 1: AppLayout — thêm hamburger button trong `app-header` (chỉ visible ≤768px qua CSS class), toggle class `sf11-nav-open` trên layout wrapper. Sidebar rail: `@media (max-width: 768px)` → `transform: translateX(-100%)` (element VẪN trong DOM — testid sống); `.sf11-nav-open` → translateX(0) + overlay backdrop. Click nav item/route change → đóng.
-- [ ] Step 2: CSS media block: header co (padding 8px), user chip rút gọn; `.sf11-stack` utility (flex-direction column). D1 FilterBar wrap + stat-strip grid 2 cột; bulk-bar wrap. D2 BatchListPage thêm `scroll={{x}}` (tính tổng cột) + filter wrap. PrintPage stack layout. CreateBatchingModal width `min(960px, calc(100vw - 16px))`. Dashboard stat grid 2 cột, charts stack. Users table wrapper overflow-x.
-- [ ] Step 3: Desktop regression tự kiểm: KHÔNG có thay đổi render ở >768px (mọi CSS mới nằm trong @media hoặc class toggle chỉ active ≤768px).
-- [ ] Step 4: Typecheck shell+orders+fulfillment; unit tests pass; commit `feat(sf11): mobile ≤768px — nav off-canvas + screen stacks + table scroll`.
+- [x] Step 1: AppLayout — thêm hamburger button trong `app-header` (chỉ visible ≤768px qua CSS class), toggle class `sf11-nav-open` trên layout wrapper. Sidebar rail: `@media (max-width: 768px)` → `transform: translateX(-100%)` (element VẪN trong DOM — testid sống); `.sf11-nav-open` → translateX(0) + overlay backdrop. Click nav item/route change → đóng.
+- [x] Step 2: CSS media block: header co (padding 8px), user chip rút gọn; `.sf11-stack` utility (flex-direction column). D1 FilterBar wrap + stat-strip grid 2 cột; bulk-bar wrap. D2 BatchListPage thêm `scroll={{x}}` (tính tổng cột) + filter wrap. PrintPage stack layout. CreateBatchingModal width `min(960px, calc(100vw - 16px))`. Dashboard stat grid 2 cột, charts stack. Users table wrapper overflow-x.
+- [x] Step 3: Desktop regression tự kiểm: KHÔNG có thay đổi render ở >768px (mọi CSS mới nằm trong @media hoặc class toggle chỉ active ≤768px).
+- [x] Step 4: Typecheck shell+orders+fulfillment; unit tests pass; commit `feat(sf11): mobile ≤768px — nav off-canvas + screen stacks + table scroll`.
 - **Verify:** frozen testids `app-sidebar`/`nav-*` vẫn trong DOM ở mọi viewport; desktop pixel-identical (browser do coordinator).
 
 ### Task 4: design-harmonize — Users + Dashboard 100% SF-6 (FI-256)
