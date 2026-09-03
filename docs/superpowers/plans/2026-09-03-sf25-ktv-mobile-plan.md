@@ -54,12 +54,12 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 
 ### Task 1: realm-ktv-roles — realm JSON + BFF KNOWN_ROLES
 **Files:** `docker/keycloak/hubstore-realm.json`, `services/bff-gateway/src/plugins/auth.ts`, test BFF auth roles.
-- [ ] Thêm realm roles `InsideTechnician`, `OutsideTechnician` (mục `roles.realm`).
-- [ ] Thêm client `hubstore-mobile`: public, PKCE S256, `redirectUris`: `http://localhost:3010/*`, `http://127.0.0.1:4220/*`, `webOrigins` +, attr `pkce.code.challenge.method` = S256 (copy pattern `hubstore-web`), audience mapper `hubstore-api` + `preferred_username` mapper (copy từ hubstore-web protocolMappers).
-- [ ] Thêm users: username `KTV-001` (firstName "Nguyễn", lastName "Văn An", email `ktv-001@hubstore.dev`, credentials password literal `Password123!` temporary:false, realmRoles `[InsideTechnician]`), `CTV-001` (firstName "Hoàng", lastName "Văn Em", realmRoles `[OutsideTechnician]`).
-- [ ] `auth.ts` KNOWN_ROLES += 2 roles; verify role claim map test (unit test BFF auth nếu có — extend).
-- [ ] **Done-signal (plan-critic P2):** realm JSON import sạch vào keycloak 26.0 (`docker run --rm -v ./docker/keycloak:/import keycloak:26.0` optimize/import dry hoặc tối thiểu `python3 -m json.tool` parse + schema fields khớp pattern users/clients hiện có) — import thật sẽ được T8 keycloak boot xác nhận.
-- [ ] Commit: `feat(realm): SF-25 InsideTechnician/OutsideTechnician roles + hubstore-mobile client`
+- [x] Thêm realm roles `InsideTechnician`, `OutsideTechnician` (mục `roles.realm`).
+- [x] Thêm client `hubstore-mobile`: public, PKCE S256, `redirectUris`: `http://localhost:3010/*`, `http://127.0.0.1:4220/*`, `webOrigins` +, attr `pkce.code.challenge.method` = S256 (copy pattern `hubstore-web`), audience mapper `hubstore-api` + `preferred_username` mapper (copy từ hubstore-web protocolMappers).
+- [x] Thêm users: username `KTV-001` (firstName "Nguyễn", lastName "Văn An", email `ktv-001@hubstore.dev`, credentials password literal `Password123!` temporary:false, realmRoles `[InsideTechnician]`), `CTV-001` (firstName "Hoàng", lastName "Văn Em", realmRoles `[OutsideTechnician]`).
+- [x] `auth.ts` KNOWN_ROLES += 2 roles; verify role claim map test (unit test BFF auth nếu có — extend).
+- [x] **Done-signal (plan-critic P2):** realm JSON import sạch vào keycloak 26.0 (`docker run --rm -v ./docker/keycloak:/import keycloak:26.0` optimize/import dry hoặc tối thiểu `python3 -m json.tool` parse + schema fields khớp pattern users/clients hiện có) — import thật sẽ được T8 keycloak boot xác nhận.
+- [x] Commit: `feat(realm): SF-25 InsideTechnician/OutsideTechnician roles + hubstore-mobile client`
 
 ### Task 2: tech-actions-be — proto additive + Java RPCs + BFF routes + seed
 **Files:** `api/proto/hubstore/fulfillment/v1/tech_service.proto`, gen ts + java, `TechModels.java`, `TechServiceImpl.java`, repo/store layer nếu cần (mở `PostgresTechStore`/tương đương — đọc code trước), `services/bff-gateway/src/routes/tech.ts`, `api/seed/tech-sample.json`, `scripts/seed-db.sh`.
