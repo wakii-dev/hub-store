@@ -177,6 +177,8 @@ Quy trình rotate (dev realm):
 5. Verify login: `E2E_PASSWORD=<mới> python3 e2e/scripts/mint_sf11.py coordinator /tmp/auth.json` → token OK.
 6. Prod-style: KHÔNG dùng literal — secret nằm secret manager/env, realm import chỉ cho dev.
 
+> Git history vẫn chứa secrets dev CŨ (trước SF-12 untrack) — KHÔNG reuse giá trị đó; rotate mọi secret khi deploy ra môi trường thật (không rewrite history — dev repo, quyết định security-audit SF-12).
+
 > Java logs: logback (Spring default) — JSON encoder là follow-up nếu cần (SF-12 chỉ chuyển Go auth/health path + BFF kafka path sang JSON).
 
 ## CI (GitHub Actions) — SF-12
