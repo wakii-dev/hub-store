@@ -113,6 +113,8 @@ export const shellResources: I18nResources = {
       "users.passwordchanged": "Đã đổi mật khẩu.",
       "users.statuschanged": "Đã cập nhật trạng thái.",
       "users.error": "Thao tác thất bại.",
+      "users.empty": "Chưa có người dùng",
+      "users.emptyHint": "Thêm người dùng đầu tiên để bắt đầu quản lý truy cập.",
       "nav.audit": "Nhật ký hệ thống",
       "audit.title": "Nhật ký hệ thống",
       "audit.filter.actor": "Người thực hiện",
@@ -126,6 +128,8 @@ export const shellResources: I18nResources = {
       "audit.pagination.total": "{{total}} bản ghi",
       "audit.empty": "Chưa có nhật ký nào.",
       "audit.emptyHint": "Thử đổi bộ lọc hoặc thực hiện thao tác trong hệ thống.",
+      "audit.error": "Không tải được nhật ký hoạt động.",
+      "audit.errorRetry": "Thử lại",
     },
     // SF-18 — namespace màn D2C/Dropship (screen keys thuộc Task 6, rule §3.22).
     d2c: {
@@ -292,6 +296,8 @@ export const shellResources: I18nResources = {
       "users.passwordchanged": "Password updated.",
       "users.statuschanged": "Status updated.",
       "users.error": "Action failed.",
+      "users.empty": "No users yet",
+      "users.emptyHint": "Add the first user to start managing access.",
       "nav.audit": "Audit log",
       "audit.title": "Audit log",
       "audit.filter.actor": "Actor",
@@ -305,6 +311,8 @@ export const shellResources: I18nResources = {
       "audit.pagination.total": "{{total}} records",
       "audit.empty": "No audit entries.",
       "audit.emptyHint": "Try changing the filters or perform an action in the system.",
+      "audit.error": "Failed to load the activity log.",
+      "audit.errorRetry": "Retry",
     },
     // SF-18 — D2C/Dropship screen namespace (Task 6).
     d2c: {

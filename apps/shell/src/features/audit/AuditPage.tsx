@@ -5,7 +5,7 @@
  * audit-filter-actor, audit-filter-action.
  */
 import { useState } from "react";
-import { Input, Space, Table, Tag, Typography } from "antd";
+import { Alert, Button, Input, Space, Table, Tag, Typography } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useTranslation } from "react-i18next";
 import {
@@ -49,7 +49,7 @@ export default function AuditPage() {
   const [range, setRange] = useState<DateRangeValue | null>(null);
   const [page, setPage] = useState(1);
 
-  const { data, isLoading, isFetching } = useListAuditQuery({
+  const { data, isLoading, isFetching, isError, refetch } = useListAuditQuery({
     actor,
     action,
     dateFrom: range?.from,
@@ -112,6 +112,18 @@ export default function AuditPage() {
       {/* Initial load → skeleton (SF-6 §2.2, không spinner toàn trang). */}
       {isLoading ? (
         <TableSkeleton />
+      ) : isError ? (
+        /* Lỗi API ≠ dữ liệu rỗng — không được ngụy trang thành EmptyState (review P1). */
+        <Alert
+          type="error"
+          showIcon
+          message={t("audit.error")}
+          action={
+            <Button size="small" onClick={() => void refetch()}>
+              {t("audit.errorRetry")}
+            </Button>
+          }
+        />
       ) : items.length === 0 ? (
         <div
           style={{
@@ -138,6 +150,7 @@ export default function AuditPage() {
         >
           <Table<AuditListItem>
             rowKey="id"
+            data-testid="audit-table"
             size="middle"
             loading={isFetching && !isLoading}
             dataSource={items}
