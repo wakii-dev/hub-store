@@ -20,6 +20,13 @@ vi.mock("./auth/oidc", () => ({
   signoutRedirect: state.signoutRedirect,
 }));
 
+// T4: MyOrdersPage fetch thật → mock api layer (smoke test chỉ assert shell).
+vi.mock("./api/ktvApi", () => ({
+  fetchMyInstallations: vi.fn(async () => []),
+  fetchMyDeliveries: vi.fn(async () => []),
+  todayIso: vi.fn(() => "2026-09-03"),
+}));
+
 import App from "./App";
 
 initI18n({ resources: ktvMobileResources });

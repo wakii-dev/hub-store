@@ -16,6 +16,7 @@ import {
 import type { User } from "oidc-client-ts";
 import BottomNav from "./features/layout/BottomNav";
 import MyOrdersPage from "./features/my-orders/MyOrdersPage";
+import OrderDetailPage from "./features/order-detail/OrderDetailPage";
 import AccountPage from "./features/account/AccountPage";
 
 /** Spinner full-screen khi đang boot / chờ redirect Keycloak. */
@@ -105,6 +106,8 @@ function MobileShell(props: { session: MobileSession; onSignOut: () => void }) {
     <div style={{ minHeight: "100vh", paddingBottom: "calc(56px + env(safe-area-inset-bottom))" }}>
       <Routes>
         <Route path="/" element={<MyOrdersPage session={props.session} />} />
+        {/* T4: stub — T7 dựng OrderDetailPage thật (timeline + map + tel:). */}
+        <Route path="/order/:code" element={<OrderDetailPage />} />
         <Route
           path="/account"
           element={<AccountPage session={props.session} onSignOut={props.onSignOut} />}
