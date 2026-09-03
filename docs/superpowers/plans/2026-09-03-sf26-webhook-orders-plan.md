@@ -281,7 +281,7 @@ export function mapWebhookPayload(payload: unknown, fieldMap?: WebhookMappingCon
 **Files:**
 - Modify: `services/bff-gateway/src/routes/webhooks.ts` (nếu còn nhánh sót) · `services/bff-gateway/src/test/webhooks.route.test.ts` (mới)
 
-- [ ] **Step 1: Test bảng lỗi ĐẦY ĐỦ** (fastify inject, mock intake client — pattern test BFF hiện có):
+- [x] **Step 1: Test bảng lỗi ĐẦY ĐỦ** (fastify inject, mock intake client — pattern test BFF hiện có):
 | case | expect |
 |---|---|
 | HMAC ok + validate ok | 200 `{fulfillCode, replayed}` |
@@ -293,9 +293,10 @@ export function mapWebhookPayload(payload: unknown, fieldMap?: WebhookMappingCon
 | intake INVALID_ARGUMENT | 422 + details[] passthrough |
 | intake UNAVAILABLE | 503 |
 | intake UNKNOWN/INTERNAL | 500-502/5xx qua mapGrpcError |
-- [ ] **Step 2: Fix nhánh sót** nếu test lộ; message KHÔNG chứa signature/secret/payload value nhạy cảm.
-- [ ] **Step 3: Chạy FULL BFF unit suite** (không chỉ file mới) — regression app.ts/auth.ts.
-- [ ] **Step 4: Commit** `feat(sf26): retry semantics — 200/400/401/422/503/5xx contract + tests từng nhánh`
+  → file `test/webhooks.retry.test.ts` (11 test, đủ bảng + leak-guard secret/sig); harness thêm opt `webhookHmacSecret` cho nhánh secret-rỗng.
+- [x] **Step 2: Fix nhánh sót** nếu test lộ; message KHÔNG chứa signature/secret/payload value nhạy cảm. → webhooks.ts KHÔNG đổi — T4 đã đúng contract, 0 nhánh sót.
+- [x] **Step 3: Chạy FULL BFF unit suite** (không chỉ file mới) — regression app.ts/auth.ts. → 28 files / 339 tests PASS (baseline T4: 328 + 11 mới); `tsc --noEmit` exit 0.
+- [x] **Step 4: Commit** `feat(sf26): retry semantics — 200/400/401/422/503/5xx contract + tests từng nhánh`
 
 ### Task 7: audit-integration — actor webhook:<source>
 

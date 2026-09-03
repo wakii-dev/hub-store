@@ -372,6 +372,8 @@ export interface HarnessOptions {
   deadlineMs?: number;
   /** Trỏ 1 upstream tới port chết — test 503 UPSTREAM_UNAVAILABLE. */
   deadUpstream?: 'fulfillment' | 'batching' | 'deliverybatch' | 'print' | 'intake';
+  /** SF-26 — override secret test (vd rỗng → nhánh fail-closed 503). */
+  webhookHmacSecret?: string;
   /** Override handler mặc định lúc boot. */
   fulfillmentHandlers?: Record<string, UnaryHandler>;
   techHandlers?: Record<string, UnaryHandler>;
@@ -483,7 +485,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
     kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 side-channel — off trong test
     // SF-26 — webhook HMAC; secret test để route chạm được nhánh verifyHmac.
-    webhookHmacSecret: 'test-webhook-secret',
+    webhookHmacSecret: opts.webhookHmacSecret ?? 'test-webhook-secret',
     webhookMapping: '',
   };
   const app = buildApp(config);
