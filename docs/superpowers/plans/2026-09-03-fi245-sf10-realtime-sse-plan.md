@@ -71,8 +71,8 @@ DAG 3 tiers — Tier 1: T1 ∥ T3 (disjoint); Tier 2: T2 (deps T1), T4 (deps T3)
 
 ### Task 5: Reconnect + fallback polling (`reconnect-fallback`) — deps T3
 **Files:** Modify `packages/api-client/src/realtime.ts`
-- [ ] **Step 1:** Hook: đếm consecutive connect-fail; >2 → chuyển polling mode (interval 30s — hằng số export được để test), thử lại SSE mỗi 60s; SSE mở lại được → tắt polling. Nhận `{type:'stream.degraded'}` (T2) → coi như failure.
-- [ ] **Step 2:** Unit tests: state machine connected→polling→connected; degraded event → polling; polling tick invalidate.
+- [x] **Step 1:** Hook: đếm consecutive connect-fail; >2 → chuyển polling mode (interval 30s — hằng số export được để test), thử lại SSE mỗi 60s; SSE mở lại được → tắt polling. Nhận `{type:'stream.degraded'}` (T2) → coi như failure.
+- [x] **Step 2:** Unit tests: state machine connected→polling→connected; degraded event → polling; polling tick invalidate.
 
 ### Task 6: E2E spec + browser verify + security audit (`e2e-sse-spec`) — deps T2+T4+T5
 **Files:** Create `e2e/tests/07-realtime.spec.ts`
