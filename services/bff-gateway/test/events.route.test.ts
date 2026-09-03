@@ -331,6 +331,84 @@ describe('per-user connection cap (review P1 audit)', () => {
       await minimal.close();
     }
   });
+
+  // Guarded app (token thật qua JWKS) — các test trên dùng minimal app KHÔNG
+  // guard nên mọi connection rơi vào bucket 'anonymous' (global). Test này chứng
+  // minh cap key theo `.sub` từng user: nếu hồi quy key theo `.role` (hoặc bỏ
+  // sub) thì u2 sẽ 429 cùng u1 → test fail.
+  it('cap là PER-USER: u1 đủ 5 connection → 429, sub u2 KHÁC vẫn 200 (guarded app)', async () => {
+    // Hook riêng ghi (sub, reply) từng request /events — hook `captured` trong
+    // beforeEach chỉ giữ connection CUỐI, không đủ cho nhiều connection song song.
+    const conns: Array<{ sub: string; reply: FastifyReply }> = [];
+    app.addHook('onRequest', (request, reply, done) => {
+      if (request.url === '/events' || request.url.startsWith('/events?')) {
+        conns.push({ sub: request.user?.sub ?? 'anonymous', reply });
+      }
+      done();
+    });
+    /** Mỗi connection SSE THẬT = 1 listener bffEvents — đếm thay poll conns. */
+    const openListeners = (): number => bffEvents.listenerCount('kafka:event');
+    /** Chỉ connection đã hijack thành SSE (request bị 429 cũng lọt qua hook). */
+    const isSse = (c: { reply: FastifyReply }): boolean =>
+      c.reply.raw.getHeader('content-type') === 'text/event-stream';
+
+    // 5 connection đồng thời của u1 — hết trong cap, đều chấp nhận.
+    const u1Tokens = await Promise.all(
+      Array.from({ length: MAX_SSE_CONNECTIONS_PER_USER }, () =>
+        identity.signToken('Coordinator', 'u1'),
+      ),
+    );
+    const u1ResPs = u1Tokens.map((token) =>
+      app.inject({ method: 'GET', url: `/events?access_token=${encodeURIComponent(token)}` }),
+    );
+    for (let i = 0; i < 100 && openListeners() < MAX_SSE_CONNECTIONS_PER_USER; i++) await sleep(10);
+    expect(openListeners()).toBe(MAX_SSE_CONNECTIONS_PER_USER);
+
+    // Connection thứ 6 của CÙNG u1 → 429 TOO_MANY_CONNECTIONS (không tăng count).
+    const u1Token6 = await identity.signToken('Coordinator', 'u1');
+    const rejected = await app.inject({
+      method: 'GET',
+      url: `/events?access_token=${encodeURIComponent(u1Token6)}`,
+    });
+    expect(rejected.statusCode).toBe(429);
+    expect(rejected.json().code).toBe('TOO_MANY_CONNECTIONS');
+    expect(openListeners()).toBe(MAX_SSE_CONNECTIONS_PER_USER);
+
+    // sub KHÁC (u2) vẫn mở được — cap per-user, không phải global bucket.
+    const u2Token = await identity.signToken('Manager', 'u2');
+    const u2ResP = app.inject({
+      method: 'GET',
+      url: `/events?access_token=${encodeURIComponent(u2Token)}`,
+    });
+    for (let i = 0; i < 100 && openListeners() < MAX_SSE_CONNECTIONS_PER_USER + 1; i++)
+      await sleep(10);
+    const u2Conn = conns.find((c) => c.sub === 'u2' && isSse(c));
+    expect(u2Conn).toBeDefined();
+    u2Conn!.reply.raw.end();
+    const u2Res = await u2ResP;
+    expect(u2Res.statusCode).toBe(200);
+    expect(u2Res.headers['content-type']).toBe('text/event-stream');
+
+    // Đóng hết 5 connection u1 → counter giảm về 0 → u1 mở lại được (decrement).
+    for (const conn of conns) {
+      if (conn.sub === 'u1' && isSse(conn)) conn.reply.raw.end();
+    }
+    await Promise.all(u1ResPs.map((p) => p.catch(() => undefined)));
+    expect(openListeners()).toBe(0);
+
+    const u1RetryToken = await identity.signToken('Coordinator', 'u1');
+    const u1RetryResP = app.inject({
+      method: 'GET',
+      url: `/events?access_token=${encodeURIComponent(u1RetryToken)}`,
+    });
+    for (let i = 0; i < 100 && openListeners() < 1; i++) await sleep(10);
+    const retryConn = conns[conns.length - 1]!;
+    expect(retryConn.sub).toBe('u1');
+    retryConn.reply.raw.end();
+    const retryRes = await u1RetryResP;
+    expect(retryRes.statusCode).toBe(200);
+    expect(retryRes.headers['content-type']).toBe('text/event-stream');
+  });
 });
 
 describe('max lifetime (review P1 audit)', () => {
