@@ -362,7 +362,7 @@ export async function pollNotifications(): Promise<NewNotification[]> {
 ### Task T7: ga-dual-mode
 **Files:** Create `packages/shared/src/analytics/ga.ts` + `packages/shared/src/analytics/__tests__/ga.test.ts` (vị trí test theo pattern package); Modify `packages/shared/src/index.ts` (+1 export line), `apps/shell/src/App.tsx` (pageview), 5 call-site files (1 line mỗi file).
 
-- [ ] **Step 1: ga.ts**
+- [x] **Step 1: ga.ts** (readEnv có fallback process.env — pattern oidc.ts, vì import.meta.env trong vitest là per-module; commit 0f5090a)
 
 ```ts
 type GtagFn = (...args: unknown[]) => void;
@@ -396,11 +396,11 @@ function pushBuffer(name: string, params?: Record<string, unknown>): void {
 if (typeof window !== 'undefined') window.__gaBuffer = buffer;
 ```
 
-- [ ] **Step 2: export** — `packages/shared/src/index.ts` thêm `export * from './analytics/ga'; // SF-23 freeze exception (pattern SF-2/SF-27 amendment)` + sửa NOTE dòng 2 thành "trừ api-contracts/ + events/ + analytics/ (SF-23)".
-- [ ] **Step 3: pageview** — App.tsx: component nhỏ `RouteTracker()` dùng `useLocation()` + `useEffect(() => { pageview(location.pathname); }, [location.pathname])`, mount trong BrowserRouter (cạnh Routes).
-- [ ] **Step 4: call sites** — sau mutation THÀNH CÔNG (đúng dòng success — KHÔNG phải trong catch): `CreateOrderModal.tsx` `trackEvent('order_created')`; `ImportOrdersModal.tsx` `trackEvent('orders_imported', { count })`; `apps/orders/src/pages/D1Page.tsx` (createBatch success) `trackEvent('batch_created')`; `apps/fulfillment/src/pages/BatchListPage.tsx` (completePicking :262) `trackEvent('batch_completed')`; `apps/fulfillment/src/pages/PrintPage.tsx` (:136) `trackEvent('print')`. Import `import { trackEvent } from '@hub-store/shared';`.
-- [ ] **Step 5: test** — vitest jsdom: env trống → initAnalytics không inject script; trackEvent vào buffer; env giả lập có ID (mock import.meta.env theo pattern readEnv của shell) → dataLayer push.
-- [ ] **Step 6: Run** shared + shell + orders + fulfillment tests (call-site files) + Commit `feat(analytics): GA dual-mode + business trackEvent (SF-23 T7)`
+- [x] **Step 2: export** — `packages/shared/src/index.ts` thêm `export * from './analytics/ga'; // SF-23 freeze exception (pattern SF-2/SF-27 amendment)` + sửa NOTE dòng 2 thành "trừ api-contracts/ + events/ + analytics/ (SF-23)".
+- [x] **Step 3: pageview** — App.tsx: component nhỏ `RouteTracker()` dùng `useLocation()` + `useEffect(() => { pageview(location.pathname); }, [location.pathname])`, mount trong BrowserRouter (cạnh Routes).
+- [x] **Step 4: call sites** (batch_created đặt tại CreateBatchingModal.tsx handleCreate — success thật, KHÔNG phải D1Page như plan đoán) — sau mutation THÀNH CÔNG (đúng dòng success — KHÔNG phải trong catch): `CreateOrderModal.tsx` `trackEvent('order_created')`; `ImportOrdersModal.tsx` `trackEvent('orders_imported', { count })`; `apps/orders/src/pages/D1Page.tsx` (createBatch success) `trackEvent('batch_created')`; `apps/fulfillment/src/pages/BatchListPage.tsx` (completePicking :262) `trackEvent('batch_completed')`; `apps/fulfillment/src/pages/PrintPage.tsx` (:136) `trackEvent('print')`. Import `import { trackEvent } from '@hub-store/shared';`.
+- [x] **Step 5: test** — vitest jsdom: env trống → initAnalytics không inject script; trackEvent vào buffer; env giả lập có ID (mock import.meta.env theo pattern readEnv của shell) → dataLayer push.
+- [x] **Step 6: Run** shared + shell + orders + fulfillment tests (call-site files) + Commit `feat(analytics): GA dual-mode + business trackEvent (SF-23 T7)` — 62/55/69/39 PASS, commit 0f5090a
 
 ### Task T8: env-wiring
 **Files:** Modify `.env.example`, `docker-compose.yml` (bff env + web build args), `Dockerfile.web`, `docker/nginx.conf`.
