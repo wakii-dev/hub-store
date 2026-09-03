@@ -652,6 +652,10 @@ function BatchListPageInner() {
           loading={isLoading || isFetching}
           dataSource={rows}
           columns={columns}
+          /* SF-11 (FI-256 D2) — scroll ngang ≤768px: tổng cột cố định
+             90+130+100+260+130+100+140+230 = 1180 + ~220 (address ellipsis)
+             = 1400 (mirror D1). */
+          scroll={{ x: 1400 }}
           locale={{
             emptyText: (
               <EmptyState
