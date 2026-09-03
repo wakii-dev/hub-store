@@ -207,6 +207,8 @@ services:
       KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID:-hubstore-admin} # SF-8 — Users management
       KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:-hubstore-admin-dev-secret}
       ENABLE_DEV_RESET_PASSWORD: "1" # DEV-ONLY — bật /auth/reset-password (prod không set → 404)
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-} # SF-23 — trống = push mock/off (dual-mode)
+      ONESIGNAL_REST_API_KEY: ${ONESIGNAL_REST_API_KEY:-}
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092 # internal listener (host view = localhost:9092)
       # SF-7 (FI-252): audit trail — BFF ghi activity_log trực tiếp DB fulfillment
@@ -226,6 +228,10 @@ services:
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        # SF-23 BUILD-TIME (vite nhúng lúc build — đổi key phải rebuild image web)
+        VITE_ONESIGNAL_APP_ID: ${VITE_ONESIGNAL_APP_ID:-}
+        VITE_GA_MEASUREMENT_ID: ${VITE_GA_MEASUREMENT_ID:-}
     ports:
       - "3000:3000"
     depends_on:
