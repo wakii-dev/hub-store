@@ -34,6 +34,11 @@ async function createBatch(page: Page, opts: { suggest?: boolean; addOrder?: str
   const modal = page.locator(".create-batching-modal");
   await expect(modal).toBeVisible();
 
+  // SF-28 T7 — wizard step 1 (preset 4 card) thêm vào trước nội dung step cũ
+  // (Deviation D1: step cũ không bị ẩn) → advance sang step DnD trước khi kéo
+  // (layout shift làm coordinate-drag trượt chỗ).
+  await page.getByTestId("batch-continue").click();
+
   if (opts.dnd) {
     // Kéo hàng đầu xuống dưới 1 vị trí (react-sortable-hoc + useDragHandle)
     const first = page.getByTestId("batch-row-ORD-3001").getByTestId("batch-drag-handle");

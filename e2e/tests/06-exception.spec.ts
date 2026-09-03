@@ -34,6 +34,9 @@ async function createBatch(page: Page) {
   await page.getByTestId("bulk-create-batch").click();
   const modal = page.locator(".create-batching-modal");
   await expect(modal).toBeVisible();
+  // SF-28 T7 — wizard step 1 (preset) mới thêm → advance sang step cũ trước
+  // khi thao tác shipper/TG giao.
+  await page.getByTestId("batch-continue").click();
   await page.getByTestId("batch-shipper-select").locator(".ant-select-selector").click();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
