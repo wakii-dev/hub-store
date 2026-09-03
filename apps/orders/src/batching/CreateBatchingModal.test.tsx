@@ -725,4 +725,52 @@ describe("CreateBatchingModal", () => {
       ],
     });
   });
+
+  // ─── SF-16 Task 5: fee-limit gates (disable radio / auto-clear / submit block) ───
+
+  it("SF-16 T5: quote vượt hạn mức → radio disabled + tag tone error, quote hợp lệ vẫn chọn được", async () => {
+    const blocked8T: DeliveryQuoteDto = { ...SIX_QUOTES[5], isExceedFeeLimit: true };
+    await renderWithAddonQuotes([SIX_QUOTES[0], blocked8T]);
+
+    const radio8T = screen.getByTestId("quote-8T").querySelector("input") as HTMLInputElement;
+    expect(radio8T.disabled).toBe(true);
+    fireEvent.click(radio8T);
+    expect(radio8T.checked).toBe(false); // không chọn được
+    // tag tone error
+    expect(screen.getByTestId("quote-limit-tag-8T").textContent).toContain("Vượt hạn mức");
+
+    // quote hợp lệ vẫn chọn bình thường
+    await selectQuote("SGCN");
+    expect((screen.getByTestId("quote-SGCN").querySelector("input") as HTMLInputElement).checked).toBe(true);
+  });
+
+  it("SF-16 T5: đang chọn 1T rồi refetch trả 1T vượt hạn mức → selection cleared + banner + submit disabled", async () => {
+    quotesMock.mockReturnValue(unwrapResult({ quotes: SIX_QUOTES, meta: { mock: false } }));
+    recalcMock.mockReturnValue(unwrapResult({ items: [] }));
+    renderModal();
+    await flush();
+    await selectTruckAndGetQuotes(ALL_STOPS);
+    await selectQuote("1T");
+    expect((screen.getByTestId("quote-1T").querySelector("input") as HTMLInputElement).checked).toBe(true);
+    expect(screen.getByTestId("sum-shipping-fee")).toBeTruthy();
+
+    // recalc distance → rows đổi → refetch quotes → 1T giờ bị đánh dấu vượt hạn mức
+    quotesMock.mockReturnValue(
+      unwrapResult({
+        quotes: SIX_QUOTES.map((q) => (q.serviceId === "1T" ? { ...q, isExceedFeeLimit: true } : q)),
+        meta: { mock: false },
+      }),
+    );
+    fireEvent.click(screen.getByTestId("batch-recalc-distance"));
+    await flush(); // recalc resolve + rows state update
+    await flushDebounce(); // refetch quotes (debounce 300ms)
+
+    // auto-clear selection + warning banner (sf6-note-banner style, tone error)
+    expect((screen.getByTestId("quote-1T").querySelector("input") as HTMLInputElement).checked).toBe(false);
+    expect(screen.getByTestId("fee-limit-banner").textContent).toContain("Đã bỏ chọn xe");
+    expect(screen.queryByTestId("sum-shipping-fee")).toBeNull();
+    // submit disabled (không còn selection hợp lệ) + KHÔNG hiện message block (selection đã cleared)
+    expect((screen.getByTestId("batch-submit") as HTMLButtonElement).disabled).toBe(true);
+    expect(screen.queryByTestId("fee-limit-submit-block")).toBeNull();
+  });
 });

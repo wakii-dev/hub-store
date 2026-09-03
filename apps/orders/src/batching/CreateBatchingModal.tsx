@@ -54,7 +54,7 @@ import {
   useGetQuotesMutation,
 } from "./deliveryBatchApi";
 import { buildAddOrderFilterRequest, extractRejectMessages } from "./batchingHelpers";
-import { computeTotalFee, toStopOrders } from "./carrierHelpers";
+import { computeTotalFee, hasBlockedSelection, isQuoteBlocked, toStopOrders } from "./carrierHelpers";
 import { CarrierSection } from "./CarrierSection";
 import { AddonSelector } from "./AddonSelector";
 import type { CarrierGroup } from "./carrierHelpers";
@@ -155,6 +155,8 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   // SF-16 §2.3 — addons (Task 4): mã addon đã tick theo quote đang chọn.
   const [selectedAddonCodes, setSelectedAddonCodes] = useState<string[]>([]);
+  // SF-16 §2.2 (Task 5) — banner cảnh báo khi quote đang chọn bị vượt hạn mức (refetch).
+  const [feeLimitWarning, setFeeLimitWarning] = useState(false);
   const [bookingResults, setBookingResults] = useState<DeliveryBookingDto[] | null>(null);
   const [nvcSubmitting, setNvcSubmitting] = useState(false);
   const [shipperId, setShipperId] = useState<string | undefined>(undefined);
@@ -191,6 +193,7 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
       setMetaMock(false);
       setSelectedServiceId(null);
       setSelectedAddonCodes([]);
+      setFeeLimitWarning(false);
       setBookingResults(null);
       setNvcSubmitting(false);
       setShipperId(undefined);
@@ -210,6 +213,18 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
   useEffect(() => {
     setSelectedAddonCodes([]);
   }, [selectedServiceId]);
+
+  // SF-16 §2.2 (Task 5) — fee-limit auto-clear: refetch quotes (recalc km /
+  // thêm-bớt đơn) có thể trả quote ĐANG CHỌN vượt hạn mức → clear selection
+  // + banner cảnh báo. Chọn quote mới tự tắt banner (onChange handler).
+  useEffect(() => {
+    if (selectedServiceId === null) return;
+    const selected = (quotes ?? []).find((q) => q.serviceId === selectedServiceId);
+    if (selected != null && isQuoteBlocked(selected)) {
+      setSelectedServiceId(null);
+      setFeeLimitWarning(true);
+    }
+  }, [quotes, selectedServiceId]);
 
   const shopCode = rows[0]?.shopAssignment.shopCode ?? "";
 
@@ -315,9 +330,6 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
   const pickedFromHint = deliveryTime !== null && hintSlots.some((s) => s.from === deliveryTime.from && s.to === deliveryTime.to);
 
   // ---- Submit -------------------------------------------------------------------
-  // TRUCK: phải chọn quote trước khi submit (fee gates chi tiết ở Task 5).
-  const canSubmit = rows.length > 0 && !!shipperId && deliveryTime !== null && (carrierGroup !== "TRUCK" || !!selectedServiceId);
-
   // SF-16 §2.3 — addons Task 4: addon DTO của quote đang chọn theo mã đã tick
   // (computeTotalFee = quote.fee + Σ addon.fee).
   const selectedQuote = (quotes ?? []).find((q) => q.serviceId === selectedServiceId) ?? null;
@@ -325,6 +337,12 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
     selectedAddonCodes.includes(a.code),
   );
   const shippingFee = selectedQuote !== null ? computeTotalFee(selectedQuote, selectedAddons) : null;
+  // SF-16 §2.2 (Task 5) — submit gate: selection vượt hạn mức phí → chặn
+  // (BE-authoritative 422 vẫn là lớp chặn cuối).
+  const submitBlocked = hasBlockedSelection(selectedQuote);
+  // TRUCK: phải chọn quote HỢP LỆ (không vượt hạn mức) trước khi submit.
+  const canSubmit =
+    rows.length > 0 && !!shipperId && deliveryTime !== null && (carrierGroup !== "TRUCK" || (!!selectedServiceId && !submitBlocked));
 
   const handleCreate = async () => {
     if (!canSubmit) return;
@@ -559,25 +577,56 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
               <Typography.Text type="secondary">{t("batching.carrierGroup.quotesPlaceholder")}</Typography.Text>
             ) : (
               <div className="quote-list" data-testid="quote-list">
-                {quotes.map((q) => (
-                  <label
-                    key={q.serviceId}
-                    className={`quote-item${q.serviceId === selectedServiceId ? " quote-item-selected" : ""}`}
-                    data-testid={`quote-${q.serviceId}`}
-                  >
-                    <Radio
-                      checked={q.serviceId === selectedServiceId}
-                      onChange={() => setSelectedServiceId(q.serviceId)}
-                    />
-                    <span className="quote-name">{q.name}</span>
-                    <Tag className="quote-vehicle">{q.vehicleType}</Tag>
-                    <span className="quote-eta">{t("batching.quotes.eta", { minutes: q.etaMinutes })}</span>
-                    {metaMock && <Tag className="quote-mock-tag">[MOCK]</Tag>}
-                    <span className="quote-fee">{formatVnd(computeTotalFee(q, q.serviceId === selectedServiceId ? selectedAddons : []))}</span>
-                  </label>
-                ))}
+                {quotes.map((q) => {
+                  // SF-16 §2.2 (Task 5) — fee-limit gate: quote vượt hạn mức →
+                  // disabled + Tooltip + tag tone error (a11y: tooltip vẫn đọc được).
+                  const blocked = isQuoteBlocked(q);
+                  const item = (
+                    <label
+                      key={q.serviceId}
+                      className={`quote-item${q.serviceId === selectedServiceId ? " quote-item-selected" : ""}${blocked ? " quote-item-blocked" : ""}`}
+                      data-testid={`quote-${q.serviceId}`}
+                      onClick={blocked ? (e) => e.preventDefault() : undefined}
+                    >
+                      <Radio
+                        checked={q.serviceId === selectedServiceId}
+                        disabled={blocked}
+                        onChange={() => {
+                          setSelectedServiceId(q.serviceId);
+                          setFeeLimitWarning(false); // chọn quote hợp lệ → tắt banner
+                        }}
+                      />
+                      <span className="quote-name">{q.name}</span>
+                      <Tag className="quote-vehicle">{q.vehicleType}</Tag>
+                      <span className="quote-eta">{t("batching.quotes.eta", { minutes: q.etaMinutes })}</span>
+                      {blocked && (
+                        <Tag className="quote-limit-tag" data-testid={`quote-limit-tag-${q.serviceId}`}>
+                          {t("batching.quotes.exceedFeeLimitTag")}
+                        </Tag>
+                      )}
+                      {metaMock && <Tag className="quote-mock-tag">[MOCK]</Tag>}
+                      <span className="quote-fee">{formatVnd(computeTotalFee(q, q.serviceId === selectedServiceId ? selectedAddons : []))}</span>
+                    </label>
+                  );
+                  return blocked ? (
+                    <Tooltip key={q.serviceId} title={t("batching.quotes.exceedFeeLimit")}>
+                      {item}
+                    </Tooltip>
+                  ) : (
+                    item
+                  );
+                })}
               </div>
             ))}
+          {/* SF-16 §2.2 (Task 5) — banner auto-clear khi quote đang chọn bị vượt hạn mức */}
+          {carrierGroup === "TRUCK" && feeLimitWarning && (
+            <div className="sf6-note-banner sf6-note-error" data-testid="fee-limit-banner">
+              <span className="sf6-note-icon" aria-hidden="true">
+                !
+              </span>
+              <span>{t("batching.quotes.feeLimitCleared")}</span>
+            </div>
+          )}
           {/* SF-16 §2.3 — AddonSelector theo quote đang chọn (Task 4) */}
           {selectedQuote !== null && selectedQuote.addonServices.length > 0 && (
             <AddonSelector
@@ -754,6 +803,12 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
                 ? `✓ ${t("createBatch.createStep3")}`
                 : t("createBatch.create")}
           </Button>
+          {/* SF-16 §2.2 (Task 5) — message line dưới nút khi selection bị chặn */}
+          {carrierGroup === "TRUCK" && submitBlocked && (
+            <Typography.Text type="danger" className="sf6-footer-block-msg" data-testid="fee-limit-submit-block">
+              {t("batching.quotes.feeLimitSubmitBlock")}
+            </Typography.Text>
+          )}
         </div>
       </div>
     </Modal>

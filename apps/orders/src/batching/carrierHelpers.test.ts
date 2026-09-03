@@ -4,7 +4,7 @@
  */
 import { describe, expect, it } from "vitest";
 import type { DeliveryAddonDto, DeliveryQuoteDto, HubStoreOrderFilterItem } from "@hub-store/shared";
-import { CARRIER_GROUPS, computeTotalFee, isGroupEnabled, toStopOrders } from "./carrierHelpers";
+import { CARRIER_GROUPS, computeTotalFee, hasBlockedSelection, isGroupEnabled, isQuoteBlocked, toStopOrders } from "./carrierHelpers";
 
 const shop = { shopCode: "30201", shopName: "FPT Shop Cầu Giấy", address: "124 Xuân Thủy" };
 
@@ -80,5 +80,30 @@ describe("computeTotalFee", () => {
       { code: "DOCUMENT", name: "Trả chứng từ", grp: "DOCUMENT", fee: 5000 },
     ];
     expect(computeTotalFee(baseQuote, addons)).toBe(65000);
+  });
+});
+
+describe("isQuoteBlocked / hasBlockedSelection (SF-16 Task 5 — fee-limit gates)", () => {
+  const okQuote: DeliveryQuoteDto = {
+    serviceId: "1T",
+    name: "Xe tải 1 tấn",
+    vehicleType: "1T",
+    fee: 50000,
+    baseFee: 30000,
+    etaMinutes: 45,
+    isExceedFeeLimit: false,
+    addonServices: [],
+  };
+  const blockedQuote: DeliveryQuoteDto = { ...okQuote, serviceId: "8T", vehicleType: "8T", fee: 200000, isExceedFeeLimit: true };
+
+  it("isQuoteBlocked theo cờ isExceedFeeLimit của BE", () => {
+    expect(isQuoteBlocked(okQuote)).toBe(false);
+    expect(isQuoteBlocked(blockedQuote)).toBe(true);
+  });
+
+  it("hasBlockedSelection: null → false; quote thường → false; quote vượt → true", () => {
+    expect(hasBlockedSelection(null)).toBe(false);
+    expect(hasBlockedSelection(okQuote)).toBe(false);
+    expect(hasBlockedSelection(blockedQuote)).toBe(true);
   });
 });

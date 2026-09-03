@@ -358,6 +358,7 @@
 /* ─── Footer ─── */
 .batch-footer {
   display: flex;
+  flex-wrap: wrap; /* SF-16 T5 — message block dưới nút submit wrap dòng mới */
   align-items: center;
   gap: 8px;
   padding-top: 14px;
@@ -439,6 +440,36 @@
   font-weight: 700;
   font-variant-numeric: tabular-nums;
   color: #eb6e09; /* primary */
+}
+
+/* ─── Fee-limit gates (SF-16 §2.2 Task 5 — mirror DESIGN_TOKENS.color.status error) ─── */
+.quote-item-blocked {
+  cursor: not-allowed;
+  background: #fef3f2; /* status.errorBg */
+  border-color: #fecdca; /* status.errorLine */
+}
+.quote-item-blocked:hover {
+  background: #fef3f2; /* status.errorBg — giữ tone error, không highlight hover */
+}
+.quote-limit-tag {
+  margin: 0; /* override antd Tag margin-inline-end */
+  background: #fef3f2; /* status.errorBg */
+  border-color: #fecdca; /* status.errorLine */
+  color: #d92d20; /* status.error */
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.sf6-note-error {
+  background: #fef3f2; /* status.errorBg */
+  border-color: #fecdca; /* status.errorLine */
+}
+.sf6-note-error .sf6-note-icon {
+  background: #d92d20; /* status.error */
+}
+.sf6-footer-block-msg {
+  flex-basis: 100%; /* wrap xuống dòng dưới nút submit */
+  text-align: right;
+  font-size: 12px;
 }
 
 /* ─── AddonSelector (SF-16 §2.3 — dịch vụ gia tăng theo quote, mirror DESIGN_TOKENS) ─── */

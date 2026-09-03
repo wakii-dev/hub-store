@@ -156,17 +156,17 @@ export function shipmentStatusLabel(s: string, locale: 'vi'|'en'): string // i18
 - Modify: `CarrierSection.tsx`, `CreateBatchingModal.tsx`, `carrierHelpers.ts(+test)`, i18n
 
 **Steps:**
-- [ ] 5.1 `carrierHelpers.ts` thêm:
+- [x] 5.1 `carrierHelpers.ts` thêm:
 ```ts
 export const isQuoteBlocked = (q: DeliveryQuoteDto) => q.isExceedFeeLimit;
 /** Submit gate — selection chứa quote vượt hạn mức → chặn (BE-authoritative 422 là lớp cuối). */
 export const hasBlockedSelection = (q: DeliveryQuoteDto | null) => q != null && q.isExceedFeeLimit;
 ```
-- [ ] 5.2 Quote radio `isExceedFeeLimit` → `disabled` + Tooltip i18n "Vượt hạn mức phí cho shop này" + tag tone error.
-- [ ] 5.3 Auto-clear: nếu `selectedServiceId` trỏ quote bị vượt (sau refetch) → clear selection + warning banner i18n (`sf6-note-banner` style).
-- [ ] 5.4 Submit block: `hasBlockedSelection` → nút `batch-submit` disabled (TRUCK mode) + message line dưới nút. 422 từ confirm/booking → hiển thị `details[].message` qua `notification.error` + i18n fallback.
-- [ ] 5.5 Test: quote vượt → disabled; đang chọn rồi vượt (refetch) → cleared + banner; submit disabled khi blocked.
-- [ ] 5.6 test + tsc → commit `feat(sf16): fee-limit gates — disable/blocked-submit/422 message`.
+- [x] 5.2 Quote radio `isExceedFeeLimit` → `disabled` + Tooltip i18n "Vượt hạn mức phí cho shop này" + tag tone error.
+- [x] 5.3 Auto-clear: nếu `selectedServiceId` trỏ quote bị vượt (sau refetch) → clear selection + warning banner i18n (`sf6-note-banner` style).
+- [x] 5.4 Submit block: `hasBlockedSelection` → nút `batch-submit` disabled (TRUCK mode) + message line dưới nút. 422 từ confirm/booking → hiển thị `details[].message` qua `notification.error` + i18n fallback.
+- [x] 5.5 Test: quote vượt → disabled; đang chọn rồi vượt (refetch) → cleared + banner; submit disabled khi blocked.
+- [x] 5.6 test + tsc → commit `feat(sf16): fee-limit gates — disable/blocked-submit/422 message`.
 
 ### Task 6: replan-rebook-flows — D2 actions + planning map + modal modes
 

@@ -40,3 +40,12 @@ export function toStopOrders(rows: HubStoreOrderFilterItem[]): DeliveryStopOrder
 export function computeTotalFee(quote: DeliveryQuoteDto, addons: DeliveryAddonDto[]): number {
   return quote.fee + addons.reduce((sum, a) => sum + (a.fee ?? 0), 0);
 }
+
+/** isQuoteBlocked — quote vượt hạn mức phí của shop (BE đánh dấu trong quotes). */
+export const isQuoteBlocked = (q: DeliveryQuoteDto): boolean => q.isExceedFeeLimit;
+
+/**
+ * Submit gate — selection chứa quote vượt hạn mức → chặn submit TRUCK
+ * (SF-16 §2.2; BE-authoritative 422 là lớp chặn cuối).
+ */
+export const hasBlockedSelection = (q: DeliveryQuoteDto | null): boolean => q != null && q.isExceedFeeLimit;
