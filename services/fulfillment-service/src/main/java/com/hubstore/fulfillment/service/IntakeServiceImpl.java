@@ -1,6 +1,7 @@
 package com.hubstore.fulfillment.service;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.hubstore.fulfillment.events.OrderEventPublisher;
 import com.hubstore.fulfillment.seed.SeedModels;
 import com.hubstore.fulfillment.store.OrderRepository;
 import com.hubstore.fulfillment.v1.Product;
@@ -9,6 +10,8 @@ import com.hubstore.intake.v1.ConfirmImportOrdersRequest;
 import com.hubstore.intake.v1.ConfirmImportOrdersResponse;
 import com.hubstore.intake.v1.CreateManualOrderRequest;
 import com.hubstore.intake.v1.CreateManualOrderResponse;
+import com.hubstore.intake.v1.CreateWebhookOrderRequest;
+import com.hubstore.intake.v1.CreateWebhookOrderResponse;
 import com.hubstore.intake.v1.DeliveryFailReason;
 import com.hubstore.intake.v1.GetOrderAuditRequest;
 import com.hubstore.intake.v1.GetOrderAuditResponse;
@@ -24,12 +27,15 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.transaction.support.TransactionTemplate;
 
+import java.time.Duration;
 import java.time.Instant;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -37,18 +43,33 @@ import java.util.Set;
  * Codegen + insert + audit chạy trong MỘT transaction (TransactionTemplate) —
  * pg_advisory_xact_lock chỉ giữ trong tx nên nextFulfillCodes + insertOrders
  * phải cùng tx mới atomic (T4 IT finding).
+ *
+ * SF-26 (FI-271): CreateWebhookOrder — dedupe webhook_events (state machine
+ * PENDING/PROCESSED/FAILED, CAS transitions, stale-reclaim) theo spec §3.
  */
 @GrpcService
 public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
 
     private static final ObjectMapper JSON = new ObjectMapper();
 
+    /** Vòng lặp re-select sau CAS conflict — kỳ vọng hội tụ sau vài vòng; vượt → UNAVAILABLE. */
+    private static final int MAX_CLAIM_ATTEMPTS = 5;
+
     private final OrderRepository repo;
     private final TransactionTemplate tx;
+    private final WebhookEventsDao webhookEvents;
+    private final OrderEventPublisher events;
+    /** PENDING cũ hơn ngưỡng này (giây) = crash mồ côi → reclaim (WEBHOOK_CLAIM_STALE_SECONDS). */
+    private final long claimStaleSeconds;
 
-    public IntakeServiceImpl(OrderRepository repo, TransactionTemplate tx) {
+    public IntakeServiceImpl(OrderRepository repo, TransactionTemplate tx,
+                             WebhookEventsDao webhookEvents, OrderEventPublisher events,
+                             @Value("${webhook.claim-stale-seconds:120}") long claimStaleSeconds) {
         this.repo = repo;
         this.tx = tx;
+        this.webhookEvents = webhookEvents;
+        this.events = events;
+        this.claimStaleSeconds = claimStaleSeconds;
     }
 
     // ---------------- ValidateImportOrders ----------------
@@ -100,6 +121,170 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
             responseObserver.onError(e);
         } catch (RuntimeException e) {
             responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    // ---------------- CreateWebhookOrder (SF-26) ----------------
+
+    /**
+     * SF-26 webhook nhận đơn từ sàn — idempotency theo (source, external_id),
+     * spec §3 flow 1-7 (CONTRACT):
+     * <ol>
+     *   <li>Blank source/external_id → INVALID_ARGUMENT (defense-in-depth cho
+     *       caller gRPC trực tiếp — BFF đã chặn trước).</li>
+     *   <li>PROCESSED → trả {fulfill_code lần đầu, replayed=true} (200).</li>
+     *   <li>Chưa có row → claim INSERT ON CONFLICT (tx riêng, commit ngay);
+     *       conflict → re-select: PROCESSED → replay; FAILED → casReprocess;
+     *       PENDING fresh (&lt; stale secs) → UNAVAILABLE (caller retry);
+     *       PENDING stale → casReclaim khóa trên stale ts đã đọc.</li>
+     *   <li>Validate IntakeValidator → lỗi → markFailed + INVALID_ARGUMENT
+     *       details rows (BFF map 422). FAILED không phải DeadlockHorror: gửi
+     *       lại cùng externalId xử lý lại bình thường.</li>
+     *   <li>TX xử lý: nextFulfillCodes → insertOrders → appendAudit → casProcess
+     *       (PENDING→PROCESSED keyed claimed ts) TRONG CÙNG tx. casProcess
+     *       != 1 → throw INTERNAL → rollback TOÀN BỘ: order KHÔNG tồn tại,
+     *       KHÔNG publish — reclaimer thắng race sẽ tự xử lý.</li>
+     *   <li>Publish order.created SAU commit — Task 5 (TODO bên dưới).</li>
+     * </ol>
+     */
+    @Override
+    public void createWebhookOrder(CreateWebhookOrderRequest request,
+                                   StreamObserver<CreateWebhookOrderResponse> responseObserver) {
+        try {
+            String source = request.getSource() == null ? "" : request.getSource().trim();
+            String externalId = request.getExternalId() == null ? "" : request.getExternalId().trim();
+            // Bước 7 — defense-in-depth: proto3 default "" vẫn lọt tới đây nếu
+            // caller gọi gRPC thẳng không qua BFF.
+            List<GrpcErrors.ErrorDetail> blank = new ArrayList<>();
+            if (source.isBlank()) {
+                blank.add(new GrpcErrors.ErrorDetail("source", "source bắt buộc (vd header X-Source)."));
+            }
+            if (externalId.isBlank()) {
+                blank.add(new GrpcErrors.ErrorDetail("externalId", "externalId bắt buộc (mã đơn phía sàn)."));
+            }
+            if (!blank.isEmpty()) {
+                throw GrpcErrors.withDetails(Status.INVALID_ARGUMENT, "source/externalId bắt buộc.", blank);
+            }
+            CreateWebhookOrderResponse resp = webhookProcess(source, externalId, request.getOrder());
+            responseObserver.onNext(resp);
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /** Vòng claim/re-select (spec §3 bước 2-3) — CAS conflict → thử lại, bounded. */
+    private CreateWebhookOrderResponse webhookProcess(String source, String externalId, IntakeOrder order) {
+        String payloadJson = protoJson(order);
+        for (int attempt = 0; attempt < MAX_CLAIM_ATTEMPTS; attempt++) {
+            Optional<WebhookEventsDao.Row> cur = webhookEvents.findStatus(source, externalId);
+            if (cur.isPresent()) {
+                WebhookEventsDao.Row row = cur.get();
+                if ("PROCESSED".equals(row.status())) {
+                    // Replay — kết quả lần đầu, KHÔNG xử lý lại.
+                    return webhookResponse(row.fulfillCode(), true);
+                }
+                if ("FAILED".equals(row.status())) {
+                    if (webhookEvents.casReprocess(source, externalId) == 1) {
+                        return processClaim(source, externalId, order, claimedTs(source, externalId));
+                    }
+                    continue; // đối thủ reprocess trước → re-select
+                }
+                // PENDING — fresh (request song song đang chạy) hay stale (crash mồ côi)?
+                long ageSeconds = Duration.between(row.receivedAt(), Instant.now()).getSeconds();
+                if (ageSeconds < claimStaleSeconds) {
+                    throw Status.UNAVAILABLE.withDescription(
+                            "Đơn webhook đang được xử lý bởi request khác — thử lại sau.").asRuntimeException();
+                }
+                if (webhookEvents.casReclaim(source, externalId, row.receivedAt()) == 1) {
+                    return processClaim(source, externalId, order, claimedTs(source, externalId));
+                }
+                continue; // đối thủ reclaim trước → re-select
+            }
+            if (webhookEvents.claimInsert(source, externalId, payloadJson)) {
+                return processClaim(source, externalId, order, claimedTs(source, externalId));
+            }
+            // Conflict — request song song claim trước → re-select.
+        }
+        throw Status.UNAVAILABLE.withDescription(
+                "Webhook contention quá lâu (source=" + source + ") — thử lại sau.").asRuntimeException();
+    }
+
+    /**
+     * Đã claim thành công (held claimedTs) → validate → TX xử lý. claimedTs
+     * là received_at của claim HIỆN TẠI — mọi CAS dưới đây khóa trên nó.
+     */
+    private CreateWebhookOrderResponse processClaim(String source, String externalId,
+                                                    IntakeOrder order, Instant claimedTs) {
+        IntakeValidator.IntakeRow staged = stageRow(order);
+        List<IntakeValidator.IntakeError> errors = IntakeValidator.validate(List.of(staged), shopCodes());
+        if (!errors.isEmpty()) {
+            // Bước 4 — markFailed commit ngay (ngoài tx xử lý): FAILED = lần gửi
+            // này bị từ chối; mark đúng holder (keyed claimedTs).
+            webhookEvents.markFailed(source, externalId, claimedTs);
+            throw invalidArgumentRows("Đơn webhook có " + errors.size() + " lỗi dữ liệu.", errors);
+        }
+        String actor = ActorInterceptor.currentActor();
+        String fulfillCode = tx.execute(status -> {
+            String code = repo.nextFulfillCodes(1).get(0);
+            Instant now = Instant.now();
+            repo.insertOrders(List.of(buildOrder(code, staged, repo.distinctShops(), now, null)));
+            repo.appendAudit(actor, "order.created", code, importDetail(now, List.of(code)));
+            // Bước 5 — CAS final TRONG tx: rowsAffected != 1 → holder stale đã
+            // bị reclaim → throw INTERNAL để TransactionTemplate ROLLBACK TOÀN
+            // BỘ (order KHÔNG insert, code KHÔNG cấp, KHÔNG publish).
+            if (webhookEvents.casProcess(source, externalId, code, claimedTs) != 1) {
+                throw Status.INTERNAL.withDescription(
+                        "Webhook claim đã bị reclaim trong lúc xử lý — giao dịch hoàn tác.").asRuntimeException();
+            }
+            return code;
+        });
+        // Bước 6 — TODO(SF-26 Task 5): publish "order.created" best-effort SAU
+        // commit qua events.publish(...), CHỈ khi xử lý thành công lần đầu
+        // (replayed=false path) — replay/rollback KHÔNG publish.
+        return webhookResponse(fulfillCode, false);
+    }
+
+    /** claimed ts = received_at sau khi CAS claim thắng (re-select lấy giá trị now() mới). */
+    private Instant claimedTs(String source, String externalId) {
+        return webhookEvents.findStatus(source, externalId)
+                .orElseThrow(() -> Status.INTERNAL.withDescription(
+                        "webhook_events row mất sau claim (source=" + source + ").").asRuntimeException())
+                .receivedAt();
+    }
+
+    private static CreateWebhookOrderResponse webhookResponse(String fulfillCode, boolean replayed) {
+        return CreateWebhookOrderResponse.newBuilder()
+                .setFulfillCode(fulfillCode == null ? "" : fulfillCode)
+                .setReplayed(replayed)
+                .build();
+    }
+
+    /**
+     * IntakeOrder → JSON cho cột payload JSONB (spec: proto-JSON đã-map,
+     * KHÔNG raw body). Jackson tự viết (protobuf-java-util KHÔNG có trong cây
+     * deps — pom ngoài scope task này); camelCase khớp tên field proto.
+     */
+    private static String protoJson(IntakeOrder order) {
+        try {
+            java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+            m.put("customerName", order.getCustomerName());
+            m.put("customerPhone", order.getCustomerPhone());
+            m.put("customerAddress", order.getCustomerAddress());
+            List<java.util.Map<String, Object>> items = new ArrayList<>(order.getItemsCount());
+            for (Product p : order.getItemsList()) {
+                items.add(java.util.Map.of("productCode", p.getProductCode(),
+                        "productName", p.getProductName(), "quantity", p.getQuantity()));
+            }
+            m.put("items", items);
+            m.put("codAmount", order.getCodAmount());
+            m.put("quantity", order.getQuantity());
+            m.put("shopHint", order.getShopHint());
+            return JSON.writeValueAsString(m);
+        } catch (Exception e) {
+            throw Status.INTERNAL.withDescription("Serialize payload webhook thất bại.").asRuntimeException();
         }
     }
 

@@ -219,7 +219,7 @@ export function verifyHmac(rawBody: Buffer | string, signature: unknown, secret:
 - Modify: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/service/IntakeServiceImpl.java`
 - Test: Java unit/integration (pattern test SF-13 hiện có — InMemory repo path + skip-when-no-DB)
 
-- [ ] **Step 1: Dao** — JdbcTemplate (pattern PostgresOrderRepository). Methods:
+- [x] **Step 1: Dao** — JdbcTemplate (pattern PostgresOrderRepository). Methods:
 ```java
 // WebhookEventsDao — toàn bộ theo spec v3 §3 (CONTRACT):
 // claim-no-row: INSERT ... ON CONFLICT DO NOTHING → boolean claimed
@@ -232,7 +232,7 @@ export function verifyHmac(rawBody: Buffer | string, signature: unknown, secret:
 // casProcess: UPDATE ... SET status='PROCESSED', fulfill_code=?, processed_at=now()
 //   WHERE source=? AND external_id=? AND status='PENDING' AND received_at=?  → rowsAffected (BẮT BUỘC =1, không phải optional)
 ```
-- [ ] **Step 2: RPC handler trong IntakeServiceImpl** — theo spec v3 flow 1-7 từng dòng:
+- [x] **Step 2: RPC handler trong IntakeServiceImpl** — theo spec v3 flow 1-7 từng dòng:
   1. Blank source/external_id → `INVALID_ARGUMENT` (defense-in-depth).
   2. findStatus: PROCESSED → `{fulfill_code, replayed=true}` 200.
   3. Không row → claim INSERT ON CONFLICT; conflict → re-select (PROCESSED → replay; FAILED → casReprocess 0-rows → re-select; PENDING fresh (< stale secs, env `WEBHOOK_CLAIM_STALE_SECONDS` default 120) → `UNAVAILABLE`; PENDING stale → casReclaim với stale-ts khóa → 0 rows → re-select).
@@ -240,8 +240,8 @@ export function verifyHmac(rawBody: Buffer | string, signature: unknown, secret:
   5. TX (TransactionTemplate — reuse `createOrders` core nhưng PHẢI cùng tx với casProcess): replicate đoạn tx của createOrders (nextFulfillCodes → insertOrders → appendAudit actor = ActorInterceptor.currentActor() = `webhook:<source>` qua metadata BFF) + casProcess sau insert TRONG CÙNG tx (`received_at` = claimed ts giữ trong biến). casProcess rowsAffected != 1 → **throw INTERNAL → TransactionTemplate rollback TOÀN BỘ tx: order KHÔNG được insert, fulfillCode KHÔNG cấp, KHÔNG publish Kafka** — reclaimer thắng race sẽ tự xử lý; đây là behavior đúng (CAS final ngăn holder stale ghi đè fulfillCode của người reclaim), không phải edge-case cần cứu.
   6. Sau commit: `events.publish("order.created", fulfillCode, ...)` — Task 5; ở task này để TODO comment Noop.
   7. Inject `OrderEventPublisher` + `WebhookEventsDao` + stale-secs vào ctor IntakeServiceImpl (Spring wire tự qua constructor).
-- [ ] **Step 3: Tests**: replay PROCESSED → cùng fulfillCode replayed=true; FAILED reprocess → fulfillCode MỚI; CAS concurrent (2 thread cùng externalId) → đúng 1 order; PENDING fresh → UNAVAILABLE; casProcess fail → tx rollback (order không tồn tại). Integration skip-when-no-DB. **Exit criteria: chạy FULL intake test class (SF-13 regression — IntakeServiceImpl vừa sửa).**
-- [ ] **Step 4: Commit** `feat(sf26): CreateWebhookOrder — atomic idempotency webhook_events (state machine + CAS)`
+- [x] **Step 3: Tests**: replay PROCESSED → cùng fulfillCode replayed=true; FAILED reprocess → fulfillCode MỚI; CAS concurrent (2 thread cùng externalId) → đúng 1 order; PENDING fresh → UNAVAILABLE; casProcess fail → tx rollback (order không tồn tại). Integration skip-when-no-DB. **Exit criteria: chạy FULL intake test class (SF-13 regression — IntakeServiceImpl vừa sửa).**
+- [x] **Step 4: Commit** `feat(sf26): CreateWebhookOrder — atomic idempotency webhook_events (state machine + CAS)`
 
 ### Task 4: order-mapping — payload → IntakeOrder + WEBHOOK_MAPPING override
 
