@@ -56,3 +56,15 @@ webhook:
   # SF-26 (FI-271) — ngưỡng stale reclaim claim webhook (giây): PENDING cũ hơn
   # ngưỡng = crash mồ côi → reclaim + xử lý lại; PENDING mới → UNAVAILABLE.
   claim-stale-seconds: ${WEBHOOK_CLAIM_STALE_SECONDS:120}
+
+# SF-12 (FI-257) — s2s auth (token passthrough, spec §3.1 CONTRACT):
+#   - oidc.issuer  = giá trị claim `iss` trong JWT (localhost dev);
+#   - oidc.jwks-url = URL mạng THẬT fetch JWKS (trong compose là http://keycloak:8081 —
+#     KHÔNG derive từ issuer — same gotcha BFF compose);
+#   - auth.internal-service-token = machine-call credential (Go→Java, reconciler).
+# Fail-closed: thiếu cả user JWT hợp lệ lẫn internal token → PERMISSION_DENIED.
+oidc:
+  issuer: ${OIDC_ISSUER:}
+  jwks-url: ${OIDC_JWKS_URL:}
+auth:
+  internal-service-token: ${INTERNAL_SERVICE_TOKEN:}

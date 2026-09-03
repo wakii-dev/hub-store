@@ -92,6 +92,15 @@
       <artifactId>spring-web</artifactId>
     </dependency>
     <dependency>
+      <!-- SF-12 (FI-257): s2s auth — JWKS RS256 verify trong TokenAuthInterceptor.
+           NOTE: Boot 3.5.5 BOM KHÔNG quản nimbus-jose-jwt (nó nằm trong spring-security
+           BOM riêng, project này không import) → pin tường minh 9.37.3 (last 9.x stable,
+           cùng dòng spring-security 6.5 dùng). -->
+      <groupId>com.nimbusds</groupId>
+      <artifactId>nimbus-jose-jwt</artifactId>
+      <version>9.37.3</version>
+    </dependency>
+    <dependency>
       <groupId>net.devh</groupId>
       <artifactId>grpc-server-spring-boot-starter</artifactId>
       <version>${grpc-spring-boot-starter.version}</version>
