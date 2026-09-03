@@ -171,6 +171,21 @@ describe('GET /events — SSE stream data', () => {
     expect(body).not.toContain('DH-2');
   });
 
+  it('forward stream.degraded (synthetic T2 — cố ý ngoài allow-list)', async () => {
+    const token = await identity.signToken('Manager');
+    const resP = app.inject({
+      method: 'GET',
+      url: `/events?access_token=${encodeURIComponent(token)}`,
+    });
+    const conn = await waitForCapture();
+    emitKafkaEvent('stream.degraded', { reason: 'consumer.disconnect' });
+    await sleep(20);
+    conn.reply.raw.end();
+    const res = await resP;
+    expect(res.payload).toContain('stream.degraded');
+    expect(res.payload).toContain('consumer.disconnect');
+  });
+
   it('cleanup: sau khi client ngắt, listener bffEvents được gỡ (không leak)', async () => {
     const token = await identity.signToken('Manager');
     const before = bffEvents.listenerCount('kafka:event');

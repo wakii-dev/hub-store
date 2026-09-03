@@ -30,6 +30,7 @@ import { paginated } from '../lib/envelope.js';
 import { sendGrpcError, grpcError } from '../lib/grpc-error.js';
 import { logActivity, getAuditPool, buildAuditWhere, normalizeAuditPage, type AuditQuery } from '../lib/audit.js';
 import { csvRow, EXPORT_COLUMNS } from '../lib/csv.js';
+import { emitLocalEvent } from '../lib/realtime-publish.js';
 import {
   mapOrderItem,
   mapOrderDetail,
@@ -345,6 +346,12 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
           targetId: request.params.code,
           detail: { toShopCode: request.body.toShopCode },
         });
+        // SF-10 — dual-source local emit (KAFKA_ENABLED=false): mirror publish
+        // 'order.assigned' phía Java (FulfillmentServiceImpl.assignShopHub).
+        emitLocalEvent('order.assigned', {
+          fulfillCode: request.params.code,
+          targetShop: { code: request.body.toShopCode },
+        });
         return await reply.send(resp.order ? mapOrderItem(resp.order) : null);
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -489,6 +496,13 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
         action: 'batch.complete',
         targetType: 'batch',
         targetId: request.body.batchCode,
+      });
+      // SF-10 — dual-source local emit: mirror publish 'batch.transitioned'
+      // (from/to) phía Go (batching_server.go CompletePicking hook).
+      emitLocalEvent('batch.transitioned', {
+        batchCode: request.body.batchCode,
+        from: 'active',
+        to: 'completed',
       });
       return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
     } catch (err) {

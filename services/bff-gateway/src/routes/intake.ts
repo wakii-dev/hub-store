@@ -26,6 +26,7 @@ import { SERVICE_NAMES } from '../config.js';
 import { requireUser, requireRole } from '../plugins/auth.js';
 import { sendGrpcError, sendBadRequest, grpcError } from '../lib/grpc-error.js';
 import { errorEnvelope } from '../lib/envelope.js';
+import { emitLocalEvent } from '../lib/realtime-publish.js';
 import { toProtoIntakeOrder, mapImportError, mapAuditEntry } from '../mappers/intake.js';
 import { mapOrderItem } from '../mappers/fulfillment.js';
 
@@ -194,6 +195,10 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
           user.role,
           user.sub,
         );
+        // SF-10 — dual-source local emit (KAFKA_ENABLED=false): type trong
+        // allow-list. Lưu ý Java Intake KHÔNG publish kafka event cho fail —
+        // local emit là kênh realtime duy nhất cho mutation này.
+        emitLocalEvent('order.failed', { fulfillCode: request.params.code });
         return await reply.code(204).send();
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.intake);
@@ -210,6 +215,12 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
         user.role,
         user.sub,
       );
+      // SF-10 — dual-source local emit (KAFKA_ENABLED=false): mirror audit
+      // 'order.redelivered' phía Java (IntakeServiceImpl.redeliverOrder).
+      emitLocalEvent('order.redelivered', {
+        fulfillCode: resp.newFulfillCode,
+        oldFulfillCode: request.params.code,
+      });
       return await reply.code(201).send({ fulfillCode: resp.newFulfillCode });
     } catch (err) {
       return sendGrpcError(reply, err, SERVICE_NAMES.intake);

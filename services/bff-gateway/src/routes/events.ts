@@ -44,7 +44,9 @@ export function registerEventsRoutes(
     const onKafkaEvent = (msg: KafkaEventMessage): void => {
       const envelope = msg.envelope as RealtimeEnvelope | null;
       const type = typeof envelope?.type === 'string' ? envelope.type : undefined;
-      if (!type || !isRealtimeEvent(type)) return; // filter allow-list
+      // filter allow-list + 'stream.degraded' (synthetic T2 — cố ý ngoài
+      // allow-list, FE xử lý riêng để chuyển polling).
+      if (!type || (!isRealtimeEvent(type) && type !== 'stream.degraded')) return;
       const frame = {
         type,
         payload: envelope?.payload ?? null,
