@@ -100,7 +100,8 @@ export function buildApp(config: BffConfig): FastifyInstance {
   // SF-18 — D2C orders (consumer trực tiếp) — dùng fulfillment client.
   registerD2cRoutes(app, { fulfillment });
   // SF-10 — SSE /events realtime (không cần gRPC client; nguồn là bffEvents).
-  registerEventsRoutes(app);
+  // corsOrigins: hijack discard headers của @fastify/cors → route tự tính CORS.
+  registerEventsRoutes(app, { corsOrigins: config.corsOrigins });
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });

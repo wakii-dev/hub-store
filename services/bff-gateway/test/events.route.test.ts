@@ -9,7 +9,12 @@ import type { FastifyInstance, FastifyReply, FastifyRequest } from 'fastify';
 import Fastify from 'fastify';
 import { buildApp } from '../src/app.js';
 import type { BffConfig } from '../src/config.js';
-import { registerEventsRoutes, SSE_HEARTBEAT_MS } from '../src/routes/events.js';
+import {
+  registerEventsRoutes,
+  SSE_HEARTBEAT_MS,
+  SSE_MAX_LIFETIME_MS,
+  MAX_SSE_CONNECTIONS_PER_USER,
+} from '../src/routes/events.js';
 import { bffEvents } from '../src/kafka/events.js';
 import { TEST_ISSUER, TEST_AUDIENCE, startTestIdentity, type TestIdentity } from './harness.js';
 
@@ -238,6 +243,117 @@ describe('heartbeat', () => {
       conn.reply.raw.end();
       const res = await resP;
       expect(res.payload).toContain(': ping\n\n');
+      await minimal.close();
+    } finally {
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('CORS trên hijacked SSE (review e2e Spec A)', () => {
+  it('origin trong whitelist → echo origin + allow-credentials + vary', async () => {
+    const token = await identity.signToken('Manager');
+    const resP = app.inject({
+      method: 'GET',
+      url: `/events?access_token=${encodeURIComponent(token)}`,
+      headers: { origin: 'http://localhost:3000' },
+    });
+    const conn = await waitForCapture();
+    conn.reply.raw.end();
+    const res = await resP;
+    expect(res.statusCode).toBe(200);
+    // Hijack discard headers của @fastify/cors → route tự ghi raw.
+    expect(res.headers['access-control-allow-origin']).toBe('http://localhost:3000');
+    expect(res.headers['access-control-allow-credentials']).toBe('true');
+    expect(res.headers['vary']).toContain('Origin');
+  });
+
+  it('origin NGOÀI whitelist → không echo (không mở CORS tùy tiện)', async () => {
+    const token = await identity.signToken('Manager');
+    const resP = app.inject({
+      method: 'GET',
+      url: `/events?access_token=${encodeURIComponent(token)}`,
+      headers: { origin: 'http://evil.example' },
+    });
+    const conn = await waitForCapture();
+    conn.reply.raw.end();
+    const res = await resP;
+    expect(res.headers['access-control-allow-origin']).toBeUndefined();
+    expect(res.headers['access-control-allow-credentials']).toBeUndefined();
+  });
+});
+
+describe('per-user connection cap (review P1 audit)', () => {
+  /** App tối giản KHÔNG guard — sub rơi về 'anonymous' (fallback) cho test cap. */
+  function buildMinimal(): FastifyInstance {
+    const minimal = Fastify({ logger: false });
+    const conns: FastifyReply[] = [];
+    minimal.addHook('onRequest', (_req, reply, done) => {
+      conns.push(reply);
+      done();
+    });
+    registerEventsRoutes(minimal);
+    // expose để test end từng connection.
+    (minimal as unknown as { conns: FastifyReply[] }).conns = conns;
+    return minimal;
+  }
+
+  it(`${MAX_SSE_CONNECTIONS_PER_USER} connection đầu OK, connection thứ ${
+    MAX_SSE_CONNECTIONS_PER_USER + 1
+  } → 429; đóng bớt thì mở lại được`, async () => {
+    const minimal = buildMinimal();
+    try {
+      const resPs = Array.from({ length: MAX_SSE_CONNECTIONS_PER_USER }, () =>
+        minimal.inject({ method: 'GET', url: '/events' }),
+      );
+      await sleep(50);
+      const conns = (minimal as unknown as { conns: FastifyReply[] }).conns;
+      expect(conns.length).toBe(MAX_SSE_CONNECTIONS_PER_USER);
+
+      // Vượt cap → 429 JSON envelope (reject TRƯỚC hijack).
+      const rejected = await minimal.inject({ method: 'GET', url: '/events' });
+      expect(rejected.statusCode).toBe(429);
+      expect(rejected.json().code).toBe('TOO_MANY_CONNECTIONS');
+
+      // Đóng hết → counter giảm o (idempotent cleanup) → mở lại OK.
+      for (const reply of conns) reply.raw.end();
+      await Promise.all(resPs.map((p) => p.catch(() => undefined)));
+      expect(bffEvents.listenerCount('kafka:event')).toBe(0);
+
+      const retry = minimal.inject({ method: 'GET', url: '/events' });
+      await sleep(20);
+      const retryConns = (minimal as unknown as { conns: FastifyReply[] }).conns;
+      retryConns[retryConns.length - 1]!.raw.end();
+      const res = await retry;
+      expect(res.statusCode).toBe(200);
+      expect(res.headers['content-type']).toBe('text/event-stream');
+    } finally {
+      await minimal.close();
+    }
+  });
+});
+
+describe('max lifetime (review P1 audit)', () => {
+  it(`hết ${SSE_MAX_LIFETIME_MS}ms (override) → comment frame cuối + end + cleanup`, async () => {
+    vi.useFakeTimers();
+    try {
+      const minimal = Fastify({ logger: false });
+      minimal.addHook('onRequest', (_req, reply, done) => {
+        captured = { request: _req, reply };
+        done();
+      });
+      const lifetimeMs = 100;
+      registerEventsRoutes(minimal, { maxLifetimeMs: lifetimeMs });
+      const before = bffEvents.listenerCount('kafka:event');
+      const resP = minimal.inject({ method: 'GET', url: '/events' });
+      await vi.advanceTimersByTimeAsync(1); // flush microtask — handler chạy
+      expect(bffEvents.listenerCount('kafka:event')).toBe(before + 1);
+
+      await vi.advanceTimersByTimeAsync(lifetimeMs + 1); // lifetime timer fire
+      const res = await resP;
+      expect(res.payload).toContain(': stream lifetime reached\n\n');
+      // Cleanup đầy đủ: listener gỡ + connection counter giảm (không leak).
+      expect(bffEvents.listenerCount('kafka:event')).toBe(before);
       await minimal.close();
     } finally {
       vi.useRealTimers();
