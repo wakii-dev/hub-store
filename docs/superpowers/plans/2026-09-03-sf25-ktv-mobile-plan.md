@@ -76,16 +76,16 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 
 ### Task 3: pwa-shell — scaffold apps/ktv-mobile + OIDC + PWA
 **Files:** `apps/ktv-mobile/**` (package.json, vite.config.ts, tsconfig, index.html, public/{sw.js,manifest.webmanifest,offline.html,icons/}, src/main.tsx, src/App.tsx, src/auth/oidc.ts, src/i18n.ts + ktvMobile resources, minimal placeholder page), root `pnpm-workspace.yaml` (đã glob apps/* — không cần sửa).
-- [ ] Scaffold clone pattern apps/orders (bỏ federation): deps react 18.3.1, react-dom, react-router-dom 6.30.6, oidc-client-ts 3.5.0, antd 4.24.16, @hub-store/shared + @hub-store/api-client workspace:*, @fontsource/roboto; devDeps vite 5.4.19, vitest 3.2.7, @vitejs/plugin-react 4.7.0, less 4.9.0. Port 3010.
-- [ ] vite.config: less modifyVars từ `../../packages/shared/src/theme/shared-theme` (import trực tiếp .ts), target esnext, KHÔNG federation plugin.
-- [ ] main.tsx: initI18n → registerTokenGetter → installUnauthorizedInterceptor → registerServiceWorker (readyState fast-path) → dynamic import App.
-- [ ] auth/oidc.ts: copy shell pattern, default clientId `hubstore-mobile`, scope openid, automaticSilentRenew, localStorage userStore, 401 interceptor.
-- [ ] App.tsx: BrowserRouter `/callback` (signinCallback → navigate /), `/` MyOrdersPage placeholder, guard chưa-login → signinRedirect; role gate: user không có role technician → màn "Không có quyền".
-- [ ] public/: sw.js (cache `ktv-mobile-v1`, pattern shell — giữ fetch-guard order), manifest.webmanifest (name "HubStore KTV", standalone, theme #EB6E09, icons 192/512 copy shell), offline.html, index.html meta viewport + theme-color + manifest link.
-- [ ] **Bottom-nav [Đơn của tôi][Tài khoản] + Account page (plan-critic P0 fix — spec §4.1):** route `/account` — user info (sub, role, tên) + nút Đăng xuất (signoutRedirect → về login). Empty shell đủ dùng, Task 4 nạp danh sách vào tab Đơn.
-- [ ] i18n: namespace `ktvMobile`, vi + en, register trong component (trap App static-import — memory SF-20).
-- [ ] `pnpm install` + `pnpm --filter @hub-store/ktv-mobile build` pass + vitest smoke (App render placeholder). Browser check: dev server boot, redirect Keycloak login hiện.
-- [ ] Commit: `feat(ktv-mobile): SF-25 standalone PWA shell — OIDC + SW/manifest + tokens`
+- [x] Scaffold clone pattern apps/orders (bỏ federation): deps react 18.3.1, react-dom, react-router-dom 6.30.6, oidc-client-ts 3.5.0, antd 4.24.16, @hub-store/shared + @hub-store/api-client workspace:*, @fontsource/roboto; devDeps vite 5.4.19, vitest 3.2.7, @vitejs/plugin-react 4.7.0, less 4.9.0. Port 3010.
+- [x] vite.config: less modifyVars từ `../../packages/shared/src/theme/shared-theme` (import trực tiếp .ts), target esnext, KHÔNG federation plugin.
+- [x] main.tsx: initI18n → registerTokenGetter → installUnauthorizedInterceptor → registerServiceWorker (readyState fast-path) → dynamic import App.
+- [x] auth/oidc.ts: copy shell pattern, default clientId `hubstore-mobile`, scope openid, automaticSilentRenew, localStorage userStore, 401 interceptor.
+- [x] App.tsx: BrowserRouter `/callback` (signinCallback → navigate /), `/` MyOrdersPage placeholder, guard chưa-login → signinRedirect; role gate: user không có role technician → màn "Không có quyền".
+- [x] public/: sw.js (cache `ktv-mobile-v1`, pattern shell — giữ fetch-guard order), manifest.webmanifest (name "HubStore KTV", standalone, theme #EB6E09, icons 192/512 copy shell), offline.html, index.html meta viewport + theme-color + manifest link.
+- [x] **Bottom-nav [Đơn của tôi][Tài khoản] + Account page (plan-critic P0 fix — spec §4.1):** route `/account` — user info (sub, role, tên) + nút Đăng xuất (signoutRedirect → về login). Empty shell đủ dùng, Task 4 nạp danh sách vào tab Đơn.
+- [x] i18n: namespace `ktvMobile`, vi + en, register trong component (trap App static-import — memory SF-20).
+- [x] `pnpm install` + `pnpm --filter @hub-store/ktv-mobile build` pass + vitest smoke (App render placeholder). Browser check: dev server boot, redirect Keycloak login hiện.
+- [x] Commit: `feat(ktv-mobile): SF-25 standalone PWA shell — OIDC + SW/manifest + tokens`
 
 ### Task 4: my-orders-today — danh sách đơn hôm nay
 **Files:** `apps/ktv-mobile/src/features/my-orders/**` (MyOrdersPage, OrderCard, StatusPill, TabBar), `apps/ktv-mobile/src/api/ktvApi.ts`, unit tests.
