@@ -115,6 +115,40 @@ for i in $(seq 1 60); do
   sleep 2
 done
 curl -sf http://localhost:8082/realms/hubstore >/dev/null || { echo KC_TIMEOUT; exit 1; }
+
+# SA user hubstore-admin cần role realm-management/manage-users cho KC Admin
+# API (users routes). Realm JSON có sẵn mapping NHƯNG sanitize (bỏ explicit
+# SA user chống duplicate-import KC26) làm mất nó → gán lại sau import,
+# idempotent (409 khi đã có → bỏ qua).
+python3 - <<'PY'
+import json, urllib.request, urllib.parse
+
+BASE = "http://localhost:8082"
+def req(method, path, body=None, token=None, form=None):
+    data = json.dumps(body).encode() if body is not None else (urllib.parse.urlencode(form).encode() if form else None)
+    r = urllib.request.Request(BASE + path, data=data, method=method)
+    if form: r.add_header("Content-Type", "application/x-www-form-urlencoded")
+    elif body is not None: r.add_header("Content-Type", "application/json")
+    if token: r.add_header("Authorization", f"Bearer {token}")
+    try:
+        return json.load(urllib.request.urlopen(r))
+    except urllib.error.HTTPError as e:
+        return {"_status": e.code}
+
+tok = req("POST", "/realms/master/protocol/openid-connect/token",
+          form={"grant_type": "password", "client_id": "admin-cli",
+                "username": "admin", "password": "admin"})["access_token"]
+rm = req("GET", "/admin/realms/hubstore/clients?clientId=realm-management", token=tok)[0]
+role = next(r for r in req("GET", f"/admin/realms/hubstore/clients/{rm['id']}/roles", token=tok) if r["name"] == "manage-users")
+sa = req("GET", "/admin/realms/hubstore/users?username=service-account-hubstore-admin&exact=true", token=tok)[0]
+cur = req("GET", f"/admin/realms/hubstore/users/{sa['id']}/role-mappings/clients/{rm['id']}", token=tok)
+if any(r["name"] == "manage-users" for r in cur):
+    print("[sf11] SA hubstore-admin đã có manage-users")
+else:
+    res = req("POST", f"/admin/realms/hubstore/users/{sa['id']}/role-mappings/clients/{rm['id']}",
+              body=[{"id": role["id"], "name": "manage-users"}], token=tok)
+    print("[sf11] gán manage-users cho SA hubstore-admin:", res.get("_status", "ok"))
+PY
 echo "[sf11] postgres :55442 + keycloak :8082 ready"
 
 # --- remotes → 4011/4012 (REQUISITE boot shell — revert trước Task 7) ---
@@ -159,6 +193,8 @@ for i in $(seq 1 60); do /usr/bin/nc -z localhost 50072 >/dev/null 2>&1 && break
 
 PORT_BFF=4085 GRPC_FULFILLMENT=50071 GRPC_BATCHING=50072 GRPC_PRINT=50053 \
   BFF_CORS_ORIGINS="http://localhost:4010,http://localhost:4011,http://localhost:4012,http://127.0.0.1:4010" \
+  KC_ADMIN_CLIENT_ID=hubstore-admin \
+  KC_ADMIN_CLIENT_SECRET="$(python3 -c "import json,sys; r=json.load(open('docker/keycloak/hubstore-realm.json')); print(next(c['secret'] for c in r['clients'] if c['clientId']=='hubstore-admin'))")" \
   pnpm --filter @hub-store/bff-gateway dev >"$LOG/sf11-bff.log" 2>&1 &
 for i in $(seq 1 30); do /usr/bin/nc -z localhost 4085 >/dev/null 2>&1 && break; sleep 2; done
 /usr/bin/nc -z localhost 4085 || { echo BFF_TIMEOUT; exit 1; }
