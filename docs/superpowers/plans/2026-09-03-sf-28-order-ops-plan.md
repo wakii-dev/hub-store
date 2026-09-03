@@ -27,7 +27,8 @@
 - Create: `api/proto/hubstore/transfer/v1/transfer.proto`
 - Create: `services/fulfillment-service/src/main/resources/db/migration/V8__transfer_tickets.sql`
 - Create: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/service/TransferServiceImpl.java`
-- Create: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/repository/TransferTicketRepository.java` (đặt theo pattern repo SF-2 — soát chỗ PostgresOrderRepository nằm)
+- Create: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/store/TransferTicketRepository.java` (pattern store/PostgresOrderRepository)
+- Modify: `services/bff-gateway/src/lib/grpc-error.ts` (thêm case `ALREADY_EXISTS → 409` — hiện rơi default 500)
 - Modify: Java gRPC server wiring (nơi register IntakeServiceImpl — thêm TransferServiceImpl)
 - Create: `services/bff-gateway/src/clients/transfer.ts`, `services/bff-gateway/src/mappers/transfer.ts`, `services/bff-gateway/src/routes/transfer.ts`
 - Modify: BFF route registration (file đăng ký routes — soát index/server entry)
@@ -86,7 +87,7 @@ CREATE INDEX idx_transfer_tickets_order ON transfer_tickets(order_fulfill_code);
 CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 ```
 
-- [ ] **Step 4: Java TransferServiceImpl** — JDBC pattern PostgresOrderRepository. `CreateTransferTicket`: (1) SELECT order + `is_debt_splitting_order` → nếu tách nợ → error `FAILED_PRECONDITION` (qua GrpcErrors pattern — soát IntakeValidator/GrpcErrors cách map); (2) tồn tại ticket PENDING cùng order → `ALREADY_EXISTS` (BFF map 409); (3) INSERT với `ticket_code = 'TT-' || lpad(nextval('transfer_ticket_code_seq')::text, 4, '0')` trong 1 transaction. `ListTransferTickets`: SELECT WHERE code = ANY(?) [+ status] ORDER BY created_at DESC. Audit: BFF-side logActivity (Java không cần).
+- [ ] **Step 4: Java TransferServiceImpl** — JDBC pattern store/PostgresOrderRepository. `CreateTransferTicket`: (1) SELECT order + `is_debt_splitting_order` → nếu tách nợ → `GrpcErrors.invalidArgument` (KHRÔNG dùng FAILED_PRECONDITION — mapper hiện tại default 409, sẽ trùng 409 của trùng-PENDING; INVALID_ARGUMENT khớp pattern `assignShopHub` FulfillmentServiceImpl:228 → 422 tự nhiên); (2) tồn tại ticket PENDING cùng order → `ALREADY_EXISTS` + **thêm case `ALREADY_EXISTS → 409 CONFLICT` vào grpc-error.ts** (file đã ở Files list); (3) INSERT với `ticket_code = 'TT-' || lpad(nextval('transfer_ticket_code_seq')::text, 4, '0')` trong 1 transaction. `ListTransferTickets`: SELECT WHERE code = ANY(?) [+ status] ORDER BY created_at DESC. Audit: BFF-side logActivity (Java không cần).
 - [ ] **Step 5: Java unit test** — pattern test SF-2 (InMemory/DB-skip): tách nợ reject, duplicate PENDING → ALREADY_EXISTS, happy path sinh TT-0001, list filter codes.
 - [ ] **Step 6: BFF clients/transfer.ts (pattern clients/intake.ts — callUnary + metadata {x-user-role, x-user-name}) + mappers/transfer.ts + routes/transfer.ts:**
   - `POST /fulfillment/:code/transfer-tickets` body `{toHub, reason, fromHub?}` — requireRole 3 role → client.createTransferTicket → 409 → HTTP 409, FAILED_PRECONDITION → 422; audit `order.transfer_ticket_create`
@@ -104,7 +105,7 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 
 - [ ] **Step 1: RTKQ endpoints** — `createTransferTicket` (mutation, invalidates `transfer-tickets`), `getTransferTickets` (query, arg codes string, skip khi rỗng). Pattern existing ordersApi.ts.
 - [ ] **Step 2: TransferHubModal** — props: `{order, open, onClose}`. Nội dung: info đơn (fulfill code, shop, address); nếu `order.isDebtSplittingOrder` → Alert warning + disable confirm (pattern transfer-debt-warning cũ — SOÁT HubStoreTransferModal.tsx để reuse style); Input search debounce 300ms → `getShops({q})` (endpoint GET /master-data/shops của Task 4 widen — nếu chưa có q, fallback fetch-all + client filter; Task 4 bổ sung q BFF-side) → Radio list kết quả; TextArea lý do (required); nút `data-testid="transfer-hub-confirm"` → mutation → success → message + onClose + invalidate.
-- [ ] **Step 3: D1Page wiring** — nút "YC chuyển kho" `data-testid="bulk-transfer-ticket"` (bên cạnh bulk-transfer cũ — GIỮ NGUYÊN nút cũ): enable khi đúng 1 đơn chọn và không tách nợ. Mở modal. Badge cột mới `data-testid="transfer-badge-${code}"`: từ `getTransferTickets(codes của page)` — đếm PENDING → Tag warning-pastel "YC chuyển kho" (tokens sf6). KHÔNG đụng testid cũ.
+- [ ] **Step 3: D1Page wiring** — nút "YC chuyển kho" `data-testid="bulk-transfer-ticket"` (bên cạnh bulk-transfer cũ — GIỮ NGUYÊN nút cũ): **ẨN theo role qua `usePermissions`/`can` từ `@hub-store/shared` (role Coordinator/Manager/Admin — hiện D1Page chưa import hook này)**; khi hiện: enable khi đúng 1 đơn chọn và không tách nợ. Mở modal. Badge cột mới `data-testid="transfer-badge-${code}"`: từ `getTransferTickets(codes của page)` — order có ticket → badge hiện, màu theo ticket MỚI NHẤT (PENDING → Tag warning-pastel "YC chuyển kho"; tokens sf6). KHÔNG đụng testid cũ. **Chạy vitest apps/orders — cập nhật `apps/orders/src/pages/D1Page.test.tsx` cho DOM mới.**
 - [ ] **Step 4: Verify browser** (Rule 0 tầng 1-2): boot app → chọn đơn → modal render → suggest list hiện → badge hiện sau khi tạo (dùng UI thật). Screenshot trước/sau.
 - [ ] **Step 5: Commit** `feat(transfer): transfer hub modal + D1 badge + bulk button`
 
@@ -114,7 +115,7 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - Create: `apps/orders/src/features/TransferTicketHistoryModal.tsx`
 - Modify: `apps/orders/src/pages/D1Page.tsx` (entry mở history — link/icon trên badge hoặc menu row)
 
-- [ ] **Step 1: Modal bảng** — cột: ticket # (TT-xxxx), trạng thái duyệt (Tag: PENDING warning-pastel / APPROVED success / REJECTED error — tokens sf6 semantic), kho đích, lý do, thời gian (format VN), người xác nhận (created_by — confirmed_by null khi PENDING). Empty state `data-testid="transfer-history-empty"`: Empty component sf6. Table `data-testid="transfer-history-table"`.
+- [ ] **Step 1: Modal bảng** — cột: ticket # (TT-xxxx), trạng thái duyệt (Tag: PENDING warning-pastel / APPROVED success / REJECTED error — tokens sf6 semantic), kho đích, lý do, thời gian (format VN), người xác nhận (created_by — confirmed_by null khi PENDING). Empty state `data-testid="transfer-history-empty"`: Empty component sf6. Table `data-testid="transfer-history-table"`. **Chạy vitest apps/orders sau khi sửa D1Page (entry mới) — cập nhật test nếu DOM thay đổi.**
 - [ ] **Step 2: D1Page entry** — click badge → mở history modal cho order đó (reuse getTransferTickets). Modal `data-testid="transfer-ticket-history-modal"`.
 - [ ] **Step 3: Verify browser** — tạo ticket qua modal Task 2 → mở history → thấy row đúng data. Screenshot.
 - [ ] **Step 4: Commit** `feat(transfer): ticket history modal + D1 entry`
@@ -140,7 +141,7 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - Modify: `apps/orders/src/api/ordersApi.ts` (getDeliveryTimeSlots query)
 
 - [ ] **Step 1: RTKQ query** getDeliveryTimeSlots(date).
-- [ ] **Step 2: Widen modal** — GIỮ testid `edit-delivery-${code}` + hành vi editable-when-batchStatus-0. Thay RangePicker thô bằng: DatePicker (`disabledDate` = ngày < hôm nay), chọn date → fetch slots → Radio chips slot (testid `delivery-slot-${index}`), disabled khi slot quá khứ (today). Confirm → mutation PUT delivery-time với from/to ISO +07:00 từ slot mapping (spec Q4). Testid control mới KHÔNG đụng testid assert cũ.
+- [ ] **Step 2: Widen modal** — GIỮ testid `edit-delivery-${code}` + hành vi editable-when-batchStatus-0. **Thêm role-hide: `usePermissions` — nút edit chỉ render cho Coordinator/Manager/Admin (D1Page/DeliveryTimeCell chưa import hook — thêm).** Thay RangePicker thô bằng: DatePicker (`disabledDate` = ngày < hôm nay, TZ Asia/Ho_Chi_Minh), chọn date → fetch slots → Radio chips slot (testid `delivery-slot-${index}`), disabled khi slot quá khứ (today). Confirm → mutation PUT delivery-time với from/to ISO +07:00 từ slot mapping (spec Q4). Testid control mới KHÔNG đụng testid assert cũ.
 - [ ] **Step 3: FE test** — cập nhật DeliveryTimeCell.test.tsx: past date disabled, slot render, confirm gọi đúng from/to.
 - [ ] **Step 4: Verify browser** — chỉnh giờ đơn → chọn ngày mai + slot → row update. Ngày quá khứ không chọn được. Screenshot.
 - [ ] **Step 5: Commit** `feat(delivery-time): FE slot picker + past-date guard`
