@@ -330,6 +330,21 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     expect(res.statusCode).toBe(200);
   });
 
+  it('InsideTechnician/OutsideTechnician (SF-25) nằm trong KNOWN_ROLES → guard cho qua + role claim map', async () => {
+    for (const [role, username] of [
+      ['InsideTechnician', 'KTV-001'],
+      ['OutsideTechnician', 'CTV-001'],
+    ] as const) {
+      const token = await signTestToken(role, username);
+      const res = await h.app.inject({
+        method: 'GET',
+        url: '/master-data/regions',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(res.statusCode).toBe(200);
+    }
+  });
+
   it('JWKS refetch khi gặp unknown kid (SF-4): key mới thêm → token verify 200', async () => {
     // Ký bằng keypair-2 CHƯA có trong JWKS → 401 (kid lạ).
     const second = await generateSecondIdentity();

@@ -3,7 +3,7 @@
  * createRemoteJWKSet — TỰ REFETCH khi gặp unknown kid). issuer/audience từ
  * BffOidcConfig (config.ts derive /realms/hubstore). Role lấy từ claim
  * `realm_access.roles` ∩ KNOWN_ROLES (Coordinator/WarehouseOps/Manager/
- * WarehouseEmployee) →
+ * WarehouseEmployee/InsideTechnician/OutsideTechnician) →
  * request.user; gRPC calls truyền metadata { x-user-role: role } — services
  * KHÔNG đổi (vẫn tin BFF, zero-trust s2s = M-3 out-of-scope).
  *
@@ -17,13 +17,17 @@ import type { BffOidcConfig } from '../config.js';
 
 /** Roles mà app nhận — khớp role matrix shell (nav.ts / PERMISSION_MATRIX).
  *  Admin (SF-17): role write của StaffArea — gate per-route qua requireRole.
- *  WarehouseEmployee (SF-18): role D2C consumer-trực-tiếp. */
+ *  WarehouseEmployee (SF-18): role D2C consumer-trực-tiếp.
+ *  InsideTechnician/OutsideTechnician (SF-25): KTV/CTV mobile — BFF override
+ *  technicianCode/driverName từ token ở các route filter. */
 export const KNOWN_ROLES = [
   'Coordinator',
   'WarehouseOps',
   'Manager',
   'Admin',
   'WarehouseEmployee',
+  'InsideTechnician',
+  'OutsideTechnician',
 ] as const;
 
 export interface RequestUser {

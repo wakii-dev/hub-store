@@ -21,6 +21,12 @@
       },
       {
         "name": "WarehouseEmployee"
+      },
+      {
+        "name": "InsideTechnician"
+      },
+      {
+        "name": "OutsideTechnician"
       }
     ]
   },
@@ -43,6 +49,62 @@
       "attributes": {
         "pkce.code.challenge.method": "S256",
         "post.logout.redirect.uris": "http://localhost:3000/*"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "web-origins"
+      ],
+      "protocolMappers": [
+        {
+          "name": "hubstore-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hubstore-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "preferred_username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
+      "clientId": "hubstore-mobile",
+      "name": "Hub Store KTV Mobile (SF-25)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "rootUrl": "http://localhost:3010",
+      "redirectUris": [
+        "http://localhost:3010/*",
+        "http://127.0.0.1:4220/*",
+        "http://localhost:3010/callback",
+        "http://127.0.0.1:4220/callback"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3010/* http://127.0.0.1:4220/*"
       },
       "defaultClientScopes": [
         "profile",
@@ -180,6 +242,42 @@
         }
       ],
       "email": "warehouse-emp@hubstore.dev"
+    },
+    {
+      "username": "KTV-001",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Nguyễn",
+      "lastName": "Văn An",
+      "realmRoles": [
+        "InsideTechnician"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "email": "ktv-001@hubstore.dev"
+    },
+    {
+      "username": "CTV-001",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Hoàng",
+      "lastName": "Văn Em",
+      "realmRoles": [
+        "OutsideTechnician"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "Password123!",
+          "temporary": false
+        }
+      ],
+      "email": "ctv-001@hubstore.dev"
     }
   ],
   "clientScopes": [
