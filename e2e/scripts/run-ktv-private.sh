@@ -33,6 +33,9 @@ set -a; . "$ROOT/.env"; set +a
 export FULFILLMENT_DB_HOST=localhost FULFILLMENT_DB_PORT=$PG_HOST_PORT
 export BATCHING_DB_HOST=localhost BATCHING_DB_PORT=$PG_HOST_PORT BATCHING_DB_NAME=batching
 export FULFILLMENT_DB_PASSWORD="$POSTGRES_PASSWORD" BATCHING_DB_PASSWORD="$POSTGRES_PASSWORD"
+# wait-db.sh (dùng chung run.sh BE): PGHOST set → pg_isready TRỰC TIẾP vào
+# postgres riêng sf-25 thay vì `docker compose exec postgres` (stack chung).
+export PGHOST=localhost PGPORT=$PG_HOST_PORT PGUSER="${POSTGRES_USER:-hubstore}" PGPASSWORD="$POSTGRES_PASSWORD"
 export SPRING_FLYWAY_VALIDATE_ON_MIGRATE=false SPRING_FLYWAY_OUT_OF_ORDER=true
 export VITE_API_BASE_URL=http://127.0.0.1:4286
 export VITE_OIDC_AUTHORITY=http://127.0.0.1:8082
@@ -75,6 +78,7 @@ echo "[sf-25] boot postgres sf-25-postgres :$PG_HOST_PORT..."
 docker run -d --name sf-25-postgres \
   -e POSTGRES_USER="${POSTGRES_USER:-hubstore}" \
   -e POSTGRES_PASSWORD="$POSTGRES_PASSWORD" \
+  -e TZ=Asia/Ho_Chi_Minh \
   -p "$PG_HOST_PORT":5432 postgres:16.4 >"$LOG/postgres-run.log" 2>&1 || {
     echo "[sf-25] FAIL boot postgres — log $LOG/postgres-run.log" >&2; exit 1; }
 for _ in $(seq 1 60); do
@@ -141,8 +145,11 @@ wait_port java 52073 || exit 1
 BATCHING_PORT=52074 FULFILLMENT_ADDR=localhost:52073 ./services/batching-service/run.sh >"$LOG/go.log" 2>&1 &
 wait_port go 52074 || exit 1
 
-# --- 6) BFF :4286 ---
+# --- 6) BFF :4286 (OIDC_ISSUER + OIDC_JWKS_URL override — root .env trỏ shared
+#         KC :8081; seam này verify token iss/JWKS của KC riêng :8082, JWKS sai
+#         → signature fail → 401 Invalid token) ---
 PORT_BFF=4286 GRPC_FULFILLMENT=52073 GRPC_BATCHING=52074 GRPC_PRINT=50053 \
+  OIDC_ISSUER=http://127.0.0.1:8082 OIDC_JWKS_URL=http://127.0.0.1:8082 \
   BFF_CORS_ORIGINS="http://localhost:4220,http://127.0.0.1:4220" \
   pnpm --dir "$ROOT" --filter @hub-store/bff-gateway dev >"$LOG/bff.log" 2>&1 &
 wait_port bff 4286 || exit 1
