@@ -11,15 +11,25 @@ import {
 } from "antd";
 import { PlusOutlined } from "@ant-design/icons";
 import { useTranslation } from "react-i18next";
+import { Provider } from "react-redux";
 import type { ColumnsType } from "antd/es/table";
 import {
+  createAppStore,
   useCreateUserMutation,
   useListUsersQuery,
   useSetUserEnabledMutation,
   useSetUserPasswordMutation,
+  type AppStore,
   type UserListItem,
 } from "@hub-store/api-client";
 import { DESIGN_TOKENS, ROLES, TableSkeleton, EmptyState } from "@hub-store/shared";
+
+/**
+ * Store per-remote (spec §2) — shell KHÔNG share store qua MF boundary.
+ * UsersPage dùng RTKQ hooks → tự wrap Provider với store riêng (pattern D1Page
+ * + AuditPage: module singleton của bundle shell).
+ */
+const usersStore: AppStore = createAppStore();
 
 /** Semantic tag SF-6 §1.1 — pastel bg + line + solid text, pill (class sf6-status-tag). */
 function statusTagStyle(tone: "success" | "neutral"): CSSProperties {
@@ -36,7 +46,7 @@ function statusTagStyle(tone: "success" | "neutral"): CSSProperties {
 
 const ROLE_OPTIONS = ROLES.map((r) => ({ value: r, label: r }));
 
-export default function UsersPage(props: { currentUsername: string }) {
+function UsersContent(props: { currentUsername: string }) {
   const { t } = useTranslation("shell");
   const [messageApi, contextHolder] = message.useMessage();
   const { data, isLoading } = useListUsersQuery();
@@ -276,5 +286,13 @@ export default function UsersPage(props: { currentUsername: string }) {
         </Form>
       </Modal>
     </div>
+  );
+}
+
+export default function UsersPage(props: { currentUsername: string }) {
+  return (
+    <Provider store={usersStore}>
+      <UsersContent {...props} />
+    </Provider>
   );
 }
