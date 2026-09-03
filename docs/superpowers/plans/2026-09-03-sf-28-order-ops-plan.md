@@ -152,10 +152,10 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - Create: `services/bff-gateway/src/routes/batching-presets.ts` (hoặc thêm vào routes file batching hiện có — soát cấu trúc)
 - Test: contract test
 
-- [ ] **Step 1: GET /batching/criteria-presets** — static list: `[{id:'shortest', name:'Ngắn nhất', description:'Ưu tiên tổng quãng đường/stop ngắn nhất'}, {id:'cod_priority', name:'Ưu tiên COD', ...}, {id:'fewest_stops', name:'Ưu tiên số dừng ít', ...}, {id:'balanced', name:'Cân bằng', ...}]`. requireRole 3 role. KHÔNG gọi batching service.
-- [ ] **Step 2: POST /batching/criteria-preset-select** body `{presetId, orderCount?}` — validate presetId ∈ list, audit `batching.criteria_preset_select` fire-and-forget, trả `{ok:true}`. requireRole.
-- [ ] **Step 3: Contract test** — GET shape, POST audit (spy logActivity theo pattern test cũ), 403.
-- [ ] **Step 4: Commit** `feat(batching): criteria presets API + select audit`
+- [x] **Step 1: GET /batching/criteria-presets** — static list: `[{id:'shortest', name:'Ngắn nhất', description:'Ưu tiên tổng quãng đường/stop ngắn nhất'}, {id:'cod_priority', name:'Ưu tiên COD', ...}, {id:'fewest_stops', name:'Ưu tiên số dừng ít', ...}, {id:'balanced', name:'Cân bằng', ...}]`. requireRole 3 role. KHÔNG gọi batching service.
+- [x] **Step 2: POST /batching/criteria-preset-select** body `{presetId, orderCount?}` — validate presetId ∈ list, audit `batching.criteria_preset_select` fire-and-forget, trả `{ok:true}`. requireRole.
+- [x] **Step 3: Contract test** — GET shape, POST audit (spy logActivity theo pattern test cũ), 403.
+- [x] **Step 4: Commit** `feat(batching): criteria presets API + select audit`
 
 ### Task 7: wizard-step1-preset — FE wizard step 1
 

@@ -33,6 +33,7 @@ import { registerUsersRoutes } from './routes/users.js';
 import { KcAdminClient } from './kc-admin.js';
 import { registerD2cRoutes } from './routes/d2c.js';
 import { registerTransferRoutes } from './routes/transfer.js';
+import { registerBatchingPresetRoutes } from './routes/batching-presets.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -105,6 +106,8 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerD2cRoutes(app, { fulfillment });
   // SF-28 — transfer tickets (tạo + lịch sử) — TransferService cùng fulfillment.
   registerTransferRoutes(app, { transfer });
+  // SF-28 — criteria presets (static BFF-side, không gọi batching service).
+  registerBatchingPresetRoutes(app);
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });
