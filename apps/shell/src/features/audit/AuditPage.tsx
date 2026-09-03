@@ -6,6 +6,7 @@
  */
 import { useState } from "react";
 import { Alert, Button, Input, Space, Table, Tag, Typography } from "antd";
+import { Provider } from "react-redux";
 import type { ColumnsType } from "antd/es/table";
 import { useTranslation } from "react-i18next";
 import {
@@ -15,9 +16,21 @@ import {
   TableSkeleton,
   type DateRangeValue,
 } from "@hub-store/shared";
-import { useListAuditQuery, type AuditListItem } from "@hub-store/api-client";
+import {
+  createAppStore,
+  useListAuditQuery,
+  type AppStore,
+  type AuditListItem,
+} from "@hub-store/api-client";
 
 const PAGE_SIZE = 20;
+
+/**
+ * Store per-remote (spec §2) — shell KHÔNG share store qua MF boundary.
+ * AuditPage là shell component ĐẦU TIÊN dùng RTKQ hooks → tự wrap Provider
+ * với store riêng (pattern D1Page: module singleton của bundle shell).
+ */
+const auditStore: AppStore = createAppStore();
 
 /** ISO → 'HH:mm DD/MM/YYYY' theo múi giờ VN (D6 — khớp convention dashboard). */
 function formatVnTime(value: string | undefined): string {
@@ -42,7 +55,7 @@ function hasDetail(record: AuditListItem): boolean {
   return record.detail != null && typeof record.detail === "object";
 }
 
-export default function AuditPage() {
+function AuditContent() {
   const { t } = useTranslation("shell");
   const [actor, setActor] = useState("");
   const [action, setAction] = useState("");
@@ -176,5 +189,13 @@ export default function AuditPage() {
         </div>
       )}
     </div>
+  );
+}
+
+export default function AuditPage() {
+  return (
+    <Provider store={auditStore}>
+      <AuditContent />
+    </Provider>
   );
 }
