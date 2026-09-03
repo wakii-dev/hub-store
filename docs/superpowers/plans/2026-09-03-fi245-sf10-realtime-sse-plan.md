@@ -45,10 +45,10 @@ DAG 3 tiers — Tier 1: T1 ∥ T3 (disjoint); Tier 2: T2 (deps T1), T4 (deps T3)
 
 ### Task 1: BFF SSE endpoint (`bff-sse-endpoint`)
 **Files:** Create `services/bff-gateway/src/routes/events.ts`, `src/lib/realtime-events.ts` (allow-list + helper, dùng chung T2) + test · Modify `src/plugins/auth.ts`, `src/app.ts`
-- [ ] **Step 1:** Guard auth.ts — thêm nhánh: url `/events` (kể cả query) cho phép `access_token` từ query thay Bearer header; verify JWKS như cũ; route khác không đổi behavior.
-- [ ] **Step 2:** `lib/realtime-events.ts` — `REALTIME_EVENT_TYPES` allow-list + `isRealtimeEvent(type)` + topic-map helper.
-- [ ] **Step 3:** `routes/events.ts` — GET /events SSE: headers + raw write + filter qua isRealtimeEvent + map `{type, payload, ts}` + heartbeat 15s + cleanup on close; listen `bffEvents.on('kafka:event')` (import singleton trực tiếp).
-- [ ] **Step 4:** app.ts register route; unit tests: mapping + filter thuần, route inject (headers, 401 thiếu token, first-data flow với fake emitter). **Exit: BFF unit suite toàn project vẫn xanh.**
+- [x] **Step 1:** Guard auth.ts — thêm nhánh: url `/events` (kể cả query) cho phép `access_token` từ query thay Bearer header; verify JWKS như cũ; route khác không đổi behavior.
+- [x] **Step 2:** `lib/realtime-events.ts` — `REALTIME_EVENT_TYPES` allow-list + `isRealtimeEvent(type)` + topic-map helper.
+- [x] **Step 3:** `routes/events.ts` — GET /events SSE: headers + raw write + filter qua isRealtimeEvent + map `{type, payload, ts}` + heartbeat 15s + cleanup on close; listen `bffEvents.on('kafka:event')` (import singleton trực tiếp).
+- [x] **Step 4:** app.ts register route; unit tests: mapping + filter thuần, route inject (headers, 401 thiếu token, first-data flow với fake emitter). **Exit: BFF unit suite toàn project vẫn xanh.**
 
 ### Task 2: Kafka consumer wiring + dual-source local emit + degraded signal (`bff-kafka-consumer`) — deps T1
 **Files:** Create `src/lib/realtime-publish.ts` + test · Modify mutation routes `fulfillment.ts`, `deliverybatch.ts`, `intake.ts`, `src/kafka/consumer.ts`
