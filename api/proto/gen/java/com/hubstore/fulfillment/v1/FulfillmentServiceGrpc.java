@@ -5,7 +5,7 @@ import static io.grpc.MethodDescriptor.generateFullMethodName;
 /**
  */
 @javax.annotation.Generated(
-    value = "by gRPC proto compiler (version 1.64.0)",
+    value = "by gRPC proto compiler (version 1.69.0)",
     comments = "Source: hubstore/fulfillment/v1/fulfillment.proto")
 @io.grpc.stub.annotations.GrpcGenerated
 public final class FulfillmentServiceGrpc {
@@ -480,6 +480,161 @@ public final class FulfillmentServiceGrpc {
     return getUpdateD2cOrderNoteMethod;
   }
 
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.ConfirmCodRequest,
+      com.hubstore.fulfillment.v1.ConfirmCodResponse> getConfirmCodMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "ConfirmCod",
+      requestType = com.hubstore.fulfillment.v1.ConfirmCodRequest.class,
+      responseType = com.hubstore.fulfillment.v1.ConfirmCodResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.ConfirmCodRequest,
+      com.hubstore.fulfillment.v1.ConfirmCodResponse> getConfirmCodMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.ConfirmCodRequest, com.hubstore.fulfillment.v1.ConfirmCodResponse> getConfirmCodMethod;
+    if ((getConfirmCodMethod = FulfillmentServiceGrpc.getConfirmCodMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getConfirmCodMethod = FulfillmentServiceGrpc.getConfirmCodMethod) == null) {
+          FulfillmentServiceGrpc.getConfirmCodMethod = getConfirmCodMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.ConfirmCodRequest, com.hubstore.fulfillment.v1.ConfirmCodResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "ConfirmCod"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.ConfirmCodRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.ConfirmCodResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("ConfirmCod"))
+              .build();
+        }
+      }
+    }
+    return getConfirmCodMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.ConfirmBatchCodRequest,
+      com.hubstore.fulfillment.v1.ConfirmBatchCodResponse> getConfirmBatchCodMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "ConfirmBatchCod",
+      requestType = com.hubstore.fulfillment.v1.ConfirmBatchCodRequest.class,
+      responseType = com.hubstore.fulfillment.v1.ConfirmBatchCodResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.ConfirmBatchCodRequest,
+      com.hubstore.fulfillment.v1.ConfirmBatchCodResponse> getConfirmBatchCodMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.ConfirmBatchCodRequest, com.hubstore.fulfillment.v1.ConfirmBatchCodResponse> getConfirmBatchCodMethod;
+    if ((getConfirmBatchCodMethod = FulfillmentServiceGrpc.getConfirmBatchCodMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getConfirmBatchCodMethod = FulfillmentServiceGrpc.getConfirmBatchCodMethod) == null) {
+          FulfillmentServiceGrpc.getConfirmBatchCodMethod = getConfirmBatchCodMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.ConfirmBatchCodRequest, com.hubstore.fulfillment.v1.ConfirmBatchCodResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "ConfirmBatchCod"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.ConfirmBatchCodRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.ConfirmBatchCodResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("ConfirmBatchCod"))
+              .build();
+        }
+      }
+    }
+    return getConfirmBatchCodMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetCodPendingRequest,
+      com.hubstore.fulfillment.v1.GetCodPendingResponse> getGetCodPendingMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "GetCodPending",
+      requestType = com.hubstore.fulfillment.v1.GetCodPendingRequest.class,
+      responseType = com.hubstore.fulfillment.v1.GetCodPendingResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetCodPendingRequest,
+      com.hubstore.fulfillment.v1.GetCodPendingResponse> getGetCodPendingMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetCodPendingRequest, com.hubstore.fulfillment.v1.GetCodPendingResponse> getGetCodPendingMethod;
+    if ((getGetCodPendingMethod = FulfillmentServiceGrpc.getGetCodPendingMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getGetCodPendingMethod = FulfillmentServiceGrpc.getGetCodPendingMethod) == null) {
+          FulfillmentServiceGrpc.getGetCodPendingMethod = getGetCodPendingMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.GetCodPendingRequest, com.hubstore.fulfillment.v1.GetCodPendingResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "GetCodPending"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetCodPendingRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetCodPendingResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("GetCodPending"))
+              .build();
+        }
+      }
+    }
+    return getGetCodPendingMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetSettlementRequest,
+      com.hubstore.fulfillment.v1.GetSettlementResponse> getGetSettlementMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "GetSettlement",
+      requestType = com.hubstore.fulfillment.v1.GetSettlementRequest.class,
+      responseType = com.hubstore.fulfillment.v1.GetSettlementResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetSettlementRequest,
+      com.hubstore.fulfillment.v1.GetSettlementResponse> getGetSettlementMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetSettlementRequest, com.hubstore.fulfillment.v1.GetSettlementResponse> getGetSettlementMethod;
+    if ((getGetSettlementMethod = FulfillmentServiceGrpc.getGetSettlementMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getGetSettlementMethod = FulfillmentServiceGrpc.getGetSettlementMethod) == null) {
+          FulfillmentServiceGrpc.getGetSettlementMethod = getGetSettlementMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.GetSettlementRequest, com.hubstore.fulfillment.v1.GetSettlementResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "GetSettlement"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetSettlementRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetSettlementResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("GetSettlement"))
+              .build();
+        }
+      }
+    }
+    return getGetSettlementMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetSettlementDetailRequest,
+      com.hubstore.fulfillment.v1.GetSettlementDetailResponse> getGetSettlementDetailMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "GetSettlementDetail",
+      requestType = com.hubstore.fulfillment.v1.GetSettlementDetailRequest.class,
+      responseType = com.hubstore.fulfillment.v1.GetSettlementDetailResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetSettlementDetailRequest,
+      com.hubstore.fulfillment.v1.GetSettlementDetailResponse> getGetSettlementDetailMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetSettlementDetailRequest, com.hubstore.fulfillment.v1.GetSettlementDetailResponse> getGetSettlementDetailMethod;
+    if ((getGetSettlementDetailMethod = FulfillmentServiceGrpc.getGetSettlementDetailMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getGetSettlementDetailMethod = FulfillmentServiceGrpc.getGetSettlementDetailMethod) == null) {
+          FulfillmentServiceGrpc.getGetSettlementDetailMethod = getGetSettlementDetailMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.GetSettlementDetailRequest, com.hubstore.fulfillment.v1.GetSettlementDetailResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "GetSettlementDetail"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetSettlementDetailRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetSettlementDetailResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("GetSettlementDetail"))
+              .build();
+        }
+      }
+    }
+    return getGetSettlementDetailMethod;
+  }
+
   /**
    * Creates a new async stub that supports all call types for the service
    */
@@ -678,6 +833,56 @@ public final class FulfillmentServiceGrpc {
         io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse> responseObserver) {
       io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getUpdateD2cOrderNoteMethod(), responseObserver);
     }
+
+    /**
+     * <pre>
+     * SF-14: confirm thu COD per-order (mỗi item 1 result — fail không kill batch).
+     * </pre>
+     */
+    default void confirmCod(com.hubstore.fulfillment.v1.ConfirmCodRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.ConfirmCodResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getConfirmCodMethod(), responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-14: confirm thu COD cả phiếu (chỉ PENDING, đơn FAILED loại — D7).
+     * </pre>
+     */
+    default void confirmBatchCod(com.hubstore.fulfillment.v1.ConfirmBatchCodRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.ConfirmBatchCodResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getConfirmBatchCodMethod(), responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-14: badge D2 "COD chờ thu (n)" theo phiếu (D7).
+     * </pre>
+     */
+    default void getCodPending(com.hubstore.fulfillment.v1.GetCodPendingRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetCodPendingResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getGetCodPendingMethod(), responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-14: đối soát theo shop theo kỳ (GROUP BY SQL — D5).
+     * </pre>
+     */
+    default void getSettlement(com.hubstore.fulfillment.v1.GetSettlementRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetSettlementResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getGetSettlementMethod(), responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-14: drill-down đơn theo shop + kỳ (lệch tiền / chưa thu).
+     * </pre>
+     */
+    default void getSettlementDetail(com.hubstore.fulfillment.v1.GetSettlementDetailRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetSettlementDetailResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getGetSettlementDetailMethod(), responseObserver);
+    }
   }
 
   /**
@@ -872,6 +1077,61 @@ public final class FulfillmentServiceGrpc {
       io.grpc.stub.ClientCalls.asyncUnaryCall(
           getChannel().newCall(getUpdateD2cOrderNoteMethod(), getCallOptions()), request, responseObserver);
     }
+
+    /**
+     * <pre>
+     * SF-14: confirm thu COD per-order (mỗi item 1 result — fail không kill batch).
+     * </pre>
+     */
+    public void confirmCod(com.hubstore.fulfillment.v1.ConfirmCodRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.ConfirmCodResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getConfirmCodMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-14: confirm thu COD cả phiếu (chỉ PENDING, đơn FAILED loại — D7).
+     * </pre>
+     */
+    public void confirmBatchCod(com.hubstore.fulfillment.v1.ConfirmBatchCodRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.ConfirmBatchCodResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getConfirmBatchCodMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-14: badge D2 "COD chờ thu (n)" theo phiếu (D7).
+     * </pre>
+     */
+    public void getCodPending(com.hubstore.fulfillment.v1.GetCodPendingRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetCodPendingResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getGetCodPendingMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-14: đối soát theo shop theo kỳ (GROUP BY SQL — D5).
+     * </pre>
+     */
+    public void getSettlement(com.hubstore.fulfillment.v1.GetSettlementRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetSettlementResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getGetSettlementMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-14: drill-down đơn theo shop + kỳ (lệch tiền / chưa thu).
+     * </pre>
+     */
+    public void getSettlementDetail(com.hubstore.fulfillment.v1.GetSettlementDetailRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetSettlementDetailResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getGetSettlementDetailMethod(), getCallOptions()), request, responseObserver);
+    }
   }
 
   /**
@@ -1039,6 +1299,56 @@ public final class FulfillmentServiceGrpc {
     public com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse updateD2cOrderNote(com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest request) {
       return io.grpc.stub.ClientCalls.blockingUnaryCall(
           getChannel(), getUpdateD2cOrderNoteMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-14: confirm thu COD per-order (mỗi item 1 result — fail không kill batch).
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.ConfirmCodResponse confirmCod(com.hubstore.fulfillment.v1.ConfirmCodRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getConfirmCodMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-14: confirm thu COD cả phiếu (chỉ PENDING, đơn FAILED loại — D7).
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.ConfirmBatchCodResponse confirmBatchCod(com.hubstore.fulfillment.v1.ConfirmBatchCodRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getConfirmBatchCodMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-14: badge D2 "COD chờ thu (n)" theo phiếu (D7).
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.GetCodPendingResponse getCodPending(com.hubstore.fulfillment.v1.GetCodPendingRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getGetCodPendingMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-14: đối soát theo shop theo kỳ (GROUP BY SQL — D5).
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.GetSettlementResponse getSettlement(com.hubstore.fulfillment.v1.GetSettlementRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getGetSettlementMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-14: drill-down đơn theo shop + kỳ (lệch tiền / chưa thu).
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.GetSettlementDetailResponse getSettlementDetail(com.hubstore.fulfillment.v1.GetSettlementDetailRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getGetSettlementDetailMethod(), getCallOptions(), request);
     }
   }
 
@@ -1223,6 +1533,61 @@ public final class FulfillmentServiceGrpc {
       return io.grpc.stub.ClientCalls.futureUnaryCall(
           getChannel().newCall(getUpdateD2cOrderNoteMethod(), getCallOptions()), request);
     }
+
+    /**
+     * <pre>
+     * SF-14: confirm thu COD per-order (mỗi item 1 result — fail không kill batch).
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.ConfirmCodResponse> confirmCod(
+        com.hubstore.fulfillment.v1.ConfirmCodRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getConfirmCodMethod(), getCallOptions()), request);
+    }
+
+    /**
+     * <pre>
+     * SF-14: confirm thu COD cả phiếu (chỉ PENDING, đơn FAILED loại — D7).
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.ConfirmBatchCodResponse> confirmBatchCod(
+        com.hubstore.fulfillment.v1.ConfirmBatchCodRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getConfirmBatchCodMethod(), getCallOptions()), request);
+    }
+
+    /**
+     * <pre>
+     * SF-14: badge D2 "COD chờ thu (n)" theo phiếu (D7).
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.GetCodPendingResponse> getCodPending(
+        com.hubstore.fulfillment.v1.GetCodPendingRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getGetCodPendingMethod(), getCallOptions()), request);
+    }
+
+    /**
+     * <pre>
+     * SF-14: đối soát theo shop theo kỳ (GROUP BY SQL — D5).
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.GetSettlementResponse> getSettlement(
+        com.hubstore.fulfillment.v1.GetSettlementRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getGetSettlementMethod(), getCallOptions()), request);
+    }
+
+    /**
+     * <pre>
+     * SF-14: drill-down đơn theo shop + kỳ (lệch tiền / chưa thu).
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.GetSettlementDetailResponse> getSettlementDetail(
+        com.hubstore.fulfillment.v1.GetSettlementDetailRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getGetSettlementDetailMethod(), getCallOptions()), request);
+    }
   }
 
   private static final int METHODID_FILTER_ORDERS = 0;
@@ -1240,6 +1605,11 @@ public final class FulfillmentServiceGrpc {
   private static final int METHODID_GET_DASHBOARD_STATS = 12;
   private static final int METHODID_FILTER_D2C_ORDERS = 13;
   private static final int METHODID_UPDATE_D2C_ORDER_NOTE = 14;
+  private static final int METHODID_CONFIRM_COD = 15;
+  private static final int METHODID_CONFIRM_BATCH_COD = 16;
+  private static final int METHODID_GET_COD_PENDING = 17;
+  private static final int METHODID_GET_SETTLEMENT = 18;
+  private static final int METHODID_GET_SETTLEMENT_DETAIL = 19;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -1317,6 +1687,26 @@ public final class FulfillmentServiceGrpc {
         case METHODID_UPDATE_D2C_ORDER_NOTE:
           serviceImpl.updateD2cOrderNote((com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest) request,
               (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse>) responseObserver);
+          break;
+        case METHODID_CONFIRM_COD:
+          serviceImpl.confirmCod((com.hubstore.fulfillment.v1.ConfirmCodRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.ConfirmCodResponse>) responseObserver);
+          break;
+        case METHODID_CONFIRM_BATCH_COD:
+          serviceImpl.confirmBatchCod((com.hubstore.fulfillment.v1.ConfirmBatchCodRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.ConfirmBatchCodResponse>) responseObserver);
+          break;
+        case METHODID_GET_COD_PENDING:
+          serviceImpl.getCodPending((com.hubstore.fulfillment.v1.GetCodPendingRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetCodPendingResponse>) responseObserver);
+          break;
+        case METHODID_GET_SETTLEMENT:
+          serviceImpl.getSettlement((com.hubstore.fulfillment.v1.GetSettlementRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetSettlementResponse>) responseObserver);
+          break;
+        case METHODID_GET_SETTLEMENT_DETAIL:
+          serviceImpl.getSettlementDetail((com.hubstore.fulfillment.v1.GetSettlementDetailRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetSettlementDetailResponse>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -1441,6 +1831,41 @@ public final class FulfillmentServiceGrpc {
               com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest,
               com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse>(
                 service, METHODID_UPDATE_D2C_ORDER_NOTE)))
+        .addMethod(
+          getConfirmCodMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.ConfirmCodRequest,
+              com.hubstore.fulfillment.v1.ConfirmCodResponse>(
+                service, METHODID_CONFIRM_COD)))
+        .addMethod(
+          getConfirmBatchCodMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.ConfirmBatchCodRequest,
+              com.hubstore.fulfillment.v1.ConfirmBatchCodResponse>(
+                service, METHODID_CONFIRM_BATCH_COD)))
+        .addMethod(
+          getGetCodPendingMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.GetCodPendingRequest,
+              com.hubstore.fulfillment.v1.GetCodPendingResponse>(
+                service, METHODID_GET_COD_PENDING)))
+        .addMethod(
+          getGetSettlementMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.GetSettlementRequest,
+              com.hubstore.fulfillment.v1.GetSettlementResponse>(
+                service, METHODID_GET_SETTLEMENT)))
+        .addMethod(
+          getGetSettlementDetailMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.GetSettlementDetailRequest,
+              com.hubstore.fulfillment.v1.GetSettlementDetailResponse>(
+                service, METHODID_GET_SETTLEMENT_DETAIL)))
         .build();
   }
 
@@ -1504,6 +1929,11 @@ public final class FulfillmentServiceGrpc {
               .addMethod(getGetDashboardStatsMethod())
               .addMethod(getFilterD2cOrdersMethod())
               .addMethod(getUpdateD2cOrderNoteMethod())
+              .addMethod(getConfirmCodMethod())
+              .addMethod(getConfirmBatchCodMethod())
+              .addMethod(getGetCodPendingMethod())
+              .addMethod(getGetSettlementMethod())
+              .addMethod(getGetSettlementDetailMethod())
               .build();
         }
       }

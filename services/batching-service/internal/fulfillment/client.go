@@ -43,7 +43,9 @@ type Client interface {
 	// GetOrdersByCodes — hydration: truth về kho + batchStatus của từng đơn.
 	GetOrdersByCodes(ctx context.Context, codes []string) ([]*fulfillmentv1.HubStoreOrderFilterItem, error)
 	// MutateOrderStatus — đổi batchStatus của các đơn (one-way mutation).
-	MutateOrderStatus(ctx context.Context, codes []string, target fulfillmentv1.BatchStatus, reason string) error
+	// batchCode: mã phiếu soạn truyền qua để Java eager-insert cod_confirmations
+	// đúng batch (SF-14: không pass → Java insert batch_code rỗng, COD filter hụt).
+	MutateOrderStatus(ctx context.Context, codes []string, target fulfillmentv1.BatchStatus, reason, batchCode string) error
 	// Close releases the underlying gRPC connection.
 	Close() error
 }
@@ -93,7 +95,7 @@ func (c *GRPCClient) GetOrdersByCodes(ctx context.Context, codes []string) ([]*f
 }
 
 // MutateOrderStatus implements Client.
-func (c *GRPCClient) MutateOrderStatus(ctx context.Context, codes []string, target fulfillmentv1.BatchStatus, reason string) error {
+func (c *GRPCClient) MutateOrderStatus(ctx context.Context, codes []string, target fulfillmentv1.BatchStatus, reason, batchCode string) error {
 	req := &fulfillmentv1.MutateOrderStatusRequest{
 		FulfillCodes:      codes,
 		TargetBatchStatus: target,
@@ -101,6 +103,10 @@ func (c *GRPCClient) MutateOrderStatus(ctx context.Context, codes []string, targ
 	if reason != "" {
 		r := reason
 		req.Reason = &r
+	}
+	if batchCode != "" {
+		b := batchCode
+		req.BatchCode = &b
 	}
 	resp, err := c.stub.MutateOrderStatus(c.ctx(ctx), req)
 	if err != nil {

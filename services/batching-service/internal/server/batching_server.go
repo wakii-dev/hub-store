@@ -100,7 +100,8 @@ func (s *BatchingServer) CreateBatch(ctx context.Context, req *batchingv1.Create
 	}
 
 	// Mutate chain: đơn batchStatus NOT_PREPARED → PREPARING qua Java.
-	if err := s.fulfill.MutateOrderStatus(ctx, orderCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARING, ""); err != nil {
+	// batchCode truyền qua để Java eager-insert cod_confirmations đúng batch (SF-14).
+	if err := s.fulfill.MutateOrderStatus(ctx, orderCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARING, "", batch.GetBatchCode()); err != nil {
 		// Compensation KHÔNG dùng request ctx — mutate fail có thể do deadline
 		// ctx hết (spec: client deadline) → compensation trên ctx chết sẽ orphan
 		// batch ACTIVE trong DB.
@@ -333,7 +334,8 @@ func (s *BatchingServer) CancelBatch(ctx context.Context, req *batchingv1.Cancel
 	itemCodes := itemOrderCodes(b)
 	// Revert đơn batchStatus → 0 qua Java; fail → hoàn tác phiếu về ACTIVE
 	// (compensation trên context riêng — không dùng request ctx có thể đã deadline).
-	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_NOT_PREPARED, req.GetReason()); err != nil {
+	// batchCode rỗng: target=0 delete pending theo codes — Java không cần mã phiếu.
+	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_NOT_PREPARED, req.GetReason(), ""); err != nil {
 		compCtx, compCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer compCancel()
 		if _, trErr := s.store.Transition(compCtx, req.GetBatchCode(),
@@ -368,7 +370,9 @@ func (s *BatchingServer) CompletePicking(ctx context.Context, req *batchingv1.Co
 			cur.GetBatchCode(), cur.GetStatus())
 	}
 	itemCodes := itemOrderCodes(b)
-	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARED, ""); err != nil {
+	// batchCode truyền qua (SF-14): Java target=PREPARED eager-insert cod_confirmations
+	// cho đơn COD chưa có pending — phải gắn đúng phiếu.
+	if err := s.fulfill.MutateOrderStatus(ctx, itemCodes, fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARED, "", req.GetBatchCode()); err != nil {
 		// Compensation trên context riêng (request ctx có thể đã deadline).
 		compCtx, compCancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer compCancel()

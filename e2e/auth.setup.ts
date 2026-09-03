@@ -21,6 +21,8 @@ import { chromium, type FullConfig } from "@playwright/test";
 const USERS = ["coordinator", "warehouse", "manager", "admin", "warehouse-emp"] as const;
 const PASSWORD = "Password123!"; // dev-only literal — realm JSON import
 const AUTH_DIR = path.join(__dirname, ".auth");
+// Private-port seam (SF-15 precedent) — default :3000 giữ behavior cũ.
+const SHELL_URL = process.env.E2E_SHELL_URL ?? "http://localhost:3000";
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {
   fs.mkdirSync(AUTH_DIR, { recursive: true });
@@ -30,7 +32,7 @@ export default async function globalSetup(_config: FullConfig): Promise<void> {
       const context = await browser.newContext();
       const page = await context.newPage();
       // globalSetup không kế thừa use.baseURL — URL đầy đủ
-      await page.goto("http://localhost:3000/hub-store-order/order");
+      await page.goto(`${SHELL_URL}/hub-store-order/order`);
       await page.getByTestId("login-submit").click();
       // Redirect sang Keycloak hosted login (realm hubstore)
       await page.waitForURL("**/protocol/openid-connect/auth**");

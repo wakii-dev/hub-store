@@ -22,6 +22,7 @@ import TechServicePage from "./features/tech/TechServicePage";
 import UsersPage from "./features/users/UsersPage";
 import AreaListPage from "./pages/area-staff/AreaListPage";
 import AreaFormPage from "./pages/area-staff/AreaFormPage";
+import SettlementPage from "./pages/settlement/SettlementPage";
 import RemoteBoundary from "./RemoteBoundary";
 
 // Federation lazy imports — exposes contract ĐÃ PIN (spec §2.7)
@@ -240,6 +241,15 @@ export default function App() {
                   element={
                     <RequirePermission permission="areastaff.view">
                       <AreaListPage />
+                    </RequirePermission>
+                  }
+                />
+                {/* SF-14 — đối soát COD, shell-local (axios wrapper, không RTKQ). */}
+                <Route
+                  path="/settlement"
+                  element={
+                    <RequirePermission permission="settlement.view">
+                      <SettlementPage />
                     </RequirePermission>
                   }
                 />
