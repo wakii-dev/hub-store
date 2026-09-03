@@ -44,6 +44,7 @@ import {
   type PaginationEnvelope,
 } from "@hub-store/api-client";
 import { registerOrdersResources } from "../i18n";
+import RealtimeBridge from "../realtime/RealtimeBridge";
 import {
   buildFilterRequest,
   bulkActionsState,
@@ -555,6 +556,8 @@ function D1Content() {
 export default function D1Page() {
   return (
     <Provider store={ordersStore}>
+      {/* SF-10: SSE bridge — invalidate Fulfillment LIST khi BFF forward event. */}
+      <RealtimeBridge />
       <D1Content />
     </Provider>
   );

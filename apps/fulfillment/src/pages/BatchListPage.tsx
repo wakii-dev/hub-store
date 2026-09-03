@@ -55,6 +55,7 @@ import {
 } from "../api/deliveryBatchApi";
 import { fulfillmentStore } from "../store";
 import { registerFulfillmentResources } from "../i18n";
+import RealtimeBridge from "../realtime/RealtimeBridge";
 import { MarkFailModal } from "../features/MarkFailModal";
 import { TrackingModal } from "../delivery/TrackingModal";
 
@@ -310,6 +311,8 @@ function OrderExpandContent({
 export default function BatchListPage() {
   return (
     <Provider store={fulfillmentStore}>
+      {/* SF-10: SSE bridge — invalidate Fulfillment/Batches khi BFF forward event. */}
+      <RealtimeBridge />
       <BatchListPageInner />
     </Provider>
   );

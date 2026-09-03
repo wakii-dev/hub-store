@@ -2,8 +2,9 @@
  * SF-27 — Kafka consumer bridge tests. parseMessage + bffEvents emit là pure
  * logic (không cần broker thật — E2E 05-kafka.spec.ts mới test với kafka lên).
  */
+import { EventEmitter } from 'node:events';
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { parseMessage } from '../src/kafka/consumer.js';
+import { attachDegradedHandlers, parseMessage } from '../src/kafka/consumer.js';
 import { bffEvents, type KafkaEventMessage } from '../src/kafka/events.js';
 
 describe('parseMessage (SF-27)', () => {
@@ -59,5 +60,62 @@ describe('kafka config flag (SF-27)', () => {
       loadConfig({ ...base, KAFKA_ENABLED: 'true', KAFKA_BOOTSTRAP_SERVERS: 'kafka:29092' })
         .kafka.bootstrapServers,
     ).toBe('kafka:29092');
+  });
+});
+
+describe('degraded signal (SF-10 T2)', () => {
+  function fakeConsumer(): EventEmitter {
+    return new EventEmitter();
+  }
+
+  it('consumer.disconnect sau khi connect → onEvent nhận stream.degraded topic _system (đúng 1 lần)', () => {
+    const consumer = fakeConsumer();
+    const seen: KafkaEventMessage[] = [];
+    attachDegradedHandlers(
+      consumer as never,
+      (m) => seen.push(m),
+      () => true,
+    );
+    consumer.emit('consumer.disconnect');
+    consumer.emit('consumer.disconnect'); // lặp → bỏ qua
+    expect(seen).toHaveLength(1);
+    expect(seen[0].topic).toBe('_system');
+    expect(seen[0].envelope).toMatchObject({
+      type: 'stream.degraded',
+      source: 'bff-local',
+      payload: { reason: 'consumer.disconnect' },
+    });
+    const envelope = seen[0].envelope as Record<string, unknown>;
+    expect(typeof envelope.eventId).toBe('string');
+    expect(new Date(envelope.occurredAt as string).getTime()).not.toBeNaN();
+  });
+
+  it('consumer.crash → degraded kèm reason từ error payload', () => {
+    const consumer = fakeConsumer();
+    const seen: KafkaEventMessage[] = [];
+    attachDegradedHandlers(
+      consumer as never,
+      (m) => seen.push(m),
+      () => true,
+    );
+    consumer.emit('consumer.crash', { payload: { error: new Error('broker gone') } });
+    expect(seen).toHaveLength(1);
+    expect(seen[0].envelope).toMatchObject({
+      type: 'stream.degraded',
+      payload: { reason: 'consumer.crash: broker gone' },
+    });
+  });
+
+  it('chưa từng connect thành công (isConnected=false) → KHÔNG emit (behavior connect-fail cũ giữ nguyên)', () => {
+    const consumer = fakeConsumer();
+    const seen: KafkaEventMessage[] = [];
+    attachDegradedHandlers(
+      consumer as never,
+      (m) => seen.push(m),
+      () => false,
+    );
+    consumer.emit('consumer.disconnect');
+    consumer.emit('consumer.crash', { payload: { error: new Error('x') } });
+    expect(seen).toHaveLength(0);
   });
 });

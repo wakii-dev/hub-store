@@ -55,11 +55,19 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
     if (request.url === '/auth/reset-password' || request.url.startsWith('/auth/reset-password?')) {
       return;
     }
+    // SF-10 — EventSource (SSE) KHÔNG set được Authorization header → CHỈ url
+    // /events (kể cả query) cho phép token từ query `access_token` thay Bearer.
+    // Verify JWKS y như Bearer; MỌI route khác vẫn bắt buộc header (không hồi quy).
     const header = request.headers.authorization;
-    if (!header || !header.startsWith('Bearer ')) {
+    let token: string | null = null;
+    if (header && header.startsWith('Bearer ')) {
+      token = header.slice('Bearer '.length);
+    } else if (request.url === '/events' || request.url.startsWith('/events?')) {
+      token = new URL(request.url, 'http://localhost').searchParams.get('access_token');
+    }
+    if (!token) {
       return unauthorized(reply, 'Missing Authorization: Bearer <token> header.');
     }
-    const token = header.slice('Bearer '.length);
     try {
       const { payload } = await jwtVerify(token, JWKS, {
         issuer: opts.oidc.issuer,
