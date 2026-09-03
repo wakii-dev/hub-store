@@ -106,7 +106,7 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - [x] **Step 1: RTKQ endpoints** — `createTransferTicket` (mutation, invalidates `transfer-tickets`), `getTransferTickets` (query, arg codes string, skip khi rỗng). Pattern existing ordersApi.ts.
 - [x] **Step 2: TransferHubModal** — props: `{order, open, onClose}`. Nội dung: info đơn (fulfill code, shop, address); nếu `order.isDebtSplittingOrder` → Alert warning + disable confirm (pattern transfer-debt-warning cũ — SOÁT HubStoreTransferModal.tsx để reuse style); Input search debounce 300ms → `getShops({q})` (endpoint GET /master-data/shops của Task 4 widen — nếu chưa có q, fallback fetch-all + client filter; Task 4 bổ sung q BFF-side) → Radio list kết quả; TextArea lý do (required); nút `data-testid="transfer-hub-confirm"` → mutation → success → message + onClose + invalidate.
 - [x] **Step 3: D1Page wiring** — nút "YC chuyển kho" `data-testid="bulk-transfer-ticket"` (bên cạnh bulk-transfer cũ — GIỮ NGUYÊN nút cũ): **ẨN theo role qua `usePermissions`/`can` từ `@hub-store/shared` (role Coordinator/Manager/Admin — hiện D1Page chưa import hook này)**; khi hiện: enable khi đúng 1 đơn chọn và không tách nợ. Mở modal. Badge cột mới `data-testid="transfer-badge-${code}"`: từ `getTransferTickets(codes của page)` — order có ticket → badge hiện, màu theo ticket MỚI NHẤT (PENDING → Tag warning-pastel "YC chuyển kho"; tokens sf6). KHÔNG đụng testid cũ. **Chạy vitest apps/orders — cập nhật `apps/orders/src/pages/D1Page.test.tsx` cho DOM mới.**
-- [ ] **Step 4: Verify browser** (Rule 0 tầng 1-2): boot app → chọn đơn → modal render → suggest list hiện → badge hiện sau khi tạo (dùng UI thật). Screenshot trước/sau.
+- [x] **Step 4: Verify browser** (Rule 0 tầng 1-2): boot app → chọn đơn → modal render → suggest list hiện → badge hiện sau khi tạo (dùng UI thật). Screenshot trước/sau.
 - [ ] **Step 5: Commit** `feat(transfer): transfer hub modal + D1 badge + bulk button`
   - [x] Committed (worktree sf-28-d1-order-ops — T2 done, step 4 browser chờ Phase 5)
 
@@ -118,7 +118,7 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 
 - [x] **Step 1: Modal bảng** — cột: ticket # (TT-xxxx), trạng thái duyệt (Tag: PENDING warning-pastel / APPROVED success / REJECTED error — tokens sf6 semantic), kho đích, lý do, thời gian (format VN), người xác nhận (created_by — confirmed_by null khi PENDING). Empty state `data-testid="transfer-history-empty"`: Empty component sf6. Table `data-testid="transfer-history-table"`. **Chạy vitest apps/orders sau khi sửa D1Page (entry mới) — cập nhật test nếu DOM thay đổi.**
 - [x] **Step 2: D1Page entry** — click badge → mở history modal cho order đó (reuse getTransferTickets). Modal `data-testid="transfer-ticket-history-modal"`.
-- [ ] **Step 3: Verify browser** — tạo ticket qua modal Task 2 → mở history → thấy row đúng data. Screenshot.
+- [x] **Step 3: Verify browser** — tạo ticket qua modal Task 2 → mở history → thấy row đúng data. Screenshot.
 - [x] **Step 4: Commit** `feat(transfer): ticket history modal + D1 entry`
 
 ### Task 4: delivery-time-adjust-api — slots endpoint + PUT guard + role gates + Kafka order.updated
@@ -144,7 +144,7 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - [x] **Step 1: RTKQ query** getDeliveryTimeSlots(date).
 - [x] **Step 2: Widen modal** — GIỮ testid `edit-delivery-${code}` + hành vi editable-when-batchStatus-0. **Thêm role-hide: `usePermissions` — nút edit chỉ render cho Coordinator/Manager/Admin (D1Page/DeliveryTimeCell chưa import hook — thêm).** Thay RangePicker thô bằng: DatePicker (`disabledDate` = ngày < hôm nay, TZ Asia/Ho_Chi_Minh), chọn date → fetch slots → Radio chips slot (testid `delivery-slot-${index}`), disabled khi slot quá khứ (today). Confirm → mutation PUT delivery-time với from/to ISO +07:00 từ slot mapping (spec Q4). Testid control mới KHÔNG đụng testid assert cũ.
 - [x] **Step 3: FE test** — cập nhật DeliveryTimeCell.test.tsx: past date disabled, slot render, confirm gọi đúng from/to.
-- [ ] **Step 4: Verify browser** — chỉnh giờ đơn → chọn ngày mai + slot → row update. Ngày quá khứ không chọn được. Screenshot. (Phase 5 — coordinator)
+- [x] **Step 4: Verify browser** — chỉnh giờ đơn → chọn ngày mai + slot → row update. Ngày quá khứ không chọn được. Screenshot. (Phase 5 — coordinator)
 - [x] **Step 5: Commit** `feat(delivery-time): FE slot picker + past-date guard`
 
 ### Task 6: criteria-presets-api — BFF presets endpoint
@@ -167,7 +167,7 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - [x] **Step 1: RTKQ endpoints** presets + select.
 - [x] **Step 2: Renumber stepper** — state `1|2|3` → `1|2|3|4`; footer `activeSection < 3` → `< 4`; scrollToSection union mở rộng. Step 1 MỚI: Radio group `data-testid="wizard-step1-preset"` — mỗi preset: name + description; default chọn `balanced`; Next → step 2 (DnD NGUYÊN — KHÔNG đổi logic). Header step 2/3 hiện preset đã chọn (Chip nhỏ — chỉ hiển thị). GIỮ nguyên Deviation D1: content step cũ không bị ẩn ngầm (sf6-direction §0 — kiểm tra cách modal hiện tại render sections rồi giữ pattern). KHÔNG đổi testid control cũ (DnD list, shipper select, date picker).
 - [x] **Step 3: FE test** — CreateBatchingModal.test.tsx cập nhật: step 1 render 4 preset, chọn → step 2 DnD hoạt động như cũ (test cũ phải vẫn pass).
-- [ ] **Step 4: Verify browser** — mở wizard → thấy 4 bước → chọn preset → DnD như cũ. Screenshot.
+- [x] **Step 4: Verify browser** — mở wizard → thấy 4 bước → chọn preset → DnD như cũ. Screenshot.
 - [x] **Step 5: Commit** `feat(batching): wizard step 1 criteria preset`
 
 ### Task 8: order-note-endpoint — verify-only
