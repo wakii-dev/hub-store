@@ -44,6 +44,7 @@ export interface TechButtonsDto {
   allowReassign: boolean;
   allowAccept: boolean;
   allowReschedule: boolean;
+  allowComplete: boolean;
 }
 
 export function mapTechButtons(b?: ProtoTechButtons): TechButtonsDto {
@@ -53,6 +54,7 @@ export function mapTechButtons(b?: ProtoTechButtons): TechButtonsDto {
     allowReassign: b?.allowReassign ?? false,
     allowAccept: b?.allowAccept ?? false,
     allowReschedule: b?.allowReschedule ?? false,
+    allowComplete: b?.allowComplete ?? false,
   };
 }
 

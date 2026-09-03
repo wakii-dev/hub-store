@@ -65,6 +65,7 @@ describe('SF-19 — POST /delivery-orders/filter', () => {
       allowReassign: false,
       allowAccept: false,
       allowReschedule: false,
+      allowComplete: false,
     });
     expect(item.receiver.name).toBe('Nguyễn Văn A');
     // coordination JSONB passthrough → parsed object.
