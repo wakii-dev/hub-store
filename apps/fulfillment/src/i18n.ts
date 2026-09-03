@@ -88,6 +88,13 @@ export const fulfillmentResources: I18nResources = {
       "print.missingBatch": "Thiếu mã phiếu (batchCode) trên đường dẫn",
       "print.all.progress": "Đang in {{done}}/{{total}}: {{doc}}",
       "print.all.done": "Hoàn tất in {{ok}}/{{total}} phiếu",
+
+      "cod.pendingBadge": "COD chờ thu ({{count}})",
+      "cod.confirmButton": "Xác nhận thu",
+      "cod.confirmTitle": "Xác nhận thu COD phiếu {{code}}",
+      "cod.confirmContent": "Xác nhận đã thu đủ tiền COD của {{count}} đơn chờ thu trong phiếu?",
+      "cod.success": "Đã xác nhận thu {{count}} đơn COD của phiếu {{code}}",
+      "cod.failed": "Xác nhận thu COD thất bại",
     },
   },
   en: {
@@ -172,6 +179,13 @@ export const fulfillmentResources: I18nResources = {
       "print.missingBatch": "Missing batchCode query parameter",
       "print.all.progress": "Printing {{done}}/{{total}}: {{doc}}",
       "print.all.done": "Finished printing {{ok}}/{{total}} documents",
+
+      "cod.pendingBadge": "COD pending ({{count}})",
+      "cod.confirmButton": "Confirm collection",
+      "cod.confirmTitle": "Confirm COD collection for {{code}}",
+      "cod.confirmContent": "Confirm full COD collection of {{count}} pending orders in this batch?",
+      "cod.success": "Confirmed collection of {{count}} COD orders for {{code}}",
+      "cod.failed": "Failed to confirm COD collection",
     },
   },
 };

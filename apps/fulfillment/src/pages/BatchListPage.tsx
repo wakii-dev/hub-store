@@ -44,6 +44,7 @@ import {
   useGetBatchOrdersQuery,
   useRedeliverOrderMutation,
 } from "../api/batchesApi";
+import { useConfirmBatchCodMutation, useGetCodPendingQuery } from "../api/codApi";
 import { fulfillmentStore } from "../store";
 import { registerFulfillmentResources } from "../i18n";
 import { MarkFailModal } from "../features/MarkFailModal";
@@ -175,6 +176,52 @@ function OrderExpandContent({
       </Space>
       <ProductTable products={item.items} />
     </div>
+  );
+}
+
+/**
+ * SF-14 D2 — badge + bulk confirm COD cho 1 phiếu COMPLETED.
+ * Mount CHỈ khi batch COMPLETED (caller guard) → query /cod/pending chạy đúng
+ * phiếu cần. pendingCount = 0 → ẩn cả cụm (badge "biến mất" sau confirm).
+ * Element mới testid `cod-*` — KHÔNG đụng testid/DOM hiện có (E2E dependency).
+ */
+function CodBatchActions({ batchCode }: { batchCode: string }) {
+  const { t } = useTranslation("fulfillment");
+  const { data, isLoading, refetch } = useGetCodPendingQuery(batchCode);
+  const [confirmBatchCod, { isLoading: confirming }] = useConfirmBatchCodMutation();
+
+  const pending = data?.pendingCount ?? 0;
+  if (isLoading || pending === 0) return null;
+
+  const handleConfirm = () => {
+    Modal.confirm({
+      title: t("cod.confirmTitle", { code: batchCode }),
+      content: t("cod.confirmContent", { count: pending }),
+      okText: t("cod.confirmButton"),
+      cancelText: t("action.reset"),
+      onOk: async () => {
+        try {
+          const resp = await confirmBatchCod({ batchCode }).unwrap();
+          message.success(
+            t("cod.success", { code: batchCode, count: resp.confirmedCount }),
+          );
+          await refetch();
+        } catch (err) {
+          message.error(`${t("cod.failed")}: ${errMessage(err)}`);
+        }
+      },
+    });
+  };
+
+  return (
+    <Space size={4} align="center" data-testid={`cod-actions-${batchCode}`}>
+      <Tag color="warning" data-testid={`cod-badge-${batchCode}`}>
+        {t("cod.pendingBadge", { count: pending })}
+      </Tag>
+      <Button size="small" type="primary" loading={confirming} onClick={handleConfirm}>
+        {t("cod.confirmButton")}
+      </Button>
+    </Space>
   );
 }
 
@@ -341,6 +388,10 @@ function BatchListPageInner() {
               >
                 {t("action.print")}
               </Button>
+              {/* SF-14 — COD chờ thu: chỉ phiếu COMPLETED có PENDING mới render. */}
+              {batch.status === BATCH_ENTITY_STATUS.COMPLETED && (
+                <CodBatchActions batchCode={batch.batchCode} />
+              )}
             </Space>
           </Space>
         );

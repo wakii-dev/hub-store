@@ -136,11 +136,11 @@ Envelope: `reply.send(paginated(rows, total, page, pageSize))` cho `/cod/settlem
 - Modify: `apps/fulfillment/src/pages/BatchListPage.tsx` (badge "COD chờ thu (n)" + nút xác nhận thu cho batch COMPLETED — fetch `/cod/pending`, modal → POST confirm-batch; KHÔNG đổi testid/DOM hiện có)
 - **Đọc TRƯỚC khi code UI:** `docs/superpowers/designs/sf-14-direction.md` + fidelity target `direction-b.html` (KPI cards + progress + segmented filter + drill-down order cards + modal prefill expected / collected optional).
 
-- [ ] Step 1: permission + nav + i18n keys.
-- [ ] Step 2: RTKQ api slice (getSettlement, getSettlementDetail, confirmCod, confirmBatch, export URL).
-- [ ] Step 3: SettlementPage theo direction B (KPI 4 cards, segmented filter, expandable table, ConfirmModal, empty-state + skeleton SF-6).
-- [ ] Step 4: D2 BatchListPage badge + bulk confirm modal (chỉ batch COMPLETED; polling nhẹ hoặc refetch on focus).
-- [ ] Step 5: `pnpm typecheck` (turbo) + FE unit tests PASS. **Nav smoke thủ công từng role (Coordinator/WarehouseOps/Manager/Admin): nav item chỉ hiện Manager+Admin, landing path KHÔNG đổi** (bắt sớm ripple 02-role-matrix — không đợi Task 6). Commit `feat(cod): settlement screen (direction B) + D2 COD badge + bulk confirm`.
+- [x] Step 1: permission + nav + i18n keys.
+- [x] Step 2: RTKQ api slice (getSettlement, getSettlementDetail, confirmCod, confirmBatch, export URL).
+- [x] Step 3: SettlementPage theo direction B (KPI 4 cards, segmented filter, expandable table, ConfirmModal, empty-state + skeleton SF-6).
+- [x] Step 4: D2 BatchListPage badge + bulk confirm modal (chỉ batch COMPLETED; polling nhẹ hoặc refetch on focus).
+- [x] Step 5: `pnpm typecheck` (turbo) + FE unit tests PASS. **Nav smoke thủ công từng role (Coordinator/WarehouseOps/Manager/Admin): nav item chỉ hiện Manager+Admin, landing path KHÔNG đổi** (bắt sớm ripple 02-role-matrix — không đợi Task 6). Commit `feat(cod): settlement screen (direction B) + D2 COD badge + bulk confirm`.
 
 ### Task 5: settlement-export — CSV endpoint + FE button
 
