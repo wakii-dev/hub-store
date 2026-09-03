@@ -102,10 +102,10 @@ Xem spec §5 — 17 files (2 NEW FE pages/slice, 3 NEW specs, 12 modify). Consum
 
 ### Task 4: design-harmonize — Users + Dashboard 100% SF-6 (FI-256)
 **Files:** Modify `apps/shell/src/features/users/UsersPage.tsx`, `apps/orders/src/pages/DashboardPage.tsx`.
-- [ ] Step 1: Đọc `docs/superpowers/designs/sf6-direction.md` (tokens §1, components §2) + `design-tokens.ts` + pattern D1 page (page-head/card/table classes).
-- [ ] Step 2: UsersPage reskin: page-head pattern (title + actions), card `radius.card`/`borderLight`, status colors semantic (active/locked → success/neutral tags), spacing tokens, buttons ghost/primary theo hệ. KHÔNG đổi logic/API/testid.
-- [ ] Step 3: DashboardPage reskin: stat cards pattern (như StatStrip D1 nếu có), chart cards cùng radius/border/shadow, page-head. KHÔNG đổi data-fetch/testid.
-- [ ] Step 4: Typecheck shell+orders; unit pass; commit `feat(sf11): harmonize Users + Dashboard theo design system SF-6`.
+- [x] Step 1: Đọc `docs/superpowers/designs/sf6-direction.md` (tokens §1, components §2) + `design-tokens.ts` + pattern D1 page (page-head/card/table classes).
+- [x] Step 2: UsersPage reskin: page-head pattern (title + actions), card `radius.card`/`borderLight`, status colors semantic (active/locked → success/neutral tags), spacing tokens, buttons ghost/primary theo hệ. KHÔNG đổi logic/API/testid.
+- [x] Step 3: DashboardPage reskin: stat cards pattern (như StatStrip D1 nếu có), chart cards cùng radius/border/shadow, page-head. KHÔNG đổi data-fetch/testid.
+- [x] Step 4: Typecheck shell+orders; unit pass; commit `feat(sf11): harmonize Users + Dashboard theo design system SF-6`.
 - **Verify:** 0 hex ngoài tokens (grep hex literals mới — chỉ tokens import).
 
 ### Task 5: skeletons-empty — Users/Dashboard/Audit (FI-256) [deps: T1, T4]
