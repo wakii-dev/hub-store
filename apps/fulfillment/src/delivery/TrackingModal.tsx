@@ -35,9 +35,11 @@ export function splitDriver(driverName: string, driverPhone: string): { name: st
   return { name: driverName, phone: driverPhone };
 }
 
-/** Slot `urltracking` — BE chưa có field → undefined → ẩn (contract-ready). */
+/** Slot `urltracking` — BE chưa có field → undefined → ẩn (contract-ready).
+ * Security P2: chỉ render http(s) — chặn `javascript:`/data-URI từ BE/partner. */
 function trackingUrl(booking: DeliveryBookingDetailDto): string | undefined {
-  return (booking as DeliveryBookingDetailDto & { urltracking?: string } | null)?.urltracking;
+  const raw = (booking as DeliveryBookingDetailDto & { urltracking?: string } | null)?.urltracking;
+  return typeof raw === "string" && /^https?:\/\//i.test(raw) ? raw : undefined;
 }
 
 function PlanningTracking({

@@ -19,9 +19,26 @@ export interface PlanningMapEntry {
 
 const key = (batchCode: string) => `nvc.plannings.${batchCode}`;
 
+/** Security P2: localStorage là input không tin cậy (UDF/devtools/cross-app)
+ * — validate shape từng entry, bỏ qua entry malformed thay vì cast mù. */
+const isEntry = (v: unknown): v is PlanningMapEntry => {
+  if (typeof v !== "object" || v === null) return false;
+  const e = v as Record<string, unknown>;
+  return (
+    typeof e.planningId === "string" &&
+    typeof e.orderCode === "string" &&
+    typeof e.stopOrder === "number" &&
+    typeof e.serviceId === "string" &&
+    typeof e.vehicleType === "string" &&
+    Array.isArray(e.addons) &&
+    e.addons.every((a) => typeof a === "string")
+  );
+};
+
 export const loadPlanningMap = (batchCode: string): PlanningMapEntry[] => {
   try {
-    return JSON.parse(localStorage.getItem(key(batchCode)) ?? '[]') as PlanningMapEntry[];
+    const parsed: unknown = JSON.parse(localStorage.getItem(key(batchCode)) ?? "[]");
+    return Array.isArray(parsed) ? parsed.filter(isEntry) : [];
   } catch {
     return [];
   }
