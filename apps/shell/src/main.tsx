@@ -14,6 +14,7 @@ import {
   registerTokenGetter,
 } from "./auth/oidc";
 import { LANG_STORAGE_KEY, shellResources } from "./i18n";
+import { registerServiceWorker } from "./lib/pwa";
 import App from "./App";
 
 // SF-11 convergence fix: pre-warm MF share cache cho react/jsx-runtime.
@@ -47,3 +48,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </I18nextProvider>
   </React.StrictMode>,
 );
+
+// SF-23 T1: PWA — đăng ký service worker (silent no-op khi không hỗ trợ).
+registerServiceWorker();
