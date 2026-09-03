@@ -41,3 +41,35 @@
 - **what**: keycloak realm JSON chỉ áp khi volume `keycloak-data` mới — thêm user mới vào realm (vd Admin SF-17) không có tác dụng trên dev volume cũ → auth.setup fail khó hiểu.
 - **where**: compose keycloak --import-realm + boot-all.sh.
 - **suggested change**: boot-all.sh thêm check user mới (token probe) + flag `RESET_KC=1` để reset volume keycloak-data tự động; hoặc import user bù qua kcadm khi thiếu.
+
+## 2026-09-02 — FI-245 SF-27 (FI-273)
+## 2026-09-02 — FI-245 SF-27 (FI-273)
+- **what**: story-verify B3 false-FAIL do Linear comment indexing delay (vài phút) — comment VERDICT: APPROVED đã post thành công (ok:true) nhưng `orca linear issue --comments` chưa trả về → B3:FAIL. Re-run sau delay → PASS (comment xuất hiện).
+- **where**: story-verify verify_sf() B3 — đọc comments một lần, không retry.
+- **suggested change**: B3 khi không thấy marker → sleep 60-90s rồi fetch lại 1 lần trước khi FAIL (phân biệt "chưa index" vs "không có marker"). Related: entry SF-2 (verdict marker tiếng Việt) — cùng hàm B3, nên fix chung.
+- **status**: OPEN — coordinator workaround bằng re-run, chưa sửa bin script.
+
+
+## 2026-09-03 — FI-276 (SF-3 Keycloak on k8s)
+
+1. **story-verify B3: orca CLI `--comments` chớp nớt trả rỗng.**
+   `orca linear issue FI-276 --comments --json` (bản CLI hiện tại) đôi lúc trả
+   `result` không có key `comments` dù write comment ok:true ngay trước đó →
+   B3 linear-check đọc 0 comments → FAIL/OUTBOX ảo dù VERDICT đã post.
+   Suggested change: B3 thêm retry/GraphQL fallback khi `result.comments` thiếu
+   key (khác với có key nhưng rỗng), hoặc CLI sửa để luôn trả comments array.
+
+2. **story-verify OUTBOX grep khớp nhầm file story khác.**
+   Fallback `grep -l "VERDICT: APPROVED" /tmp/story/*/code-reviewer-<sfp>*.md`
+   không giới hạn thư mục story → khi story FI-272 chưa có verdict file,
+   script bắt nhầm `/tmp/story/fi245/code-reviewer-sf-3.md` (review của
+   "Batches Go → Postgres", KHÔNG liên quan) và báo OUTBOX sai.
+   Suggested change: chặn pattern theo story dir đang chạy (ví dụ
+   `/tmp/story/<story-slug>/`) hoặc soi header `Issue: FI-<id>` trong file
+   trước khi tính OUTBOX.
+
+3. **Linear write rate-limit chớp nớt (2500 req/h).**
+   Cùng window: comment write ok, ngay sau đó `status set` rate-limited,
+   5 phút sau tự thông. Nhiều SF chạy song song cùng bơm Linear.
+   Suggested change: script/gate Linear-write nên backoff-retry (60s→180s→300s)
+   thay vì fail ngay; hoặc orca CLI có sẵn retry với `Retry-After`.
