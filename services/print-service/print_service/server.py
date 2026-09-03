@@ -5,6 +5,7 @@ Standalone: python -m print_service hoặc ./run.sh. KHÔNG thêm vào turbo.
 from __future__ import annotations
 
 import logging
+import os
 from concurrent import futures
 
 import grpc
@@ -16,7 +17,7 @@ from .fonts import register_fonts
 from .printers import load_printers
 from .servicer import PrintServicer
 
-PORT = 50053
+PORT = int(os.environ.get("GRPC_PRINT_PORT", "50053"))  # private-port seam
 
 logging.basicConfig(
     level=logging.INFO,

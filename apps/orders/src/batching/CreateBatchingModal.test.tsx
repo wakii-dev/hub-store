@@ -38,6 +38,7 @@ vi.mock("@hub-store/api-client", async (importOriginal) => {
 const suggestMock = vi.fn();
 const recalcMock = vi.fn();
 const createMock = vi.fn();
+const selectPresetMock = vi.fn();
 const createTimeDelivery = (timeSlots: TimeRange[]) => vi.fn(() => ({ data: { timeSlots } }));
 
 vi.mock("./batchingApi", () => ({
@@ -45,6 +46,8 @@ vi.mock("./batchingApi", () => ({
   useRecalculateDistanceMutation: () => [recalcMock, { isLoading: false }],
   useCreateBatchMutation: () => [createMock, { isLoading: false }],
   useGetTimeDeliveryQuery: (arg: { shopCode: string }) => timeDeliveryHook(arg),
+  useGetCriteriaPresetsQuery: () => criteriaPresetsHook(),
+  useSelectCriteriaPresetMutation: () => [selectPresetMock, { isLoading: false }],
 }));
 
 // Mock hooks NVC (SF-16 Task 3 — deliveryBatchApi). quotesLoading qua flag let.
@@ -60,6 +63,19 @@ vi.mock("./deliveryBatchApi", () => ({
 }));
 
 let timeDeliveryHook: (arg: { shopCode: string }) => { data?: { timeSlots: TimeRange[] } } = () => ({});
+
+// SF-28 T7 — presets theo contract GET /batching/criteria-presets (T6 BFF).
+const API_PRESETS = [
+  { id: "shortest", name: "Ngắn nhất", description: "Ưu tiên tổng quãng đường/stop ngắn nhất" },
+  { id: "cod_priority", name: "Ưu tiên COD", description: "Ưu tiên đơn thu COD trước" },
+  { id: "fewest_stops", name: "Ưu tiên số dừng ít", description: "Giảm số điểm dừng mỗi phiếu" },
+  { id: "balanced", name: "Cân bằng", description: "Cân bằng quãng đường và số dừng" },
+];
+let criteriaPresetsHook: () => {
+  data?: { items: typeof API_PRESETS };
+  isError?: boolean;
+  refetch?: () => Promise<unknown>;
+} = () => ({ data: { items: API_PRESETS } });
 
 const mocked = {
   useListOrdersQuery: vi.mocked(useListOrdersQuery),
@@ -123,6 +139,8 @@ function currentRows(): HTMLElement[] {
 
 beforeAll(() => {
   testI18n = initI18n({ resources: ordersResources });
+  // jsdom không có scrollIntoView — scrollToSection gọi khi bấm node/Tiếp tục.
+  Element.prototype.scrollIntoView = vi.fn();
   const rectFor = (el: HTMLElement): DOMRect => {
     const li = el.closest(".batch-row") as HTMLElement | null;
     const idx = li ? currentRows().indexOf(li) : 0;
@@ -182,6 +200,8 @@ beforeEach(() => {
   suggestMock.mockReset();
   recalcMock.mockReset();
   createMock.mockReset();
+  selectPresetMock.mockReset();
+  selectPresetMock.mockResolvedValue({ data: { ok: true } }); // fire-and-forget audit
   quotesMock.mockReset();
   confirmPlanningMock.mockReset();
   bookingMock.mockReset();
@@ -189,6 +209,7 @@ beforeEach(() => {
   mocked.useListOrdersQuery.mockReturnValue({ data: undefined, isFetching: false, isLoading: false } as never);
   mocked.useGetDeliveryStaffQuery.mockReturnValue({ data: staff } as never);
   timeDeliveryHook = createTimeDelivery([]);
+  criteriaPresetsHook = () => ({ data: { items: API_PRESETS } });
 });
 
 afterEach(() => {
@@ -197,6 +218,47 @@ afterEach(() => {
 });
 
 describe("CreateBatchingModal", () => {
+  it("SF-28 T7: step 1 render 4 preset card + default chọn balanced", () => {
+    renderModal();
+    const wrapper = screen.getByTestId("wizard-step1-preset");
+    expect(wrapper.querySelectorAll(".batch-preset-card")).toHaveLength(4);
+    // Copy VI từ design §2.4 (KHÔNG dùng description của API payload)
+    expect(screen.getByTestId("wizard-preset-shortest").textContent).toContain(
+      "Ưu tiên tổng quãng đường di chuyển ít nhất giữa các điểm giao.",
+    );
+    expect(screen.getByTestId("wizard-preset-balanced").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("wizard-preset-shortest").getAttribute("aria-checked")).toBe("false");
+  });
+
+  it("SF-28 T7: chọn preset → audit selectCriteriaPreset fire-and-forget + chip ở header step sau", async () => {
+    renderModal();
+    await flush();
+
+    fireEvent.click(screen.getByTestId("wizard-preset-cod_priority"));
+    expect(selectPresetMock).toHaveBeenCalledWith({ presetId: "cod_priority", orderCount: 3 });
+    expect(screen.getByTestId("wizard-preset-cod_priority").getAttribute("aria-checked")).toBe("true");
+    expect(screen.getByTestId("wizard-preset-balanced").getAttribute("aria-checked")).toBe("false");
+    // Còn ở step 1 — chip header chưa hiện
+    expect(screen.queryByTestId("wizard-preset-chip")).toBeNull();
+
+    // Tiếp tục → step 2 (DnD) — chip preset display ở header
+    fireEvent.click(screen.getByTestId("batch-continue"));
+    expect(screen.getByTestId("wizard-preset-chip").textContent).toBe("Ưu tiên COD");
+  });
+
+  it("SF-28 T7: API presets fail → error note + Tiếp tục disabled; retry refetch", async () => {
+    const refetch = vi.fn();
+    criteriaPresetsHook = () => ({ isError: true, refetch });
+    renderModal();
+    await flush();
+
+    expect(screen.getByText("Không tải được tiêu chí — thử lại.")).toBeTruthy();
+    expect((screen.getByTestId("batch-continue") as HTMLButtonElement).disabled).toBe(true);
+
+    fireEvent.click(screen.getByText("Thử lại"));
+    expect(refetch).toHaveBeenCalledTimes(1);
+  });
+
   it("render danh sách đơn đã chọn qua PROPS + đủ 8 cột header", () => {
     renderModal();
     expect(rowCodes()).toEqual(["ORD-3001", "ORD-3002", "ORD-3003"]);

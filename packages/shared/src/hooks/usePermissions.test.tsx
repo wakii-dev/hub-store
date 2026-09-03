@@ -15,18 +15,18 @@ afterEach(() => {
   setRole(null); // reset module store giữa các test
 });
 
-/** Matrix kỳ vọng — transcribe TRỰC TIẾP từ REQUIREMENTS §2 (+ SF-17 areastaff, SF-18 d2c.view, SF-11 audit.view Manager-only). */
+/** Matrix kỳ vọng — transcribe TRỰC TIẾP từ REQUIREMENTS §2 (+ SF-17 areastaff, SF-18 d2c.view, SF-11 audit.view Manager-only, SF-14 settlement.view). */
 const EXPECTED: Record<Role, Record<Permission, boolean>> = {
-  Coordinator: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': false, 'users.manage': false, 'areastaff.view': true, 'areastaff.manage': false, 'd2c.view': false, 'audit.view': false },
-  WarehouseOps: { 'orders.view': false, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': false, 'users.manage': false, 'areastaff.view': true, 'areastaff.manage': false, 'd2c.view': true, 'audit.view': false },
-  Manager: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': true, 'users.manage': true, 'areastaff.view': true, 'areastaff.manage': false, 'd2c.view': true, 'audit.view': true },
-  Admin: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': true, 'users.manage': true, 'areastaff.view': true, 'areastaff.manage': true, 'd2c.view': true, 'audit.view': false },
+  Coordinator: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': false, 'users.manage': false, 'areastaff.view': true, 'areastaff.manage': false, 'd2c.view': false, 'audit.view': false, 'settlement.view': false },
+  WarehouseOps: { 'orders.view': false, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': false, 'users.manage': false, 'areastaff.view': true, 'areastaff.manage': false, 'd2c.view': true, 'audit.view': false, 'settlement.view': false },
+  Manager: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': true, 'users.manage': true, 'areastaff.view': true, 'areastaff.manage': false, 'd2c.view': true, 'audit.view': true, 'settlement.view': true },
+  Admin: { 'orders.view': true, 'fulfillment.view': true, 'fulfillment.print': true, 'dashboard.view': true, 'users.manage': true, 'areastaff.view': true, 'areastaff.manage': true, 'd2c.view': true, 'audit.view': false, 'settlement.view': true },
   // SF-18: WarehouseEmployee CHỈ có d2c.view — không D1/D2/Print.
-  WarehouseEmployee: { 'orders.view': false, 'fulfillment.view': false, 'fulfillment.print': false, 'dashboard.view': false, 'users.manage': false, 'areastaff.view': false, 'areastaff.manage': false, 'd2c.view': true, 'audit.view': false },
+  WarehouseEmployee: { 'orders.view': false, 'fulfillment.view': false, 'fulfillment.print': false, 'dashboard.view': false, 'users.manage': false, 'areastaff.view': false, 'areastaff.manage': false, 'd2c.view': true, 'audit.view': false, 'settlement.view': false },
 };
 
 describe('usePermissions — role matrix §2 (exhaustive)', () => {
-  it('matrix const khớp bảng §2 cho đủ 5 roles × 9 permissions (SF-17 + SF-18 + SF-11)', () => {
+  it('matrix const khớp bảng §2 cho đủ 5 roles × 10 permissions (SF-17 + SF-18 + SF-11 + SF-14)', () => {
     for (const role of ROLES) {
       expect([...PERMISSION_MATRIX[role]].sort()).toEqual(
         PERMISSIONS.filter((p) => EXPECTED[role][p]).sort(),

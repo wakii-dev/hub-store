@@ -4,7 +4,7 @@ import { Alert, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Typ
 import { PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { DESIGN_TOKENS, PRINT_TYPES, type PrintType } from '@hub-store/shared';
+import { DESIGN_TOKENS, PRINT_TYPES, trackEvent, type PrintType } from '@hub-store/shared';
 import { fulfillmentStore } from '../store';
 import { printDocument, useGetBatchDetailQuery, useGetPrintersQuery } from '../api/printApi';
 import { registerFulfillmentResources } from '../i18n';
@@ -135,6 +135,7 @@ function PrintPageInner() {
     try {
       await printDocument({ batchCode, printType: activeType, printerId: pid });
       message.success(t('print.success', { doc: t(`print.tab.${activeType}`) }));
+      trackEvent('print'); // SF-23 T7
     } catch (err) {
       message.error(`${t('print.failed')}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {

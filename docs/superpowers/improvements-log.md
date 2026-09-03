@@ -41,3 +41,9 @@
 - **what**: keycloak realm JSON chỉ áp khi volume `keycloak-data` mới — thêm user mới vào realm (vd Admin SF-17) không có tác dụng trên dev volume cũ → auth.setup fail khó hiểu.
 - **where**: compose keycloak --import-realm + boot-all.sh.
 - **suggested change**: boot-all.sh thêm check user mới (token probe) + flag `RESET_KC=1` để reset volume keycloak-data tự động; hoặc import user bù qua kcadm khi thiếu.
+
+## 2026-09-03 — FI-245 SF-23 (FI-268)
+- **MF dev-server entry-poisoning (@module-federation/vite 1.21.1)**: nhánh fallback dev (`inject:"html"`, `!clientInjected`) bọc module TS/JS ĐẦU TIÊN được transform trước lần load index.html đầu thành "app entry" (bootstrap wrapper không có static exports) → module đó hỏng tại URL bare, mọi importer link-error, app chết tàng hình. Trigger thực tế: curl/đọc module bare URL trực tiếp sau khi restart dev server (debug). Rule: KHÔNG curl bare `/src/*.ts` trên MF dev server; nếu app chết "không rõ lý do" sau debug session → restart server và chỉ load qua page.
+- **Story merge-back KHÔNG được假设 ancestor**: `story/fi245-postgres-production` tiến 71 commits trong lúc SF chạy. Update-ref mù = rewind base, mất work SF khác. Luôn `git merge-base --is-ancestor` trước; nếu không → merge base vào nhánh SF (conflicts keep-both: shared/index.ts exports, CreateBatchingModal imports, bff app.ts routes) rồi update-ref. Suggested: thêm check ancestor vào story-verify B4 (hiện chỉ check dest ref reachable).
+- **`orca orchestration task-update` dùng `--id`** không phải `--task` (error validFlagsreveals). Note vào watchdog memory.
+- **SW register sau MF bootstrap**: MF dev bootstrap execute main.tsx SAU `load` → `window.addEventListener('load')` treo vĩnh viễn. Pattern: `document.readyState === 'complete' ? register() : addEventListener(...)`.

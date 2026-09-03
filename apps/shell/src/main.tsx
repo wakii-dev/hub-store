@@ -8,12 +8,14 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import { BrowserRouter } from "react-router-dom";
-import { initI18n } from "@hub-store/shared";
+import { initAnalytics, initI18n } from "@hub-store/shared";
 import {
   installUnauthorizedInterceptor,
   registerTokenGetter,
 } from "./auth/oidc";
 import { LANG_STORAGE_KEY, shellResources } from "./i18n";
+import { registerServiceWorker } from "./lib/pwa";
+import { initOneSignal } from "./lib/push";
 import App from "./App";
 
 // SF-11 convergence fix: pre-warm MF share cache cho react/jsx-runtime.
@@ -47,3 +49,11 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
     </I18nextProvider>
   </React.StrictMode>,
 );
+
+// SF-23 T1: PWA — đăng ký service worker (silent no-op khi không hỗ trợ).
+registerServiceWorker();
+// SF-23 T6: OneSignal web push (env-gated — VITE_ONESIGNAL_APP_ID trống → no-op).
+initOneSignal();
+// SF-23 T7: GA4 dual-mode (env-gated — VITE_GA_MEASUREMENT_ID trống → off-mode
+// buffer, không network). Review P0 nhóm C: thiếu lệnh gọi này → on-mode chết.
+initAnalytics();

@@ -231,6 +231,10 @@ func TestCreateBatch_Success_HydratesAndMutates(t *testing.T) {
 	if len(muts) != 1 || muts[0].Target != fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARING {
 		t.Fatalf("mutations = %+v, want 1x PREPARING (hydration call mock-verified)", muts)
 	}
+	// SF-14: batchCode truyền qua Java — eager cod_confirmations gắn đúng phiếu.
+	if muts[0].BatchCode != "BATCH-0008" {
+		t.Fatalf("mutation batchCode = %q, want BATCH-0008 (pass-through mock-verified)", muts[0].BatchCode)
+	}
 	if bs, _ := f.java.BatchStatusOf("ORD-3001"); bs != fulfillmentv1.BatchStatus_BATCH_STATUS_PREPARING {
 		t.Fatalf("mock order batchStatus = %s, want PREPARING", bs)
 	}

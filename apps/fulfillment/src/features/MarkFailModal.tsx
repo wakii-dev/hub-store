@@ -62,7 +62,6 @@ export function MarkFailModal({ open, orderCode, onClose }: MarkFailModalProps) 
     <Modal
       open={open}
       title={t("exception.modalTitle", { code: orderCode ?? "" })}
-      data-testid="mark-fail-modal"
       okText={t("exception.submit")}
       cancelText={t("exception.cancel")}
       okButtonProps={{
@@ -74,7 +73,10 @@ export function MarkFailModal({ open, orderCode, onClose }: MarkFailModalProps) 
       onCancel={onClose}
       destroyOnClose
     >
-      <Space direction="vertical" style={{ width: "100%" }} size={12}>
+      {/* testid trên content node — đặt trên <Modal> land ở .ant-modal-root
+          (children position:fixed → bounding box 0 → Playwright toBeVisible
+          false-negative dù modal mở thật, e2e 06 lần chạy post-merge). */}
+      <Space direction="vertical" data-testid="mark-fail-modal" style={{ width: "100%" }} size={12}>
         <div>
           <Typography.Text>{t("exception.reasonLabel")}</Typography.Text>
           <Select

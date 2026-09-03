@@ -33,6 +33,7 @@ import {
   StatusTag,
   formatPeriodOfTime,
   formatVnd,
+  trackEvent,
   savePlanningMap,
   type DeliveryAddonDto,
   type DeliveryBookingDto,
@@ -46,9 +47,12 @@ import {
 import { useGetDeliveryStaffQuery, useListOrdersQuery } from "@hub-store/api-client";
 import {
   useCreateBatchMutation,
+  useGetCriteriaPresetsQuery,
   useGetTimeDeliveryQuery,
   usePackingSuggestMutation,
   useRecalculateDistanceMutation,
+  useSelectCriteriaPresetMutation,
+  type CriteriaPresetItem,
 } from "./batchingApi";
 import {
   useConfirmPlanningMutation,
@@ -73,6 +77,22 @@ const GROUP_COLORS: Array<{ bg: string; border: string }> = [
 
 function groupColor(index: number): { bg: string; border: string } {
   return GROUP_COLORS[index % GROUP_COLORS.length];
+}
+
+// SF-28 T7 — step 1 criteria preset (design §2.4, hướng B). Copy VI chính xác
+// theo design (tên/mô tả/chip render qua i18n theo preset id của API); preset
+// id lạ (API thêm mới) → fallback name/description từ payload. Icon = emoji
+// placeholder theo prototype (§6 — icon library là out-of-scope dev-decided).
+const DEFAULT_PRESET_ID = "balanced"; // design §2.4: mặc định chọn sẵn BALANCED
+const PRESET_META: Record<string, { icon: string; chipKeys: string[] }> = {
+  shortest: { icon: "📏", chipKeys: ["shortest.1", "shortest.2"] },
+  cod_priority: { icon: "💰", chipKeys: ["cod_priority.1", "cod_priority.2"] },
+  fewest_stops: { icon: "📍", chipKeys: ["fewest_stops.1", "fewest_stops.2"] },
+  balanced: { icon: "⚖️", chipKeys: ["balanced.1", "balanced.2"] },
+};
+
+function presetDisplayName(p: CriteriaPresetItem, t: (k: string) => string): string {
+  return PRESET_META[p.id] ? t(`createBatch.preset.name.${p.id}`) : p.name;
 }
 
 const DragHandle = SortableHandle(() => (
@@ -189,10 +209,14 @@ export function CreateBatchingModal({
   const [pendingBatch, setPendingBatch] = useState<BatchResult | null>(null);
   const [shipperId, setShipperId] = useState<string | undefined>(undefined);
   const [deliveryTime, setDeliveryTime] = useState<TimeRange | null>(null);
+  // SF-28 T7: step 1 = criteria preset; 2/3/4 = nội dung cũ theo thứ tự (renumber).
+  const [presetId, setPresetId] = useState<string | null>(null);
   // SF-6 §2.3 stepper — NON-BLOCKING (Deviation D1): content không bao giờ ẩn,
   // activeSection chỉ điều khiển highlight + scroll-to khi bấm node/Tiếp tục.
-  const [activeSection, setActiveSection] = useState<1 | 2 | 3>(1);
+  const [activeSection, setActiveSection] = useState<1 | 2 | 3 | 4>(1);
   const [created, setCreated] = useState(false); // micro-interaction "✓" 800ms
+  const section1Ref = useRef<HTMLDivElement | null>(null);
+  const ordersRef = useRef<HTMLDivElement | null>(null);
   const section2Ref = useRef<HTMLDivElement | null>(null);
   const section3Ref = useRef<HTMLDivElement | null>(null);
   // Reviewer-sf6 P1: timer đóng sau micro-interaction phải clear được —
@@ -205,10 +229,12 @@ export function CreateBatchingModal({
     }
   };
 
-  const scrollToSection = (s: 1 | 2 | 3) => {
+  const scrollToSection = (s: 1 | 2 | 3 | 4) => {
     setActiveSection(s);
-    if (s === 2) section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (s === 3) section3Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (s === 1) section1Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (s === 2) ordersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (s === 3) section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (s === 4) section3Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   useEffect(() => {
@@ -229,6 +255,7 @@ export function CreateBatchingModal({
       prefillingAddonsRef.current = false; // P1 group-3: guard không trôi sang lần mở sau
       setShipperId(undefined);
       setDeliveryTime(null);
+      setPresetId(null); // re-default BALANCED khi presets data có sẵn (effect dưới)
       setActiveSection(1);
       setCreated(false);
     }
@@ -294,6 +321,32 @@ export function CreateBatchingModal({
   const [packingSuggest, { isLoading: suggesting }] = usePackingSuggestMutation();
   const [recalculate, { isLoading: recalculating }] = useRecalculateDistanceMutation();
   const [createBatch, { isLoading: creating }] = useCreateBatchMutation();
+
+  // ---- Step 1: criteria preset (SF-28 T7) --------------------------------------
+  const {
+    data: presetData,
+    isError: presetsError,
+    refetch: refetchPresets,
+  } = useGetCriteriaPresetsQuery(undefined, { skip: !open });
+  const [selectCriteriaPreset] = useSelectCriteriaPresetMutation();
+  const presets: CriteriaPresetItem[] = presetData?.items ?? [];
+
+  // Default chọn sẵn BALANCED khi API trả về list có preset đó (design §2.4) —
+  // user không đổi vẫn hợp lệ; API fail → không default, "Tiếp tục" disabled.
+  useEffect(() => {
+    if (presetId === null && presets.some((p) => p.id === DEFAULT_PRESET_ID)) {
+      setPresetId(DEFAULT_PRESET_ID);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetData, presetId]);
+
+  const handlePickPreset = (id: string) => {
+    if (id === presetId) return; // click lại card đang chọn — không audit đôi
+    setPresetId(id);
+    // Audit fire-and-forget (T6 contract): gọi nhưng lỗi KHÔNG block UI.
+    void selectCriteriaPreset({ presetId: id, orderCount: rows.length }).catch(() => undefined);
+  };
+
 
   // ---- Quotes NVC (SF-16 §2.2 — Task 3) -----------------------------------------
   const [getQuotes, { isLoading: quotesLoading }] = useGetQuotesMutation();
@@ -434,6 +487,7 @@ export function CreateBatchingModal({
         deliveryTime,
       }).unwrap();
       message.success(t("createBatch.success"));
+      trackEvent("batch_created"); // SF-23 T7
       // SF-6 §3 micro-interaction: label "✓" 800ms trước khi đóng.
       setCreated(true);
       closeTimerRef.current = setTimeout(onClose, 800); // ref để clear (P1 review)
@@ -570,12 +624,16 @@ export function CreateBatchingModal({
   const totalDistance = rows.reduce((s, r) => s + (r.distance ?? 0), 0);
   const totalCod = rows.reduce((s, r) => s + (r.codAmount ?? 0), 0);
   const shipperLabel = staffOptions.find((o) => o.value === shipperId)?.label ?? "—";
+  const selectedPreset = presets.find((p) => p.id === presetId) ?? null;
+  // SF-28 T7: stepper 4 bước — 1 preset (mới), 2/3/4 = nội dung cũ theo thứ tự.
+  const stepPresetDone = presetId !== null;
   const step1Done = rows.length > 0;
   const step2Done = !!shipperId && deliveryTime !== null;
-  const steps: Array<{ n: 1 | 2 | 3; label: string; done: boolean }> = [
-    { n: 1, label: t("createBatch.step1"), done: step1Done },
-    { n: 2, label: t("createBatch.step2"), done: step2Done },
-    { n: 3, label: t("createBatch.step3"), done: false },
+  const steps: Array<{ n: 1 | 2 | 3 | 4; label: string; done: boolean }> = [
+    { n: 1, label: t("createBatch.stepPreset"), done: stepPresetDone },
+    { n: 2, label: t("createBatch.step1"), done: step1Done },
+    { n: 3, label: t("createBatch.step2"), done: step2Done },
+    { n: 4, label: t("createBatch.step3"), done: false },
   ];
   // SF-16 §2.5 — title theo mode (create giữ key cũ byte-for-byte).
   const titleKey =
@@ -591,6 +649,12 @@ export function CreateBatchingModal({
           <div style={{ fontSize: 12.5, fontWeight: 400, color: DESIGN_TOKENS.color.textMuted }}>
             {t("createBatch.selectedCount", { count: rows.length })}
             {shopCode ? ` · ${t("createBatch.shopLabel", { code: shopCode })}` : ""}
+            {/* SF-28 T7: chip preset đã chọn ở header các step sau (chỉ display). */}
+            {activeSection !== 1 && selectedPreset && (
+              <span className="batch-preset-header-chip" data-testid="wizard-preset-chip">
+                {presetDisplayName(selectedPreset, t)}
+              </span>
+            )}
           </div>
         </div>
       }
@@ -637,8 +701,68 @@ export function CreateBatchingModal({
         })}
       </div>
 
-      {/* ─── Section 1: danh sách đơn & thứ tự giao ─── */}
-      {/* rebook (SF-16 §2.5) — section 1 KHÓA: ẩn toolbar (không DnD/thêm/bớt). */}
+      {/* ─── Step 1 (MỚI — SF-28 T7, design §2.4): tiêu chí tối ưu ─── */}
+      <div className="batch-preset" ref={section1Ref} data-testid="wizard-step1-preset">
+        <div className="batch-preset-overline">{t("createBatch.preset.label")}</div>
+        {presetsError ? (
+          <div className="batch-preset-error">
+            <span>{t("createBatch.preset.loadError")}</span>
+            <Button size="small" onClick={() => void refetchPresets()}>
+              {t("createBatch.preset.retry")}
+            </Button>
+          </div>
+        ) : (
+          <div className="batch-preset-grid">
+            {presets.map((p) => {
+              const meta = PRESET_META[p.id];
+              const selected = p.id === presetId;
+              return (
+                <div
+                  key={p.id}
+                  role="radio"
+                  aria-checked={selected}
+                  // a11y (P1 review): role="radio" phải focusable + Enter/Space
+                  // select — trước đây tabIndex={-1} + click-only.
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handlePickPreset(p.id);
+                    }
+                  }}
+                  className={`batch-preset-card${selected ? " batch-preset-card-selected" : ""}`}
+                  data-testid={`wizard-preset-${p.id}`}
+                  onClick={() => handlePickPreset(p.id)}
+                >
+                  <span className="batch-preset-radio" aria-hidden="true">
+                    {selected && <span className="batch-preset-radio-dot" />}
+                  </span>
+                  <div className="batch-preset-head">
+                    <span className="batch-preset-icon" aria-hidden="true">
+                      {meta?.icon ?? "⚙️"}
+                    </span>
+                    <span className="batch-preset-name">{presetDisplayName(p, t)}</span>
+                  </div>
+                  <div className="batch-preset-desc">{meta ? t(`createBatch.preset.desc.${p.id}`) : p.description}</div>
+                  {(meta?.chipKeys ?? []).length > 0 && (
+                    <div className="batch-preset-chips">
+                      {meta!.chipKeys.map((k) => (
+                        <span key={k} className="batch-preset-chip">
+                          {t(`createBatch.preset.chip.${k}`)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </div>
+
+      {/* ─── Step 2: danh sách đơn & thứ tự giao (nội dung cũ — KHÔNG đổi logic) ─── */}
+      <div ref={ordersRef}>
+      {/* rebook (SF-16 §2.5) — section 1 khóa: ẩn toolbar (không DnD/thêm/bớt). */}
       {!rebook && (
         <div className="batch-toolbar">
           <Button data-testid="batch-packing-suggest" loading={suggesting} onClick={() => void handlePackingSuggest()}>
@@ -705,8 +829,9 @@ export function CreateBatchingModal({
           <SortableRows items={sortableItems} onSortEnd={handleSortEnd} useDragHandle lockToContainerEdges helperClass="batch-row-dragging" />
         )}
       </div>
+      </div>
 
-      {/* ─── Section 2: carrier & shipper & thời gian giao + sumbar ─── */}
+      {/* ─── Step 3 (Section 2): carrier & shipper & thời gian giao + sumbar ─── */}
       <div className="batch-form" ref={section2Ref}>
         {/* SF-16 §2.1 — nhóm vận chuyển, chèn TRÊN shipper-select (testid cũ nguyên vẹn) */}
         <CarrierSection
@@ -821,7 +946,7 @@ export function CreateBatchingModal({
                       color={pickedFromHint && deliveryTime?.from === slot.from ? "gold" : "default"}
                       onClick={(e) => {
                         setDeliveryTime({ from: slot.from, to: slot.to });
-                        setActiveSection((cur) => (cur === 1 ? 2 : cur));
+                        setActiveSection((cur) => (cur === 2 ? 3 : cur)); // renumber T7: đơn=2, shipper=3
                         void e;
                       }}
                       data-testid={`batch-time-hint-${i}`}
@@ -862,7 +987,7 @@ export function CreateBatchingModal({
           )}
         </div>
 
-        {/* ─── Section 3: review + note banner ─── */}
+        {/* ─── Step 4: review + note banner (nội dung cũ) ─── */}
         <div className="sf6-review" ref={section3Ref}>
           <div className="sf6-review-row">
             <span className="sf6-review-key">{t("createBatch.review.shop")}</span>
@@ -922,18 +1047,24 @@ export function CreateBatchingModal({
           <span className="sf6-footer-hint">
             {t("createBatch.footer.step", { step: activeSection })} —{" "}
             {activeSection === 1
-              ? t("createBatch.footer.hint1")
+              ? t("createBatch.footer.hint0")
               : activeSection === 2
-                ? t("createBatch.footer.hint2")
-                : t("createBatch.footer.hint3")}
+                ? t("createBatch.footer.hint1")
+                : activeSection === 3
+                  ? t("createBatch.footer.hint2")
+                  : t("createBatch.footer.hint3")}
           </span>
           <span style={{ flex: 1 }} />
           <Button data-testid="batch-close" onClick={onClose}>
             {t("createBatch.close")}
           </Button>
-          {activeSection < 3 && (
-            <Button onClick={() => scrollToSection((activeSection + 1) as 2 | 3)}>
-              {t("createBatch.continue")}
+          {activeSection < 4 && (
+            <Button
+              data-testid="batch-continue"
+              disabled={activeSection === 1 && presetId === null}
+              onClick={() => scrollToSection((activeSection + 1) as 2 | 3 | 4)}
+            >
+              {activeSection === 1 ? t("createBatch.continuePreset") : t("createBatch.continue")}
             </Button>
           )}
           <Button
@@ -947,7 +1078,7 @@ export function CreateBatchingModal({
               ? t("createBatch.created")
               : rebook
                 ? t("createBatch.rebookSubmit")
-                : activeSection === 3
+                : activeSection === 4
                   ? `✓ ${t("createBatch.createStep3")}`
                   : t("createBatch.create")}
           </Button>

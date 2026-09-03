@@ -6,6 +6,7 @@ import com.hubstore.fulfillment.seed.SeedLoader;
 import com.hubstore.fulfillment.seed.SeedModels;
 import com.hubstore.fulfillment.service.FulfillmentServiceImpl;
 import com.hubstore.fulfillment.service.GrpcErrors;
+import com.hubstore.fulfillment.store.InMemoryCodConfirmationRepository;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.v1.AssignShopHubRequest;
 import com.hubstore.fulfillment.v1.AssignShopHubResponse;
@@ -52,7 +53,9 @@ class ValidationAndMutationTest {
         repo = new InMemoryOrderRepository(seed);
         publisher = new RecordingEventPublisher();
         service = new FulfillmentServiceImpl(repo, publisher,
-                new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()));
+                new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()),
+                new InMemoryCodConfirmationRepository(repo::isFailed),
+                TestTx.noop());
     }
 
     // ---------------- helpers ----------------

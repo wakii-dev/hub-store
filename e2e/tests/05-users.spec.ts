@@ -6,7 +6,7 @@ import { expect, test, type Page } from "@playwright/test";
  * storage — KHÔNG dùng cookie-only vì BFF verify Bearer → 401 nếu thiếu).
  */
 
-const BFF = "http://localhost:8080";
+const BFF = process.env.E2E_BFF_URL ?? "http://localhost:8080"; // private-port seam (SF-15/SF-14 precedent)
 
 /** Đọc access token từ oidc-client-ts storage (localStorage key oidc.user:*). */
 async function accessToken(page: Page): Promise<string> {

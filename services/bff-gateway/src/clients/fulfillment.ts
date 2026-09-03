@@ -8,18 +8,28 @@ import { FulfillmentServiceClient } from '../../../../api/proto/gen/ts/hubstore/
 import type {
   AssignShopHubRequest,
   AssignShopHubResponse,
+  ConfirmBatchCodRequest,
+  ConfirmBatchCodResponse,
+  ConfirmCodRequest,
+  ConfirmCodResponse,
   FilterD2cOrdersRequest,
   FilterD2cOrdersResponse,
   FilterOrdersRequest,
   FilterOrdersResponse,
   GetAssignHistoryRequest,
   GetAssignHistoryResponse,
+  GetCodPendingRequest,
+  GetCodPendingResponse,
   GetDashboardStatsRequest,
   GetDashboardStatsResponse,
   GetOrderDetailRequest,
   GetOrderDetailResponse,
   GetOrdersByCodesRequest,
   GetOrdersByCodesResponse,
+  GetSettlementDetailRequest,
+  GetSettlementDetailResponse,
+  GetSettlementRequest,
+  GetSettlementResponse,
   GetTimeDeliveryRequest,
   GetTimeDeliveryResponse,
   ListDeliveryStaffRequest,
@@ -56,6 +66,20 @@ export interface FulfillmentApi {
     note: string,
     actorRole: string,
   ): Promise<UpdateD2cOrderNoteResponse>;
+  // SF-14 COD confirm + settlement (FI-259) — confirm paths truyền actor
+  // (x-user-name metadata) cho audit trail collected_by.
+  confirmCod(req: ConfirmCodRequest, role: string, actor: string): Promise<ConfirmCodResponse>;
+  confirmBatchCod(
+    req: ConfirmBatchCodRequest,
+    role: string,
+    actor: string,
+  ): Promise<ConfirmBatchCodResponse>;
+  getCodPending(req: GetCodPendingRequest, role: string): Promise<GetCodPendingResponse>;
+  getSettlement(req: GetSettlementRequest, role: string): Promise<GetSettlementResponse>;
+  getSettlementDetail(
+    req: GetSettlementDetailRequest,
+    role: string,
+  ): Promise<GetSettlementDetailResponse>;
   close(): void;
 }
 
@@ -77,6 +101,14 @@ export function createFulfillmentClient(addr: string, deadlineMs: number): Fulfi
     filterD2cOrders: (req, role) => callUnary(c.filterD2COrders.bind(c), req, role, deadlineMs),
     updateD2cOrderNote: (orderCode, note, actorRole) =>
       callUnary(c.updateD2COrderNote.bind(c), { orderCode, note, actorRole }, actorRole, deadlineMs),
+    confirmCod: (req, role, actor) =>
+      callUnary(c.confirmCod.bind(c), req, role, deadlineMs, actor),
+    confirmBatchCod: (req, role, actor) =>
+      callUnary(c.confirmBatchCod.bind(c), req, role, deadlineMs, actor),
+    getCodPending: (req, role) => callUnary(c.getCodPending.bind(c), req, role, deadlineMs),
+    getSettlement: (req, role) => callUnary(c.getSettlement.bind(c), req, role, deadlineMs),
+    getSettlementDetail: (req, role) =>
+      callUnary(c.getSettlementDetail.bind(c), req, role, deadlineMs),
     close: () => c.close(),
   };
 }

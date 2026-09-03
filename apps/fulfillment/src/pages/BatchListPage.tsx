@@ -28,6 +28,7 @@ import {
   MultiSelect,
   StatusTag,
   TextSearch,
+  trackEvent,
   formatPeriodOfTime,
   formatVnd,
   loadPlanningMap,
@@ -49,6 +50,7 @@ import {
   useGetBatchOrdersQuery,
   useRedeliverOrderMutation,
 } from "../api/batchesApi";
+import { useConfirmBatchCodMutation, useGetCodPendingQuery } from "../api/codApi";
 import {
   useCancelDeliveryBatchMutation,
   useCancelDeliveryOrderMutation,
@@ -307,6 +309,52 @@ function OrderExpandContent({
   );
 }
 
+/**
+ * SF-14 D2 — badge + bulk confirm COD cho 1 phiếu COMPLETED.
+ * Mount CHỈ khi batch COMPLETED (caller guard) → query /cod/pending chạy đúng
+ * phiếu cần. pendingCount = 0 → ẩn cả cụm (badge "biến mất" sau confirm).
+ * Element mới testid `cod-*` — KHÔNG đụng testid/DOM hiện có (E2E dependency).
+ */
+function CodBatchActions({ batchCode }: { batchCode: string }) {
+  const { t } = useTranslation("fulfillment");
+  const { data, isLoading, refetch } = useGetCodPendingQuery(batchCode);
+  const [confirmBatchCod, { isLoading: confirming }] = useConfirmBatchCodMutation();
+
+  const pending = data?.pendingCount ?? 0;
+  if (isLoading || pending === 0) return null;
+
+  const handleConfirm = () => {
+    Modal.confirm({
+      title: t("cod.confirmTitle", { code: batchCode }),
+      content: t("cod.confirmContent", { count: pending }),
+      okText: t("cod.confirmButton"),
+      cancelText: t("action.reset"),
+      onOk: async () => {
+        try {
+          const resp = await confirmBatchCod({ batchCode }).unwrap();
+          message.success(
+            t("cod.success", { code: batchCode, count: resp.confirmedCount }),
+          );
+          await refetch();
+        } catch (err) {
+          message.error(`${t("cod.failed")}: ${errMessage(err)}`);
+        }
+      },
+    });
+  };
+
+  return (
+    <Space size={4} align="center" data-testid={`cod-actions-${batchCode}`}>
+      <Tag color="warning" data-testid={`cod-badge-${batchCode}`}>
+        {t("cod.pendingBadge", { count: pending })}
+      </Tag>
+      <Button size="small" type="primary" loading={confirming} onClick={handleConfirm}>
+        {t("cod.confirmButton")}
+      </Button>
+    </Space>
+  );
+}
+
 /** Exposed qua federation là `fulfillment/BatchListPage` → route /hub-store-order/batch. */
 export default function BatchListPage() {
   return (
@@ -439,6 +487,7 @@ function BatchListPageInner() {
         try {
           await completePicking({ batchCode: batch.batchCode }).unwrap();
           message.success(t("complete.success", { code: batch.batchCode }));
+          trackEvent("batch_completed"); // SF-23 T7
         } catch (err) {
           message.error(`${t("complete.failed")}: ${errMessage(err)}`);
         }
@@ -522,6 +571,10 @@ function BatchListPageInner() {
               >
                 {t("action.print")}
               </Button>
+              {/* SF-14 — COD chờ thu: chỉ phiếu COMPLETED có PENDING mới render. */}
+              {batch.status === BATCH_ENTITY_STATUS.COMPLETED && (
+                <CodBatchActions batchCode={batch.batchCode} />
+              )}
               {/* SF-16 §2.5 (Task 6) — replan/rebook: cross-MF qua URL params →
                   D1Page (orders remote) đọc + mở modal tương ứng. KHÔNG đụng
                   3 nút legacy ở trên. */}

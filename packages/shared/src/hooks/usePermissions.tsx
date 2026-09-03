@@ -14,6 +14,7 @@
  *   - 'd2c.view'          → D2C/Dropship (/hub-store-order/d2c) — SF-18
  *   - 'audit.view'        → Audit viewer (/audit) — SF-11, Manager only
  *                            (BFF cũng gate Manager-only — D2).
+ *   - 'settlement.view'   → SF-14 Đối soát COD (/settlement) — Manager + Admin.
  *
  * Role source: module-level store (setRole) HOẶC RoleProvider (context
  * — context wins nếu có). SF-6 role switcher drive bằng 1 trong 2 cách.
@@ -46,13 +47,15 @@ export const PERMISSIONS = [
   'areastaff.manage',
   'd2c.view',
   'audit.view',
+  'settlement.view',
 ] as const;
 export type Permission = (typeof PERMISSIONS)[number];
 
 /** §2: Coordinator → D1+D2+Print; WarehouseOps → D2+Print (KHÔNG D1); Manager → all.
  *  SF-17: Admin → all + areastaff.manage; 3 role cũ → areastaff.view.
  *  SF-18: d2c.view cho WarehouseOps/Manager/Admin/WarehouseEmployee
- *  (KHÔNG Coordinator); WarehouseEmployee chỉ d2c.view. */
+ *  (KHÔNG Coordinator); WarehouseEmployee chỉ d2c.view.
+ *  SF-14: settlement.view chỉ Manager + Admin (màn đối soát Manager). */
 export const PERMISSION_MATRIX = {
   Coordinator: ['orders.view', 'fulfillment.view', 'fulfillment.print', 'areastaff.view'],
   WarehouseOps: ['fulfillment.view', 'fulfillment.print', 'areastaff.view', 'd2c.view'],
@@ -65,6 +68,7 @@ export const PERMISSION_MATRIX = {
     'areastaff.view',
     'd2c.view',
     'audit.view',
+    'settlement.view',
   ],
   Admin: [
     'orders.view',
@@ -75,6 +79,7 @@ export const PERMISSION_MATRIX = {
     'areastaff.view',
     'areastaff.manage',
     'd2c.view',
+    'settlement.view',
   ],
   WarehouseEmployee: ['d2c.view'],
 } as const satisfies Record<Role, readonly Permission[]>;

@@ -53,6 +53,16 @@ type FulfillmentServiceClient interface {
 	FilterD2COrders(ctx context.Context, in *FilterD2COrdersRequest, opts ...grpc.CallOption) (*FilterD2COrdersResponse, error)
 	// SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
 	UpdateD2COrderNote(ctx context.Context, in *UpdateD2COrderNoteRequest, opts ...grpc.CallOption) (*UpdateD2COrderNoteResponse, error)
+	// SF-14: confirm thu COD per-order (mỗi item 1 result — fail không kill batch).
+	ConfirmCod(ctx context.Context, in *ConfirmCodRequest, opts ...grpc.CallOption) (*ConfirmCodResponse, error)
+	// SF-14: confirm thu COD cả phiếu (chỉ PENDING, đơn FAILED loại — D7).
+	ConfirmBatchCod(ctx context.Context, in *ConfirmBatchCodRequest, opts ...grpc.CallOption) (*ConfirmBatchCodResponse, error)
+	// SF-14: badge D2 "COD chờ thu (n)" theo phiếu (D7).
+	GetCodPending(ctx context.Context, in *GetCodPendingRequest, opts ...grpc.CallOption) (*GetCodPendingResponse, error)
+	// SF-14: đối soát theo shop theo kỳ (GROUP BY SQL — D5).
+	GetSettlement(ctx context.Context, in *GetSettlementRequest, opts ...grpc.CallOption) (*GetSettlementResponse, error)
+	// SF-14: drill-down đơn theo shop + kỳ (lệch tiền / chưa thu).
+	GetSettlementDetail(ctx context.Context, in *GetSettlementDetailRequest, opts ...grpc.CallOption) (*GetSettlementDetailResponse, error)
 }
 
 type fulfillmentServiceClient struct {
@@ -198,6 +208,51 @@ func (c *fulfillmentServiceClient) UpdateD2COrderNote(ctx context.Context, in *U
 	return out, nil
 }
 
+func (c *fulfillmentServiceClient) ConfirmCod(ctx context.Context, in *ConfirmCodRequest, opts ...grpc.CallOption) (*ConfirmCodResponse, error) {
+	out := new(ConfirmCodResponse)
+	err := c.cc.Invoke(ctx, "/hubstore.fulfillment.v1.FulfillmentService/ConfirmCod", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) ConfirmBatchCod(ctx context.Context, in *ConfirmBatchCodRequest, opts ...grpc.CallOption) (*ConfirmBatchCodResponse, error) {
+	out := new(ConfirmBatchCodResponse)
+	err := c.cc.Invoke(ctx, "/hubstore.fulfillment.v1.FulfillmentService/ConfirmBatchCod", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) GetCodPending(ctx context.Context, in *GetCodPendingRequest, opts ...grpc.CallOption) (*GetCodPendingResponse, error) {
+	out := new(GetCodPendingResponse)
+	err := c.cc.Invoke(ctx, "/hubstore.fulfillment.v1.FulfillmentService/GetCodPending", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) GetSettlement(ctx context.Context, in *GetSettlementRequest, opts ...grpc.CallOption) (*GetSettlementResponse, error) {
+	out := new(GetSettlementResponse)
+	err := c.cc.Invoke(ctx, "/hubstore.fulfillment.v1.FulfillmentService/GetSettlement", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *fulfillmentServiceClient) GetSettlementDetail(ctx context.Context, in *GetSettlementDetailRequest, opts ...grpc.CallOption) (*GetSettlementDetailResponse, error) {
+	out := new(GetSettlementDetailResponse)
+	err := c.cc.Invoke(ctx, "/hubstore.fulfillment.v1.FulfillmentService/GetSettlementDetail", in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 // FulfillmentServiceServer is the server API for FulfillmentService service.
 // All implementations must embed UnimplementedFulfillmentServiceServer
 // for forward compatibility
@@ -233,6 +288,16 @@ type FulfillmentServiceServer interface {
 	FilterD2COrders(context.Context, *FilterD2COrdersRequest) (*FilterD2COrdersResponse, error)
 	// SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
 	UpdateD2COrderNote(context.Context, *UpdateD2COrderNoteRequest) (*UpdateD2COrderNoteResponse, error)
+	// SF-14: confirm thu COD per-order (mỗi item 1 result — fail không kill batch).
+	ConfirmCod(context.Context, *ConfirmCodRequest) (*ConfirmCodResponse, error)
+	// SF-14: confirm thu COD cả phiếu (chỉ PENDING, đơn FAILED loại — D7).
+	ConfirmBatchCod(context.Context, *ConfirmBatchCodRequest) (*ConfirmBatchCodResponse, error)
+	// SF-14: badge D2 "COD chờ thu (n)" theo phiếu (D7).
+	GetCodPending(context.Context, *GetCodPendingRequest) (*GetCodPendingResponse, error)
+	// SF-14: đối soát theo shop theo kỳ (GROUP BY SQL — D5).
+	GetSettlement(context.Context, *GetSettlementRequest) (*GetSettlementResponse, error)
+	// SF-14: drill-down đơn theo shop + kỳ (lệch tiền / chưa thu).
+	GetSettlementDetail(context.Context, *GetSettlementDetailRequest) (*GetSettlementDetailResponse, error)
 	mustEmbedUnimplementedFulfillmentServiceServer()
 }
 
@@ -284,6 +349,21 @@ func (UnimplementedFulfillmentServiceServer) FilterD2COrders(context.Context, *F
 }
 func (UnimplementedFulfillmentServiceServer) UpdateD2COrderNote(context.Context, *UpdateD2COrderNoteRequest) (*UpdateD2COrderNoteResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method UpdateD2COrderNote not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) ConfirmCod(context.Context, *ConfirmCodRequest) (*ConfirmCodResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmCod not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) ConfirmBatchCod(context.Context, *ConfirmBatchCodRequest) (*ConfirmBatchCodResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ConfirmBatchCod not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) GetCodPending(context.Context, *GetCodPendingRequest) (*GetCodPendingResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetCodPending not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) GetSettlement(context.Context, *GetSettlementRequest) (*GetSettlementResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSettlement not implemented")
+}
+func (UnimplementedFulfillmentServiceServer) GetSettlementDetail(context.Context, *GetSettlementDetailRequest) (*GetSettlementDetailResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method GetSettlementDetail not implemented")
 }
 func (UnimplementedFulfillmentServiceServer) mustEmbedUnimplementedFulfillmentServiceServer() {}
 
@@ -568,6 +648,96 @@ func _FulfillmentService_UpdateD2COrderNote_Handler(srv interface{}, ctx context
 	return interceptor(ctx, in, info, handler)
 }
 
+func _FulfillmentService_ConfirmCod_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmCodRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).ConfirmCod(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/hubstore.fulfillment.v1.FulfillmentService/ConfirmCod",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).ConfirmCod(ctx, req.(*ConfirmCodRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_ConfirmBatchCod_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ConfirmBatchCodRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).ConfirmBatchCod(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/hubstore.fulfillment.v1.FulfillmentService/ConfirmBatchCod",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).ConfirmBatchCod(ctx, req.(*ConfirmBatchCodRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_GetCodPending_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetCodPendingRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).GetCodPending(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/hubstore.fulfillment.v1.FulfillmentService/GetCodPending",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).GetCodPending(ctx, req.(*GetCodPendingRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_GetSettlement_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSettlementRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).GetSettlement(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/hubstore.fulfillment.v1.FulfillmentService/GetSettlement",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).GetSettlement(ctx, req.(*GetSettlementRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _FulfillmentService_GetSettlementDetail_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(GetSettlementDetailRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(FulfillmentServiceServer).GetSettlementDetail(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: "/hubstore.fulfillment.v1.FulfillmentService/GetSettlementDetail",
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(FulfillmentServiceServer).GetSettlementDetail(ctx, req.(*GetSettlementDetailRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 // FulfillmentService_ServiceDesc is the grpc.ServiceDesc for FulfillmentService service.
 // It's only intended for direct use with grpc.RegisterService,
 // and not to be introspected or modified (even as a copy)
@@ -634,6 +804,26 @@ var FulfillmentService_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "UpdateD2cOrderNote",
 			Handler:    _FulfillmentService_UpdateD2COrderNote_Handler,
+		},
+		{
+			MethodName: "ConfirmCod",
+			Handler:    _FulfillmentService_ConfirmCod_Handler,
+		},
+		{
+			MethodName: "ConfirmBatchCod",
+			Handler:    _FulfillmentService_ConfirmBatchCod_Handler,
+		},
+		{
+			MethodName: "GetCodPending",
+			Handler:    _FulfillmentService_GetCodPending_Handler,
+		},
+		{
+			MethodName: "GetSettlement",
+			Handler:    _FulfillmentService_GetSettlement_Handler,
+		},
+		{
+			MethodName: "GetSettlementDetail",
+			Handler:    _FulfillmentService_GetSettlementDetail_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
