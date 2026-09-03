@@ -23,6 +23,7 @@ import { requireUser } from '../plugins/auth.js';
 import { paginated } from '../lib/envelope.js';
 import { sendGrpcError } from '../lib/grpc-error.js';
 import { logActivity } from '../lib/audit.js';
+import { emitLocalEvent } from '../lib/realtime-publish.js';
 import { mapBatch, mapPackingGroup, mapOrderDistance } from '../mappers/batching.js';
 
 /**
@@ -79,6 +80,12 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
         targetType: 'batch',
         targetId: resp.batch?.batchCode ?? '',
         detail: { orderCodes: request.body.orderCodes },
+      });
+      // SF-10 — dual-source local emit: mirror publish 'batch.created' phía Go
+      // (kafka.go BatchCreated — payload batchCode + itemCount).
+      emitLocalEvent('batch.created', {
+        batchCode: resp.batch?.batchCode ?? '',
+        itemCount: request.body.orderCodes.length,
       });
       return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
     } catch (err) {
@@ -158,6 +165,15 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
           targetType: 'batch',
           targetId: request.params.code,
           detail: { reason: request.body.reason },
+        });
+        // SF-10 — dual-source local emit: mirror publish 'batch.transitioned'
+        // (from/to + reason) phía Go (batching_server.go CancelBatch hook — Go
+        // dùng batch.transitioned cho cancel, KHÔNG phải batch.cancelled).
+        emitLocalEvent('batch.transitioned', {
+          batchCode: request.params.code,
+          from: 'active',
+          to: 'cancelled',
+          reason: request.body.reason,
         });
         return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
       } catch (err) {

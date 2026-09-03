@@ -115,7 +115,11 @@
 }
 .batch-list {
   flex: 1;
-  min-height: 0;
+  /* min-height đủ header + 3 rows (~55px/row) — carrier-section (SF-16) làm form
+     cao hơn → flex bóp list còn ~1 row, handle row 2+ bị clip ra ngoài vùng
+     hit-test (boundingBox nằm dưới carrier-card → mousedown không tới handle,
+     DnD chết — regression e2e 01). min-height ép form shrink (đã overflow auto). */
+  min-height: 202px;
   overflow-y: auto;
   border: 1px solid #eaecf0;
   border-radius: 16px;
@@ -358,6 +362,7 @@
 /* ─── Footer ─── */
 .batch-footer {
   display: flex;
+  flex-wrap: wrap; /* SF-16 T5 — message block dưới nút submit wrap dòng mới */
   align-items: center;
   gap: 8px;
   padding-top: 14px;
@@ -367,4 +372,162 @@
 .sf6-footer-hint {
   font-size: 12.5px;
   color: #667085;
+}
+
+/* ─── Carrier section (SF-16 D1b — mirror DESIGN_TOKENS theo convention file này) ─── */
+.carrier-section {
+  margin-bottom: 12px;
+}
+.carrier-group-radios {
+  display: flex;
+  gap: 16px;
+  margin-top: 8px;
+  flex-wrap: wrap;
+}
+.carrier-quotes-slot {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px dashed #d0d5dd; /* border */
+  border-radius: 10px;
+  color: #667085; /* textMuted */
+  font-size: 12.5px;
+}
+
+/* ─── Quotes NVC (SF-16 §2.2 — bảng báo giá theo tải trọng, mirror DESIGN_TOKENS) ─── */
+.quote-list {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  color: #344054; /* textSecondary */
+}
+.quote-item {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 8px 12px;
+  border: 1px solid #f2f4f7; /* dividerSoft */
+  border-radius: 10px;
+  cursor: pointer;
+  transition: all 0.12s ease;
+}
+.quote-item:hover {
+  background: #f9fafb; /* bgSubtle */
+}
+.quote-item-selected {
+  border-color: #fdeada; /* primaryBorder */
+  background: #fef6ee; /* primaryBg */
+}
+.quote-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #101828; /* textStrong */
+}
+.quote-vehicle {
+  margin: 0; /* override antd Tag margin-inline-end */
+  font-size: 11.5px;
+}
+.quote-eta {
+  font-size: 12px;
+  color: #667085; /* textMuted */
+  white-space: nowrap;
+}
+.quote-mock-tag {
+  margin: 0;
+  background: #f2f4f7; /* dividerSoft */
+  border-color: #d0d5dd; /* border */
+  color: #667085; /* textMuted */
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.quote-fee {
+  margin-left: auto;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  color: #eb6e09; /* primary */
+}
+
+/* ─── Fee-limit gates (SF-16 §2.2 Task 5 — mirror DESIGN_TOKENS.color.status error) ─── */
+.quote-item-blocked {
+  cursor: not-allowed;
+  background: #fef3f2; /* status.errorBg */
+  border-color: #fecdca; /* status.errorLine */
+}
+.quote-item-blocked:hover {
+  background: #fef3f2; /* status.errorBg — giữ tone error, không highlight hover */
+}
+.quote-limit-tag {
+  margin: 0; /* override antd Tag margin-inline-end */
+  background: #fef3f2; /* status.errorBg */
+  border-color: #fecdca; /* status.errorLine */
+  color: #d92d20; /* status.error */
+  font-size: 10.5px;
+  font-weight: 600;
+}
+.sf6-note-error {
+  background: #fef3f2; /* status.errorBg */
+  border-color: #fecdca; /* status.errorLine */
+}
+.sf6-note-error .sf6-note-icon {
+  background: #d92d20; /* status.error */
+}
+.sf6-footer-block-msg {
+  flex-basis: 100%; /* wrap xuống dòng dưới nút submit */
+  text-align: right;
+  font-size: 12px;
+}
+
+/* ─── AddonSelector (SF-16 §2.3 — dịch vụ gia tăng theo quote, mirror DESIGN_TOKENS) ─── */
+.addon-selector {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #f2f4f7; /* dividerSoft */
+  border-radius: 10px;
+  background: #f9fafb; /* bgSubtle */
+  color: #344054; /* textSecondary */
+  font-size: 12.5px;
+}
+.addon-selector-label {
+  display: block;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+.addon-grp {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
+}
+.addon-grp-label {
+  min-width: 78px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #667085; /* textMuted */
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.addon-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.addon-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.addon-item:has(.ant-checkbox-disabled, .ant-radio-disabled) {
+  cursor: not-allowed;
+  color: #98a2b3;
+}
+.addon-name {
+  font-size: 12.5px;
+  color: #344054; /* textSecondary */
+}
+.addon-fee {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #eb6e09; /* primary */
 }

@@ -32,6 +32,7 @@ import { registerUsersRoutes } from './routes/users.js';
 import { KcAdminClient } from './kc-admin.js';
 import { registerD2cRoutes } from './routes/d2c.js';
 import { registerCodRoutes } from './routes/cod.js';
+import { registerEventsRoutes } from './routes/events.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -101,6 +102,9 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerD2cRoutes(app, { fulfillment });
   // SF-14 — COD confirm + settlement đối soát — dùng fulfillment client.
   registerCodRoutes(app, { fulfillment });
+  // SF-10 — SSE /events realtime (không cần gRPC client; nguồn là bffEvents).
+  // corsOrigins: hijack discard headers của @fastify/cors → route tự tính CORS.
+  registerEventsRoutes(app, { corsOrigins: config.corsOrigins });
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });
