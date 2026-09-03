@@ -165,7 +165,7 @@ export function registerServiceWorker(): void {
 
 **Step 0 (BLOCKER-CHECK):** `ls services/fulfillment-service/src/main/resources/db/migration/` — V10 bị chiếm → dùng số trống kế tiếp + ghi header comment lý do (V5 precedent).
 
-- [ ] **Step 1: V10__notification_log.sql**
+- [x] **Step 1: V10__notification_log.sql**
 
 ```sql
 -- SF-23 (FI-268): notification_log — push/notification trail (broadcast-by-design).
@@ -183,7 +183,7 @@ CREATE TABLE IF NOT EXISTS notification_log (
 CREATE INDEX IF NOT EXISTS idx_notification_log_created_at ON notification_log (created_at DESC);
 ```
 
-- [ ] **Step 2: lib/notifications.ts** — mirror audit.ts CHÍNH XÁC về shape (lazy pool riêng instance, fail-open, `__setNotificationsPoolForTests`, page cap 100/20):
+- [x] **Step 2: lib/notifications.ts** — mirror audit.ts CHÍNH XÁC về shape (lazy pool riêng instance, fail-open, `__setNotificationsPoolForTests`, page cap 100/20):
 
 ```ts
 import { Pool } from 'pg';
@@ -210,10 +210,10 @@ export async function listNotifications(page: number, pageSize: number, env = pr
 }
 ```
 
-- [ ] **Step 3: routes/notifications.ts** — `GET /api/notifications?page=&pageSize=` JWT-guarded (app-level guard tự áp); reuse `normalizeAuditPage` pattern (Number.isFinite guard — input rác → default, KHÔNG 500). Pool thiếu → `{items:[],total:0}` 200 (fail-open như audit disabled). Comment đầu route: broadcast-by-design — KHÔNG lọc theo user.
-- [ ] **Step 4: app.ts** — import + `registerNotificationsRoutes(app);` cạnh registerEventsRoutes.
-- [ ] **Step 5: tests** — vitest: pool inject giả → logNotification INSERT params đúng + dedupe conflict không throw; listNotifications map camel; route integration (app.inject) 401 khi không JWT / 200 envelope khi có (pattern spec auth hiện có — xem test dùng `signToken`/mock JWKS nào trong test/*.spec.ts và làm y hệt).
-- [ ] **Step 6: Run** `pnpm --filter @hub-store/bff-gateway test` → PASS. **Commit** `feat(bff): notification_log + GET /api/notifications (SF-23 T3)`
+- [x] **Step 3: routes/notifications.ts** — `GET /api/notifications?page=&pageSize=` JWT-guarded (app-level guard tự áp); reuse `normalizeAuditPage` pattern (Number.isFinite guard — input rác → default, KHÔNG 500). Pool thiếu → `{items:[],total:0}` 200 (fail-open như audit disabled). Comment đầu route: broadcast-by-design — KHÔNG lọc theo user.
+- [x] **Step 4: app.ts** — import + `registerNotificationsRoutes(app);` cạnh registerEventsRoutes.
+- [x] **Step 5: tests** — vitest: pool inject giả → logNotification INSERT params đúng + dedupe conflict không throw; listNotifications map camel; route integration (app.inject) 401 khi không JWT / 200 envelope khi có (pattern spec auth hiện có — xem test dùng `signToken`/mock JWKS nào trong test/*.spec.ts và làm y hệt).
+- [x] **Step 6: Run** `pnpm --filter @hub-store/bff-gateway test` → PASS. **Commit** `feat(bff): notification_log + GET /api/notifications (SF-23 T3)`
 
 ### Task T4: onesignal-dual-mode (BFF)
 **Files:** Modify `services/bff-gateway/src/config.ts` (BffConfig + loadConfig); Create `services/bff-gateway/src/lib/onesignal.ts`; Test `services/bff-gateway/test/onesignal.spec.ts`.
