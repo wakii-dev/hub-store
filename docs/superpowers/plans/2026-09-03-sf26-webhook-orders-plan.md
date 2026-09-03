@@ -116,42 +116,50 @@ createWebhookOrder(req: CreateWebhookOrderRequest, role: string, actor?: string)
 // factory: createWebhookOrder: (req, role, actor) => callUnary(c.createWebhookOrder.bind(c), req, role, deadlineMs, actor),
 ```
 
-`routes/webhooks.ts` — skeleton (encapsulated plugin để raw-body parser KHÔNG ảnh hưởng route khác):
+`routes/webhooks.ts` — skeleton (**BẮT BUỘC bọc trong encapsulated `app.register` scope** — addContentTypeParser trên root app sẽ ghi đè JSON parser TOÀN BỘ BFF, vỡ import CSV SF-13 >1MB):
 ```ts
 import type { FastifyInstance } from 'fastify';
 import { verifyHmac } from '../lib/hmac.js';
-import { mapWebhookPayload } from '../lib/webhook-mapping.js';
 import { errorEnvelope } from '../lib/envelope.js';
-import { mapGrpcError } from '../lib/grpc-error.js';
 
 export function registerWebhookRoutes(app: FastifyInstance, deps: {
   intake: IntakeApi; config: Config;
 }) {
-  // Raw body cho HMAC đúng bytes — parser này SCOPED trong plugin này thôi.
-  app.addContentTypeParser(
-    'application/json',
-    { parseAs: 'buffer', bodyLimit: 1024 * 1024 },
-    (_req, body, done) => {
-      (body as any).rawBody = undefined; // no-op giữ Fastify vui
-      try { done(null, JSON.parse(body.toString('utf8'))); }
-      catch (e) { done(e as Error); }
-    },
-  );
+  app.register(async (scope) => {
+    // Raw body cho HMAC đúng bytes — parser NÀY chỉ tồn tại trong scope con,
+    // shadow default parser của root app cho đúng route trong scope này.
+    scope.addContentTypeParser(
+      'application/json',
+      { parseAs: 'buffer', bodyLimit: 1024 * 1024 },
+      (req, body: Buffer, done) => {
+        (req as any).rawBody = body; // giữ raw bytes cho HMAC
+        try { done(null, JSON.parse(body.toString('utf8'))); }
+        catch (e) { done(e as Error); }
+      },
+    );
+    // Parse-error (JSON malformed) → 400 errorEnvelope (không phải default Fastify shape)
+    scope.setErrorHandler((err: any, request, reply) => {
+      if (err?.statusCode === 400 || err instanceof SyntaxError) {
+        return reply.code(400).send(errorEnvelope(400, 'Malformed JSON body'));
+      }
+      throw err; // nhả cho root handler
+    });
 
-  app.post('/webhooks/orders', async (request, reply) => {
-    const source = String(request.headers['x-source'] ?? '').trim();
-    const secret = deps.config.webhookHmacSecret;
-    const raw = (request.body as any)?.__raw ?? request.rawBody; // Step 5 Task 2 thay bằng raw thật
-    const sig = request.headers['x-signature'];
-    // HMAC — Task 2 hoàn thiện; skeleton trả 503 khi chưa có secret (fail-closed)
-    const auth = verifyHmac(raw, sig, secret);
-    if (!auth.ok) return reply.code(auth.status).send(errorEnvelope(auth.status, auth.message, { code: 'UNAUTHORIZED' }));
-    // mapping + RPC — Task 4 wire đầy đủ; skeleton 503
-    return reply.code(503).send(errorEnvelope(503, 'not implemented yet'));
+    scope.post('/webhooks/orders', async (request, reply) => {
+      const source = String(request.headers['x-source'] ?? '').trim();
+      const secret = deps.config.webhookHmacSecret;
+      const raw = (request as any).rawBody as Buffer;
+      const sig = request.headers['x-signature'];
+      // HMAC — Task 2 hoàn thiện; skeleton trả 503 khi chưa có secret (fail-closed)
+      const auth = verifyHmac(raw, sig, secret);
+      if (!auth.ok) return reply.code(auth.status).send(errorEnvelope(auth.status, auth.message, { code: 'UNAUTHORIZED' }));
+      // mapping + RPC — Task 4 wire đầy đủ; skeleton 503
+      return reply.code(503).send(errorEnvelope(503, 'not implemented yet'));
+    });
   });
 }
 ```
-(Executor điều chỉnh để raw buffer gắn đúng — parser lưu `request.rawBody = body` trước JSON.parse.)
+`app.ts` giữ nguyên pattern gọi `registerWebhookRoutes(app, { intake, config })` — scope con tự encapsulate.
 
 `app.ts` — register cạnh các route khác: `registerWebhookRoutes(app, { intake, config })`.
 
@@ -165,7 +173,7 @@ WEBHOOK_HMAC_SECRET=dev-webhook-secret-change-me
 # WEBHOOK_CLAIM_STALE_SECONDS=120
 ```
 
-- [ ] **Step 5: Tests skeleton + verify build** — unit test auth-skip exact-path (request `/webhooks/orders` không JWT không bị 401-JWT; `/webhooks/other` VẪN bị 401-JWT); `pnpm install` rồi `npx tsc --noEmit` (bff) + `mvn -q compile` (java) sạch.
+- [ ] **Step 5: Tests skeleton + verify build + regression parser** — unit test auth-skip exact-path (request `/webhooks/orders` không JWT không bị 401-JWT; `/webhooks/other` VẪN bị 401-JWT); **chạy FULL BFF unit suite** chứng minh scoped parser không vỡ route khác; `pnpm install` rồi `npx tsc --noEmit` (bff) + `mvn -q compile` (java) sạch.
 - [ ] **Step 6: Commit** `feat(sf26): webhook endpoint skeleton — proto additive + V11 + auth skip + raw-body route`
 
 ### Task 2: hmac-auth — timing-safe verify + 401 + fail-closed 503
@@ -175,7 +183,7 @@ WEBHOOK_HMAC_SECRET=dev-webhook-secret-change-me
 - Modify: `services/bff-gateway/src/routes/webhooks.ts` (wire verify thật)
 
 - [ ] **Step 1: Test trước** (`test/hmac.test.ts`, pattern test hiện có — node:test hoặc vitest theo repo):
-- signature đúng → ok; sai → 401; thiếu header → 401; secret rỗng/thiếu → 503 fail-closed; raw body khác 1 byte → 401; header có tiền tố `sha256=` → chấp nhận (stripped); length khác → KHÔNG throw (dùng timingSafeEqual an toàn).
+- signature đúng → ok; sai → 401; thiếu header → 401; secret rỗng/thiếu → 503 fail-closed; raw body khác 1 byte → 401; header có tiền tố `sha256=` → chấp nhận (stripped); length khác → KHÔNG throw (dùng timingSafeEqual an toàn). Route: thiếu secret → warn log MỘT LẦN (flag tránh spam) + 503 — đúng spec §3.
 - [ ] **Step 2: Implement** `lib/hmac.ts`:
 ```ts
 import { createHmac, timingSafeEqual } from 'node:crypto';
@@ -229,10 +237,10 @@ export function verifyHmac(rawBody: Buffer | string, signature: unknown, secret:
   2. findStatus: PROCESSED → `{fulfill_code, replayed=true}` 200.
   3. Không row → claim INSERT ON CONFLICT; conflict → re-select (PROCESSED → replay; FAILED → casReprocess 0-rows → re-select; PENDING fresh (< stale secs, env `WEBHOOK_CLAIM_STALE_SECONDS` default 120) → `UNAVAILABLE`; PENDING stale → casReclaim với stale-ts khóa → 0 rows → re-select).
   4. Validate `IntakeValidator.validate(List.of(stageRow(order)), shopCodes())` → lỗi → markFailed + `invalidArgumentRows` (422).
-  5. TX (TransactionTemplate — reuse `createOrders` core nhưng PHẢI cùng tx với casProcess): replicate đoạn tx của createOrders (nextFulfillCodes → insertOrders → appendAudit actor = ActorInterceptor.currentActor() = `webhook:<source>` qua metadata BFF) + casProcess sau insert TRONG CÙNG tx (`received_at` = claimed ts giữ trong biến). casProcess rowsAffected != 1 → throw INTERNAL (đơn đã tạo nhưng event không claim được — log + Kafka vẫn publish; xác suất cực thấp, stale-reclaim xử lý).
+  5. TX (TransactionTemplate — reuse `createOrders` core nhưng PHẢI cùng tx với casProcess): replicate đoạn tx của createOrders (nextFulfillCodes → insertOrders → appendAudit actor = ActorInterceptor.currentActor() = `webhook:<source>` qua metadata BFF) + casProcess sau insert TRONG CÙNG tx (`received_at` = claimed ts giữ trong biến). casProcess rowsAffected != 1 → **throw INTERNAL → TransactionTemplate rollback TOÀN BỘ tx: order KHÔNG được insert, fulfillCode KHÔNG cấp, KHÔNG publish Kafka** — reclaimer thắng race sẽ tự xử lý; đây là behavior đúng (CAS final ngăn holder stale ghi đè fulfillCode của người reclaim), không phải edge-case cần cứu.
   6. Sau commit: `events.publish("order.created", fulfillCode, ...)` — Task 5; ở task này để TODO comment Noop.
   7. Inject `OrderEventPublisher` + `WebhookEventsDao` + stale-secs vào ctor IntakeServiceImpl (Spring wire tự qua constructor).
-- [ ] **Step 3: Tests**: replay PROCESSED → cùng fulfillCode replayed=true; FAILED reprocess → fulfillCode MỚI; CAS concurrent (2 thread cùng externalId) → đúng 1 order; PENDING fresh → UNAVAILABLE. Integration skip-when-no-DB.
+- [ ] **Step 3: Tests**: replay PROCESSED → cùng fulfillCode replayed=true; FAILED reprocess → fulfillCode MỚI; CAS concurrent (2 thread cùng externalId) → đúng 1 order; PENDING fresh → UNAVAILABLE; casProcess fail → tx rollback (order không tồn tại). Integration skip-when-no-DB. **Exit criteria: chạy FULL intake test class (SF-13 regression — IntakeServiceImpl vừa sửa).**
 - [ ] **Step 4: Commit** `feat(sf26): CreateWebhookOrder — atomic idempotency webhook_events (state machine + CAS)`
 
 ### Task 4: order-mapping — payload → IntakeOrder + WEBHOOK_MAPPING override
@@ -255,7 +263,7 @@ export function mapWebhookPayload(payload: unknown, fieldMap?: WebhookMappingCon
 ```
 (IntakeOrderLike đủ field tạo `CreateWebhookOrderRequest` — items[] `{productCode, productName, quantity}` quantity>=1, `quantity = Σ`.)
 - [ ] **Step 3: Wire route**: mapping errors → 422 `errorEnvelope(422, 'Dữ liệu đơn không hợp lệ', { code: 'VALIDATION_ERROR', details: errors.map(e => ({ row: 1, field: e.field, message: e.message })) })`; OK → `intake.createWebhookOrder({ source, externalId, order }, 'MANAGER', 'webhook:' + source)` → 200 `{ fulfillCode: r.fulfillCode, replayed: r.replayed }` (camelCase theo DTO convention — check mappers/); `mapGrpcError` catch (INVALID_ARGUMENT→422 details, UNAVAILABLE→503).
-- [ ] **Step 4: Docs mapping mặc định** — comment block trong `.env.example` (đã Task 1) đủ; thêm bảng field vào `docs/superpowers/contexts/fi245-sf-26.md` mục mapping (5-10 dòng).
+- [ ] **Step 4: Docs mapping mặc định** — comment block trong `.env.example` (đã Task 1) đủ; thêm bảng field vào `docs/superpowers/contexts/fi245-sf-26.md` mục mapping (5-10 dòng) + known-limitations (KHÔNG rate-limit, KHÔNG retention webhook_events).
 - [ ] **Step 5: Commit** `feat(sf26): webhook payload mapping — default + WEBHOOK_MAPPING override, quantity=sum(items)`
 
 ### Task 5: order-created-publish-kafka — publish sau commit
@@ -304,7 +312,7 @@ export function mapWebhookPayload(payload: unknown, fieldMap?: WebhookMappingCon
 **Files:**
 - Create: `e2e/tests/09-webhook.spec.ts` + `/tmp/story/sf-26/run-sf26-private.sh` (runner — /tmp OK theo precedent SF-14/23; NẾU muốn bền: `e2e/scripts/run-sf26-private.sh` trong repo)
 
-- [ ] **Step 1: Runner private seam** (pattern /tmp/story/sf-23/run-private-stack.sh — ĐỌC file đó trước): containers docker tên prefix `sf-26-` (postgres :56441, kafka :56442内部, java :53051, bff :19080; Keycloak DÙNG chung :8081 stack khác hoặc mock-less vì spec này API-only → bearer token: specs dùng HMAC nên KHÔNG cần JWT/Keycloak cho webhook routes; các assertion D1 qua API list orders cần token → mint qua shared Keycloak như SF-14 pattern hoặc dùng `E2E_NVC_STORAGE` trick). Java env: `KAFKA_ENABLED='true'`, `WEBHOOK_HMAC_SECRET=e2e-sf26-secret`, `GRPC_FULFILLMENT`/datasource trỏ sf-26-pg, SPRING_FLYWAY ra khỏi đường (migrate-on-boot tự chạy V11). Kafka compose riêng sf-26-* (port KHÔNG đụng 9092/29092 global).
+- [ ] **Step 1: Runner private seam** (pattern /tmp/story/sf-23/run-private-stack.sh — ĐỌC file đó trước): containers docker tên prefix `sf-26-` (postgres :56441, kafka :56442 nội bộ, java :53051, bff :19080; Keycloak DÙNG chung :8081). **Bearer token strategy CHỐT TRƯỚC: mint token bằng script Keycloak (precedent SF-14/15 — memory fi245-sf15: PKCE mint script; password-grant đã fail; nếu script không chạy được thì mint bằng client-credentials service-account hoặc đưa shell vào seam — KHÔNG dùng bearerToken() localStorage pattern vì không có shell page).** Java env: `KAFKA_ENABLED='true'`, `WEBHOOK_HMAC_SECRET=e2e-sf26-secret`, `GRPC_FULFILLMENT`/datasource trỏ sf-26-pg, migrate-on-boot tự chạy V11. Kafka compose riêng sf-26-* (port KHÔNG đụng 9092/29092 global).
 - [ ] **Step 2: Spec** `09-webhook.spec.ts` — API-level (pattern 05-kafka.spec.ts: helper sign(payload)):
 ```ts
 // skip-gate: E2E_SF26 !== '1' → skip toàn bộ (chạy qua runner đặt env)
@@ -319,7 +327,7 @@ Scenarios (serial, một worker):
 3. Sai signature (đổi 1 ký tự) → 401; thiếu header → 401.
 4. Payload sai phone format + items rỗng → 422 + `details[]` có đúng field từng lỗi.
 5. 422 → sửa payload cùng externalId → 200 fulfillCode MỚI `replayed:false`.
-6. Kafka: `GET {kafka-ui}/api/clusters/local/topics/order-events/messages` (poll ≤ 30s) → thấy message có `"type":"order.created"` với fulfillCode scenario 1 (pattern 05-kafka).
+6. Kafka: `GET {kafka-ui}/api/clusters/local/topics/order-events/messages` là **SSE stream — parse `data:` lines** (đúng pattern 05-kafka.spec.ts), poll ≤ 30s → thấy message có `"type":"order.created"` với fulfillCode scenario 1.
 - [ ] **Step 3: Chạy e2e** qua runner → TẤT CẢ PASS (chụp output). Chạy thêm 1 bộ e2e cũ nhỏ (05-kafka hoặc 01-main-flow tương thích runner) để chứng minh không vỡ chung.
 - [ ] **Step 4: Commit** `test(sf26): e2e 09-webhook — 6 scenarios private seam sf-26-* + kafka order.created assert`
 
