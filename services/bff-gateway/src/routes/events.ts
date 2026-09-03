@@ -3,7 +3,8 @@
  * được Authorization header → auth qua query `access_token` (guard auth.ts
  * chỉ mở nhánh này cho url /events). Stream: bypass serialization (reply.hijack
  * + raw write), filter qua allow-list isRealtimeEvent, heartbeat 15s, cleanup
- * listener + interval khi client ngắt kết nối (không leak).
+ * listener + interval khi client ngắt kết nối hoặc raw stream lỗi (không leak,
+ * không unhandled 'error' crash process).
  *
  * Nguồn event: `bffEvents.on('kafka:event')` — singleton import trực tiếp từ
  * kafka/events.js (wiring emit nằm ở server.ts, không phải app.ts — nên inject
@@ -65,5 +66,9 @@ export function registerEventsRoutes(
     };
     request.raw.on('close', cleanup);
     raw.on('close', cleanup);
+    // Socket chết giữa stream (trước khi 'close' kịp chạy): write() vào
+    // destroyed stream sẽ emit 'error' — không có listener → unhandled
+    // 'error' crash process. cleanup idempotent nên gọi lại vẫn an toàn.
+    raw.on('error', cleanup);
   });
 }

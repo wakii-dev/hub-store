@@ -201,6 +201,25 @@ describe('GET /events — SSE stream data', () => {
     // Emit sau cleanup không crash + không ghi vào stream đã đóng.
     expect(() => emitKafkaEvent('order.completed', {})).not.toThrow();
   });
+
+  it("cleanup: raw 'error' (socket chết giữa stream) → không unhandled error crash, dọn sạch", async () => {
+    const token = await identity.signToken('Manager');
+    const before = bffEvents.listenerCount('kafka:event');
+    const resP = app.inject({
+      method: 'GET',
+      url: `/events?access_token=${encodeURIComponent(token)}`,
+    });
+    const conn = await waitForCapture();
+    // Không có listener 'error' → emit('error') ném (unhandled) và crash
+    // process; có handler (review P1) → cleanup chạy, không throw.
+    expect(() => conn.reply.raw.emit('error', new Error('socket died'))).not.toThrow();
+    expect(bffEvents.listenerCount('kafka:event')).toBe(before);
+    // Kafka event emit sau đó cũng an toàn (listener đã gỡ).
+    expect(() => emitKafkaEvent('order.completed', {})).not.toThrow();
+    // cleanup idempotent — 'error' lặp lại vẫn không ném.
+    expect(() => conn.reply.raw.emit('error', new Error('again'))).not.toThrow();
+    await resP.catch(() => undefined);
+  });
 });
 
 describe('heartbeat', () => {
