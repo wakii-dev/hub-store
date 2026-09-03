@@ -182,9 +182,9 @@ WEBHOOK_HMAC_SECRET=dev-webhook-secret-change-me
 - Create: `services/bff-gateway/src/lib/hmac.ts` + `services/bff-gateway/src/test/hmac.test.ts`
 - Modify: `services/bff-gateway/src/routes/webhooks.ts` (wire verify thật)
 
-- [ ] **Step 1: Test trước** (`test/hmac.test.ts`, pattern test hiện có — node:test hoặc vitest theo repo):
+- [x] **Step 1: Test trước** (`test/hmac.test.ts`, pattern test hiện có — node:test hoặc vitest theo repo):
 - signature đúng → ok; sai → 401; thiếu header → 401; secret rỗng/thiếu → 503 fail-closed; raw body khác 1 byte → 401; header có tiền tố `sha256=` → chấp nhận (stripped); length khác → KHÔNG throw (dùng timingSafeEqual an toàn). Route: thiếu secret → warn log MỘT LẦN (flag tránh spam) + 503 — đúng spec §3.
-- [ ] **Step 2: Implement** `lib/hmac.ts`:
+- [x] **Step 2: Implement** `lib/hmac.ts`:
 ```ts
 import { createHmac, timingSafeEqual } from 'node:crypto';
 
@@ -209,8 +209,8 @@ export function verifyHmac(rawBody: Buffer | string, signature: unknown, secret:
   return { ok: true, status: 200, message: 'ok' };
 }
 ```
-- [ ] **Step 3: Chạy test PASS + wire vào route** (thay skeleton): raw body Buffer từ parser (lưu `request.rawBody = body` trong parser của Task 1), 401/503 theo result — KHÔNG log signature/secret.
-- [ ] **Step 4: Commit** `feat(sf26): HMAC X-Signature timing-safe verify + fail-closed 503 khi thiếu secret`
+- [x] **Step 3: Chạy test PASS + wire vào route** (thay skeleton): raw body Buffer từ parser (lưu `request.rawBody = body` trong parser của Task 1), 401/503 theo result — KHÔNG log signature/secret.
+- [x] **Step 4: Commit** `feat(sf26): HMAC X-Signature timing-safe verify + fail-closed 503 khi thiếu secret`
 
 ### Task 3: idempotency-store — Java CreateWebhookOrder (state machine + CAS)
 

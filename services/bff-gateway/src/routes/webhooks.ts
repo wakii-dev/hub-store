@@ -16,6 +16,13 @@ import type { BffConfig } from '../config.js';
 import { verifyHmac } from '../lib/hmac.js';
 import { errorEnvelope } from '../lib/envelope.js';
 
+/**
+ * Fail-closed warn-once flag (spec §3): secret rỗng → log warn MỘT LẦN duy
+ * nhất mỗi process — tránh spam log mỗi request nhưng ops vẫn thấy cấu hình
+ * thiếu. KHÔNG log giá trị secret/signature.
+ */
+let secretWarned = false;
+
 export function registerWebhookRoutes(
   app: FastifyInstance,
   deps: { intake: IntakeApi; config: BffConfig },
@@ -52,6 +59,12 @@ export function registerWebhookRoutes(
       // HMAC — timing-safe fail-closed; KHÔNG log signature/secret.
       const auth = verifyHmac(raw, sig, secret);
       if (!auth.ok) {
+        if (auth.status === 503 && !secretWarned) {
+          secretWarned = true;
+          console.warn(
+            '[sf26] WEBHOOK_HMAC_SECRET rỗng/thiếu — webhook auth unavailable, fail-closed 503.',
+          );
+        }
         return reply
           .code(auth.status)
           .send(errorEnvelope(auth.status, auth.message, { code: 'UNAUTHORIZED' }));
