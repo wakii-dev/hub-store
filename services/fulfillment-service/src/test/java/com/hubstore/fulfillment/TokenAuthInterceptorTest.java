@@ -229,6 +229,20 @@ class TokenAuthInterceptorTest {
     }
 
     @Test
+    void healthAndReflectionAllowlistedWithoutLeadingSlash() {
+        // GOTCHA live-verify: MethodDescriptor.getFullMethodName() KHÔNG có
+        // leading slash — allowlist phải match cả 2 dạng (regression guard).
+        TokenAuthInterceptor icpt = interceptor();
+        for (String method : new String[] {
+                "grpc.health.v1.Health/Check",
+                "grpc.reflection.v1.ServerReflection/ServerReflectionInfo",
+                "grpc.reflection.v1alpha.ServerReflection/ServerReflectionInfo"}) {
+            assertNull(intercept(icpt, new Metadata(), method).closedStatus(),
+                    method + " (no leading slash — production shape) không token phải pass");
+        }
+    }
+
+    @Test
     void failClosedWhenConfigMissing() throws Exception {
         // issuer/jwks rỗng → Bearer verify fail-closed (không NPE, không bypass).
         TokenAuthInterceptor icpt = new TokenAuthInterceptor("", "", "");

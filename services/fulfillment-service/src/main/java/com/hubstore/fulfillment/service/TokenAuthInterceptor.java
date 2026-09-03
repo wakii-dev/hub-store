@@ -163,8 +163,14 @@ public class TokenAuthInterceptor implements ServerInterceptor {
     }
 
     private boolean isAllowlisted(String fullMethodName) {
+        // GOTCHA (SF-12 live-verify): Java getFullMethodName() KHÔNG có leading
+        // slash ("grpc.health.v1.Health/Check") trong khi allowlist prefix có
+        // ("/grpc.health.v1.Health/") — không normalize thì allowlist chết,
+        // health/reflection bị DENY (Go info.FullMethod có slash, không vướng).
+        String name = fullMethodName.startsWith("/") ? fullMethodName.substring(1) : fullMethodName;
         for (String prefix : ALLOWLIST_PREFIXES) {
-            if (fullMethodName.startsWith(prefix)) {
+            String p = prefix.startsWith("/") ? prefix.substring(1) : prefix;
+            if (name.startsWith(p)) {
                 return true;
             }
         }
