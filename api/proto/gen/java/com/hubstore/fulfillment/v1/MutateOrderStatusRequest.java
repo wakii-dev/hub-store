@@ -36,6 +36,7 @@ private static final long serialVersionUID = 0L;
         com.google.protobuf.LazyStringArrayList.emptyList();
     targetBatchStatus_ = 0;
     reason_ = "";
+    batchCode_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -166,6 +167,65 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int BATCH_CODE_FIELD_NUMBER = 4;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object batchCode_ = "";
+  /**
+   * <pre>
+   * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+   * </pre>
+   *
+   * <code>optional string batch_code = 4;</code>
+   * @return Whether the batchCode field is set.
+   */
+  @java.lang.Override
+  public boolean hasBatchCode() {
+    return ((bitField0_ & 0x00000002) != 0);
+  }
+  /**
+   * <pre>
+   * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+   * </pre>
+   *
+   * <code>optional string batch_code = 4;</code>
+   * @return The batchCode.
+   */
+  @java.lang.Override
+  public java.lang.String getBatchCode() {
+    java.lang.Object ref = batchCode_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      batchCode_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+   * </pre>
+   *
+   * <code>optional string batch_code = 4;</code>
+   * @return The bytes for batchCode.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getBatchCodeBytes() {
+    java.lang.Object ref = batchCode_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      batchCode_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -188,6 +248,9 @@ private static final long serialVersionUID = 0L;
     }
     if (((bitField0_ & 0x00000001) != 0)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 3, reason_);
+    }
+    if (((bitField0_ & 0x00000002) != 0)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 4, batchCode_);
     }
     getUnknownFields().writeTo(output);
   }
@@ -213,6 +276,9 @@ private static final long serialVersionUID = 0L;
     if (((bitField0_ & 0x00000001) != 0)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(3, reason_);
     }
+    if (((bitField0_ & 0x00000002) != 0)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(4, batchCode_);
+    }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
     return size;
@@ -236,6 +302,11 @@ private static final long serialVersionUID = 0L;
       if (!getReason()
           .equals(other.getReason())) return false;
     }
+    if (hasBatchCode() != other.hasBatchCode()) return false;
+    if (hasBatchCode()) {
+      if (!getBatchCode()
+          .equals(other.getBatchCode())) return false;
+    }
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -256,6 +327,10 @@ private static final long serialVersionUID = 0L;
     if (hasReason()) {
       hash = (37 * hash) + REASON_FIELD_NUMBER;
       hash = (53 * hash) + getReason().hashCode();
+    }
+    if (hasBatchCode()) {
+      hash = (37 * hash) + BATCH_CODE_FIELD_NUMBER;
+      hash = (53 * hash) + getBatchCode().hashCode();
     }
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
@@ -397,6 +472,7 @@ private static final long serialVersionUID = 0L;
           com.google.protobuf.LazyStringArrayList.emptyList();
       targetBatchStatus_ = 0;
       reason_ = "";
+      batchCode_ = "";
       return this;
     }
 
@@ -442,6 +518,10 @@ private static final long serialVersionUID = 0L;
         result.reason_ = reason_;
         to_bitField0_ |= 0x00000001;
       }
+      if (((from_bitField0_ & 0x00000008) != 0)) {
+        result.batchCode_ = batchCode_;
+        to_bitField0_ |= 0x00000002;
+      }
       result.bitField0_ |= to_bitField0_;
     }
 
@@ -473,6 +553,11 @@ private static final long serialVersionUID = 0L;
       if (other.hasReason()) {
         reason_ = other.reason_;
         bitField0_ |= 0x00000004;
+        onChanged();
+      }
+      if (other.hasBatchCode()) {
+        batchCode_ = other.batchCode_;
+        bitField0_ |= 0x00000008;
         onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
@@ -517,6 +602,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000004;
               break;
             } // case 26
+            case 34: {
+              batchCode_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000008;
+              break;
+            } // case 34
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -797,6 +887,109 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       reason_ = value;
       bitField0_ |= 0x00000004;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object batchCode_ = "";
+    /**
+     * <pre>
+     * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+     * </pre>
+     *
+     * <code>optional string batch_code = 4;</code>
+     * @return Whether the batchCode field is set.
+     */
+    public boolean hasBatchCode() {
+      return ((bitField0_ & 0x00000008) != 0);
+    }
+    /**
+     * <pre>
+     * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+     * </pre>
+     *
+     * <code>optional string batch_code = 4;</code>
+     * @return The batchCode.
+     */
+    public java.lang.String getBatchCode() {
+      java.lang.Object ref = batchCode_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        batchCode_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+     * </pre>
+     *
+     * <code>optional string batch_code = 4;</code>
+     * @return The bytes for batchCode.
+     */
+    public com.google.protobuf.ByteString
+        getBatchCodeBytes() {
+      java.lang.Object ref = batchCode_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        batchCode_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+     * </pre>
+     *
+     * <code>optional string batch_code = 4;</code>
+     * @param value The batchCode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBatchCode(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      batchCode_ = value;
+      bitField0_ |= 0x00000008;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+     * </pre>
+     *
+     * <code>optional string batch_code = 4;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearBatchCode() {
+      batchCode_ = getDefaultInstance().getBatchCode();
+      bitField0_ = (bitField0_ & ~0x00000008);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+     * </pre>
+     *
+     * <code>optional string batch_code = 4;</code>
+     * @param value The bytes for batchCode to set.
+     * @return This builder for chaining.
+     */
+    public Builder setBatchCodeBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      batchCode_ = value;
+      bitField0_ |= 0x00000008;
       onChanged();
       return this;
     }

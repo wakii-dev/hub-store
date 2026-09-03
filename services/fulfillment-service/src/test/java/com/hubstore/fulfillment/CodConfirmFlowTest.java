@@ -87,10 +87,19 @@ class CodConfirmFlowTest {
     }
 
     private void mutate(List<String> codes, BatchStatus target) {
+        mutate(codes, target, null);
+    }
+
+    /** batchCode null = không set trong request (fallback o.batchCode()); "" = set rỗng. */
+    private void mutate(List<String> codes, BatchStatus target, String batchCode) {
         CollectingObserver<com.hubstore.fulfillment.v1.MutateOrderStatusResponse> obs =
                 new CollectingObserver<>();
-        service.mutateOrderStatus(MutateOrderStatusRequest.newBuilder()
-                .addAllFulfillCodes(codes).setTargetBatchStatus(target).build(), obs);
+        MutateOrderStatusRequest.Builder req = MutateOrderStatusRequest.newBuilder()
+                .addAllFulfillCodes(codes).setTargetBatchStatus(target);
+        if (batchCode != null) {
+            req.setBatchCode(batchCode);
+        }
+        service.mutateOrderStatus(req.build(), obs);
         assertThat(obs.error).isNull();
     }
 
@@ -154,6 +163,35 @@ class CodConfirmFlowTest {
         mutate(List.of(codeOf(0)), BatchStatus.BATCH_STATUS_PREPARED);
         mutate(List.of(codeOf(0)), BatchStatus.BATCH_STATUS_PREPARED);
         assertThat(pending().getPendingCount()).isEqualTo(1);
+    }
+
+    // ---------------- SF-14: batchCode pass-through (MutateOrderStatus) ----------------
+
+    @Test
+    void completePickingUsesRequestBatchCodeOverOrderBatchCode() {
+        // Flow thật: Go truyền batchCode phiếu mới — KHÔNG dùng o.batchCode() (rỗng
+        // trong flow thật, chỉ seed set). Đơn được seed batchCode=B-COD-1 nhưng
+        // request nói BATCH-X → row phải là BATCH-X.
+        mutate(List.of(codeOf(0)), BatchStatus.BATCH_STATUS_PREPARED, "BATCH-X");
+        CodConfirmation c = codRepo.findByFulfillCode(codeOf(0)).orElseThrow();
+        assertThat(c.batchCode()).isEqualTo("BATCH-X");
+        assertThat(c.batchCode()).isNotEqualTo(BATCH);
+    }
+
+    @Test
+    void completePickingFallsBackToOrderBatchCodeWhenRequestMissing() {
+        // Không set batchCode trong request (Go cũ / compat) → fallback o.batchCode().
+        mutate(List.of(codeOf(0)), BatchStatus.BATCH_STATUS_PREPARED);
+        assertThat(codRepo.findByFulfillCode(codeOf(0)).orElseThrow().batchCode())
+                .isEqualTo(BATCH);
+    }
+
+    @Test
+    void completePickingFallsBackToOrderBatchCodeWhenRequestEmpty() {
+        // batchCode set nhưng rỗng → vẫn fallback (request.hasBatchCode() nhưng isEmpty).
+        mutate(List.of(codeOf(0)), BatchStatus.BATCH_STATUS_PREPARED, "");
+        assertThat(codRepo.findByFulfillCode(codeOf(0)).orElseThrow().batchCode())
+                .isEqualTo(BATCH);
     }
 
     // ---------------- revert cleanup (D8) ----------------

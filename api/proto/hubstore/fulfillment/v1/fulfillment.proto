@@ -258,6 +258,8 @@ message MutateOrderStatusRequest {
   BatchStatus target_batch_status = 2;
   // Lý do (vd hủy phiếu) — optional.
   optional string reason = 3;
+  // Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+  optional string batch_code = 4;
 }
 
 message MutateOrderStatusResult {

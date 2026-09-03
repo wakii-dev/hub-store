@@ -370,11 +370,12 @@ public final class Fulfillment {
       "\001(\005\"-\n\025GetOrderDetailRequest\022\024\n\014fulfill_" +
       "code\030\001 \001(\t\"Y\n\026GetOrderDetailResponse\022?\n\005" +
       "order\030\001 \001(\01320.hubstore.fulfillment.v1.Hu" +
-      "bStoreOrderFilterItem\"\224\001\n\030MutateOrderSta" +
+      "bStoreOrderFilterItem\"\274\001\n\030MutateOrderSta" +
       "tusRequest\022\025\n\rfulfill_codes\030\001 \003(\t\022A\n\023tar" +
       "get_batch_status\030\002 \001(\0162$.hubstore.fulfil" +
       "lment.v1.BatchStatus\022\023\n\006reason\030\003 \001(\tH\000\210\001" +
-      "\001B\t\n\007_reason\"Q\n\027MutateOrderStatusResult\022" +
+      "\001\022\027\n\nbatch_code\030\004 \001(\tH\001\210\001\001B\t\n\007_reasonB\r\n" +
+      "\013_batch_code\"Q\n\027MutateOrderStatusResult\022" +
       "\024\n\014fulfill_code\030\001 \001(\t\022\017\n\007success\030\002 \001(\010\022\017" +
       "\n\007message\030\003 \001(\t\"^\n\031MutateOrderStatusResp" +
       "onse\022A\n\007results\030\001 \003(\01320.hubstore.fulfill" +
@@ -647,7 +648,7 @@ public final class Fulfillment {
     internal_static_hubstore_fulfillment_v1_MutateOrderStatusRequest_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_hubstore_fulfillment_v1_MutateOrderStatusRequest_descriptor,
-        new java.lang.String[] { "FulfillCodes", "TargetBatchStatus", "Reason", });
+        new java.lang.String[] { "FulfillCodes", "TargetBatchStatus", "Reason", "BatchCode", });
     internal_static_hubstore_fulfillment_v1_MutateOrderStatusResult_descriptor =
       getDescriptor().getMessageTypes().get(13);
     internal_static_hubstore_fulfillment_v1_MutateOrderStatusResult_fieldAccessorTable = new

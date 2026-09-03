@@ -398,7 +398,11 @@ export interface MutateOrderStatusRequest {
   fulfillCodes: string[];
   targetBatchStatus: BatchStatus;
   /** Lý do (vd hủy phiếu) — optional. */
-  reason?: string | undefined;
+  reason?:
+    | string
+    | undefined;
+  /** Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch. */
+  batchCode?: string | undefined;
 }
 
 export interface MutateOrderStatusResult {
@@ -2253,7 +2257,7 @@ export const GetOrderDetailResponse: MessageFns<GetOrderDetailResponse> = {
 };
 
 function createBaseMutateOrderStatusRequest(): MutateOrderStatusRequest {
-  return { fulfillCodes: [], targetBatchStatus: 0, reason: undefined };
+  return { fulfillCodes: [], targetBatchStatus: 0, reason: undefined, batchCode: undefined };
 }
 
 export const MutateOrderStatusRequest: MessageFns<MutateOrderStatusRequest> = {
@@ -2266,6 +2270,9 @@ export const MutateOrderStatusRequest: MessageFns<MutateOrderStatusRequest> = {
     }
     if (message.reason !== undefined) {
       writer.uint32(26).string(message.reason);
+    }
+    if (message.batchCode !== undefined) {
+      writer.uint32(34).string(message.batchCode);
     }
     return writer;
   },
@@ -2301,6 +2308,14 @@ export const MutateOrderStatusRequest: MessageFns<MutateOrderStatusRequest> = {
           message.reason = reader.string();
           continue;
         }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.batchCode = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -2317,6 +2332,7 @@ export const MutateOrderStatusRequest: MessageFns<MutateOrderStatusRequest> = {
         : [],
       targetBatchStatus: isSet(object.targetBatchStatus) ? batchStatusFromJSON(object.targetBatchStatus) : 0,
       reason: isSet(object.reason) ? globalThis.String(object.reason) : undefined,
+      batchCode: isSet(object.batchCode) ? globalThis.String(object.batchCode) : undefined,
     };
   },
 
@@ -2331,6 +2347,9 @@ export const MutateOrderStatusRequest: MessageFns<MutateOrderStatusRequest> = {
     if (message.reason !== undefined) {
       obj.reason = message.reason;
     }
+    if (message.batchCode !== undefined) {
+      obj.batchCode = message.batchCode;
+    }
     return obj;
   },
 
@@ -2342,6 +2361,7 @@ export const MutateOrderStatusRequest: MessageFns<MutateOrderStatusRequest> = {
     message.fulfillCodes = object.fulfillCodes?.map((e) => e) || [];
     message.targetBatchStatus = object.targetBatchStatus ?? 0;
     message.reason = object.reason ?? undefined;
+    message.batchCode = object.batchCode ?? undefined;
     return message;
   },
 };

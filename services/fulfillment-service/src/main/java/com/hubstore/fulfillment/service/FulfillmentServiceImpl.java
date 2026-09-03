@@ -218,8 +218,13 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                         Instant completedAt = Instant.now();
                         for (SeedModels.OrderSeed o : res) {
                             if (o.codAmount() > 0) {
+                                // SF-14: batchCode ưu tiên từ request (Go pass-through) —
+                                // flow thật o.batchCode() rỗng (chỉ seed set), eager insert
+                                // batch_code='' làm GET /cod/pending?batchCode trả 0.
+                                String batchCode = request.hasBatchCode() && !request.getBatchCode().isEmpty()
+                                        ? request.getBatchCode() : o.batchCode();
                                 codRepo.insertPendingIfAbsent(new CodConfirmation(
-                                        o.fulfillCode(), o.batchCode(),
+                                        o.fulfillCode(), batchCode,
                                         o.shopAssignment() == null ? null : o.shopAssignment().shopCode(),
                                         o.shopAssignment() == null ? null : o.shopAssignment().shopName(),
                                         o.codAmount(), null, null, null, completedAt,
