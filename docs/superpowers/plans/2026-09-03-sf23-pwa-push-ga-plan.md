@@ -156,8 +156,8 @@ export function registerServiceWorker(): void {
 ### Task T2: offline-fallback
 **Files:** Create `apps/shell/public/offline.html`; Modify `apps/shell/public/sw.js` (precache offline.html — đã có từ T1; thêm fallback đã có ở network-first); Test qua e2e T9.
 
-- [ ] **Step 1: offline.html** — static semantic, inline CSS: gradient nền nhạt, logo-dot #EB6E09, `h1 Mất kết nối`, `p Vui lòng kiểm tra mạng và thử lại.`, nút "Thử lại" (`onclick="location.reload()"`), font stack Roboto. KHÔNG import JS bundle nào (mục đích: dùng được khi React chưa cache).
-- [ ] **Step 2: Verify SW**: offline qua DevTools → navigate `/` → thấy offline.html; online → app trở lại. network-first navigation đã trả `caches.match('/offline.html')` khi miss cache (T1 code) — T2 chỉ thêm nội dung + precache list.
+- [x] **Step 1: offline.html** — static semantic, inline CSS: gradient nền nhạt, logo-dot #EB6E09, `h1 Mất kết nối`, `p Vui lòng kiểm tra mạng và thử lại.`, nút "Thử lại" (`onclick="location.reload()"`), font stack Roboto. KHÔNG import JS bundle nào (mục đích: dùng được khi React chưa cache).
+- [ ] **Step 2: Verify SW**: offline qua DevTools → navigate `/` → thấy offline.html; online → app trở lại. network-first navigation đã trả `caches.match('/offline.html')` khi miss cache (T1 code) — T2 chỉ thêm nội dung + precache list. *(defer sang e2e T9 — headless không DevTools được; T9 assert file này)*
 - [ ] **Step 3: Commit** `feat(pwa): offline fallback page (SF-23 T2)`
 
 ### Task T3: notification-log
