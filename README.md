@@ -179,6 +179,36 @@ Quy trình rotate (dev realm):
 
 > Java logs: logback (Spring default) — JSON encoder là follow-up nếu cần (SF-12 chỉ chuyển Go auth/health path + BFF kafka path sang JSON).
 
+## CI (GitHub Actions) — SF-12
+
+`.github/workflows/ci.yml` chạy 3 job trên mỗi PR/push main:
+
+| Job | Nội dung |
+| --- | --- |
+| `unit` | tsc --noEmit (6 package, exclude `@hub-store/fulfillment` — debt cũ), Node unit tests, `go vet + test` (self-skip khi không DB), `mvn test` (*IT skip-if-no-DB) |
+| `docker-build` | build 5 Dockerfile (no push) |
+| `e2e` (needs unit) | Playwright với `E2E=1` — GH service `postgres:16.4` + Keycloak boot bằng step `docker run ... start-dev --import-realm` (GH services không support command override) → `scripts/ci-e2e-boot.sh` (tạo 2 DB + migrate + seed) → webServer `boot-all.sh` host-run app services → `playwright test` |
+
+**E2E password trong CI:** secret `E2E_PASSWORD` (nếu đã set trên repo) được `ci-e2e-boot.sh` dùng rotate password 6 user e2e sau realm import — CI không phụ thuộc password dev trong realm JSON. Không có secret → dùng default realm JSON (khớp `e2e/lib/credentials.ts`).
+
+**Seam cục bộ (mô phỏng phần infra của job e2e):**
+
+```bash
+bash scripts/ci-e2e-boot.sh
+# → tự boot container postgres-ci :55441 + keycloak-ci :18081 (PORT RIÊNG —
+#   không đụng stack compose main 5432/8081; override E2E_CI_PG_PORT /
+#   E2E_CI_KC_PORT), create 2 DB, flyway + golang-migrate, seed, kcadm grant
+#   manage-users, echo READY.
+```
+
+Chạy 1 spec e2e kiểu CI (webServer boot-all như thường):
+
+```bash
+E2E=1 pnpm --filter @hub-store/e2e exec playwright test tests/03-audit.spec.ts
+```
+
+> **Lưu ý (SF-12 Task 7):** job `e2e` cần 1 lần tinh chỉnh khi chạy thật lần đầu trên GH runner — local chỉ verify được phần infra seam (ci-e2e-boot) + spec seam; các bước host-run app services trên runner (python3-venv, OS deps playwright, timing boot) có thể cần chỉnh env nhỏ trong workflow. Spec subset mặc định = `tests/03-audit.spec.ts` (đọc-là-chính, không mutate); widen bằng env `E2E_CI_SPECS` (rỗng = full suite).
+
 ## K8s / minikube deploy — requirements + preflight
 
 Deploy lên Kubernetes local (minikube) cần:
