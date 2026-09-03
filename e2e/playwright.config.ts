@@ -11,6 +11,13 @@ import { defineConfig } from "@playwright/test";
  * storageState `.auth/<user>.json`; default coordinator (specs 01/03/04).
  * Spec 02 override per-test (`test.use({ storageState })`) theo role.
  */
+/**
+ * E2E_SHELL_URL — private-port seam (SF-15/SF-14 precedent): override khi chạy
+ * stack private (vd http://localhost:3100) mà không tranh :3000 với sibling SF
+ * đang chạy e2e trên stack riêng. Default giữ nguyên behavior cũ.
+ */
+const SHELL_URL = process.env.E2E_SHELL_URL ?? "http://localhost:3000";
+
 export default defineConfig({
   testDir: "./tests",
   globalSetup: "./auth.setup",
@@ -21,7 +28,7 @@ export default defineConfig({
   retries: 0,
   reporter: [["list"], ["html", { open: "never" }]],
   use: {
-    baseURL: "http://localhost:3000",
+    baseURL: SHELL_URL,
     storageState: ".auth/coordinator.json",
     viewport: { width: 1440, height: 900 },
     trace: "retain-on-failure",
@@ -30,7 +37,7 @@ export default defineConfig({
   },
   webServer: {
     command: "bash ../scripts/boot-all.sh",
-    url: "http://localhost:3000",
+    url: SHELL_URL,
     timeout: 300_000,
     reuseExistingServer: !!process.env.E2E_REUSE,
   },

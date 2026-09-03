@@ -104,7 +104,7 @@ interface AuditEntry {
 
 async function getAudit(page: Page, request: APIRequestContext, code: string): Promise<AuditEntry[]> {
   const call = (token: string) =>
-    request.get(`http://localhost:8080/orders/${code}/audit`, {
+    request.get(`${process.env.E2E_BFF_URL ?? "http://localhost:8080"}/orders/${code}/audit`, {
       headers: { Authorization: `Bearer ${token}` },
     });
   let res = await call(await getAccessToken(page));
@@ -206,7 +206,7 @@ test.describe("warehouse ops (storageState warehouse)", () => {
     // D1 là route Coordinator (warehouse bị 403) → context coordinator riêng
     const ctx = await browser.newContext({
       storageState: path.join(__dirname, "..", ".auth", "coordinator.json"),
-      baseURL: "http://localhost:3000",
+      baseURL: process.env.E2E_SHELL_URL ?? "http://localhost:3000",
     });
     try {
       const cPage = await ctx.newPage();

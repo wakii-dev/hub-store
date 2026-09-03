@@ -16,8 +16,8 @@ import { expect, test, type Page } from "@playwright/test";
  * Runbook: pnpm --filter @hub-store/e2e e2e (webServer boot-all.sh tự dựng).
  */
 
-const BFF = "http://localhost:8080"; // pattern 07-realtime.spec.ts:32 — shell dev KHÔNG proxy /api
-const APP = "http://localhost:3000";
+const BFF = process.env.E2E_BFF_URL ?? "http://localhost:8080"; // private-port seam — shell dev KHÔNG proxy /api
+const APP = process.env.E2E_SHELL_URL ?? "http://localhost:3000"; // private-port seam
 
 /** Bearer token cho BFF — đọc từ localStorage của shell (pattern 07-realtime). */
 async function bearerToken(page: Page): Promise<string> {
