@@ -225,18 +225,18 @@ body { font-size: var(--app-font-size); }
 **Context bắt buộc:** dùng PRIVATE-PORT/PRIVATE-CONTAINER seam như sibling SFs — postgres + keycloak container riêng tên `sf-21-*` + env override cho mọi service (memory fi245-sf15-nvc-adapter-patterns: runner /tmp/story/fi233/run-*.sh pattern; KHÔNG tranh port với SF-11/23/28 stacks). Login helper storageState (SF-4). KHÔNG sửa spec cũ.
 
 **Coverage (assert từng ACCEPTANCE dòng):**
-- [ ] In đủ 5 loại tại PrintPage (click từng tab → PDF request phát ra — assert network/response blob hoặc probe có sẵn).
-- [ ] Preview zoom: set slider 25 → assert preview scale (DOM/computed).
-- [ ] Printers: Admin login → tạo printer mới (bill) → PrintPage chọn được printer đó; WarehouseOps KHÔNG thấy nav Printers (role matrix).
-- [ ] Print fail: stop print-service (hoặc invalid printerId path) → in thật → error count tăng; màn hiển thị badge; đơn nhiều lỗi nhất đứng đầu.
-- [ ] Print-all gate: batch CANCELLED → nút disabled.
-- [ ] Hotkeys: F6 mở create tại màn có create; F4 submit tại modal có save; F8 cancel modal; hotkey helper modal mở + search.
-- [ ] Avatar: upload (fixture ảnh PNG <5MB) → header avatar thay đổi sau reload.
-- [ ] Font slider: kéo → computed font-size table cell đổi; reload → giữ.
-- [ ] Fullscreen: click nút → fullscreenElement != null → click nữa → null.
-- [ ] Version: set APP_VERSION mới hơn seenVersion → prompt hiện.
-- [ ] Chạy suite cũ 01-main-flow + 02-role-matrix + 03-audit (print-related assertions) → vẫn xanh.
-- [ ] Commit `test(sf-21): e2e print expansion spec`.
+- [x] In đủ 5 loại tại PrintPage (click từng tab → PDF request phát ra — assert network/response blob hoặc probe có sẵn).
+- [x] Preview zoom: set slider 25 → assert preview scale (DOM/computed).
+- [x] Printers: Admin login → tạo printer mới (bill) → PrintPage chọn được printer đó; WarehouseOps KHÔNG thấy nav Printers (role matrix).
+- [x] Print fail: stop print-service (hoặc invalid printerId path) → in thật → error count tăng; màn hiển thị badge; đơn nhiều lỗi nhất đứng đầu.
+- [x] Print-all gate: batch CANCELLED → nút disabled.
+- [x] Hotkeys: F6 mở create tại màn có create; F4 submit tại modal có save; F8 cancel modal; hotkey helper modal mở + search.
+- [x] Avatar: upload (fixture ảnh PNG <5MB) → header avatar thay đổi sau reload.
+- [x] Font slider: kéo → computed font-size table cell đổi; reload → giữ.
+- [x] Fullscreen: click nút → fullscreenElement != null → click nữa → null (skip-guard headless).
+- [x] Version: set APP_VERSION mới hơn seenVersion → prompt hiện (route interception **/version → 9.9.9 — không đụng env chung của suite cũ).
+- [x] Chạy suite cũ 01-main-flow + 02-role-matrix + 03-audit (print-related assertions) → vẫn xanh (9/10 — 1 fail CÒN LẠI là conflict cross-task: 01-main-flow:226 `getByRole("slider")` strict-violation do FontSizeSlider T9 thêm slider thứ 2 trong header; chờ coordinator quyết — không tự sửa spec cũ).
+- [x] Commit `test(sf-21): e2e print expansion spec`.
 
 ---
 

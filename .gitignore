@@ -18,6 +18,8 @@ e2e/test-results/
 e2e/playwright-report/
 # SF-4 — storageState do auth.setup tạo mỗi lần chạy (session Keycloak dev)
 e2e/.auth/
+# SF-21 — batchCode state giữa các test E2E (spec 08, sống qua run mới)
+e2e/.sf21-batch-code
 __pycache__/
 
 # Claude Code local settings

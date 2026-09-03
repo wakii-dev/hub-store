@@ -29,7 +29,8 @@ const PROXY_URL = process.env.E2E_PROXY;
 if (process.env.E2E_PG_SEAM === "1") {
   // Mutate PATH của chính runner process — execSync trong specs (psql helper,
   // seed-db.sh) + webServer con đều inherit shim.
-  process.env.PATH = `/tmp/story/sf-14/shim:${process.env.PATH ?? ""}`;
+  const PG_SHIM = process.env.E2E_PG_SHIM ?? "/tmp/story/sf-14/shim";
+  process.env.PATH = `${PG_SHIM}:${process.env.PATH ?? ""}`;
 }
 
 export default defineConfig({
