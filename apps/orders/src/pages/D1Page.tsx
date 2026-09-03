@@ -540,7 +540,9 @@ function D1Content() {
           orders={nvcModal.orders}
           batchCode={nvcModal.mode === "rebook" ? nvcModal.batchCode : undefined}
           rebookEntries={nvcModal.entries.length > 0 ? nvcModal.entries : undefined}
-          onClose={() => setNvcModal(null)}
+          // Clear CẢ nvcRequest — nếu chỉ clear nvcModal, effect build modal chạy lại
+          // (deps đổi) và mount lại từ RTKQ cache → modal không thể đóng.
+          onClose={() => { setNvcModal(null); setNvcRequest(null); }}
         />
       )}
       <CreateOrderModal open={createOrderOpen} onClose={() => setCreateOrderOpen(false)} />
