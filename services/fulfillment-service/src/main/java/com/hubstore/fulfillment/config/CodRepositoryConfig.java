@@ -34,4 +34,34 @@ public class CodRepositoryConfig {
         // (twin parity break — P1 review 45a5fc5).
         return new InMemoryCodConfirmationRepository(orderRepository::isFailed);
     }
+
+    /**
+     * P0 plan-critic round 2 (SF-14 Task 2): inmemory không có DataSource →
+     * không có PlatformTransactionManager auto-config → FulfillmentServiceImpl
+     * không inject được TransactionTemplate (eager PENDING span 2 repos, D1).
+     * spring-tx 6.x KHÔNG còn ResourcelessTransactionManager → no-op PTM 15
+     * dòng: getTransaction trả status mới, commit/rollback không làm gì (repos
+     * in-memory đã synchronized — tx chỉ cần "chạy được", không có gì để rollback).
+     */
+    @Bean
+    @ConditionalOnProperty(name = "fulfillment.store", havingValue = "inmemory")
+    public org.springframework.transaction.PlatformTransactionManager noopTransactionManager() {
+        return new org.springframework.transaction.PlatformTransactionManager() {
+            @Override
+            public org.springframework.transaction.TransactionStatus getTransaction(
+                    org.springframework.transaction.TransactionDefinition definition) {
+                return new org.springframework.transaction.support.SimpleTransactionStatus();
+            }
+
+            @Override
+            public void commit(org.springframework.transaction.TransactionStatus status) {
+                // no-op
+            }
+
+            @Override
+            public void rollback(org.springframework.transaction.TransactionStatus status) {
+                // no-op
+            }
+        };
+    }
 }

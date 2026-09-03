@@ -1,8 +1,11 @@
 package com.hubstore.fulfillment.service;
 
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.protobuf.Timestamp;
 import com.hubstore.fulfillment.events.OrderEventPublisher;
 import com.hubstore.fulfillment.seed.SeedModels;
+import com.hubstore.fulfillment.store.CodConfirmation;
+import com.hubstore.fulfillment.store.CodConfirmationRepository;
 import com.hubstore.fulfillment.store.D2cFilterResult;
 import com.hubstore.fulfillment.store.D2cOrderFilter;
 import com.hubstore.fulfillment.store.D2cOrderRecord;
@@ -11,9 +14,17 @@ import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.FilterResult;
 import com.hubstore.fulfillment.store.OrderFilter;
 import com.hubstore.fulfillment.store.OrderRepository;
+import com.hubstore.fulfillment.v1.ConfirmBatchCodRequest;
+import com.hubstore.fulfillment.v1.ConfirmBatchCodResponse;
+import com.hubstore.fulfillment.v1.ConfirmCodItem;
+import com.hubstore.fulfillment.v1.ConfirmCodRequest;
+import com.hubstore.fulfillment.v1.ConfirmCodResponse;
+import com.hubstore.fulfillment.v1.ConfirmCodResult;
 import com.hubstore.fulfillment.v1.D2cOrder;
 import com.hubstore.fulfillment.v1.FilterD2cOrdersRequest;
 import com.hubstore.fulfillment.v1.FilterD2cOrdersResponse;
+import com.hubstore.fulfillment.v1.GetCodPendingRequest;
+import com.hubstore.fulfillment.v1.GetCodPendingResponse;
 import com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest;
 import com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse;
 import com.hubstore.fulfillment.v1.AssignShopHubRequest;
@@ -61,6 +72,7 @@ import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import net.devh.boot.grpc.server.service.GrpcService;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.Duration;
 import java.time.Instant;
@@ -71,6 +83,7 @@ import java.time.format.DateTimeFormatter;
 import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
 
 /**
@@ -85,15 +98,22 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
     private static final org.slf4j.Logger log =
             org.slf4j.LoggerFactory.getLogger(FulfillmentServiceImpl.class);
 
+    private static final ObjectMapper JSON = new ObjectMapper();
+
     private final OrderRepository repo;
     private final OrderEventPublisher events;
     private final D2cOrderRepository d2cRepo;
+    private final CodConfirmationRepository codRepo;
+    private final TransactionTemplate transactions;
 
     public FulfillmentServiceImpl(OrderRepository repo, OrderEventPublisher events,
-            D2cOrderRepository d2cRepo) {
+            D2cOrderRepository d2cRepo, CodConfirmationRepository codRepo,
+            TransactionTemplate transactions) {
         this.repo = repo;
         this.events = events;
         this.d2cRepo = d2cRepo;
+        this.codRepo = codRepo;
+        this.transactions = transactions;
     }
 
     // ---------------- D1 list + detail + hydration ----------------
@@ -179,7 +199,38 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                             .setMessage("Order " + code + " không tồn tại."));
                 }
             }
-            List<SeedModels.OrderSeed> updated = repo.mutateBatchStatus(codes, target);
+            // SF-14 D1/D8 — mutation + cod_confirmations trong 1 transaction thật
+            // (TransactionTemplate, KHÔNG @Transactional self-invocation qua this).
+            // target=2: eager chèn PENDING cho đơn cod>0 (completed_at = anchor).
+            // target=0: revert → xóa PENDING rows (CONFIRMED giữ — D8).
+            // target=1: không đụng COD — mutate thẳng (repo tự tx bên Postgres).
+            List<SeedModels.OrderSeed> updated;
+            if (target == 2 || target == 0) {
+                updated = transactions.execute(tx -> {
+                    List<SeedModels.OrderSeed> res = repo.mutateBatchStatus(codes, target);
+                    if (target == 2) {
+                        Instant completedAt = Instant.now();
+                        for (SeedModels.OrderSeed o : res) {
+                            if (o.codAmount() > 0) {
+                                codRepo.insertPendingIfAbsent(new CodConfirmation(
+                                        o.fulfillCode(), o.batchCode(),
+                                        o.shopAssignment() == null ? null : o.shopAssignment().shopCode(),
+                                        o.shopAssignment() == null ? null : o.shopAssignment().shopName(),
+                                        o.codAmount(), null, null, null, completedAt,
+                                        CodConfirmation.STATUS_PENDING));
+                            }
+                        }
+                    } else {
+                        codRepo.deletePendingByFulfillCodes(codes);
+                    }
+                    return res;
+                });
+            } else {
+                updated = repo.mutateBatchStatus(codes, target);
+            }
+            if (updated == null) {
+                updated = List.of();
+            }
             if (updated.isEmpty() && !codes.isEmpty()) {
                 // SF-27 carry-in (spec-critic): repo trả rỗng dù có codes → không publish.
                 log.warn("fulfillment: mutateOrderStatus updated none of {} codes — skip publish", codes.size());
@@ -386,6 +437,93 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
         }
     }
 
+    // ---------------- COD confirm (SF-14, FI-259) ----------------
+
+    /**
+     * Per-order confirm — D3 last-write-wins (re-confirm CONFIRMED được, không 422).
+     * collected_amount absence = lấy expected; presence 0 = thu thật 0 đồng.
+     * Per-code result — 1 code hỏng không kill cả request. Actor từ metadata
+     * x-user-name (ActorInterceptor — cùng pattern IntakeServiceImpl).
+     */
+    @Override
+    public void confirmCod(ConfirmCodRequest request, StreamObserver<ConfirmCodResponse> responseObserver) {
+        try {
+            String actor = ActorInterceptor.currentActor();
+            ConfirmCodResponse.Builder resp = ConfirmCodResponse.newBuilder();
+            for (ConfirmCodItem item : request.getItemsList()) {
+                String code = item.getFulfillCode();
+                Optional<CodConfirmation> existing = codRepo.findByFulfillCode(code);
+                if (existing.isEmpty()) {
+                    resp.addResults(ConfirmCodResult.newBuilder()
+                            .setFulfillCode(code).setSuccess(false)
+                            .setMessage("Confirmation " + code + " không tồn tại."));
+                    continue;
+                }
+                Long collectedArg = item.hasCollectedAmount() ? item.getCollectedAmount() : null;
+                long collected = collectedArg == null ? existing.get().expectedAmount() : collectedArg;
+                codRepo.confirmOne(code, collectedArg, actor, Instant.now());
+                repo.appendAudit(actor, "cod.confirmed", code, json(Map.of(
+                        "expected", existing.get().expectedAmount(),
+                        "collected", collected)));
+                resp.addResults(ConfirmCodResult.newBuilder()
+                        .setFulfillCode(code).setSuccess(true)
+                        .setMessage("collected=" + collected + "."));
+            }
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /**
+     * Bulk confirm phiếu — chỉ PENDING của batch, đơn FAILED loại (D7, filter
+     * trong repo). Audit 1 entry per-batch với danh sách codes (tránh spam).
+     * confirmed_count = số row đổi; total_amount = tổng expected đã chốt.
+     */
+    @Override
+    public void confirmBatchCod(ConfirmBatchCodRequest request, StreamObserver<ConfirmBatchCodResponse> responseObserver) {
+        try {
+            if (request.getBatchCode().isBlank()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "batchCode", "batchCode bắt buộc.")));
+            }
+            List<CodConfirmation> pending = codRepo.findPendingByBatch(request.getBatchCode());
+            long total = pending.stream().mapToLong(CodConfirmation::expectedAmount).sum();
+            String actor = ActorInterceptor.currentActor();
+            int confirmed = codRepo.confirmBatch(request.getBatchCode(), actor, Instant.now());
+            if (confirmed > 0) {
+                repo.appendAudit(actor, "cod.batch_confirmed", request.getBatchCode(), json(Map.of(
+                        "count", confirmed, "total", total,
+                        "codes", pending.stream().map(CodConfirmation::fulfillCode).toList())));
+            }
+            responseObserver.onNext(ConfirmBatchCodResponse.newBuilder()
+                    .setConfirmedCount(confirmed).setTotalAmount(total).build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /** Badge D2 "COD chờ thu (n)" — count/sum PENDING theo phiếu (D7 trong repo). */
+    @Override
+    public void getCodPending(GetCodPendingRequest request, StreamObserver<GetCodPendingResponse> responseObserver) {
+        try {
+            List<CodConfirmation> pending = codRepo.findPendingByBatch(request.getBatchCode());
+            responseObserver.onNext(GetCodPendingResponse.newBuilder()
+                    .setPendingCount(pending.size())
+                    .setTotalAmount(pending.stream().mapToLong(CodConfirmation::expectedAmount).sum())
+                    .build());
+            responseObserver.onCompleted();
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
     // ---------------- Master data / order-promising ----------------
 
     @Override
@@ -562,6 +700,15 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
 
     private static String orEmpty(String s) {
         return s == null ? "" : s;
+    }
+
+    /** Audit detail JSON — lỗi serialize không được kill RPC (fallback {}). */
+    private static String json(Object value) {
+        try {
+            return JSON.writeValueAsString(value);
+        } catch (Exception e) {
+            return "{}";
+        }
     }
 
     // ---------------- D2C mapping helpers (SF-18) ----------------

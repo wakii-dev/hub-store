@@ -96,11 +96,11 @@ Service: `rpc ConfirmCod(ConfirmCodRequest)...; rpc ConfirmBatchCod(...); rpc Ge
 - `confirmCod`: per item — tìm confirmation; confirm; `appendAudit(username, "cod.confirmed", fulfillCode, {expected, collected})`; trả result per-code (không tồn tại → success=false message rõ).
 - `confirmBatchCod`: `codRepo.findPendingByBatch` → confirm tất → audit từng đơn (hoặc 1 audit per batch — chọn per-batch 1 entry với danh sách codes để tránh spam).
 - `getCodPending`: count/sum PENDING theo batch (JOIN fail_reason IS NULL).
-- [ ] Step 1: proto append + regen TS + Java (verify additive diff).
-- [ ] Step 2: test TRƯỚC: unit test service-level confirm flow (InMemory repos, mock StreamObserver theo pattern test có sẵn trong fulfillment-service tests).
-- [ ] Step 3: implement service wiring trên.
-- [ ] Step 4: integration test: completePicking flow → PENDING row xuất hiện (InMemory assert); revert → row biến mất.
-- [ ] Step 5: `./mvnw -q test` PASS + `pnpm --filter @hub-store/shared build` (hoặc turbo build shared) để typecheck TS gen mới. Commit `feat(cod): confirm flow — eager pending, per-order + batch confirm, revert cleanup`.
+- [x] Step 1: proto append + regen TS + Java (verify additive diff).
+- [x] Step 2: test TRƯỚC: unit test service-level confirm flow (InMemory repos, mock StreamObserver theo pattern test có sẵn trong fulfillment-service tests).
+- [x] Step 3: implement service wiring trên.
+- [x] Step 4: integration test: completePicking flow → PENDING row xuất hiện (InMemory assert); revert → row biến mất.
+- [x] Step 5: `./mvnw -q test` PASS + `pnpm --filter @hub-store/shared build` (hoặc turbo build shared) để typecheck TS gen mới. Commit `feat(cod): confirm flow — eager pending, per-order + batch confirm, revert cleanup`.
 
 ### Task 3: settlement-aggregate-api — aggregate/detail RPCs + BFF REST `/cod/*` + shared DTOs
 
