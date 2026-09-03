@@ -91,7 +91,8 @@ Service: `rpc ConfirmCod(ConfirmCodRequest)...; rpc ConfirmBatchCod(...); rpc Ge
 **Service wiring (FulfillmentServiceImpl):**
 - Constructor inject thêm `CodConfirmationRepository codRepo` (UPDATE FulfillmentServiceImpl ctor — NOTE: đây là điểm semantic-conflict hay gặp khi merge; giữ signature cũ + param mới ở CUỐI).
 - **Eager PENDING (D1) — cơ chế atomicity (P0 plan-critic): KHÔNG dùng `@Transactional` trên method service (self-invocation qua `this.` bypass proxy; codebase 0 precedent service-layer @Transactional). Dùng `TransactionTemplate`** inject vào FulfillmentServiceImpl (PlatformTransactionManager đã có qua Spring Boot auto-config): `transactionTemplate.executeWithoutResult(tx -> { repo.mutateBatchStatus(...); codRepo.insertPendingIfAbsent(...); })` — 1 transaction thật span 2 repos, matching repo-level tx style. Với target==0 (revert): `codRepo.deletePendingByFulfillCodes(codes)` (D8 — cũng trong transaction nếu có codes update).
-- **Ctor ripple (P2):** thêm param `CodConfirmationRepository` vào ctor FulfillmentServiceImpl sẽ vỡ compile mọi test construct thủ công — sửa hết test ctor call sites trong cùng commit.
+- **Ctor ripple (P2):** thêm param `CodConfirmationRepository` + `TransactionTemplate` vào ctor FulfillmentServiceImpl sẽ vỡ compile mọi test construct thủ công — sửa hết test ctor call sites trong cùng commit.
+- **P0 (plan-critic round 2): inmemory mode KHÔNG có DataSource → không có PlatformTransactionManager auto-config → ctor inject TransactionTemplate vỡ boot.** Fix: `CodRepositoryConfig` inmemory branch đăng ký thêm bean `ResourcelessTransactionManager` (spring-tx, không cần DataSource) → TransactionTemplate auto-wire được ở cả 2 mode.
 - `confirmCod`: per item — tìm confirmation; confirm; `appendAudit(username, "cod.confirmed", fulfillCode, {expected, collected})`; trả result per-code (không tồn tại → success=false message rõ).
 - `confirmBatchCod`: `codRepo.findPendingByBatch` → confirm tất → audit từng đơn (hoặc 1 audit per batch — chọn per-batch 1 entry với danh sách codes để tránh spam).
 - `getCodPending`: count/sum PENDING theo batch (JOIN fail_reason IS NULL).
@@ -131,7 +132,7 @@ Envelope: `reply.send(paginated(rows, total, page, pageSize))` cho `/cod/settlem
 - Modify: `apps/shell/src/nav.ts` (append CUỐI `{ path: '/settlement', labelKey: 'nav.settlement', permission: 'settlement.view' }` + i18n keys namespace shell)
 - Create: `apps/shell/src/pages/settlement/SettlementPage.tsx` (+ components con nếu cần: KpiCards, ShopTable, ConfirmModal)
 - Create: `apps/shell/src/api/settlementApi.ts` (**axios fetch wrapper — pattern `apps/shell/src/api/areaStaffApi.ts`; shell KHÔNG dùng RTKQ** — P1 plan-critic: RTKQ chỉ ở apps/fulfillment với per-page Provider)
-- Modify: `apps/fulfillment/src/api/batchesApi.ts` HOẶC mới `codApi.ts` + đăng ký trong `apps/fulfillment/src/store.ts` (RTKQ cho D2 badge `/cod/pending` + confirm mutation — RTKQ lives here, store setup cần inject reducer)
+- Modify: `apps/fulfillment/src/api/` — tạo mới `codApi.ts` (injectApi pattern của batchesApi) + đăng ký trong `apps/fulfillment/src/store.ts`. RTKQ slice CHỈ chứa endpoints D2-badge: `getCodPending` (query `/cod/pending`) + `confirmBatchCod` (mutation `/cod/confirm-batch`) — settlement/detail/export là axios ở shell, KHÔNG đưa vào RTKQ (P2 plan-critic round 2)
 - Modify: `apps/fulfillment/src/pages/BatchListPage.tsx` (badge "COD chờ thu (n)" + nút xác nhận thu cho batch COMPLETED — fetch `/cod/pending`, modal → POST confirm-batch; KHÔNG đổi testid/DOM hiện có)
 - **Đọc TRƯỚC khi code UI:** `docs/superpowers/designs/sf-14-direction.md` + fidelity target `direction-b.html` (KPI cards + progress + segmented filter + drill-down order cards + modal prefill expected / collected optional).
 
