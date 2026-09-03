@@ -7,8 +7,8 @@
  * useNavigate hoạt động dưới BrowserRouter của shell nhờ react-router-dom
  * MF singleton — batchCode link cross-remote navigate /hub-store-order/batch.
  */
-import { useMemo, useState } from "react";
-import { Button, Space, Table, Tooltip, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { Button, Space, Table, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -29,7 +29,9 @@ import {
   DESIGN_TOKENS,
   StatStripSkeleton,
   EmptyState,
+  loadPlanningMap,
   type HubStoreOrderFilterItem,
+  type PlanningMapEntry,
   type RegionsResponse,
   type ShopsResponse,
 } from "@hub-store/shared";
@@ -55,6 +57,7 @@ import { HubStoreTransferModal } from "../features/HubStoreTransferModal";
 import { CreateOrderModal } from "../features/CreateOrderModal";
 import { ImportOrdersModal } from "../features/ImportOrdersModal";
 import { CreateBatchingModal } from "../batching/CreateBatchingModal";
+import { useBatchOrdersQuery, useSearchBookingDetailQuery } from "../batching/deliveryBatchApi";
 import { StatStrip } from "./StatStrip";
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
@@ -125,6 +128,86 @@ function D1Content() {
   // SF-13 — tạo đơn tay + nhập đơn file
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [importOrdersOpen, setImportOrdersOpen] = useState(false);
+
+  // --- SF-16 (Task 6) — replan/rebook entry-point -----------------------------
+  // D2 (fulfillment) navigate sang đây với ?nvcMode=replan|rebook&nvcBatchCode=
+  // (cross-MF qua URL params — P0 plan-critic: KHÔNG import cross-app).
+  const [nvcRequest, setNvcRequest] = useState<{
+    mode: "replan" | "rebook";
+    batchCode: string;
+    entries: PlanningMapEntry[];
+  } | null>(null);
+  const [nvcModal, setNvcModal] = useState<{
+    mode: "replan" | "rebook";
+    batchCode: string;
+    entries: PlanningMapEntry[];
+    orders: HubStoreOrderFilterItem[];
+  } | null>(null);
+
+  // On mount — đọc params + xóa NGAY (replaceState) để refresh không mở lại.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nvcMode = params.get("nvcMode");
+    const nvcBatchCode = params.get("nvcBatchCode");
+    if ((nvcMode !== "replan" && nvcMode !== "rebook") || !nvcBatchCode) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    if (nvcMode === "rebook") {
+      const entries = loadPlanningMap(nvcBatchCode);
+      if (entries.length === 0) {
+        message.info(t("nvc.rebook.noEntries"));
+        return;
+      }
+      setNvcRequest({ mode: "rebook", batchCode: nvcBatchCode, entries });
+    } else {
+      setNvcRequest({ mode: "replan", batchCode: nvcBatchCode, entries: [] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const { data: nvcBatchOrders } = useBatchOrdersQuery(nvcRequest?.batchCode ?? "", {
+    skip: nvcRequest === null,
+  });
+  const nvcPlanningIds = (nvcRequest?.entries ?? []).map((e) => e.planningId).join(",");
+  const { data: nvcBookingDetails } = useSearchBookingDetailQuery(nvcPlanningIds, {
+    skip: nvcRequest?.mode !== "rebook" || nvcPlanningIds === "",
+  });
+
+  // Khi data đủ → build modal (chạy 1 lần — guard nvcModal tránh loop setState).
+  useEffect(() => {
+    if (nvcRequest === null || nvcModal !== null || !nvcBatchOrders) return;
+    if (nvcRequest.mode === "replan") {
+      // Replan — loại đơn FAILED (failReason do server set, như OrderExpandContent D7).
+      const remaining = nvcBatchOrders.filter((o) => !o.failReason);
+      if (remaining.length === 0) {
+        message.info(t("nvc.replan.noOrders"));
+        setNvcRequest(null);
+        return;
+      }
+      setNvcModal({ ...nvcRequest, orders: remaining });
+    } else {
+      if (!nvcBookingDetails) return;
+      // Rebook — planningIdsToRebook: booking null (đã confirm nhưng bị hủy) hoặc
+      // booking CANCELLED. Planning BOOKED khác KHÔNG đụng (BE idempotent no-op).
+      const bookingByPlanning = new Map(
+        nvcBookingDetails.bookings.map((b) => [b.planningId, b.booking]),
+      );
+      const toRebook = nvcRequest.entries.filter((e) => {
+        const b = bookingByPlanning.get(e.planningId);
+        return b == null || b.status === "CANCELLED";
+      });
+      if (toRebook.length === 0) {
+        message.info(t("nvc.rebook.noEntries"));
+        setNvcRequest(null);
+        return;
+      }
+      const codes = new Set(toRebook.map((e) => e.orderCode));
+      setNvcModal({
+        ...nvcRequest,
+        entries: toRebook,
+        orders: nvcBatchOrders.filter((o) => codes.has(o.fulfillCode)),
+      });
+    }
+  }, [nvcRequest, nvcModal, nvcBatchOrders, nvcBookingDetails, t]);
 
   // Expand (controlled — nút "Chi tiết" toggle cùng hàng với icon expand)
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
@@ -449,6 +532,17 @@ function D1Content() {
         orders={selectedRows}
         onClose={() => setCreateBatchOpen(false)}
       />
+      {/* SF-16 (Task 6) — modal replan/rebook mở từ entry-point URL params */}
+      {nvcModal !== null && (
+        <CreateBatchingModal
+          open
+          mode={nvcModal.mode}
+          orders={nvcModal.orders}
+          batchCode={nvcModal.mode === "rebook" ? nvcModal.batchCode : undefined}
+          rebookEntries={nvcModal.entries.length > 0 ? nvcModal.entries : undefined}
+          onClose={() => setNvcModal(null)}
+        />
+      )}
       <CreateOrderModal open={createOrderOpen} onClose={() => setCreateOrderOpen(false)} />
       <ImportOrdersModal open={importOrdersOpen} onClose={() => setImportOrdersOpen(false)} />
     </div>

@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
-import { initI18n } from "@hub-store/shared";
+import { initI18n, savePlanningMap } from "@hub-store/shared";
 import type { HubStoreOrderFilterItem, RegionsResponse, ShopsResponse } from "@hub-store/shared";
 import { useGetRegionsQuery, useGetShopsQuery, useListOrdersQuery } from "@hub-store/api-client";
 import { ordersResources, registerOrdersResources } from "../i18n";
@@ -20,8 +20,32 @@ vi.mock("@hub-store/api-client", async (importOriginal) => {
     useListOrdersQuery: vi.fn(),
     useGetRegionsQuery: vi.fn(),
     useGetShopsQuery: vi.fn(),
+    useGetDeliveryStaffQuery: vi.fn(() => ({ data: undefined })),
   };
 });
+
+// SF-16 (Task 6) — deliveryBatchApi hooks: nvc batch orders + search booking
+// detail (rebook gate) + các mutation NVC mà CreateBatchingModal dùng (inert —
+// tránh fetch thật khi modal mở trong test).
+const nvcBatchOrdersMock = vi.hoisted(() => vi.fn());
+const nvcSearchBookingMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../batching/deliveryBatchApi", () => ({
+  // Mutation inert (resolve rỗng) — modal rebook/rebook mở trong test có thể
+  // auto-fetch quotes (TRUCK bật sẵn) → không được trả undefined.
+  useGetQuotesMutation: () => [vi.fn(() => ({ unwrap: () => Promise.resolve({ quotes: [], meta: { mock: false } }) })), { isLoading: false }],
+  useConfirmPlanningMutation: () => [vi.fn(), { isLoading: false }],
+  useCreateBookingMutation: () => [vi.fn(), { isLoading: false }],
+  useBatchOrdersQuery: (arg: unknown) => nvcBatchOrdersMock(arg),
+  useSearchBookingDetailQuery: (arg: unknown) => nvcSearchBookingMock(arg),
+}));
+
+vi.mock("../batching/batchingApi", () => ({
+  usePackingSuggestMutation: () => [vi.fn(), { isLoading: false }],
+  useRecalculateDistanceMutation: () => [vi.fn(), { isLoading: false }],
+  useCreateBatchMutation: () => [vi.fn(), { isLoading: false }],
+  useGetTimeDeliveryQuery: () => ({ data: undefined }),
+}));
 
 const mocked = {
   useListOrdersQuery: vi.mocked(useListOrdersQuery),
@@ -99,6 +123,9 @@ beforeAll(() => {
 beforeEach(() => {
   window.history.replaceState(null, "", "/hub-store-order/order");
   mockApi();
+  localStorage.clear();
+  nvcBatchOrdersMock.mockReset().mockReturnValue({ data: undefined });
+  nvcSearchBookingMock.mockReset().mockReturnValue({ data: undefined });
 });
 
 afterEach(() => {
@@ -188,5 +215,63 @@ describe("D1Page", () => {
     unmount();
     renderD1();
     expect((screen.getByPlaceholderText("Số đơn hàng") as HTMLInputElement).value).toBe("ORD-1");
+  });
+
+  // ─── SF-16 Task 6: entry-point replan/rebook (URL params từ D2 navigate) ───
+
+  it("nvcMode=replan → mở modal 'Tạo lại phiếu giao', LỌC đơn FAILED, xóa params", { timeout: 20000 }, async () => {
+    nvcBatchOrdersMock.mockReturnValue({
+      data: [
+        makeRow({ fulfillCode: "ORD-3001", batchStatus: 1 }),
+        makeRow({ fulfillCode: "ORD-FAIL", batchStatus: 1, failReason: "KHACH_VANG" }),
+      ],
+    });
+    window.history.replaceState(
+      null,
+      "",
+      "/hub-store-order/order?nvcMode=replan&nvcBatchCode=BATCH-0001",
+    );
+    renderD1();
+
+    expect(await screen.findByText("Tạo lại phiếu giao")).toBeTruthy();
+    // Params đã xóa (replaceState) — refresh không mở lại
+    expect(window.location.search).toBe("");
+    // Đơn FAILED bị loại khỏi rows
+    expect(screen.getByTestId("batch-row-ORD-3001")).toBeTruthy();
+    expect(screen.queryByTestId("batch-row-ORD-FAIL")).toBeNull();
+  });
+
+  it("nvcMode=rebook + planning map + booking null → mở modal 'Book lại vận đơn' với rows của planning cần rebook", { timeout: 20000 }, async () => {
+    savePlanningMap("BATCH-0001", [
+      { planningId: "11", orderCode: "ORD-3001", stopOrder: 1, serviceId: "1T", vehicleType: "1T", addons: [] },
+    ]);
+    nvcBatchOrdersMock.mockReturnValue({
+      data: [makeRow({ fulfillCode: "ORD-3001", batchStatus: 1 })],
+    });
+    nvcSearchBookingMock.mockReturnValue({
+      data: { bookings: [{ planningId: "11", booking: null, timeline: [] }], meta: { mock: false } },
+    });
+    window.history.replaceState(
+      null,
+      "",
+      "/hub-store-order/order?nvcMode=rebook&nvcBatchCode=BATCH-0001",
+    );
+    renderD1();
+
+    expect(await screen.findByText("Book lại vận đơn")).toBeTruthy();
+    expect(window.location.search).toBe("");
+    expect(screen.getByTestId("batch-row-ORD-3001")).toBeTruthy();
+  });
+
+  it("nvcMode=rebook KHÔNG có planning map → không mở modal (chỉ info)", { timeout: 20000 }, async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/hub-store-order/order?nvcMode=rebook&nvcBatchCode=BATCH-XXXX",
+    );
+    renderD1();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText("Book lại vận đơn")).toBeNull();
+    expect(window.location.search).toBe(""); // params vẫn được dọn
   });
 });

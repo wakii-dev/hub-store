@@ -1,7 +1,7 @@
 import { render, screen, fireEvent, cleanup, waitFor } from "@testing-library/react";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
-import { getI18n, initI18n } from "@hub-store/shared";
+import { getI18n, initI18n, savePlanningMap } from "@hub-store/shared";
 import type { Batch, HubStoreOrderFilterItem } from "@hub-store/shared";
 import { fulfillmentResources } from "../i18n";
 import BatchListPage from "./BatchListPage";
@@ -60,6 +60,20 @@ const COMPLETED_BATCH: Batch = {
     },
   ],
   createdAt: "2026-09-01T10:00:00+07:00",
+};
+
+const CANCELLED_BATCH: Batch = {
+  ...ACTIVE_BATCH,
+  batchCode: "BATCH-0003",
+  status: 2, // CANCELLED — gate action "Tạo lại phiếu" (SF-16 Task 6)
+  items: [
+    {
+      ...ACTIVE_BATCH.items[0],
+      batchCode: "BATCH-0003",
+      orderCode: "RSA-700300",
+    },
+  ],
+  createdAt: "2026-08-30T10:00:00+07:00",
 };
 
 const paginated = (items: Batch[]) => ({ items, total: items.length, page: 1, pageSize: 10 });
@@ -132,6 +146,7 @@ beforeEach(() => {
   // Mặc định hydration chưa có dữ liệu (chưa expand / BFF lỗi) — UI vẫn render.
   batchOrdersMock.mockReturnValue({ data: undefined });
   window.history.replaceState(null, "", "/");
+  localStorage.clear(); // planning map (SF-16) — gate rebook sạch giữa các test
 });
 
 afterEach(() => {
@@ -300,5 +315,61 @@ describe("BatchListPage (D2)", () => {
     await waitFor(() =>
       expect(redeliverMutate).toHaveBeenCalledWith({ code: "RSA-700107" }),
     );
+  });
+
+  // ─── SF-16 Task 6: replan/rebook actions (cross-MF navigate qua URL params) ───
+
+  it("SF-16: batch CANCELLED → nút 'Tạo lại phiếu' → navigate nvcMode=replan; ACTIVE ẩn nút", () => {
+    mockListResult([ACTIVE_BATCH, CANCELLED_BATCH]);
+    renderPage();
+
+    // ACTIVE — không có replan
+    expect(screen.queryByTestId("batch-replan-BATCH-0001")).toBeNull();
+    // CANCELLED — có replan → navigate đúng URL (D1Page đọc nvcMode/nvcBatchCode)
+    fireEvent.click(screen.getByTestId("batch-replan-BATCH-0003"));
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/hub-store-order/order?nvcMode=replan&nvcBatchCode=BATCH-0003",
+    );
+  });
+
+  it("SF-16: rebook gate — ACTIVE KHÔNG planning map → ẩn; CÓ map → hiện + navigate nvcMode=rebook", () => {
+    mockListResult([ACTIVE_BATCH]);
+    renderPage();
+    expect(screen.queryByTestId("batch-rebook-BATCH-0001")).toBeNull();
+
+    // Persist planning map (flow TRUCK submit đã save) → gate mở
+    savePlanningMap("BATCH-0001", [
+      {
+        planningId: "101",
+        orderCode: "RSA-700107",
+        stopOrder: 1,
+        serviceId: "1T",
+        vehicleType: "1T",
+        addons: [],
+      },
+    ]);
+    cleanup();
+    renderPage();
+
+    fireEvent.click(screen.getByTestId("batch-rebook-BATCH-0001"));
+    expect(navigateMock).toHaveBeenCalledWith(
+      "/hub-store-order/order?nvcMode=rebook&nvcBatchCode=BATCH-0001",
+    );
+  });
+
+  it("SF-16: rebook KHÔNG hiện cho batch COMPLETED dù map có entries", () => {
+    savePlanningMap("BATCH-0002", [
+      {
+        planningId: "201",
+        orderCode: "RSA-700200",
+        stopOrder: 1,
+        serviceId: "1T",
+        vehicleType: "1T",
+        addons: [],
+      },
+    ]);
+    mockListResult([COMPLETED_BATCH]);
+    renderPage();
+    expect(screen.queryByTestId("batch-rebook-BATCH-0002")).toBeNull();
   });
 });

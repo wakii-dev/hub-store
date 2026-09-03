@@ -12,7 +12,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
-import { formatVnd, initI18n, type DeliveryAddonDto, type DeliveryQuoteDto, type HubStoreOrderFilterItem, type TimeRange } from "@hub-store/shared";
+import { formatVnd, initI18n, loadPlanningMap, savePlanningMap, type DeliveryAddonDto, type DeliveryQuoteDto, type HubStoreOrderFilterItem, type PlanningMapEntry, type TimeRange } from "@hub-store/shared";
 import { useGetDeliveryStaffQuery, useListOrdersQuery } from "@hub-store/api-client";
 import { ordersResources } from "../i18n";
 import { CreateBatchingModal } from "./CreateBatchingModal";
@@ -772,5 +772,135 @@ describe("CreateBatchingModal", () => {
     // submit disabled (không còn selection hợp lệ) + KHÔNG hiện message block (selection đã cleared)
     expect((screen.getByTestId("batch-submit") as HTMLButtonElement).disabled).toBe(true);
     expect(screen.queryByTestId("fee-limit-submit-block")).toBeNull();
+  });
+
+  // ─── SF-16 Task 6: rebook / replan behavior ───
+
+  const REBOOK_ENTRIES: PlanningMapEntry[] = [
+    { planningId: "101", orderCode: "ORD-3001", stopOrder: 1, serviceId: "1T", vehicleType: "1T", addons: [] },
+    { planningId: "102", orderCode: "ORD-3002", stopOrder: 2, serviceId: "1T", vehicleType: "1T", addons: [] },
+  ];
+
+  function renderRebook() {
+    return render(
+      <I18nextProvider i18n={testI18n}>
+        <CreateBatchingModal
+          open
+          mode="rebook"
+          orders={selection.slice(0, 2)}
+          batchCode="BATCH-9"
+          rebookEntries={REBOOK_ENTRIES}
+          onClose={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+  }
+
+  it("SF-16 T6: rebook — section 1 khóa (ẩn toolbar add + drag handle), TRUCK tự bật, prefill serviceId đồng nhất", async () => {
+    quotesMock.mockReturnValue(unwrapResult({ quotes: SIX_QUOTES, meta: { mock: false } }));
+    renderRebook();
+    await flush();
+    await flushDebounce(); // TRUCK đã bật sẵn → quotes fetch sau debounce
+
+    // Section 1 locked: KHÔNG toolbar thêm đơn + KHÔNG drag handle
+    expect(screen.queryByTestId("batch-add-order")).toBeNull();
+    expect(screen.queryByTestId("batch-packing-suggest")).toBeNull();
+    expect(screen.queryByTestId("batch-drag-handle")).toBeNull();
+
+    // Prefill: cả 2 planning cùng serviceId "1T" → quote 1T tick sẵn
+    expect((screen.getByTestId("quote-1T").querySelector("input") as HTMLInputElement).checked).toBe(true);
+    // Submit KHÔNG cần shipper/TG giao (rebook chỉ confirm + book)
+    expect((screen.getByTestId("batch-submit") as HTMLButtonElement).disabled).toBe(false);
+  });
+
+  it("SF-16 T6: rebook submit — KHÔNG createBatch; confirmPlanning batchCode hiện có (chỉ entries) + createBooking", async () => {
+    quotesMock.mockReturnValue(unwrapResult({ quotes: SIX_QUOTES, meta: { mock: false } }));
+    confirmPlanningMock.mockReturnValue(
+      unwrapResult({
+        plannings: [
+          { planningId: "101", batchCode: "BATCH-9", stopOrder: 1, orderCode: "ORD-3001", vehicleType: "1T", serviceId: "1T", addons: [], status: "CONFIRMED", codAmount: 15000000, totalBill: 0, fee: 50000 },
+          { planningId: "102", batchCode: "BATCH-9", stopOrder: 2, orderCode: "ORD-3002", vehicleType: "1T", serviceId: "1T", addons: [], status: "CONFIRMED", codAmount: 15000000, totalBill: 0, fee: 50000 },
+        ],
+        meta: { mock: false },
+      }),
+    );
+    bookingMock.mockReturnValue(
+      unwrapResult({
+        bookings: [
+          { planningId: "101", carrierBookingId: "CB-9", driver: "Mới - 0999", licensePlate: "30K-999.99", status: "ACTIVE" },
+        ],
+        meta: { mock: false },
+      }),
+    );
+
+    renderRebook();
+    await flush();
+    await flushDebounce();
+
+    fireEvent.click(screen.getByTestId("batch-submit"));
+    await flush();
+
+    // KHÔNG tạo phiếu mới — phiếu BATCH-9 giữ nguyên
+    expect(createMock).not.toHaveBeenCalled();
+    expect(confirmPlanningMock).toHaveBeenCalledWith({
+      batchCode: "BATCH-9",
+      plannings: [
+        { stopOrder: 1, orderCode: "ORD-3001", vehicleType: "1T", serviceId: "1T", addons: [] },
+        { stopOrder: 2, orderCode: "ORD-3002", vehicleType: "1T", serviceId: "1T", addons: [] },
+      ],
+    });
+    expect(bookingMock).toHaveBeenCalledWith({
+      batchCode: "BATCH-9",
+      shipmentPlannings: [
+        { planningId: "101", codAmount: 15000000, totalBill: 0, stopOrder: 1 },
+        { planningId: "102", codAmount: 15000000, totalBill: 0, stopOrder: 2 },
+      ],
+    });
+    // Review hiển thị booking mới
+    expect(screen.getByTestId("review-booking").textContent).toContain("CB-9");
+  });
+
+  it("SF-16 T6: TRUCK submit thành công → savePlanningMap (gate rebook/replan ở D2)", async () => {
+    localStorage.clear();
+    quotesMock.mockReturnValue(unwrapResult({ quotes: SIX_QUOTES, meta: { mock: false } }));
+    createMock.mockReturnValue(
+      unwrapResult({
+        batchCode: "BATCH-77",
+        items: [
+          { batchCode: "BATCH-77", stopOrder: 1, orderCode: "ORD-3001", customerAddress: "Địa chỉ ORD-3001", distance: 3.5, fromDeliveryTime: "", toDeliveryTime: "", orderStatus: 1, orderType: 0, items: [], totalQuantity: 2, codAmount: 15000000 },
+        ],
+      }),
+    );
+    confirmPlanningMock.mockReturnValue(
+      unwrapResult({
+        plannings: [
+          { planningId: "701", batchCode: "BATCH-77", stopOrder: 1, orderCode: "ORD-3001", vehicleType: "1T", serviceId: "1T", addons: ["DOCUMENT"], status: "CONFIRMED", codAmount: 15000000, totalBill: 0, fee: 50000 },
+        ],
+        meta: { mock: false },
+      }),
+    );
+    bookingMock.mockReturnValue(unwrapResult({ bookings: [], meta: { mock: false } }));
+    timeDeliveryHook = createTimeDelivery([{ from: "2026-09-05T01:00:00.000Z", to: "2026-09-05T05:00:00.000Z" }]);
+
+    renderModal(selection.slice(0, 1));
+    await flush();
+    await selectTruckAndGetQuotes(ALL_STOPS.slice(0, 1));
+    await selectQuote("1T");
+
+    const shipperSelector = document.querySelector<HTMLElement>("[data-testid='batch-shipper-select'] .ant-select-selector")!;
+    fireEvent.mouseDown(shipperSelector);
+    await waitFor(() => document.querySelector(".ant-select-item-option"));
+    const option = document.querySelector<HTMLElement>(".ant-select-item-option")!;
+    fireEvent.mouseDown(option);
+    fireEvent.mouseUp(option);
+    fireEvent.click(option);
+    fireEvent.click(screen.getByTestId("batch-time-hint-0"));
+    fireEvent.click(screen.getByTestId("batch-submit"));
+    await flush();
+
+    expect(confirmPlanningMock).toHaveBeenCalled();
+    expect(loadPlanningMap("BATCH-77")).toEqual([
+      { planningId: "701", orderCode: "ORD-3001", stopOrder: 1, serviceId: "1T", vehicleType: "1T", addons: ["DOCUMENT"] },
+    ]);
   });
 });

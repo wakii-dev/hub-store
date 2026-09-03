@@ -34,6 +34,8 @@ export const fulfillmentResources: I18nResources = {
       "action.cancel": "Hủy phiếu",
       "action.complete": "Hoàn tất soạn",
       "action.print": "In",
+      "action.replan": "Tạo lại phiếu",
+      "action.rebook": "Book lại vận đơn",
 
       "batch.status": "Trạng thái phiếu",
 
@@ -134,6 +136,8 @@ export const fulfillmentResources: I18nResources = {
       "action.cancel": "Cancel batch",
       "action.complete": "Complete picking",
       "action.print": "Print",
+      "action.replan": "Re-create batch",
+      "action.rebook": "Re-book shipment",
 
       "batch.status": "Batch status",
 

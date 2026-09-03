@@ -33,12 +33,14 @@ import {
   StatusTag,
   formatPeriodOfTime,
   formatVnd,
+  savePlanningMap,
   type DeliveryAddonDto,
   type DeliveryBookingDto,
   type DeliveryQuoteDto,
   type DeliveryStaffResponse,
   type HubStoreOrderFilterItem,
   type PackingGroup,
+  type PlanningMapEntry,
   type TimeRange,
 } from "@hub-store/shared";
 import { useGetDeliveryStaffQuery, useListOrdersQuery } from "@hub-store/api-client";
@@ -83,13 +85,14 @@ interface SortableRowValue {
   order: HubStoreOrderFilterItem;
   stopOrder: number;
   groupIndex: number; // -1 = không thuộc nhóm suggest nào
+  locked: boolean; // rebook — ẩn drag handle (section 1 khóa)
 }
 
 // react-sortable-hoc@2 typings không infer P qua WrappedComponentFactory union —
 // cast tường minh (runtime ĐÃ verify spike-3 trên react 18.3.1).
 const SortableRow = SortableElement(({ value }: { value: SortableRowValue }) => {
   const { t } = useTranslation("orders");
-  const { order, stopOrder, groupIndex } = value;
+  const { order, stopOrder, groupIndex, locked } = value;
   const color = groupIndex >= 0 ? groupColor(groupIndex) : null;
   return (
     <li
@@ -97,7 +100,7 @@ const SortableRow = SortableElement(({ value }: { value: SortableRowValue }) => 
       data-testid={`batch-row-${order.fulfillCode}`}
       style={color ? { background: color.bg } : undefined}
     >
-      <DragHandle />
+      {!locked && <DragHandle />}
       <span className="batch-cell-stop" data-testid="batch-stop-order">
         {stopOrder}
       </span>
@@ -138,10 +141,23 @@ export interface CreateBatchingModalProps {
    * 'replan' (tạo lại phiếu) · 'rebook' (book lại vận đơn — Task 6 lắp behavior).
    */
   mode?: CreateBatchingModalMode;
+  /** SF-16 rebook — mã phiếu hiện có (confirmPlanning BẬT buộc khi rebook). */
+  batchCode?: string;
+  /** SF-16 rebook — planning cần book lại (từ planning map, D1Page truyền). */
+  rebookEntries?: PlanningMapEntry[];
 }
 
-export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: CreateBatchingModalProps) {
+export function CreateBatchingModal({
+  open,
+  orders,
+  onClose,
+  mode = "create",
+  batchCode,
+  rebookEntries,
+}: CreateBatchingModalProps) {
   const { t } = useTranslation("orders");
+  const rebook = mode === "rebook";
+  const entries = rebookEntries ?? [];
 
   // Rows state — sync khi MỞ modal (snapshot selection); DnD/thêm đơn/recalc đổi state.
   const [rows, setRows] = useState<HubStoreOrderFilterItem[]>([]);
@@ -188,7 +204,8 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
       clearCloseTimer(); // P1: hủy timer version trước trước khi reset state
       setRows(orders);
       setGroups(null);
-      setCarrierGroup("KHO_CN");
+      // SF-16 rebook — luôn NVC: đặt TRUCK ngay để fetch quotes + prefill xe.
+      setCarrierGroup(rebook ? "TRUCK" : "KHO_CN");
       setQuotes(null);
       setMetaMock(false);
       setSelectedServiceId(null);
@@ -204,6 +221,17 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
     // Chỉ sync khi mở — selection D1 refetch giữa lúc mở không reset state đang sửa.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  // SF-16 rebook — prefill xe theo serviceId PHỔ BIẾN NHẤT khi đồng nhất
+  // (entries cùng 1 serviceId → tick sẵn quote đó; khác nhau → NG tự chọn).
+  useEffect(() => {
+    if (!rebook || quotes === null || entries.length === 0) return;
+    const uniform = entries.every((e) => e.serviceId === entries[0].serviceId);
+    if (!uniform) return;
+    const serviceId = entries[0].serviceId;
+    if (quotes.some((q) => q.serviceId === serviceId)) setSelectedServiceId(serviceId);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotes]);
 
   // P1: unmount (navigate/destroyOnClose) → không fire onClose sau khi chết.
   useEffect(() => () => clearCloseTimer(), []);
@@ -341,15 +369,27 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
   // (BE-authoritative 422 vẫn là lớp chặn cuối).
   const submitBlocked = hasBlockedSelection(selectedQuote);
   // TRUCK: phải chọn quote HỢP LỆ (không vượt hạn mức) trước khi submit.
-  const canSubmit =
-    rows.length > 0 && !!shipperId && deliveryTime !== null && (carrierGroup !== "TRUCK" || (!!selectedServiceId && !submitBlocked));
+  // rebook: chỉ cần quote hợp lệ (shipper/TG giao là flow KHO_CN legacy — NVC
+  // booking không dùng; plan T6.5 submit KHÔNG tạo phiếu).
+  const canSubmit = rebook
+    ? rows.length > 0 && !!selectedServiceId && !submitBlocked
+    : rows.length > 0 &&
+      !!shipperId &&
+      deliveryTime !== null &&
+      (carrierGroup !== "TRUCK" || (!!selectedServiceId && !submitBlocked));
 
   const handleCreate = async () => {
     if (!canSubmit) return;
+    if (rebook) {
+      await handleRebook();
+      return;
+    }
     if (carrierGroup === "TRUCK") {
       await handleCreateTruck();
       return;
     }
+    // Guard narrowing (ternary canSubmit làm mất aliased-narrowing của state)
+    if (!shipperId || deliveryTime === null) return;
     try {
       await createBatch({
         orderCodes: rows.map((r) => r.fulfillCode), // theo THỨ TỰ GIAO hiện hành
@@ -394,6 +434,20 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
         })),
       }).unwrap();
       const plannings = confirmResp.plannings ?? [];
+      // SF-16 Task 6 — persist planning map (gate rebook ở D2 + prefill D1).
+      if (batchCode) {
+        savePlanningMap(
+          batchCode,
+          plannings.map((p) => ({
+            planningId: p.planningId,
+            orderCode: p.orderCode,
+            stopOrder: p.stopOrder,
+            serviceId: p.serviceId,
+            vehicleType: p.vehicleType,
+            addons: p.addons,
+          })),
+        );
+      }
       const bookingResp = await createBooking({
         batchCode,
         shipmentPlannings: plannings.map((p) => ({
@@ -413,6 +467,46 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
     }
   };
 
+  /**
+   * Submit rebook (SF-16 §2.5 — Task 6): KHÔNG createBatch — chỉ
+   * confirmPlanning trên phiếu HIỆN CÓ (batchCode prop, chỉ planningIdsToRebook;
+   * planning CONFIRMED/BOOKED khác BE giữ nguyên) → createBooking. Kết quả book
+   * mới hiển thị ở review section (như flow TRUCK).
+   */
+  const handleRebook = async () => {
+    if (!batchCode || selectedQuote === null || entries.length === 0) return;
+    setNvcSubmitting(true);
+    try {
+      const confirmResp = await confirmPlanning({
+        batchCode,
+        plannings: entries.map((e) => ({
+          stopOrder: e.stopOrder,
+          orderCode: e.orderCode,
+          vehicleType: selectedQuote.vehicleType,
+          serviceId: selectedQuote.serviceId,
+          addons: selectedAddonCodes,
+        })),
+      }).unwrap();
+      const plannings = confirmResp.plannings ?? [];
+      const bookingResp = await createBooking({
+        batchCode,
+        shipmentPlannings: plannings.map((p) => ({
+          planningId: p.planningId,
+          codAmount: p.codAmount,
+          totalBill: 0, // như flow TRUCK — FE chưa có field totalBill
+          stopOrder: p.stopOrder,
+        })),
+      }).unwrap();
+      setBookingResults(bookingResp.bookings ?? []);
+      message.success(t("batching.quotes.bookingSuccess"));
+      setCreated(true);
+    } catch (err) {
+      message.error(extractRejectMessages(err, t("batching.quotes.error")).join("; "));
+    } finally {
+      setNvcSubmitting(false);
+    }
+  };
+
   const sortableItems: SortableRowValue[] = useMemo(() => {
     const codeToGroup = new Map<string, number>();
     (groups ?? []).forEach((g, gi) => g.orderCodes.forEach((c) => codeToGroup.set(c, gi)));
@@ -420,11 +514,12 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
       order,
       stopOrder: index + 1,
       groupIndex: codeToGroup.get(order.fulfillCode) ?? -1,
+      locked: rebook,
     }));
-  }, [rows, groups]);
+  }, [rows, groups, rebook]);
 
   const handleSortEnd = ({ oldIndex, newIndex }: SortEnd) => {
-    if (oldIndex === newIndex) return;
+    if (rebook || oldIndex === newIndex) return; // rebook — section 1 khóa
     setRows((prev) => arrayMove(prev, oldIndex, newIndex));
   };
 
@@ -501,34 +596,37 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
       </div>
 
       {/* ─── Section 1: danh sách đơn & thứ tự giao ─── */}
-      <div className="batch-toolbar">
-        <Button data-testid="batch-packing-suggest" loading={suggesting} onClick={() => void handlePackingSuggest()}>
-          {t("createBatch.packingSuggest")}
-        </Button>
-        <Button data-testid="batch-recalc-distance" loading={recalculating} onClick={() => void handleRecalculate()}>
-          {t("createBatch.recalcDistance")}
-        </Button>
-        <Select
-          className="batch-add-order"
-          mode="multiple"
-          showSearch
-          optionFilterProp="label"
-          value={[]}
-          placeholder={t("createBatch.addOrderPlaceholder")}
-          notFoundContent={searching ? t("common.loading") : t("createBatch.addOrderEmpty")}
-          onSearch={(v) => setSearchText(v)}
-          onSelect={(code: string) => handleAddOrders([code])}
-          onDeselect={() => undefined}
-          data-testid="batch-add-order"
-        >
-          {addItems.map((o) => (
-            <Select.Option key={o.fulfillCode} value={o.fulfillCode} label={o.fulfillCode}>
-              {o.fulfillCode} — {o.customerAddress}
-            </Select.Option>
-          ))}
-        </Select>
-        <Typography.Text type="secondary">{t("createBatch.addOrder")}</Typography.Text>
-      </div>
+      {/* rebook (SF-16 §2.5) — section 1 KHÓA: ẩn toolbar (không DnD/thêm/bớt). */}
+      {!rebook && (
+        <div className="batch-toolbar">
+          <Button data-testid="batch-packing-suggest" loading={suggesting} onClick={() => void handlePackingSuggest()}>
+            {t("createBatch.packingSuggest")}
+          </Button>
+          <Button data-testid="batch-recalc-distance" loading={recalculating} onClick={() => void handleRecalculate()}>
+            {t("createBatch.recalcDistance")}
+          </Button>
+          <Select
+            className="batch-add-order"
+            mode="multiple"
+            showSearch
+            optionFilterProp="label"
+            value={[]}
+            placeholder={t("createBatch.addOrderPlaceholder")}
+            notFoundContent={searching ? t("common.loading") : t("createBatch.addOrderEmpty")}
+            onSearch={(v) => setSearchText(v)}
+            onSelect={(code: string) => handleAddOrders([code])}
+            onDeselect={() => undefined}
+            data-testid="batch-add-order"
+          >
+            {addItems.map((o) => (
+              <Select.Option key={o.fulfillCode} value={o.fulfillCode} label={o.fulfillCode}>
+                {o.fulfillCode} — {o.customerAddress}
+              </Select.Option>
+            ))}
+          </Select>
+          <Typography.Text type="secondary">{t("createBatch.addOrder")}</Typography.Text>
+        </div>
+      )}
 
       {groups !== null && groups.length > 0 && (
         <div className="batch-groups" data-testid="batch-groups">
@@ -799,9 +897,11 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
           >
             {created
               ? t("createBatch.created")
-              : activeSection === 3
-                ? `✓ ${t("createBatch.createStep3")}`
-                : t("createBatch.create")}
+              : rebook
+                ? t("createBatch.rebookSubmit")
+                : activeSection === 3
+                  ? `✓ ${t("createBatch.createStep3")}`
+                  : t("createBatch.create")}
           </Button>
           {/* SF-16 §2.2 (Task 5) — message line dưới nút khi selection bị chặn */}
           {carrierGroup === "TRUCK" && submitBlocked && (

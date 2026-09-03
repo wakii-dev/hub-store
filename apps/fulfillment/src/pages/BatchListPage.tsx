@@ -28,6 +28,7 @@ import {
   TextSearch,
   formatPeriodOfTime,
   formatVnd,
+  loadPlanningMap,
   useUrlState,
   type Batch,
   type BatchEntityStatus,
@@ -341,6 +342,36 @@ function BatchListPageInner() {
               >
                 {t("action.print")}
               </Button>
+              {/* SF-16 §2.5 (Task 6) — replan/rebook: cross-MF qua URL params →
+                  D1Page (orders remote) đọc + mở modal tương ứng. KHÔNG đụng
+                  3 nút legacy ở trên. */}
+              {batch.status === BATCH_ENTITY_STATUS.CANCELLED && (
+                <Button
+                  size="small"
+                  data-testid={`batch-replan-${batch.batchCode}`}
+                  onClick={() =>
+                    navigate(
+                      `/hub-store-order/order?nvcMode=replan&nvcBatchCode=${encodeURIComponent(batch.batchCode)}`,
+                    )
+                  }
+                >
+                  {t("action.replan")}
+                </Button>
+              )}
+              {batch.status === BATCH_ENTITY_STATUS.ACTIVE &&
+                loadPlanningMap(batch.batchCode).length > 0 && (
+                  <Button
+                    size="small"
+                    data-testid={`batch-rebook-${batch.batchCode}`}
+                    onClick={() =>
+                      navigate(
+                        `/hub-store-order/order?nvcMode=rebook&nvcBatchCode=${encodeURIComponent(batch.batchCode)}`,
+                      )
+                    }
+                  >
+                    {t("action.rebook")}
+                  </Button>
+                )}
             </Space>
           </Space>
         );

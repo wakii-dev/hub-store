@@ -14,6 +14,8 @@ import type {
   DeliveryConfirmPlanningResponse,
   DeliveryQuotesRequest,
   DeliveryQuotesResponse,
+  DeliverySearchBookingDetailResponse,
+  HubStoreOrderFilterItem,
 } from "@hub-store/shared";
 
 const enhanced = api.injectEndpoints({
@@ -46,7 +48,36 @@ const enhanced = api.injectEndpoints({
         data: body,
       }),
     }),
+
+    // --- SF-16 (Task 6) — replan/rebook entry-point ở D1Page -----------------
+
+    // GET /delivery-batch/searchbookingdetail?planningIds=a,b — rebook gate:
+    // planning nào có booking null/CANCELLED cần book lại. Endpoint cùng tên
+    // fulfillment cũng inject (shape giống hệt — singleton dedupe an toàn).
+    searchBookingDetail: builder.query<DeliverySearchBookingDetailResponse, string>({
+      query: (planningIds) => ({
+        url: "/delivery-batch/searchbookingdetail",
+        method: "GET",
+        params: { planningIds },
+      }),
+    }),
+
+    // GET /orders/by-batch/:batchCode — đơn của phiếu (replan: lọc FAILED;
+    // rebook: rows hiển thị của planning còn lại). Tên `batchOrders` KHÔNG
+    // trùng `getBatchOrders` của fulfillment batchesApi (singleton isolation).
+    batchOrders: builder.query<HubStoreOrderFilterItem[], string>({
+      query: (batchCode) => ({
+        url: `/orders/by-batch/${encodeURIComponent(batchCode)}`,
+        method: "GET",
+      }),
+    }),
   }),
 });
 
-export const { useGetQuotesMutation, useConfirmPlanningMutation, useCreateBookingMutation } = enhanced;
+export const {
+  useGetQuotesMutation,
+  useConfirmPlanningMutation,
+  useCreateBookingMutation,
+  useSearchBookingDetailQuery,
+  useBatchOrdersQuery,
+} = enhanced;
