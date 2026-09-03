@@ -5,6 +5,11 @@
  * #475467 = gray warehouse — design-tokens.ts) vì icon nhận string param.
  */
 import L from "leaflet";
+// leaflet.css nạp tại đây (không phải MapView) — module này CHỈ bị reached qua
+// dynamic import của MapView nên leaflet chỉ tải khi map thật sự render
+// (map/index phải leaflet-free lúc import — regression index.node.test.ts).
+// Vitest (jsdom) stub CSS import theo mặc định nên tests vẫn pass.
+import "leaflet/dist/leaflet.css";
 import { numberedStopIcon, statusPinIcon, warehouseIcon } from "./markers";
 import type { LatLng } from "./routeFixture";
 
@@ -27,10 +32,9 @@ export interface MapController {
   destroy(): void;
 }
 
-/** Sắp stops theo stopOrder tăng dần — nguồn sự thật duy nhất về thứ tự. */
-export function sortStops<T extends { stopOrder: number }>(stops: T[]): T[] {
-  return [...stops].sort((a, b) => a.stopOrder - b.stopOrder);
-}
+/** sortStops sống ở ./sortStops (leaflet-free) — re-export ở đây cho tests
+ * import trực tiếp từ mapController. */
+export { sortStops } from "./sortStops";
 
 export function createMap(container: HTMLElement, opts?: { scrollWheelZoom?: boolean }): MapController {
   const map = L.map(container, {

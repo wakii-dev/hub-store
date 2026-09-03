@@ -1,7 +1,6 @@
 import { useEffect, useRef } from "react";
-import "leaflet/dist/leaflet.css";
 import "./map.css";
-import { createMap, type MapController, type StopSpec } from "./mapController";
+import type { MapController, StopSpec } from "./mapController";
 import type { LatLng } from "./routeFixture";
 
 export interface MapViewProps {
@@ -15,20 +14,45 @@ export interface MapViewProps {
   height?: number;
 }
 
-/** React wrapper Leaflet — mount: createMap; cleanup: destroy() (chống
- * "Map container is already initialized" khi modal destroyOnClose mở lại).
- * ResizeObserver → invalidateSize (modal animation + tab switch 0-width). */
+/** React wrapper Leaflet — mount: DYNAMIC import mapController (leaflet chỉ
+ * nạp khi map thật sự render — module này phải leaflet-free lúc import vì
+ * @hub-store/shared bị kéo vào node-env tests, vd shell tokenGetter.test —
+ * regression index.node.test.ts). Cleanup: destroy() (chống "Map container
+ * is already initialized" khi modal destroyOnClose mở lại). ResizeObserver →
+ * invalidateSize (modal animation + tab switch 0-width). */
 export function MapView(props: MapViewProps) {
   const ref = useRef<HTMLDivElement>(null);
   const ctrlRef = useRef<MapController | null>(null);
+  // Latest props cho async init — init xong SAU unmount không được chạy nếu
+  // cancelled; init xong ĐÚNG LÚC áp props HIỆN TẠI (không phải props lúc mount).
+  const propsRef = useRef(props);
+  propsRef.current = props;
 
   useEffect(() => {
-    if (!ref.current) return;
-    const ctrl = createMap(ref.current, { scrollWheelZoom: props.scrollWheelZoom });
-    ctrlRef.current = ctrl;
-    const ro = new ResizeObserver(() => ctrl.invalidateSize());
-    ro.observe(ref.current);
-    return () => { ro.disconnect(); ctrl.destroy(); ctrlRef.current = null; };
+    const container = ref.current;
+    if (!container) return;
+    let cancelled = false;
+    let ro: ResizeObserver | null = null;
+    void (async () => {
+      const { createMap } = await import("./mapController");
+      if (cancelled) return;
+      const ctrl = createMap(container, { scrollWheelZoom: propsRef.current.scrollWheelZoom });
+      ctrlRef.current = ctrl;
+      const p = propsRef.current;
+      if (p.warehouse) ctrl.setWarehouse(p.warehouse);
+      ctrl.setStops(p.stops ?? []);
+      if (p.polyline) ctrl.setPolyline(p.polyline);
+      ctrl.fitToData();
+      ctrl.invalidateSize();
+      ro = new ResizeObserver(() => ctrl.invalidateSize());
+      ro.observe(container);
+    })();
+    return () => {
+      cancelled = true;
+      ro?.disconnect();
+      ctrlRef.current?.destroy();
+      ctrlRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
