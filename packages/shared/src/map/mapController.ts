@@ -44,16 +44,21 @@ export function createMap(container: HTMLElement, opts?: { scrollWheelZoom?: boo
   }).addTo(map);
   const layer = L.layerGroup().addTo(map);
   let dataBounds: L.LatLngBounds | undefined;
+  // SF-24 fix (Task 2): MapView effect gọi setWarehouse TRƯỚC setStops —
+  // clearLayers() của setStops xóa warehouse marker vừa thêm → track marker
+  // và re-add sau mỗi clear (marker instance vẫn dùng được sau clearLayers).
+  let warehouseMarker: L.Marker | undefined;
 
   const api: MapController = {
     setWarehouse(p) {
       layer.clearLayers();
-      L.marker([p.lat, p.long], { icon: warehouseIcon("#475467" /* DESIGN_TOKENS gray — xem header */, p.testId) })
+      warehouseMarker = L.marker([p.lat, p.long], { icon: warehouseIcon("#475467" /* DESIGN_TOKENS gray — xem header */, p.testId) })
         .bindPopup(p.popupHtml ?? "Kho")
         .addTo(layer);
     },
     setStops(stops) {
       layer.clearLayers(); // chống marker trùng khi effect re-run (prop identity đổi)
+      if (warehouseMarker) warehouseMarker.addTo(layer);
       for (const s of stops) {
         const icon = s.color
           ? statusPinIcon(s.color, s.testId)

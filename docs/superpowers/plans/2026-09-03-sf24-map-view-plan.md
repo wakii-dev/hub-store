@@ -259,11 +259,11 @@ git commit -m "feat(shared): SF-24 map wrapper — Leaflet controller + MapView 
 
 **Dep:** Task 1.
 
-- [ ] **Step 2.1: i18n keys**
+- [x] **Step 2.1: i18n keys**
 
 `apps/fulfillment/src/i18n.ts` — khối vi + en thêm: `tracking.tabTimeline` ("Timeline"/"Timeline"), `tracking.tabMap` ("Bản đồ"/"Map"), `tracking.noRoute` ("Chưa có lộ trình — batch chưa xác nhận planning"/"No route — planning not confirmed in this session"), `tracking.noCoordsNote` ("{{count}} điểm chưa có tọa độ"/"{{count}} stop(s) without coordinates").
 
-- [ ] **Step 2.2: Test trước**
+- [x] **Step 2.2: Test trước**
 
 `BatchRouteMap.test.tsx` (vitest + testing-library, mock `@hub-store/shared` `loadPlanningMap` trả 2 entries ORD-A stopOrder 2, ORD-B stopOrder 1; mock leaflet? KHÔNG — jsdom chạy được createMap cơ bản, container có width qua style; nếu jsdom lỗi layout → vi.mock `./BatchRouteMap` subcomponents):
 
@@ -298,7 +298,7 @@ describe("BatchRouteMap.buildStops", () => {
 
 (Viết test render `BatchRouteMap` đầy đủ với jsdom — nếu `L.map` fail trong jsdom, thêm `vi.mock("leaflet", ...)` stub nhẹ theo lỗi thực tế; ghi kết quả thật vào commit message.)
 
-- [ ] **Step 2.3: Implement BatchRouteMap**
+- [x] **Step 2.3: Implement BatchRouteMap**
 
 `BatchRouteMap.tsx`:
 
@@ -376,11 +376,11 @@ import { Tabs } from "antd";
 - Props `TrackingModalProps` thêm `stopMeta?: Record<string, StopMeta>` (optional — caller chưa truyền cũng chạy).
 - KHÔNG forceRender tab map (không init map ẩn).
 
-- [ ] **Step 2.4: Test pass + typecheck app**
+- [x] **Step 2.4: Test pass + typecheck app**
 
 Run: `pnpm --filter fulfillment test` (theo test script thật của app — đọc package.json) → PASS. Run: `pnpm --filter fulfillment build` hoặc `exec tsc --noEmit` → sạch.
 
-- [ ] **Step 2.5: Commit**
+- [x] **Step 2.5: Commit**
 
 ```bash
 git add apps/fulfillment/src/delivery/BatchRouteMap.tsx apps/fulfillment/src/delivery/BatchRouteMap.test.tsx apps/fulfillment/src/delivery/TrackingModal.tsx apps/fulfillment/src/i18n.ts

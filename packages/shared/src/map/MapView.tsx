@@ -5,7 +5,8 @@ import { createMap, type MapController, type StopSpec } from "./mapController";
 import type { LatLng } from "./routeFixture";
 
 export interface MapViewProps {
-  warehouse?: (LatLng & { popupHtml?: string }) | null;
+  /** testId → DOM data-testid trên warehouse marker (SF-24 Task 2: warehouse-marker). */
+  warehouse?: (LatLng & { popupHtml?: string; testId?: string }) | null;
   stops?: StopSpec[];
   polyline?: LatLng[];
   scrollWheelZoom?: boolean;
