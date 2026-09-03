@@ -134,7 +134,9 @@ component không đổi."
 - `TechServicePage` render tab "Bản đồ" → `MapTab` (mới): MapTab TỰ fetch delivery
   orders bằng cùng query pattern `useTechFetch`/techApi (POST
   `/delivery-orders/filter`) **KHÔNG áp filter ẩn** (filter bar chỉ render trong tab
-  delivery — filter vô hình trong map tab là UX trap, spec-critic P1) → pins cho
+  delivery — filter vô hình trong map tab là UX trap, spec-critic P1); fetch MỘT lần
+  với pageSize lớn tường minh (200 — đủ cho scale hiện tại; nếu BE chặn max thì lấy
+  max và note limitation) → pins cho
   mỗi order có `receiver.location`: màu = `STATUS_TONE_MAP[status]` →
   `toneColors(tone).text`; popup: fulfillCode, trạng thái (TechStatusTag-style),
   địa chỉ, receiver, nút `<a href="tel:...">Gọi</a>` (pattern PhoneLink, testid
@@ -144,9 +146,10 @@ component không đổi."
   khi REQUIREMENT-GAP FI-245 được đóng (backend thêm GeoPoint). E2E assert pins bằng
   **route-mock POST `/delivery-orders/filter`** (Playwright `page.route` trả fixture
   có location) — cùng chiến lược route-abort tiles, không phụ thuộc seed.
-- Orders thiếu tọa độ (installation orders + delivery thiếu location): KHÔNG marker —
+- Orders thiếu tọa độ (delivery orders trong kết quả fetch thiếu location — MapTab
+  KHÔNG fetch installation orders): KHÔNG marker —
   liệt kê note bên dưới map "N đơn chưa có tọa độ" (testid `map-no-coords-note`,
-  count thật).
+  count trên data đã fetch).
 - Testid pin: `tech-map-pin-${orderCode}` (divIcon element `data-testid`).
 
 ### 4.4 MF singleton + CSS
@@ -188,9 +191,10 @@ Task DAG (5 tasks, tuần tự phần lớn vì cùng chạm shared/app files):
    markers theo planningMap mock.
 3. **tech-pins-view** — TECH_TABS 'map' + MapTab + i18n shell. Unit test: pins màu
    theo status, popup + tel, note count thiếu tọa độ.
-4. **integrate-tracking-modal** — mfShared leaflet 2 vite configs + wire-stopMeta
-   (BatchListPage truyền metadata địa chỉ/COD vào modal) + kiểm tra build/typecheck
-   cả 2 apps không vỡ.
+4. **integrate-tracking-modal** — mfShared leaflet **3 vite configs** (fulfillment,
+   shell, orders — §4.4) + wire-stopMeta (BatchListPage truyền metadata địa chỉ/COD,
+   key theo `batch.items[].orderCode` — KHÔNG key theo index join) + kiểm tra
+   build/typecheck cả 3 apps không vỡ.
 5. **e2e-map** — playwright.map.config.ts (containers sf-24-*, private ports) +
    08-map.spec.ts: login → tracking modal → tab Bản đồ → assert markers theo
    planningMap seed qua addInitScript (stop markers có data-stop-order, warehouse
