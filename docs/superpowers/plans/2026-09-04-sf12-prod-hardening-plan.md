@@ -22,7 +22,7 @@ T6 ci-pipeline ──> T7 e2e-in-ci ──────────────�
 T8 backup-cron ──> T9 restore-doc ───────────────────────┘
 ```
 
-Tier 1 (parallel-safe): T1, T2, T6, T8 — không đụng chung file (T1: services/*/; T2: .gitignore/.env.example/.env; T6: .github/; T8: scripts/). Tier 2: T3, T4, T7, T9. Tier 3: T5, T10. Cuối: T11. Thực thi tuần tự trong worktree (commit sequencing), review rolling theo nhóm: Nhóm A = T1+T2+T3+T4, Nhóm B = T5+T6+T7+T8+T9, Nhóm C = T10.
+Tier 1: T1, T2, T6, T8. Tier 2: T3, T4, T7, T9. Tier 3: T5, T10. Cuối: T11. **Thực thi TUẦN TỰ trong worktree, linear commit order: T1 → T2 → T3 → T4 → T5 → T6 → T7 → T8 → T9 → T10 → T11** (plan-critic: T2/T3/T4 ĐỀU sửa docker-compose.yml — KHÔNG song song hóa nhóm này; review rolling theo nhóm: Nhóm A = T1+T2+T3+T4, Nhóm B = T5+T6+T7+T8+T9, Nhóm C = T10). T1 được phép 2-3 scoped commits (Go / Java / BFF+e2e) cùng task — blast radius quá lớn cho 1 commit.
 
 **Commit convention:** `<type>(<scope>): SF-12 <summary> (FI-257)`. MỖI task 1 atomic commit, stage file cụ thể (KHÔNG `git add -A`).
 
@@ -68,6 +68,7 @@ Tier 1 (parallel-safe): T1, T2, T6, T8 — không đụng chung file (T1: servic
 
 - [ ] **Step 2.1:** `git ls-files | grep -E '^\.env'` — xác nhận .env tracked. `.gitignore` thêm `.env` (giữ `.env.local`, `.env.*.local`). `git rm --cached .env` + verify `git status` shows deletion staged, file vẫn tồn tại trên đĩa (`ls -la .env`).
 - [ ] **Step 2.2:** `.env.example`: `JWT_DEV_SECRET`/`VITE_JWT_DEV_SECRET` đang là hex thật → đổi thành placeholder rỗng + comment "điền local, KHÔNG commit"; thêm `INTERNAL_SERVICE_TOKEN=` placeholder; `OIDC_JWKS_URL`/`OIDC_ISSUER` cho Go/Java (issuer `http://localhost:8081`, jwks trong compose `http://keycloak:8081/realms/hubstore/...` — 2 giá trị KHÁC nhau, gotcha BFF compose:204).
+- [ ] **Step 2.2b:** README thêm mục "Fresh clone setup" (spec §3.2): `cp .env.example .env` → điền `POSTGRES_PASSWORD` + `INTERNAL_SERVICE_TOKEN` (+ secrets khác theo bảng) → `docker compose up --build`. 1 đoạn ngắn, đặt trên mục Deploy.
 - [ ] **Step 2.3:** `docker-compose.yml`: fulfillment + batching service env thêm `OIDC_ISSUER`, `OIDC_JWKS_URL=http://keycloak:8081/...`, `INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-}`, `HEALTH_PORT` (8083/8082). KHÔNG publish thêm port mới ra host ngoài health ports cần thiết.
 - [ ] **Step 2.4:** Verify: `git status` sạch về .env (chỉ staged deletion); `git check-ignore .env` → match; fresh-clone simulation: `GIT_SSH_COMMAND=: git archive HEAD | ...` không cần — chỉ verify index không còn .env: `git ls-files | grep -c '^\.env$'` → 0. compose config vẫn parse: `docker compose config -q` (cần .env local có giá trị — worktree này đã có .env từ base).
 - [ ] **Step 2.5:** Commit: `chore(secrets): SF-12 untrack .env + gitignore + placeholder sweep + compose env wiring (FI-257)`.
@@ -76,9 +77,11 @@ Tier 1 (parallel-safe): T1, T2, T6, T8 — không đụng chung file (T1: servic
 
 **Files:**
 - Modify: `docker/keycloak/hubstore-realm.json` (:191 admin client secret + :206-314 7 user passwords `"Password123!"`), `docker-compose.yml` (lockstep defaults), `.env.example` (lockstep), README.md (dev credentials section + rotation runbook)
+- **Lockstep e2e credentials (plan-critic P0):** `e2e/auth.setup.ts:22` (PASSWORD hardcoded `Password123!`), `e2e/tests/02-role-matrix.spec.ts:76`, `e2e/tests/05-users.spec.ts:82`, `e2e/tests/05-dashboard.spec.ts:163`, `e2e/walkthrough-sf18.ts:25` — đổi cùng đợt (tốt nhất: extract vào 1 constants file `e2e/lib/credentials.ts` import thay literal, hoặc đọc env `E2E_PASSWORD` với default mới)
 
-- [ ] **Step 3.1:** Sinh giá trị mới (openssl rand -hex 16 style): admin client secret mới; mỗi 7 user 1 password dev mới KHÁC nhau (ghi bảng vào README "Dev credentials (KHÔNG dùng prod)").
+- [ ] **Step 3.1:** Sinh giá trị mới (openssl rand -hex 16 style): admin client secret mới; mỗi 7 user 1 password dev mới KHÁC nhau (ghi bảng vào README "Dev credentials (KHÔNG dùng prod)"). Chọn 1 password chung cho e2e users nếu e2e specs fill literal — cập nhật e2e files ở Step 3.2b.
 - [ ] **Step 3.2:** Sửa realm JSON: `"secret"` admin + `credentials[].value` 7 users ( realm import hash format giữ nguyên — plain value KC tự hash khi import). Sửa compose + .env.example cùng giá trị (lockstep — 1 commit).
+- [ ] **Step 3.2b:** Cập nhật e2e credentials lockstep: extract `Password123!` từ 5 file trên vào `e2e/lib/credentials.ts` (hoặc env) — mọi spec login vẫn pass sau rotate (`pnpm --filter e2e exec tsc --noEmit` nếu có).
 - [ ] **Step 3.3:** README: mục "Secrets & rotation runbook" — bảng secret → nơi phải đổi đồng bộ (realm JSON / compose / .env.example / .env local) + quy trình rotate prod-style (từng secret 1 đoạn ngắn).
 - [ ] **Step 3.4:** Verify: Keycloak import thành công với realm JSON mới (boot keycloak compose service hoặc docker run --import-realm một lần) → login 1 user bằng password mới qua token endpoint (password grant hoặc PKCE script `e2e/scripts/`). `git diff` chỉ chứa file đã liệt kê.
 - [ ] **Step 3.5:** Commit: `chore(secrets): SF-12 rotate dev defaults — realm admin+7 users, lockstep compose/env.example, rotation runbook (FI-257)`.
@@ -86,14 +89,14 @@ Tier 1 (parallel-safe): T1, T2, T6, T8 — không đụng chung file (T1: servic
 ### Task 4: healthchecks — /health mọi service + compose wiring
 
 **Files:**
-- Modify: `services/bff-gateway/src/app.ts` (/healthz → /health + DB ping cả 2 pool; giữ /healthz alias), ripple `bff.contract.test.ts`, `server.ts`, `scripts/k8s-deploy.sh:31` nếu đổi path
+- Modify: `services/bff-gateway/src/app.ts` (/healthz → /health + DB ping cả 2 pool; giữ /healthz alias), **`services/bff-gateway/src/plugins/auth.ts` — thêm `/health` vào public skip-list (global onRequest hook :58 — không thêm → compose probe 401, stack boot deadlock)**, ripple `bff.contract.test.ts`, `server.ts`, `scripts/k8s-deploy.sh:31` nếu đổi path
 - Modify Go: `cmd/server/main.go` (+HTTP health server port `${HEALTH_PORT:8082}` — handler ping pgx pool `SELECT 1`)
 - Modify Java: bootstrap (+`com.sun.net.httpserver.HttpServer` port `${HEALTH_PORT:8083}`, handler ping DataSource `SELECT 1`, JSON `{status,db}`)
 - Modify: `services/print-service/print_service/server.py` (+`/health` liveness JSON)
 - Modify: `docker-compose.yml` (healthcheck mỗi app service; Java probe không giả định curl — cài curl vào `services/fulfillment-service/Dockerfile` HOẶC bash /dev/tcp; Go/BFF alpine busybox wget)
 - Test: BFF contract test /health
 
-- [ ] **Step 4.1:** BFF: `/health` mới — `await pool1.query('SELECT 1')` + pool2 (đọc wiring DB hiện có trong bff — nếu BFF không có pg pool trực tiếp thì health check qua gRPC ping fulfillment, ghi rõ choice); response `{status:'ok'|'degraded', db:{fulfillment,batching}}`, 200/503. `/healthz` alias giữ (contract test không vỡ). Update test assert db shape.
+- [ ] **Step 4.1:** BFF: `/health` mới — `await pool1.query('SELECT 1')` + pool2 (đọc wiring DB hiện có trong bff — nếu BFF không có pg pool trực tiếp thì health check qua gRPC ping fulfillment, ghi rõ choice); response `{status:'ok'|'degraded', db:{fulfillment,batching}}`, 200/503. `/healthz` alias giữ (contract test không vỡ). **Thêm `/health` vào skip-list public của `plugins/auth.ts` (:58)** — KHÔNG thì compose probe 401. Update test assert db shape.
 - [ ] **Step 4.2:** Go: health server tách file `internal/server/health_http.go` — start goroutine, graceful shutdown; ping `store.Pool().Ping(ctx)`. Java: `HealthHttpServer` class nhỏ cạnh bootstrap — start sau Spring context sẵn sàng, ping `jdbcTemplate.queryForObject("SELECT 1")`. Print: FastAPI/Flask route `/health` `{"status":"ok"}`.
 - [ ] **Step 4.3:** compose healthchecks: mỗi app service `test:` probe /health tương ứng image (Java: cài curl trong Dockerfile — 1 dòng apt-get; interval 10s timeout 5s retries 5 start_period 30s Java / 15s còn lại).
 - [ ] **Step 4.4:** Verify: boot từng service host-run → `curl -s localhost:<port>/health | jq` đúng shape; compose config parse. `go test ./... && mvn -q test && pnpm --filter bff-gateway test`.
@@ -116,7 +119,7 @@ Tier 1 (parallel-safe): T1, T2, T6, T8 — không đụng chung file (T1: servic
 **Files:**
 - Create: `.github/workflows/ci.yml`
 
-- [ ] **Step 6.1:** Workflow: `on: pull_request` + `push: branches: [main]`. Job `unit`: matrix steps trong 1 job — node20 + pnpm (cache pnpm store), `pnpm install --frozen-lockfile`, `pnpm -r lint` (nếu có lint script — kiểm root package.json; không có → `tsc --noEmit` per FE/BFF), `pnpm -r test` unit; setup-go 1.19 + `go vet ./... && go test ./...` (working-directory services/batching-service); setup-java 17 temurin + `mvn -B test` (working-directory services/fulfillment-service).
+- [ ] **Step 6.1:** Workflow: `on: pull_request` + `push: branches: [main]`. Job `unit`: matrix steps trong 1 job — node20 + pnpm (cache pnpm store), `pnpm install --frozen-lockfile`, `pnpm -r lint` (nếu có lint script — kiểm root package.json; không có → `tsc --noEmit` per FE/BFF), `pnpm -r test` **--filter loại trừ e2e package (e2e có script test → sẽ trigger Playwright trong unit job — kiểm và exclude)**; setup-go 1.19 + `go vet ./... && go test ./...` (working-directory services/batching-service); setup-java 17 temurin + `mvn -B test` (working-directory services/fulfillment-service).
 - [ ] **Step 6.2:** Job `docker-build`: docker build mỗi Dockerfile (tìm `**/Dockerfile` — compose dùng images nào thì build nấy, `docker build -t ci-<name> <ctx>`), KHÔNG push.
 - [ ] **Step 6.3:** Env cho tests không cần DB thật: Go tests đã skip-when-no-DB; Java integration test skip khi không DB (pattern SF-2 có sẵn) — verify bằng cách đọc test setup, ghi vào PR comment nếu cần env giả.
 - [ ] **Step 6.4:** Validate YAML cục bộ (`python3 -c "import yaml; yaml.safe_load(open('.github/workflows/ci.yml'))"`). Commit: `ci(sf-12): GitHub Actions — lint + unit (node/go/java) + docker build per PR (FI-257)`.
