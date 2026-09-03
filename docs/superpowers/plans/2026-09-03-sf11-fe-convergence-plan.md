@@ -110,10 +110,10 @@ Xem spec §5 — 17 files (2 NEW FE pages/slice, 3 NEW specs, 12 modify). Consum
 
 ### Task 5: skeletons-empty — Users/Dashboard/Audit (FI-256) [deps: T1, T4]
 **Files:** Modify `apps/shell/src/features/users/UsersPage.tsx`, `apps/orders/src/pages/DashboardPage.tsx`, `apps/shell/src/features/audit/AuditPage.tsx`.
-- [ ] Step 1: Áp `TableSkeleton` (initial load) + `EmptyState` (list rỗng) cho UsersPage (components có sẵn `packages/shared/src/components/Skeleton|EmptyState` — đọc props thật).
-- [ ] Step 2: DashboardPage — `StatStripSkeleton` khi aggregate loading; empty state khi charts không data (EmptyState hoặc chart empty config — chọn 1, theo pattern D1 dashboard cũ nếu có).
-- [ ] Step 3: AuditPage — confirm skeleton/empty đã có từ T1 (chỉ bổ sung nếu thiếu).
-- [ ] Step 4: Typecheck + unit pass; commit `feat(sf11): skeletons + empty-states Users/Dashboard/Audit`.
+- [x] Step 1: Áp `TableSkeleton` (initial load) + `EmptyState` (list rỗng) cho UsersPage (components có sẵn `packages/shared/src/components/Skeleton|EmptyState` — đọc props thật).
+- [x] Step 2: DashboardPage — `StatStripSkeleton` khi aggregate loading; empty state khi charts không data (EmptyState hoặc chart empty config — chọn 1, theo pattern D1 dashboard cũ nếu có).
+- [x] Step 3: AuditPage — confirm skeleton/empty đã có từ T1 (chỉ bổ sung nếu thiếu).
+- [x] Step 4: Typecheck + unit pass; commit `feat(sf11): skeletons + empty-states Users/Dashboard/Audit`.
 - **Verify:** mỗi màn có đúng 1 skeleton khi loading + 1 empty khi rỗng (browser do coordinator).
 
 ### Task 6: e2e-new-green — 3 specs mới + seam sf-11 (FI-256) [deps: T1,T2,T3,T5]
@@ -127,14 +127,14 @@ Xem spec §5 — 17 files (2 NEW FE pages/slice, 3 NEW specs, 12 modify). Consum
 
 ### Task 7: e2e-regression-15 — specs cũ all green KHÔNG sửa (FI-256) [deps: 6]
 **Files:** KHÔNG sửa specs (run-only). Fix code được phép NẾU (và chỉ nếu) triage ra lỗi do code SF-11.
-- [ ] Step 1: Port-guard (lưu ý: `boot-all.sh` tự blind-kill listeners trên 50051/50052/50053/8080/3000/3001/3002 — guard thật sự cần cho docker ports): `lsof -nP -iTCP:8081,8085,9092,55432 -sTCP:LISTEN` sạch + xác nhận không sibling e2e đang chạy trên default ports → boot: `LOG_DIR=/tmp/story/fi245/sf11` + `export KAFKA_ENABLED=true` (inline env — KHÔNG sửa `.env` vì file này git-tracked; dotenv không ghi đè process.env nên inline thắng cho BFF host-run; kafka part chỉ cần `docker compose --profile kafka up -d kafka kafka-init kafka-ui` — postgres/keycloak boot-all tự lo) → `E2E=1 bash scripts/boot-all.sh` (reset-db → seed sạch, khớp intent "state cần seed sạch" của config). Không sạch (docker ports) → liệt kê owner, REPORT coordinator, KHÔNG kill.
-- [ ] Step 2: Chạy 15 specs cũ: `E2E_REUSE=1 KAFKA_ENABLED=true pnpm exec playwright test` trong e2e/ (E2E_REUSE=1 BẮT BUỘC — webServer reuse=false mặc định sẽ abort "port already used" vì stack đã boot tay; KAFKA_ENABLED=true trên e2e processenv BẮT BUỘC — 05-kafka test.skip nếu thiếu, false-green). Ghi kết quả từng file.
-- [ ] Step 3: Triage matrix khi FAIL (KHÔNG sửa spec trong mọi nhánh):
+- [x] Step 1: Port-guard (lưu ý: `boot-all.sh` tự blind-kill listeners trên 50051/50052/50053/8080/3000/3001/3002 — guard thật sự cần cho docker ports): `lsof -nP -iTCP:8081,8085,9092,55432 -sTCP:LISTEN` sạch + xác nhận không sibling e2e đang chạy trên default ports → boot: `LOG_DIR=/tmp/story/fi245/sf11` + `export KAFKA_ENABLED=true` (inline env — KHÔNG sửa `.env` vì file này git-tracked; dotenv không ghi đè process.env nên inline thắng cho BFF host-run; kafka part chỉ cần `docker compose --profile kafka up -d kafka kafka-init kafka-ui` — postgres/keycloak boot-all tự lo) → `E2E=1 bash scripts/boot-all.sh` (reset-db → seed sạch, khớp intent "state cần seed sạch" của config). Không sạch (docker ports) → liệt kê owner, REPORT coordinator, KHÔNG kill.
+- [x] Step 2: Chạy 15 specs cũ: `E2E_REUSE=1 KAFKA_ENABLED=true pnpm exec playwright test` trong e2e/ (E2E_REUSE=1 BẮT BUỘC — webServer reuse=false mặc định sẽ abort "port already used" vì stack đã boot tay; KAFKA_ENABLED=true trên e2e processenv BẮT BUỘC — 05-kafka test.skip nếu thiếu, false-green). Ghi kết quả từng file.
+- [x] Step 3: Triage matrix khi FAIL (KHÔNG sửa spec trong mọi nhánh):
   (i) Port/seam/env mismatch (lỗi connect, absolute URL) → sai stack — fix cách boot, rerun.
   (ii) Data state (seed mutation, audit trống, đơn đếm sai) → re-seed DB (`seed-db.sh` / compose seed) rồi rerun.
   (iii) Code SF-11 vỡ hành vi cũ (testid mất, DOM đổi, API shape đổi do FE) → fix code SF-11, rerun.
   Nếu FAIL không vào 3 nhánh trên → REPORT coordinator kèm trace, không đoán fix.
-- [ ] Step 4: `git diff --stat e2e/tests/` files cũ = 0 (chứng minh không sửa specs); commit chỉ nếu có fix code (`fix(sf11): ...`).
+- [x] Step 4: `git diff --stat e2e/tests/` files cũ = 0 (chứng minh không sửa specs); commit chỉ nếu có fix code (`fix(sf11): ...`).
 - **Verify:** playwright output full pass (hoặc skip có lý do rõ per-spec nếu spec tự gate env — vd 05-nvc-api theo E2E env của nó); specs cũ untouched.
 
 ## Testing checklist (Phase 5 inputs)
