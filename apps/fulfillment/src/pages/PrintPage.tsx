@@ -1,10 +1,10 @@
 import { Component, type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Provider } from 'react-redux';
-import { Alert, Badge, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Typography, message } from 'antd';
+import { Alert, Badge, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Tooltip, Typography, message } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { DESIGN_TOKENS, PRINT_TYPES, type PrintType } from '@hub-store/shared';
+import { BATCH_ENTITY_STATUS, DESIGN_TOKENS, PRINT_TYPES, type PrintType } from '@hub-store/shared';
 import { fulfillmentStore } from '../store';
 import {
   printDocument,
@@ -203,6 +203,20 @@ function PrintPageInner() {
 
   const busy = printing || printAll !== null;
 
+  // SF-21 T5 — FE-only gate: batch CANCELLED → chặn in (In + In tất cả).
+  // Fail-open: batch chưa load / status vắng → KHÔNG chặn (E2E cũ in khi
+  // batch đang xử lý không có status trong mock).
+  const printBlocked = batch?.status === BATCH_ENTITY_STATUS.CANCELLED;
+  // antd4: Button disabled không nhận mouse event → bọc span để Tooltip hiện.
+  const withCancelTooltip = (node: ReactNode) =>
+    printBlocked ? (
+      <Tooltip title={t('print.cancelled.reason')}>
+        <span style={{ display: 'inline-flex' }}>{node}</span>
+      </Tooltip>
+    ) : (
+      node
+    );
+
   const tabItems = PRINT_TYPES.map((type) => ({
     key: type,
     label: t(`print.tab.${type}`),
@@ -304,18 +318,26 @@ function PrintPageInner() {
                 }))
           }
         />
-        <Button
-          type="primary"
-          icon={<PrinterOutlined />}
-          onClick={handlePrint}
-          loading={printing}
-          disabled={busy && !printing}
-        >
-          {t('action.print')}
-        </Button>
-        <Button onClick={handlePrintAll} loading={printAll !== null} disabled={busy && printAll === null}>
-          {t('print.action.printAll')}
-        </Button>
+        {withCancelTooltip(
+          <Button
+            type="primary"
+            icon={<PrinterOutlined />}
+            onClick={handlePrint}
+            loading={printing}
+            disabled={printBlocked || (busy && !printing)}
+          >
+            {t('action.print')}
+          </Button>,
+        )}
+        {withCancelTooltip(
+          <Button
+            onClick={handlePrintAll}
+            loading={printAll !== null}
+            disabled={printBlocked || (busy && printAll === null)}
+          >
+            {t('print.action.printAll')}
+          </Button>,
+        )}
         <Space align="center" style={{ marginLeft: 'auto' }}>
           <Typography.Text>{t('print.zoom.label')}</Typography.Text>
           <Slider

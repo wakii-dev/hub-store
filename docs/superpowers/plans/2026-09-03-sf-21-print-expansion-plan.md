@@ -116,9 +116,9 @@ Dispatch discipline (orca task deps không sửa được — coordinator enforc
 - Modify: `apps/fulfillment/src/pages/PrintPage.test.tsx`
 
 **Steps:**
-- [ ] Gate: batch status = `BATCH_ENTITY_STATUS.CANCELLED` (enums.ts:42, =2) → disable cả "In tất cả" + nút in per-type, Tooltip lý do "Phiếu đã hủy — không in được". Batch khác (ASSIGNED/PREPARING/COMPLETED) → cho phép (re-print OK). Chỉ FE gate (server-side out of scope — noted).
-- [ ] Test: status CANCELLED → buttons disabled; status PREPARING → enabled. KHÔNG vỡ test flow cũ (in khi PREPARING/ASSIGNED phải vẫn pass).
-- [ ] Run PrintPage tests + `pnpm -F fulfillment test` full → PASS. Commit `feat(sf-21): print-all gate theo batch status`.
+- [x] Gate: batch status = `BATCH_ENTITY_STATUS.CANCELLED` (enums.ts:42, =2) → disable cả "In tất cả" + nút in per-type, Tooltip lý do "Phiếu đã hủy — không in được". Batch khác (ASSIGNED/PREPARING/COMPLETED) → cho phép (re-print OK). Chỉ FE gate (server-side out of scope — noted).
+- [x] Test: status CANCELLED → buttons disabled; status PREPARING → enabled. KHÔNG vỡ test flow cũ (in khi PREPARING/ASSIGNED phải vẫn pass).
+- [x] Run PrintPage tests + `pnpm -F fulfillment test` full → PASS. Commit `feat(sf-21): print-all gate theo batch status`.
 
 ### Task 6: hotkeys — useHotkeys shared hook + wire F4/F6/F8
 

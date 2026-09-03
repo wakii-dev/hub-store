@@ -2,7 +2,7 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
 import { MemoryRouter } from "react-router-dom";
-import { getI18n, initI18n, PRINT_TYPES, type PrintType } from "@hub-store/shared";
+import { BATCH_ENTITY_STATUS, getI18n, initI18n, PRINT_TYPES, type PrintType } from "@hub-store/shared";
 import { fulfillmentResources } from "../i18n";
 import PrintPage from "./PrintPage";
 import { printDocument } from "../api/printApi";
@@ -20,11 +20,19 @@ const printDocMock = vi.hoisted(() => vi.fn());
 const sf21Mocks = vi.hoisted(() => ({
   batchItems: [] as Array<Record<string, unknown>>,
   countsItems: [] as Array<{ orderCode: string; count: number }>,
+  // SF-21 T5 — status phiếu điều khiển được; undefined = batch chưa có status
+  // (fail-open: nút in ENABLED — E2E cũ in khi batch chưa mang status).
+  batchStatus: undefined as number | undefined,
 }));
 
 vi.mock("../api/printApi", () => ({
   useGetBatchDetailQuery: () => ({
-    data: { batchCode: "BATCH-0001", shopCode: "30201", items: sf21Mocks.batchItems },
+    data: {
+      batchCode: "BATCH-0001",
+      shopCode: "30201",
+      status: sf21Mocks.batchStatus,
+      items: sf21Mocks.batchItems,
+    },
     isLoading: false,
   }),
   useGetPrintersQuery: () => ({
@@ -111,6 +119,7 @@ beforeEach(() => {
   printDocMock.mockResolvedValue(PDF_BYTES);
   sf21Mocks.batchItems.length = 0;
   sf21Mocks.countsItems.length = 0;
+  sf21Mocks.batchStatus = undefined;
 });
 
 afterEach(cleanup);
@@ -382,5 +391,54 @@ describe("PrintPage (SF-21 T3 — print-error badge + sort)", () => {
     const rows = within(list).getAllByTestId("print-order-row");
     expect(rows.map((r) => r.getAttribute("data-order-code"))).toEqual(["RSA-1", "RSA-2"]);
     expect(within(list).queryByText(/^1$/)).toBeNull();
+  });
+});
+
+/**
+ * SF-21 T5 — print-all gate theo batch status (spec §2): batch CANCELLED →
+ * disable "In" + "In tất cả" kèm Tooltip lý do; status khác (ACTIVE/COMPLETED)
+ * → enabled (re-print OK). Fail-open: batch thiếu status → ENABLED.
+ */
+describe("PrintPage (SF-21 T5 — print-all status gate)", () => {
+  it("batch CANCELLED → cả 2 nút in disabled + Tooltip lý do", async () => {
+    sf21Mocks.batchStatus = BATCH_ENTITY_STATUS.CANCELLED;
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy(), { timeout: 5000 });
+
+    const printBtn = getPrintBtn() as HTMLButtonElement;
+    const printAllBtn = getPrintAllBtn() as HTMLButtonElement;
+    expect(printBtn.disabled).toBe(true);
+    expect(printAllBtn.disabled).toBe(true);
+
+    // Tooltip trên nút disabled — bọc span (antd4 disabled không nhận mouse
+    // event trên chính button), hover span → lý do hiện.
+    fireEvent.mouseEnter(printAllBtn.parentElement as HTMLElement);
+    await waitFor(
+      () => expect(screen.getAllByText("Phiếu đã hủy — không in được").length).toBeGreaterThan(0),
+      { timeout: 5000 },
+    );
+
+    // Click nút disabled → KHÔNG phát call in thêm (chỉ preview bill lúc mount).
+    fireEvent.click(printAllBtn);
+    expect(printDocMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("batch ACTIVE/COMPLETED → nút in ENABLED (re-print OK)", async () => {
+    for (const status of [BATCH_ENTITY_STATUS.ACTIVE, BATCH_ENTITY_STATUS.COMPLETED]) {
+      sf21Mocks.batchStatus = status;
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy(), { timeout: 5000 });
+      expect((getPrintBtn() as HTMLButtonElement).disabled).toBe(false);
+      expect((getPrintAllBtn() as HTMLButtonElement).disabled).toBe(false);
+      cleanup();
+    }
+  });
+
+  it("batch thiếu status (mock cũ) → fail-open: nút in ENABLED", async () => {
+    sf21Mocks.batchStatus = undefined;
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy(), { timeout: 5000 });
+    expect((getPrintBtn() as HTMLButtonElement).disabled).toBe(false);
+    expect((getPrintAllBtn() as HTMLButtonElement).disabled).toBe(false);
   });
 });
