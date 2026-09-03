@@ -189,9 +189,9 @@ body { font-size: var(--app-font-size); }
 .ant-btn, .ant-table, .ant-form-item, .ant-modal, .ant-select,
 .ant-menu, .ant-descriptions-item, .ant-card { font-size: inherit; }
 ```
-- [ ] Util: clamp(12, 20) + localStorage `sf.fontSize` + setProperty trên documentElement. Test util.
-- [ ] Slider 12–20 (step 1) trong header + apply ngay khi kéo + persist. Reload giữ (E2E sẽ assert).
-- [ ] Run shared + shell tests → PASS. Commit `feat(sf-21): font-size slider 12-20 persist`.
+- [x] Util: clamp(12, 20) + localStorage `sf.fontSize` + setProperty trên documentElement. Test util.
+- [x] Slider 12–20 (step 1) trong header + apply ngay khi kéo + persist. Reload giữ (E2E sẽ assert).
+- [x] Run shared + shell tests → PASS. Commit `feat(sf-21): font-size slider 12-20 persist`.
 
 ### Task 10: hotkey-helper-modal
 
