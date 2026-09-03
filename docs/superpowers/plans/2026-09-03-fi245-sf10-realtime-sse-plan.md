@@ -60,8 +60,8 @@ DAG 3 tiers — Tier 1: T1 ∥ T3 (disjoint); Tier 2: T2 (deps T1), T4 (deps T3)
 
 ### Task 3: FE SSE hook (`fe-sse-hook`)
 **Files:** Create `packages/api-client/src/realtime.ts` + test
-- [ ] **Step 1:** `useRealtimeEvents({ api, invalidationTags, eventTypes? })` — EventSource connect (token từ tokenGetter), onmessage filter type → dispatch invalidateTags; expose connection status ('connected' | 'polling' | 'offline').
-- [ ] **Step 2:** Unit tests: filter đúng type, invalidate dispatch, cleanup unmount (mock EventSource).
+- [x] **Step 1:** `useRealtimeEvents({ api, invalidationTags, eventTypes? })` — EventSource connect (token từ tokenGetter), onmessage filter type → dispatch invalidateTags; expose connection status ('connected' | 'polling' | 'offline').
+- [x] **Step 2:** Unit tests: filter đúng type, invalidate dispatch, cleanup unmount (mock EventSource).
 
 ### Task 4: D1/D2 live update (`d1-d2-live-update`)
 **Files:** Modify `apps/orders/src/**` (root wire), `apps/fulfillment/src/**` (root wire)
