@@ -242,7 +242,7 @@ body { font-size: var(--app-font-size); }
 
 ## Verification (Phase 5 checklist)
 
-- [ ] Từng dòng ACCEPTANCE spec §7 → evidence (test + browser).
-- [ ] E2E cũ: 01-main-flow (print assertions :209-235), 02-role-matrix, 03-audit → xanh.
-- [ ] Flyway pre-merge: `ls services/fulfillment-service/src/main/resources/db/migration/` trên parent story/fi245-postgres-production — renumber V8/V9/V10 nếu sibling đã chiếm.
-- [ ] story-verify sf-21 sạch.
+- [x] Từng dòng ACCEPTANCE spec §7 → evidence (test + browser).
+- [x] E2E cũ: 01-main-flow (print assertions :209-235), 02-role-matrix, 03-audit → xanh.
+- [x] Flyway pre-merge: `ls services/fulfillment-service/src/main/resources/db/migration/` trên parent story/fi245-postgres-production — renumber V8/V9/V10 nếu sibling đã chiếm.
+- [x] story-verify sf-21 sạch.
