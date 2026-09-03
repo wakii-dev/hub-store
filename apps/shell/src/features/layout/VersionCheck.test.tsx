@@ -23,7 +23,7 @@ beforeEach(() => {
   callOrder.length = 0;
   localStorage.clear();
   const realSetItem = Storage.prototype.setItem;
-  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (key, value) {
+  vi.spyOn(Storage.prototype, 'setItem').mockImplementation(function (this: Storage, key: string, value: string) {
     callOrder.push('set');
     return realSetItem.call(this, key, value);
   });
