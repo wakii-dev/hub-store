@@ -7,7 +7,7 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
-import { initI18n } from "@hub-store/shared";
+import { initI18n, setRole } from "@hub-store/shared";
 import type { HubStoreOrderFilterItem, RegionsResponse, ShopsResponse } from "@hub-store/shared";
 import { useGetRegionsQuery, useGetShopsQuery, useListOrdersQuery } from "@hub-store/api-client";
 import { ordersResources, registerOrdersResources } from "../i18n";
@@ -168,10 +168,13 @@ describe("D1Page", () => {
   });
 
   it("edit delivery-time CHỈ hiện trên đơn batchStatus=0", { timeout: 20000 }, () => {
+    // SF-28 role gate: DeliveryTimeCell ẩn nút sửa khi không phải Coordinator/Manager/Admin
+    setRole("Coordinator");
     renderD1();
     expect(screen.getByTestId("edit-delivery-ORD-3001")).toBeTruthy(); // batchStatus 0
     expect(screen.getByTestId("edit-delivery-ORD-3009")).toBeTruthy(); // batchStatus 0
     expect(screen.queryByTestId("edit-delivery-ORD-3002")).toBeNull(); // batchStatus 1 → read-only
+    setRole(null);
   });
 
   it("batchCode link navigate cross-remote /hub-store-order/batch", { timeout: 20000 }, () => {
