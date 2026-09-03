@@ -71,6 +71,19 @@ wait_keycloak_realm() {
 }
 wait_keycloak_realm || exit 1
 
+# SF-8 — service account hubstore-admin cần realm-management:manage-users cho
+# Admin API (create/set-password/disable user). KC 26.0 bị bug import-realm:
+# khai báo user service-account trong realm JSON → duplicate-username crash,
+# nên JSON KHÔNG chứa user này (KC tự tạo khi client serviceAccountsEnabled)
+# và role được grant idempotent ở đây sau boot (chạy lại = no-op).
+docker exec hub-store-keycloak-1 /opt/keycloak/bin/kcadm.sh config credentials \
+  --server http://localhost:8081 --realm master \
+  --user "${KEYCLOAK_ADMIN:-admin}" --password "${KEYCLOAK_ADMIN_PASSWORD:-admin}" >/dev/null 2>&1 &&
+docker exec hub-store-keycloak-1 /opt/keycloak/bin/kcadm.sh add-roles \
+  -r hubstore --uusername service-account-hubstore-admin \
+  --cclientid realm-management --rolename manage-users >/dev/null 2>&1 ||
+  echo "[boot-all] WARN: grant manage-users cho service-account thất bại (SF-8 Admin API sẽ thiếu quyền)" >&2
+
 echo "[boot-all] boot fulfillment-service (Java :50051)..."
 (cd "$ROOT/services/fulfillment-service" && exec ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
 JAVA_PID=$!
