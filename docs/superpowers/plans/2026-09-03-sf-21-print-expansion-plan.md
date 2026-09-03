@@ -23,15 +23,20 @@
 - Commit per task: `<type>(sf-21): <summary>`; KHÔNG `git add -A`.
 - Proto regen toolchain (đã verify có mặt): protoc 29.3 `/opt/homebrew/bin/protoc`; java plugin `/tmp/sf1-spikes/spike4/jars/protoc-gen-grpc-java-1.64.0-osx-aarch_64.exe`; ts: `npm i ts-proto@2.7.7` vào /tmp dir rồi `--plugin` trỏ vào đó, opts `outputServices=grpc-js,forceLong=number,esModuleInterop=true`. Chi tiết: memory worktree-merge-patterns.md + docs/superpowers/spikes/grpc-codegen-multilang.md.
 
-## Task DAG (orca orchestration)
+## Task DAG (orca orchestration run_729984938a5b — dispatch schedule ĐIỀU CHỈNH theo plan-critic)
 
 ```
-Track A (print): T1 → T2 → T3 → T4 → T5 ─┐
-Track B (platform):                        ├→ T12 (e2e)
-  T6 → T10                                 │
-  T8, T9, T11 (độc lập)                    │
-  T7 (depends T2) ─────────────────────────┘
+Track A (print):     T1 → T2 → T3 → T4 → T5 ─┐
+Track B (platform):                           ├→ T12 (e2e)
+  T6 (sau T2 — cần PrintersPage) → T10        │
+  T8 → T9 → T11 (chain — cùng AppLayout.tsx)  │
+  T7 (sau T5 — tránh window sửa PrintPage) ───┘
 ```
+
+Dispatch discipline (orca task deps không sửa được — coordinator enforce):
+- Tier 0: T1, T8 (max 2 song song — T2 là long pole, không ghép task chậm khác)
+- Sau T2: T6 (song song T3), T9 sau T8, T11 sau T9, T10 sau T6, T7 sau T5
+- T12 cuối: deps hiệu dụng [T5, T6..T11]
 
 ---
 
@@ -65,6 +70,7 @@ Track B (platform):                        ├→ T12 (e2e)
 **Steps:**
 - [ ] V8 SQL: bảng `printers(shop_code varchar, printer_id varchar, name varchar, printer_ip varchar, mac varchar, type varchar CHECK (type IN ('bill','a4')), PRIMARY KEY (shop_code, printer_id))` + INSERT 6 rows canonical-seed (lấy từ `services/print-service/print_service/printers.py` seed registry — 2× shop 30201 + 4 shop khác; gán type: 30201 1 bill + 1 a4, shop 1-row gán `a4`) ON CONFLICT DO NOTHING.
 - [ ] Proto additive (đặt cuối service block, follow style hiện có): `message Printer { string shop_code; string printer_id; string name; string printer_ip; string mac; string type; }` + rpc `ListPrinters(ListPrintersRequest{shop_code}) → ListPrintersResponse{repeat Printer}` / `CreatePrinter(CreatePrinterRequest{Printer}) → CreatePrinterResponse` / `UpdatePrinter(UpdatePrinterRequest{shop_code, printer_id, Printer fields}) → UpdatePrinterResponse`. Lint giữ ENUM rule như buf.yaml chú thích.
+- [ ] Audit integration: CreatePrinter/UpdatePrinter ghi activity_log (pattern SF-7 audit — actor/action/target/detail, theo cách FulfillmentServiceImpl ghi audit cho mutation có sẵn — đọc trước khi viết).
 - [ ] Regen stubs: java (protoc + plugin path trên, out `services/fulfillment-service` theo đúng flag pattern đã dùng — xem git log các lần regen trước hoặc spike doc) + ts (ts-proto vào `api/proto/gen/ts/`). Verify: grep symbol mới trong gen files.
 - [ ] Java: PrinterRepository interface + PostgresPrinterRepository (JdbcTemplate, pattern PostgresServiceEmployeeRepository) + impl 3 rpc trong FulfillmentServiceImpl (role check server-side: Create/Update chỉ Admin — xem cách SF-8/17 check role trong impl) + duplicate → ALREADY_EXISTS (map 409 ở BFF). Unit test repo với InMemory impl.
 - [ ] BFF: `deps.fulfillment.listPrinters/createPrinter/updatePrinter` client methods (pattern staffArea client); routes: `GET /fulfillment/print/printers?shopCode=` ĐỔI NGUỒN sang `deps.fulfillment.listPrinters` (giữ nguyên response shape `{ items }` — api-contracts.test.ts pin); `POST/PUT /fulfillment/printers` Admin-gated (`requireUser(request, ['Admin'])` — plugin auth.ts:99) → map ALREADY_EXISTS→409.
@@ -82,6 +88,7 @@ Track B (platform):                        ├→ T12 (e2e)
 - Create: route `GET /fulfillment/print-errors?codes=` (counts per orderCode) trong print.ts
 - Modify: `apps/fulfillment/src/pages/PrintPage.tsx` + `BatchListPage.tsx` — badge count lỗi per đơn (antd Badge/Tag), sort danh sách đơn: nhiều lỗi nhất lên đầu (stable: rồi theo code), PrintPage hiển thị error list per order trong panel
 - Modify: `apps/fulfillment/src/api/printApi.ts` (client cho counts)
+- Modify: `packages/shared/src/api-contracts/print.ts` — additive `PrintErrorCountDto { orderCode: string; count: number }` + response type cho counts endpoint
 
 **Steps:**
 - [ ] V9 SQL: `print_errors(id bigserial PK, order_code varchar NOT NULL, batch_code varchar, print_type varchar NOT NULL, printer_id varchar, error_message text, occurred_at timestamptz NOT NULL DEFAULT now())` + index `(order_code)` + index `(batch_code, order_code)`.
@@ -140,7 +147,8 @@ function useHotkeys(bindings: HotkeyBinding[]): void
 
 **Steps:**
 - [ ] Áp EmptyState cho: PrintersPage khi shop chưa có printer (CTA "Thêm máy in"), PrintPage panel lỗi khi 0 errors, PrintPage khi batch không còn đơn hợp lệ để in.
-- [ ] Test render empty state mỗi màn. Commit `feat(sf-21): shared empty-states cho print screens`.
+- [ ] Test render empty state mỗi màn: `pnpm -F shell test` + `pnpm -F fulfillment test` → PASS.
+- [ ] Commit `feat(sf-21): shared empty-states cho print screens`.
 
 ### Task 8: avatar-upload — V10 + BFF routes + FE crop
 
@@ -193,7 +201,8 @@ body { font-size: var(--app-font-size); }
 
 **Steps:**
 - [ ] Đọc `hotkeyRegistry` (Task 6) → render bảng (phím | mô tả | context màn). Ô search filter theo text. KHÔNG đổi DOM/testid header hiện có — chỉ THÊM node mới.
-- [ ] Test: render modal qua click nút; search filter. Commit `feat(sf-21): hotkey helper modal`.
+- [ ] Test: render modal qua click nút; search filter; `pnpm -F shell test` → PASS.
+- [ ] Commit `feat(sf-21): hotkey helper modal`.
 
 ### Task 11: fullscreen-version-check
 
@@ -205,7 +214,8 @@ body { font-size: var(--app-font-size); }
 **Behavior:**
 - Fullscreen: `document.documentElement.requestFullscreen()` / `document.exitFullscreen()` toggle; F11 keydown preventDefault (webkitRequestFullscreen fallback Safari); macOS Fn-intercept graceful — nút luôn hoạt động.
 - Version: `APP_VERSION` unset → badge ẩn + check skip (không prompt-loop). Có version → so localStorage `sf.seenVersion`; khác → antd Modal "Phiên bản mới" + nút reload (reload set seenVersion TRƯỚC khi reload để không lặp). Check khi window focus + interval 5'.
-- [ ] Tests cho cả hai (mock fullscreen API + fetch). Commit `feat(sf-21): fullscreen toggle + version check prompt`.
+- [ ] Tests cho cả hai (mock fullscreen API + fetch): `pnpm -F shell test` → PASS.
+- [ ] Commit `feat(sf-21): fullscreen toggle + version check prompt`.
 
 ### Task 12: e2e-print-expansion
 
@@ -220,7 +230,7 @@ body { font-size: var(--app-font-size); }
 - [ ] Printers: Admin login → tạo printer mới (bill) → PrintPage chọn được printer đó; WarehouseOps KHÔNG thấy nav Printers (role matrix).
 - [ ] Print fail: stop print-service (hoặc invalid printerId path) → in thật → error count tăng; màn hiển thị badge; đơn nhiều lỗi nhất đứng đầu.
 - [ ] Print-all gate: batch CANCELLED → nút disabled.
-- [ ] Hotkeys: F6 mở create tại màn có create; F8 cancel modal; hotkey helper modal mở + search.
+- [ ] Hotkeys: F6 mở create tại màn có create; F4 submit tại modal có save; F8 cancel modal; hotkey helper modal mở + search.
 - [ ] Avatar: upload (fixture ảnh PNG <5MB) → header avatar thay đổi sau reload.
 - [ ] Font slider: kéo → computed font-size table cell đổi; reload → giữ.
 - [ ] Fullscreen: click nút → fullscreenElement != null → click nữa → null.
