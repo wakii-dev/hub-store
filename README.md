@@ -177,6 +177,8 @@ Quy trình rotate (dev realm):
 5. Verify login: `E2E_PASSWORD=<mới> python3 e2e/scripts/mint_sf11.py coordinator /tmp/auth.json` → token OK.
 6. Prod-style: KHÔNG dùng literal — secret nằm secret manager/env, realm import chỉ cho dev.
 
+> Java logs: logback (Spring default) — JSON encoder là follow-up nếu cần (SF-12 chỉ chuyển Go auth/health path + BFF kafka path sang JSON).
+
 ## K8s / minikube deploy — requirements + preflight
 
 Deploy lên Kubernetes local (minikube) cần:

@@ -1,5 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import { Kafka, logLevel, type Consumer } from 'kafkajs';
+import type { FastifyBaseLogger } from 'fastify';
 import { type KafkaEventMessage } from './events.js';
 
 const TOPICS = ['order-events', 'batch-events'];
@@ -61,6 +62,8 @@ export function attachDegradedHandlers(
 export async function startKafkaConsumer(
   bootstrapServers: string,
   onEvent: (m: KafkaEventMessage) => void,
+  // SF-12 — Fastify logger (JSON sẵn) thay console.log; caller truyền app.log.
+  log: FastifyBaseLogger,
 ): Promise<() => Promise<void>> {
   const kafka = new Kafka({
     clientId: 'bff-realtime',
@@ -83,7 +86,7 @@ export async function startKafkaConsumer(
     connected = true;
     // SF-10 — lỗi/ngắt SAU khi đã chạy → degraded signal cho FE (phía trên).
     attachDegradedHandlers(consumer, onEvent, () => connected);
-    console.log(`[kafka] consumer 'bff-realtime' subscribed: ${TOPICS.join(', ')}`);
+    log.info(`[kafka] consumer 'bff-realtime' subscribed: ${TOPICS.join(', ')}`);
   } catch (err) {
     console.warn('[kafka] consumer unavailable (side-channel, BFF vẫn chạy):', (err as Error).message);
   }

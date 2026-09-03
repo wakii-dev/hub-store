@@ -109,10 +109,10 @@ Tier 1: T1, T2, T6, T8. Tier 2: T3, T4, T7, T9. Tier 3: T5, T10. Cuối: T11. **
 - Create Go: `internal/logging/logging.go` (JSON line emitter: `logger.JSON(level, msg, kv...)` — tiny, go 1.19 không có slog)
 - Modify Go: log.Printf trong `main.go` + `auth_interceptor.go` + reconcile (Task 10 dùng luôn)
 
-- [ ] **Step 5.1:** Go logging helper ~40 LOC: struct `{ts,level,msg,...kv}` → `json.Marshal` → stdout. Replace log.Printf ở main.go/auth path (KHÔNG sweep toàn repo — chỉ đường auth/health).
-- [ ] **Step 5.2:** BFF: thay console.log bằng app.log (Fastify `app.log` — shape JSON sẵn). Grep xác nhận 0 console.log còn trong src auth/kafka path.
-- [ ] **Step 5.3:** Java: KHÔNG đổi (logback đã structure được) — ghi 1 dòng trong README ops section "Java logs: logback, cấu hình JSON encoder là follow-up nếu cần".
-- [ ] **Step 5.4:** `go test ./... && go build ./... && pnpm --filter bff-gateway test`. Commit: `feat(logging): SF-12 structured JSON logs — Go helper + BFF console.log sweep (FI-257)`.
+- [x] **Step 5.1:** Go logging helper ~40 LOC: struct `{ts,level,msg,...kv}` → `json.Marshal` → stdout. Replace log.Printf ở main.go/auth path (KHÔNG sweep toàn repo — chỉ đường auth/health).
+- [x] **Step 5.2:** BFF: thay console.log bằng app.log (Fastify `app.log` — shape JSON sẵn). Grep xác nhận 0 console.log còn trong src auth/kafka path.
+- [x] **Step 5.3:** Java: KHÔNG đổi (logback đã structure được) — ghi 1 dòng trong README ops section "Java logs: logback, cấu hình JSON encoder là follow-up nếu cần".
+- [x] **Step 5.4:** `go test ./... && go build ./... && pnpm --filter bff-gateway test`. Commit: `feat(logging): SF-12 structured JSON logs — Go helper + BFF console.log sweep (FI-257)`.
 
 ### Task 6: CI pipeline — lint + unit + docker build
 

@@ -17,8 +17,7 @@ const app = buildApp(config);
 let kafkaConsumerStop: (() => Promise<void>) | null = null;
 if (config.kafka.enabled) {
   void startKafkaConsumer(config.kafka.bootstrapServers, (m) =>
-    bffEvents.emit('kafka:event', m),
-  ).then((stop) => {
+    bffEvents.emit('kafka:event', m), app.log).then((stop) => {
     kafkaConsumerStop = stop;
   });
 }

@@ -24,7 +24,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
-	"log"
 	"math/big"
 	"net/http"
 	"os"
@@ -34,6 +33,7 @@ import (
 	"time"
 
 	"hubstore/batching-service/internal/fulfillment"
+	"hubstore/batching-service/internal/logging"
 
 	"github.com/golang-jwt/jwt/v4"
 	"google.golang.org/grpc"
@@ -230,7 +230,8 @@ func AuthUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.Unary
 			return nil, status.Errorf(codes.PermissionDenied, "unauthenticated: %v", err)
 		}
 		if metaRole := firstMD(md, "x-user-role"); metaRole != "" && metaRole != role {
-			log.Printf("[auth] WARN x-user-role metadata %q != token claim %q — dùng claim (token wins)", metaRole, role)
+			logging.Warn("x-user-role metadata lệch token claim — dùng claim (token wins)",
+				"component", "auth", "meta_role", metaRole, "token_role", role)
 		}
 		nmd := md.Copy()
 		nmd.Set("x-user-role", role)
@@ -298,6 +299,7 @@ func warnAuthDisabled() {
 	now := time.Now().Unix()
 	last := atomic.LoadInt64(&lastAuthWarn)
 	if now-last >= authDisabledWarnSecs && atomic.CompareAndSwapInt64(&lastAuthWarn, last, now) {
-		log.Printf("[auth] *** WARNING AUTH_DISABLED=1 — gRPC auth ĐANG TẮT. CHỈ dùng unit-test harness; KHÔNG được bật trong compose/production! ***")
+		logging.Warn("*** AUTH_DISABLED=1 — gRPC auth ĐANG TẮT. CHỈ dùng unit-test harness; KHÔNG được bật trong compose/production! ***",
+			"component", "auth")
 	}
 }
