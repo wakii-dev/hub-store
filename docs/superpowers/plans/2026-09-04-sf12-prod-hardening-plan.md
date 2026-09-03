@@ -66,12 +66,12 @@ Tier 1: T1, T2, T6, T8. Tier 2: T3, T4, T7, T9. Tier 3: T5, T10. Cuối: T11. **
 - Untrack: `.env` — `git rm --cached .env` (file trên đĩa GIỮ NGUYÊN trong worktree này)
 - Modify: `docker-compose.yml` — mọi secret qua `${VAR:?}` hoặc `${VAR:-dev-default-mới}` (chỉ default cho giá trị đã rotate ở Task 3, KHÔNG default cho POSTGRES_PASSWORD — giữ `:?`)
 
-- [ ] **Step 2.1:** `git ls-files | grep -E '^\.env'` — xác nhận .env tracked. `.gitignore` thêm `.env` (giữ `.env.local`, `.env.*.local`). `git rm --cached .env` + verify `git status` shows deletion staged, file vẫn tồn tại trên đĩa (`ls -la .env`).
-- [ ] **Step 2.2:** `.env.example`: `JWT_DEV_SECRET`/`VITE_JWT_DEV_SECRET` đang là hex thật → đổi thành placeholder rỗng + comment "điền local, KHÔNG commit"; thêm `INTERNAL_SERVICE_TOKEN=` placeholder; `OIDC_JWKS_URL`/`OIDC_ISSUER` cho Go/Java (issuer `http://localhost:8081`, jwks trong compose `http://keycloak:8081/realms/hubstore/...` — 2 giá trị KHÁC nhau, gotcha BFF compose:204).
-- [ ] **Step 2.2b:** README thêm mục "Fresh clone setup" (spec §3.2): `cp .env.example .env` → điền `POSTGRES_PASSWORD` + `INTERNAL_SERVICE_TOKEN` (+ secrets khác theo bảng) → `docker compose up --build`. 1 đoạn ngắn, đặt trên mục Deploy.
-- [ ] **Step 2.3:** `docker-compose.yml`: fulfillment + batching service env thêm `OIDC_ISSUER`, `OIDC_JWKS_URL=http://keycloak:8081/...`, `INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-}`, `HEALTH_PORT` (8083/8082). KHÔNG publish thêm port mới ra host ngoài health ports cần thiết.
-- [ ] **Step 2.4:** Verify: `git status` sạch về .env (chỉ staged deletion); `git check-ignore .env` → match; fresh-clone simulation: `GIT_SSH_COMMAND=: git archive HEAD | ...` không cần — chỉ verify index không còn .env: `git ls-files | grep -c '^\.env$'` → 0. compose config vẫn parse: `docker compose config -q` (cần .env local có giá trị — worktree này đã có .env từ base).
-- [ ] **Step 2.5:** Commit: `chore(secrets): SF-12 untrack .env + gitignore + placeholder sweep + compose env wiring (FI-257)`.
+- [x] **Step 2.1:** `git ls-files | grep -E '^\.env'` — xác nhận .env tracked. `.gitignore` thêm `.env` (giữ `.env.local`, `.env.*.local`). `git rm --cached .env` + verify `git status` shows deletion staged, file vẫn tồn tại trên đĩa (`ls -la .env`).
+- [x] **Step 2.2:** `.env.example`: `JWT_DEV_SECRET`/`VITE_JWT_DEV_SECRET` đang là hex thật → đổi thành placeholder rỗng + comment "điền local, KHÔNG commit"; thêm `INTERNAL_SERVICE_TOKEN=` placeholder; `OIDC_JWKS_URL`/`OIDC_ISSUER` cho Go/Java (issuer `http://localhost:8081`, jwks trong compose `http://keycloak:8081/realms/hubstore/...` — 2 giá trị KHÁC nhau, gotcha BFF compose:204).
+- [x] **Step 2.2b:** README thêm mục "Fresh clone setup" (spec §3.2): `cp .env.example .env` → điền `POSTGRES_PASSWORD` + `INTERNAL_SERVICE_TOKEN` (+ secrets khác theo bảng) → `docker compose up --build`. 1 đoạn ngắn, đặt trên mục Deploy.
+- [x] **Step 2.3:** `docker-compose.yml`: fulfillment + batching service env thêm `OIDC_ISSUER`, `OIDC_JWKS_URL=http://keycloak:8081/...`, `INTERNAL_SERVICE_TOKEN=${INTERNAL_SERVICE_TOKEN:-}`, `HEALTH_PORT` (8083/8082). KHÔNG publish thêm port mới ra host ngoài health ports cần thiết.
+- [x] **Step 2.4:** Verify: `git status` sạch về .env (chỉ staged deletion); `git check-ignore .env` → match; fresh-clone simulation: `GIT_SSH_COMMAND=: git archive HEAD | ...` không cần — chỉ verify index không còn .env: `git ls-files | grep -c '^\.env$'` → 0. compose config vẫn parse: `docker compose config -q` (cần .env local có giá trị — worktree này đã có .env từ base).
+- [x] **Step 2.5:** Commit: `chore(secrets): SF-12 untrack .env + gitignore + placeholder sweep + compose env wiring (FI-257)`.
 
 ### Task 3: rotate credentials — new defaults + rotation runbook
 
