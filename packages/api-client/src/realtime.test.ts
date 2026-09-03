@@ -9,6 +9,9 @@ import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import {
   createRealtimeStream,
   useRealtimeEvents,
+  MAX_SSE_FAILURES,
+  POLL_INTERVAL_MS,
+  SSE_RETRY_INTERVAL_MS,
   type CreateRealtimeStreamOptions,
   type RealtimeEventSourceLike,
   type RealtimeStatus,
@@ -266,5 +269,115 @@ describe('useRealtimeEvents', () => {
     expect(es.onopen).toBeNull();
     expect(es.onmessage).toBeNull();
     expect(es.onerror).toBeNull();
+  });
+
+  it('cleans up polling/retry timers on unmount — no leaked intervals or EventSources', () => {
+    vi.useFakeTimers();
+    try {
+      const { invalidateTags, runtime } = mountHook();
+      const es = lastSource();
+      es.open();
+      es.fail();
+      es.fail();
+      es.fail(); // >MAX_SSE_FAILURES → polling
+      expect(runtime.rerender()).toBe('polling');
+      runtime.unmount();
+      expect(es.closed).toBe(true);
+      const instancesBefore = FakeEventSource.instances.length;
+      // well past both the poll tick and the SSE retry tick
+      vi.advanceTimersByTime(POLL_INTERVAL_MS * 3 + SSE_RETRY_INTERVAL_MS * 3);
+      expect(invalidateTags).not.toHaveBeenCalled();
+      expect(FakeEventSource.instances).toHaveLength(instancesBefore);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('fallback polling state machine (Task 5)', () => {
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  /** Drives the stream into polling mode and returns the first (closed) source. */
+  function enterPolling(stream: ReturnType<typeof createRealtimeStream>): FakeEventSource {
+    stream.connect();
+    const es = lastSource();
+    es.open();
+    es.fail();
+    es.fail();
+    expect(stream.getStatus()).toBe('offline'); // at threshold, not past it
+    es.fail();
+    expect(stream.getStatus()).toBe('polling');
+    expect(es.closed).toBe(true); // native reconnect churn stopped
+    return es;
+  }
+
+  it('degrades to polling after more than MAX_SSE_FAILURES consecutive failures', () => {
+    vi.useFakeTimers();
+    const { options } = baseOptions();
+    const stream = createRealtimeStream(options);
+    expect(MAX_SSE_FAILURES).toBe(2);
+    const es = enterPolling(stream);
+    expect(stream.getConnectFailures()).toBe(MAX_SSE_FAILURES + 1);
+    expect(FakeEventSource.instances).toHaveLength(1);
+    void es;
+  });
+
+  it('polling ticks dispatch invalidateTags every POLL_INTERVAL_MS', () => {
+    vi.useFakeTimers();
+    const { options, invalidateTags, dispatch } = baseOptions();
+    const stream = createRealtimeStream(options);
+    enterPolling(stream);
+    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    expect(invalidateTags).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(POLL_INTERVAL_MS * 2);
+    expect(invalidateTags).toHaveBeenCalledTimes(3);
+    expect(invalidateTags).toHaveBeenCalledWith(TAGS);
+  });
+
+  it('SSE retry opens again → polling cleared, counter reset, back to connected', () => {
+    vi.useFakeTimers();
+    const { options, invalidateTags } = baseOptions();
+    const stream = createRealtimeStream(options);
+    enterPolling(stream);
+    vi.advanceTimersByTime(SSE_RETRY_INTERVAL_MS);
+    // retry created a fresh EventSource (old one stays closed)
+    expect(FakeEventSource.instances).toHaveLength(2);
+    const retried = lastSource();
+    expect(retried.closed).toBe(false);
+    const ticksAtReopen = invalidateTags.mock.calls.length;
+    retried.open();
+    expect(stream.getStatus()).toBe('connected');
+    expect(stream.getConnectFailures()).toBe(0);
+    vi.advanceTimersByTime(POLL_INTERVAL_MS * 3 + SSE_RETRY_INTERVAL_MS * 3);
+    expect(invalidateTags).toHaveBeenCalledTimes(ticksAtReopen); // no more polling ticks
+    expect(FakeEventSource.instances).toHaveLength(2); // no further retries spawned
+  });
+
+  it('degraded event counts as one failure toward polling, without invalidating or forwarding', () => {
+    vi.useFakeTimers();
+    const degraded = { type: 'stream.degraded', payload: null, ts: 't' };
+    const { options, invalidateTags, dispatch } = baseOptions({ eventTypes: ['order.assigned'] });
+    const stream = createRealtimeStream(options);
+    stream.connect();
+    const es = lastSource();
+    es.open();
+    es.message({ ...degraded });
+    expect(stream.getConnectFailures()).toBe(1);
+    expect(stream.getStatus()).toBe('connected'); // below threshold — still live
+    expect(invalidateTags).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    es.message({ ...degraded });
+    es.message({ ...degraded });
+    expect(stream.getStatus()).toBe('polling'); // 3 > MAX_SSE_FAILURES
+    expect(invalidateTags).not.toHaveBeenCalled(); // degraded never invalidates
+    // after a successful open the counter is cleared again
+    vi.advanceTimersByTime(SSE_RETRY_INTERVAL_MS);
+    lastSource().open();
+    expect(stream.getConnectFailures()).toBe(0);
   });
 });

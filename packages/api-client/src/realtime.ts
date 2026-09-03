@@ -10,15 +10,31 @@
  * setTokenGetter for axios; that module-level getter has no reader, so the
  * caller passes the same fn here).
  *
- * Status: 'connected' once the stream opens, 'offline' on error. 'polling' is
- * reserved for Task 5 (fallback polling after consecutive connect failures —
- * the failure counter below is the scaffold it extends). Reconnect itself is
- * native EventSource behavior (onerror fires per failed attempt, onopen fires
- * again on success, which resets the counter).
+ * Status: 'connected' once the stream opens, 'offline' on error, 'polling'
+ * when the fallback state machine kicks in. Transient drops are handled by
+ * EventSource's native reconnect (onerror fires per failed attempt, onopen
+ * fires again on success, which resets the counter). After more than
+ * MAX_SSE_FAILURES consecutive failures without a successful (re)open, the
+ * stream degrades to 30s fallback polling (invalidateTags on an interval)
+ * while a background timer retries SSE every SSE_RETRY_INTERVAL_MS; the
+ * moment SSE opens again, polling stops and the counter resets. The BFF can
+ * also push a synthetic `stream.degraded` event (its Kafka consumer died) —
+ * that counts as one failure toward polling and is never forwarded to the app.
  */
 import { useEffect, useRef, useState } from 'react';
 
 // ---- Types -------------------------------------------------------------------
+
+/**
+ * Tunables for the fallback state machine (exported so tests can read/assert
+ * against them and hosts could tune via a wrapper if ever needed).
+ */
+export const POLL_INTERVAL_MS = 30_000;
+export const SSE_RETRY_INTERVAL_MS = 60_000;
+export const MAX_SSE_FAILURES = 2;
+
+/** Synthetic BFF event — the BFF's Kafka consumer died; stream is degraded. */
+const DEGRADED_EVENT_TYPE = 'stream.degraded';
 
 export type RealtimeStatus = 'connected' | 'polling' | 'offline';
 
@@ -65,7 +81,7 @@ export type RealtimeEventSourceCtor = new (url: string) => RealtimeEventSourceLi
 export interface CreateRealtimeStreamOptions extends UseRealtimeEventsOptions {
   /** Where the token is attached (defaults to the app dispatch if provided). */
   dispatch?: RealtimeDispatch;
-  /** Status changes (connected/offline — 'polling' arrives with Task 5). */
+  /** Status changes (connected / polling / offline). */
   onStatus?: (status: RealtimeStatus) => void;
   /** Test seam — defaults to globalThis.EventSource. */
   EventSourceImpl?: RealtimeEventSourceCtor;
@@ -75,7 +91,7 @@ export interface RealtimeStream {
   connect(): void;
   close(): void;
   getStatus(): RealtimeStatus;
-  /** Consecutive connect failures — scaffold for Task 5 fallback polling. */
+  /** Consecutive connect failures (reset on every successful open). */
   getConnectFailures(): number;
 }
 
@@ -98,10 +114,79 @@ export function createRealtimeStream(options: CreateRealtimeStreamOptions): Real
   let status: RealtimeStatus = 'offline';
   let connectFailures = 0;
   let source: RealtimeEventSourceLike | null = null;
+  let pollingTimer: ReturnType<typeof setInterval> | null = null;
+  let retryTimer: ReturnType<typeof setInterval> | null = null;
 
   function setStatus(next: RealtimeStatus): void {
     status = next;
     onStatus?.(next);
+  }
+
+  function closeSource(): void {
+    if (!source) return;
+    source.onopen = null;
+    source.onmessage = null;
+    source.onerror = null;
+    source.close();
+    source = null;
+  }
+
+  function clearTimers(): void {
+    if (pollingTimer !== null) {
+      clearInterval(pollingTimer);
+      pollingTimer = null;
+    }
+    if (retryTimer !== null) {
+      clearInterval(retryTimer);
+      retryTimer = null;
+    }
+  }
+
+  function countFailure(): void {
+    connectFailures += 1;
+    // >MAX consecutive failures without a successful open → degrade to polling.
+    if (connectFailures > MAX_SSE_FAILURES && pollingTimer === null) enterPollingMode();
+  }
+
+  /** Fallback mode: invalidate on an interval, retry SSE in the background. */
+  function enterPollingMode(): void {
+    closeSource(); // stop native reconnect churn — one fresh attempt per retry tick
+    pollingTimer = setInterval(() => {
+      dispatch?.(api.util.invalidateTags([...invalidationTags]));
+    }, POLL_INTERVAL_MS);
+    retryTimer = setInterval(() => {
+      closeSource();
+      openConnection();
+    }, SSE_RETRY_INTERVAL_MS);
+    setStatus('polling');
+  }
+
+  function openConnection(): void {
+    const Ctor = EventSourceImpl ?? globalEventSource();
+    if (!Ctor) {
+      // No EventSource (SSR/node) — count as a failed connect.
+      connectFailures += 1;
+      if (pollingTimer === null) setStatus('offline');
+      return;
+    }
+    const token = tokenGetter?.() ?? null;
+    const query = token ? `?access_token=${encodeURIComponent(token)}` : '';
+    const es = new Ctor(`${API_BASE}/events${query}`);
+    source = es;
+    es.onopen = () => {
+      // SSE is back (first connect, native reconnect, or polling-mode retry):
+      // stop fallback polling and reset the failure counter.
+      clearTimers();
+      connectFailures = 0;
+      setStatus('connected');
+    };
+    es.onmessage = (ev) => handleMessage(ev);
+    es.onerror = () => {
+      // Transient: EventSource keeps retrying natively; each error without a
+      // subsequent open counts as one failure toward the polling threshold.
+      countFailure();
+      if (pollingTimer === null) setStatus('offline');
+    };
   }
 
   function handleMessage(raw: unknown): void {
@@ -112,6 +197,12 @@ export function createRealtimeStream(options: CreateRealtimeStreamOptions): Real
       return; // non-JSON frame — ignore
     }
     if (!event || typeof event.type !== 'string') return;
+    if (event.type === DEGRADED_EVENT_TYPE) {
+      // BFF control signal — its Kafka consumer died. One failure toward the
+      // polling threshold; never invalidated, never forwarded to the app.
+      countFailure();
+      return;
+    }
     if (eventTypes && !eventTypes.includes(event.type)) return;
     dispatch?.(api.util.invalidateTags([...invalidationTags]));
   }
@@ -119,37 +210,14 @@ export function createRealtimeStream(options: CreateRealtimeStreamOptions): Real
   return {
     connect() {
       if (source) return; // idempotent — one connection per stream instance
-      const Ctor = EventSourceImpl ?? globalEventSource();
-      if (!Ctor) {
-        // No EventSource (SSR/node) — count as a failed connect (Task 5 scaffold).
-        connectFailures += 1;
-        setStatus('offline');
-        return;
-      }
-      const token = tokenGetter?.() ?? null;
-      const query = token ? `?access_token=${encodeURIComponent(token)}` : '';
-      const es = new Ctor(`${API_BASE}/events${query}`);
-      source = es;
-      es.onopen = () => {
-        connectFailures = 0;
-        setStatus('connected');
-      };
-      es.onmessage = (ev) => handleMessage(ev);
-      es.onerror = () => {
-        connectFailures += 1;
-        // TODO(Task 5): >2 consecutive failures → switch to polling mode.
-        setStatus('offline');
-      };
+      openConnection();
     },
 
     close() {
-      if (!source) return;
-      source.onopen = null;
-      source.onmessage = null;
-      source.onerror = null;
-      source.close();
-      source = null;
-      setStatus('offline');
+      const hadConnection = source !== null;
+      clearTimers();
+      closeSource();
+      if (hadConnection) setStatus('offline');
     },
 
     getStatus: () => status,
