@@ -304,9 +304,9 @@ export function mapWebhookPayload(payload: unknown, fieldMap?: WebhookMappingCon
 - Modify: `services/bff-gateway/src/routes/webhooks.ts` (chỉ metadata nếu thiếu) · Java test nếu cần
 - Verify-first: `grep -n appendAudit` IntakeServiceImpl — audit đã ghi trong createOrders tx (Task 3 tái dùng). Task này CHỈ đảm bảo actor đúng + verify test.
 
-- [ ] **Step 1: Test**: Java unit (hoặc integration skip-when-no-DB) — sau CreateWebhookOrder thành công, `GetOrderAudit(fulfillCode)` → entry action `order.created`, actor `webhook:shopee` (metadata x-user-name BFF gửi `webhook:<source>`); FAILED path → KHÔNG có audit entry order.
-- [ ] **Step 2: BFF check**: `callUnary(..., 'MANAGER', 'webhook:' + source)` đã ở Task 4 — xác nhận không xoá.
-- [ ] **Step 3: Commit** `test(sf26): audit actor webhook:<source> — order.created entry + FAILED không audit`
+- [x] **Step 1: Test**: Java unit (hoặc integration skip-when-no-DB) — sau CreateWebhookOrder thành công, `GetOrderAudit(fulfillCode)` → entry action `order.created`, actor `webhook:shopee` (metadata x-user-name BFF gửi `webhook:<source>`); FAILED path → KHÔNG có audit entry order. (WebhookOrderDbTest +2 test `auditRecordsActorWebhookSourceWithOrderCreatedAction` / `failedPathWritesNoAuditEntry` — gọi QUA ActorInterceptor thật với metadata x-user-name; 165 tests xanh, DB test 9/9 chạy Postgres thật)
+- [x] **Step 2: BFF check**: `callUnary(..., 'MANAGER', 'webhook:' + source)` đã ở Task 4 — xác nhận không xoá. (webhooks.ts:99 nguyên vẹn)
+- [x] **Step 3: Commit** `test(sf26): audit actor webhook:<source> — order.created entry + FAILED không audit`
 
 ### Task 8: e2e-webhook — 09-webhook.spec.ts + private seam sf-26-*
 

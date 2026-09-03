@@ -1,11 +1,16 @@
 package com.hubstore.fulfillment;
 
+import com.hubstore.fulfillment.service.ActorInterceptor;
 import com.hubstore.fulfillment.service.IntakeServiceImpl;
 import com.hubstore.fulfillment.service.WebhookEventsDao;
+import com.hubstore.fulfillment.store.AuditEntry;
 import com.hubstore.fulfillment.store.PostgresOrderRepository;
 import com.hubstore.intake.v1.CreateWebhookOrderRequest;
 import com.hubstore.intake.v1.CreateWebhookOrderResponse;
 import com.hubstore.intake.v1.IntakeOrder;
+import io.grpc.Metadata;
+import io.grpc.MethodDescriptor;
+import io.grpc.ServerCall;
 import io.grpc.Status;
 import io.grpc.StatusRuntimeException;
 import org.junit.jupiter.api.AfterAll;
@@ -148,6 +153,60 @@ class WebhookOrderDbTest {
         service.createWebhookOrder(request(externalId, order), obs);
         assertThat(obs.error).isNull();
         return obs.values.get(0);
+    }
+
+    /**
+     * Task 7: gọi RPC QUA {@link ActorInterceptor} thật với metadata
+     * "x-user-name" (mô phỏng BFF gửi actor 'webhook:&lt;source&gt;') —
+     * currentActor() đọc từ grpc Context do interceptor thiết lập.
+     */
+    private static CollectingObserver<CreateWebhookOrderResponse> callAsActor(
+            String actor, String externalId, IntakeOrder order) {
+        Metadata headers = new Metadata();
+        headers.put(ActorInterceptor.USER_NAME_METADATA, actor);
+        ServerCall<CreateWebhookOrderRequest, CreateWebhookOrderResponse> call =
+                new ServerCall<>() {
+                    @Override
+                    public void request(int numMessages) {
+                    }
+
+                    @Override
+                    public void sendHeaders(Metadata responseHeaders) {
+                    }
+
+                    @Override
+                    public void sendMessage(CreateWebhookOrderResponse responseMessage) {
+                    }
+
+                    @Override
+                    public void close(Status status, Metadata trailers) {
+                    }
+
+                    @Override
+                    public boolean isCancelled() {
+                        return false;
+                    }
+
+                    @Override
+                    public MethodDescriptor<CreateWebhookOrderRequest, CreateWebhookOrderResponse>
+                            getMethodDescriptor() {
+                        return null;
+                    }
+                };
+        CollectingObserver<CreateWebhookOrderResponse> obs = new CollectingObserver<>();
+        new ActorInterceptor().interceptCall(call, headers,
+                (c, m) -> {
+                    service.createWebhookOrder(request(externalId, order), obs);
+                    return new ServerCall.Listener<CreateWebhookOrderRequest>() {
+                    };
+                });
+        return obs;
+    }
+
+    private static int webhookAuditCount() {
+        Integer n = jdbc.queryForObject(
+                "SELECT count(*) FROM activity_log WHERE actor LIKE 'webhook:%'", Integer.class);
+        return n == null ? 0 : n;
     }
 
     private static String webhookStatus(String externalId) {
@@ -322,5 +381,39 @@ class WebhookOrderDbTest {
         service.createWebhookOrder(request("ext-nopublish", invalidOrder()), obs);
         assertThat(obs.error).isNotNull();
         assertThat(publisher.events).isEmpty();
+    }
+
+    // ---------------- Task 7: audit-integration ----------------
+
+    @Test
+    void auditRecordsActorWebhookSourceWithOrderCreatedAction() {
+        // Đúng 1 entry action "order.created", actor 'webhook:shopee' (metadata
+        // x-user-name mà BFF gửi 'webhook:' + source) — đọc lại qua
+        // repo.getAudit, cùng nguồn dữ liệu RPC GetOrderAudit.
+        CollectingObserver<CreateWebhookOrderResponse> ok =
+                callAsActor("webhook:shopee", "ext-audit", WebhookOrderValidationTest.validOrder());
+        assertThat(ok.error).isNull();
+        CreateWebhookOrderResponse r = ok.values.get(0);
+        track(r);
+
+        List<AuditEntry> entries = new PostgresOrderRepository(jdbc).getAudit(r.getFulfillCode());
+        assertThat(entries).hasSize(1);
+        assertThat(entries.get(0).action()).isEqualTo("order.created");
+        assertThat(entries.get(0).actor()).isEqualTo("webhook:shopee");
+        assertThat(entries.get(0).target()).isEqualTo(r.getFulfillCode());
+    }
+
+    @Test
+    void failedPathWritesNoAuditEntry() {
+        // Validate fail → INVALID_ARGUMENT, KHÔNG order được tạo → không có
+        // audit nào (không có fulfillCode để GetOrderAudit — assert qua SQL:
+        // tổng row actor 'webhook:%' không đổi sau lần gửi lỗi).
+        int before = webhookAuditCount();
+        CollectingObserver<CreateWebhookOrderResponse> obs =
+                callAsActor("webhook:shopee", "ext-noaudit", invalidOrder());
+        assertThat(obs.error).isInstanceOf(StatusRuntimeException.class);
+        assertThat(((StatusRuntimeException) obs.error).getStatus().getCode())
+                .isEqualTo(Status.Code.INVALID_ARGUMENT);
+        assertThat(webhookAuditCount()).isEqualTo(before);
     }
 }
