@@ -64,7 +64,8 @@ webhook:
 #   - auth.internal-service-token = machine-call credential (Go→Java, reconciler).
 # Fail-closed: thiếu cả user JWT hợp lệ lẫn internal token → PERMISSION_DENIED.
 oidc:
-  issuer: ${OIDC_ISSUER:}
+  # Giá trị claim `iss` trong JWT (full realm URL) — KHÔNG phải base như BFF env.
+  issuer: ${OIDC_ISSUER:http://localhost:8081/realms/hubstore}
   jwks-url: ${OIDC_JWKS_URL:}
 auth:
   internal-service-token: ${INTERNAL_SERVICE_TOKEN:}

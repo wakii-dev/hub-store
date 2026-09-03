@@ -93,6 +93,12 @@ export interface BffConfig {
    * field). Parse ở lib/webhook-mapping (Task 4) — invalid JSON → warn + default.
    */
   webhookMapping: string;
+  /**
+   * SF-12 (FI-257) — machine-call credential cho gRPC call không user JWT
+   * (webhook sàn → CreateWebhookOrder). Rỗng → interceptor sẽ DENY (fail-closed).
+   * Compose wiring env INTERNAL_SERVICE_TOKEN — Task 2 sở hữu.
+   */
+  internalServiceToken: string;
 }
 
 export interface BffOnesignalConfig {
@@ -189,5 +195,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
     // SF-26 — webhook sàn (FI-271): secret rỗng → verifyHmac 503 fail-closed.
     webhookHmacSecret: env.WEBHOOK_HMAC_SECRET ?? '',
     webhookMapping: env.WEBHOOK_MAPPING ?? '',
+    internalServiceToken: env.INTERNAL_SERVICE_TOKEN ?? '',
   };
 }

@@ -75,8 +75,8 @@ function mapD2cItem(o: D2cOrder): D2cOrderDto {
 
 /** Role guard per-route — 403 envelope khi role ngoài D2C_ROLES. */
 function requireD2cRole(request: FastifyRequest, reply: FastifyReply): boolean {
-  const { role } = requireUser(request);
-  if (!(D2C_ROLES as readonly string[]).includes(role)) {
+  const caller = requireUser(request);
+  if (!(D2C_ROLES as readonly string[]).includes(caller.role)) {
     void reply.code(403).send(
       errorEnvelope(403, 'Role của bạn không có quyền truy cập D2C.', {
         code: 'PERMISSION_DENIED',
@@ -204,7 +204,7 @@ export function registerD2cRoutes(app: FastifyInstance, deps: D2cRouteDeps): voi
     if (!requireD2cRole(request, reply)) return reply;
     try {
       const req = mapFilterBody(request.body ?? {});
-      const resp = await f.filterD2cOrders(req, requireUser(request).role);
+      const resp = await f.filterD2cOrders(req, requireUser(request));
       return await reply.send(
         paginated(resp.items.map(mapD2cItem), Number(resp.total), req.page, req.pageSize),
       );
@@ -217,7 +217,7 @@ export function registerD2cRoutes(app: FastifyInstance, deps: D2cRouteDeps): voi
   app.put<{ Params: { orderCode: string }; Body: { note: string } }>(
     '/d2c-orders/:orderCode/note',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       if (!requireD2cRole(request, reply)) return reply;
       const rawNote = (request.body as { note?: string } | undefined)?.note;
       if (typeof rawNote !== 'string' || rawNote.length > 500) {
@@ -227,7 +227,7 @@ export function registerD2cRoutes(app: FastifyInstance, deps: D2cRouteDeps): voi
         return reply;
       }
       try {
-        const resp = await f.updateD2cOrderNote(request.params.orderCode, rawNote, role);
+        const resp = await f.updateD2cOrderNote(request.params.orderCode, rawNote, caller);
         return await reply.send({ item: resp.order ? mapD2cItem(resp.order) : null });
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -248,7 +248,7 @@ export function registerD2cRoutes(app: FastifyInstance, deps: D2cRouteDeps): voi
         return reply;
       }
       try {
-        const role = requireUser(request).role;
+        const caller = requireUser(request);
         const items: D2cOrder[] = [];
         let page = 1;
         let total = Number.POSITIVE_INFINITY;
@@ -273,7 +273,7 @@ export function registerD2cRoutes(app: FastifyInstance, deps: D2cRouteDeps): voi
         while (items.length < total) {
           const resp = await f.filterD2cOrders(
             { ...rangeFilter, page },
-            role,
+            caller,
           );
           total = Number(resp.total);
           items.push(...resp.items);

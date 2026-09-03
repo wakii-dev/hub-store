@@ -1,12 +1,12 @@
 // SF-12 (FI-257) — s2s auth interceptor: token passthrough (spec §3.1).
 //
 // Auth matrix (CONTRACT — KHÔNG tự ý đổi):
-//   1. authorization: Bearer <JWT> hợp lệ (RS256, iss=OIDC_ISSUER, exp ok,
-//      JWKS khớp kid) → ALLOW; role DERIVE từ claim realm_access.roles —
-//      x-user-role metadata KHÔNG được tin, override bằng claim (warn nếu lệch).
-//   2. x-internal-token == $INTERNAL_SERVICE_TOKEN → ALLOW; tin x-user-role /
-//      x-user-name metadata (caller có secret = đã qua trust boundary).
-//   3. thiếu / sai → PermissionDenied. Fail-closed.
+//  1. authorization: Bearer <JWT> hợp lệ (RS256, iss=OIDC_ISSUER, exp ok,
+//     JWKS khớp kid) → ALLOW; role DERIVE từ claim realm_access.roles —
+//     x-user-role metadata KHÔNG được tin, override bằng claim (warn nếu lệch).
+//  2. x-internal-token == $INTERNAL_SERVICE_TOKEN → ALLOW; tin x-user-role /
+//     x-user-name metadata (caller có secret = đã qua trust boundary).
+//  3. thiếu / sai → PermissionDenied. Fail-closed.
 //
 // Allowlist (pass-through, không auth): /grpc.health.v1.Health/ +
 // /grpc.reflection.v1.ServerReflection/ (cả v1alpha) — grpcurl + readiness.
@@ -43,10 +43,13 @@ import (
 )
 
 const (
-	envJWKSURL     = "OIDC_JWKS_URL"
-	defJWKSURL     = "http://localhost:8081/realms/hubstore/protocol/openid-connect/certs"
-	envIssuer      = "OIDC_ISSUER"
-	defIssuer      = "http://localhost:8081"
+	envJWKSURL = "OIDC_JWKS_URL"
+	defJWKSURL = "http://localhost:8081/realms/hubstore/protocol/openid-connect/certs"
+	envIssuer  = "OIDC_ISSUER"
+	// defIssuer = GIÁ TRỊ claim `iss` trong JWT (full realm URL) — KHÔNG phải
+	// issuer base như BFF env (BFF tự append /realms/hubstore). Live-verify:
+	// Keycloak phát token iss=http://localhost:8081/realms/hubstore.
+	defIssuer = "http://localhost:8081/realms/hubstore"
 	envInternalTok = "INTERNAL_SERVICE_TOKEN"
 	envAuthOff     = "AUTH_DISABLED"
 

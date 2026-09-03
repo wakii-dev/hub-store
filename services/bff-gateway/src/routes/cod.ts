@@ -140,7 +140,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
     async (request, reply) => {
       const user = requireRole(request, reply, ...COD_CONFIRM_ROLES);
       if (user === null) return reply;
-      const role = user.role;
+      const caller = user;
       const sub = user.sub;
       const body = request.body ?? {};
       if (typeof body.fulfillCode !== 'string' || body.fulfillCode.length === 0) {
@@ -181,7 +181,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
               },
             ],
           },
-          role,
+          caller,
           sub,
         );
         return await reply.send({ results: resp.results.map(mapConfirmResult) });
@@ -195,7 +195,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
   app.post<{ Body: { batchCode?: string } }>('/cod/confirm-batch', async (request, reply) => {
     const user = requireRole(request, reply, ...COD_CONFIRM_ROLES);
     if (user === null) return reply;
-    const role = user.role;
+    const caller = user;
     const sub = user.sub;
     const batchCode = (request.body as { batchCode?: string } | undefined)?.batchCode;
     if (typeof batchCode !== 'string' || batchCode.length === 0) {
@@ -205,7 +205,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
       return reply;
     }
     try {
-      const resp = await f.confirmBatchCod({ batchCode }, role, sub);
+      const resp = await f.confirmBatchCod({ batchCode }, caller, sub);
       return await reply.send({
         confirmedCount: Number(resp.confirmedCount),
         totalAmount: Number(resp.totalAmount),
@@ -227,7 +227,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
       return reply;
     }
     try {
-      const resp = await f.getCodPending({ batchCode }, user.role);
+      const resp = await f.getCodPending({ batchCode }, user);
       return await reply.send({
         pendingCount: Number(resp.pendingCount),
         totalAmount: Number(resp.totalAmount),
@@ -250,7 +250,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
       try {
         const resp = await f.getSettlement(
           { periodFrom: period.from, periodTo: period.to },
-          user.role,
+          user,
         );
         // Upstream không phân trang — BFF slice trên rows (total = số shop).
         const page = Math.max(Number(request.query.page) || DEFAULT_PAGE, 1);
@@ -285,7 +285,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
       try {
         const resp = await f.getSettlement(
           { periodFrom: period.from, periodTo: period.to },
-          user.role,
+          user,
         );
         rows = resp.rows.map(mapSettlementRow); // export đầy đủ — KHÔNG slice trang
       } catch (err) {
@@ -305,7 +305,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
           if (r.pendingCount === 0 && r.mismatchCount === 0) continue;
           const resp = await f.getSettlementDetail(
             { shopCode: r.shopCode, periodFrom: period.from, periodTo: period.to },
-            user.role,
+            user,
           );
           for (const c of resp.confirmations) {
             const pending = c.status === CodCollectionStatus.COD_PENDING;
@@ -385,7 +385,7 @@ export function registerCodRoutes(app: FastifyInstance, deps: CodRouteDeps): voi
       try {
         const resp = await f.getSettlementDetail(
           { shopCode, periodFrom: period.from, periodTo: period.to },
-          user.role,
+          user,
         );
         const page = Math.max(Number(request.query.page) || DEFAULT_PAGE, 1);
         const pageSize = Math.max(Number(request.query.pageSize) || DEFAULT_PAGE_SIZE, 1);

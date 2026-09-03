@@ -10,19 +10,19 @@ import type {
   PrintRequest,
   PrintResponse,
 } from '../../../../api/proto/gen/ts/hubstore/print/v1/print';
-import { callUnary, insecureChannel } from './grpc.js';
+import { callUnary, insecureChannel, type Caller } from './grpc.js';
 
 export interface PrintApi {
-  listPrinters(req: ListPrintersRequest, role: string): Promise<ListPrintersResponse>;
-  print(req: PrintRequest, role: string): Promise<PrintResponse>;
+  listPrinters(req: ListPrintersRequest, caller: Caller): Promise<ListPrintersResponse>;
+  print(req: PrintRequest, caller: Caller): Promise<PrintResponse>;
   close(): void;
 }
 
 export function createPrintClient(addr: string, deadlineMs: number): PrintApi {
   const c = new PrintServiceClient(addr, insecureChannel());
   return {
-    listPrinters: (req, role) => callUnary(c.listPrinters.bind(c), req, role, deadlineMs),
-    print: (req, role) => callUnary(c.print.bind(c), req, role, deadlineMs),
+    listPrinters: (req, caller) => callUnary(c.listPrinters.bind(c), req, caller, deadlineMs),
+    print: (req, caller) => callUnary(c.print.bind(c), req, caller, deadlineMs),
     close: () => c.close(),
   };
 }

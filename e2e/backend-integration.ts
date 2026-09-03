@@ -9,6 +9,7 @@
  * Exit 0 = PASS; exit 1 = FAIL (assert chi tiết in stdout).
  */
 import { readFileSync } from "node:fs";
+import { createHash, randomBytes } from "node:crypto";
 import { ChannelCredentials, Metadata } from "@grpc/grpc-js";
 import type { CreateBatchRequest } from "../api/proto/gen/ts/hubstore/batching/v1/batching.js";
 import type {
@@ -35,6 +36,79 @@ const GO = process.env.GRPC_BATCHING_ADDR ?? "localhost:50052";
 const ROLE = "Coordinator";
 const DEADLINE = 5_000;
 
+// SF-12 (FI-257) — gRPC interceptor verify JWKS → bare metadata KHÔNG còn đủ.
+// Mint access token THẬT từ Keycloak qua PKCE (realm KHÔNG bật direct access
+// grant — password grant bị từ chối; port flow của e2e/scripts/mint_sf11.py).
+const KEYCLOAK_URL = process.env.KEYCLOAK_URL ?? "http://localhost:8081";
+const E2E_USER = process.env.E2E_USER ?? "coordinator";
+const E2E_PASSWORD = process.env.E2E_PASSWORD ?? "Password123!"; // dev-only (realm JSON)
+
+async function mintAccessToken(): Promise<string> {
+  const base = `${KEYCLOAK_URL}/realms/hubstore`;
+  const verifier = randomBytes(48).toString("base64url");
+  const challenge = createHash("sha256").update(verifier).digest("base64url");
+  const state = randomBytes(16).toString("base64url");
+  const redirect = "http://localhost:3000/callback"; // client hubstore-web allow-list
+  let cookie = "";
+  const mergeCookies = (res: Response): void => {
+    const set = typeof res.headers.getSetCookie === "function" ? res.headers.getSetCookie() : [];
+    for (const c of set) {
+      const [pair] = c.split(";");
+      const [name] = pair.split("=");
+      cookie = cookie
+        ? cookie
+            .split("; ")
+            .filter((x) => !x.startsWith(name + "="))
+            .concat(pair)
+            .join("; ")
+        : pair;
+    }
+  };
+
+  const authUrl =
+    `${base}/protocol/openid-connect/auth?` +
+    new URLSearchParams({
+      client_id: "hubstore-web",
+      response_type: "code",
+      scope: "openid",
+      redirect_uri: redirect,
+      state,
+      code_challenge: challenge,
+      code_challenge_method: "S256",
+    });
+  const page = await fetch(authUrl);
+  mergeCookies(page);
+  const html = await page.text();
+  const action = /action="([^"]+)"/.exec(html)?.[1]?.replace(/&amp;/g, "&");
+  if (!action) throw new Error("mint: không tìm thấy login form — Keycloak chưa boot/realm import?");
+
+  const form = new URLSearchParams({ username: E2E_USER, password: E2E_PASSWORD, credentialId: "" });
+  const login = await fetch(action, {
+    method: "POST",
+    redirect: "manual", // KHÔNG follow — code nằm trong Location
+    headers: { "content-type": "application/x-www-form-urlencoded", cookie },
+    body: form,
+  });
+  mergeCookies(login);
+  const loc = login.headers.get("location") ?? "";
+  const code = new URL(loc).searchParams.get("code");
+  if (!code) throw new Error(`mint: no code (HTTP ${login.status}) — ${loc.slice(0, 120)}`);
+
+  const token = await fetch(`${base}/protocol/openid-connect/token`, {
+    method: "POST",
+    headers: { "content-type": "application/x-www-form-urlencoded" },
+    body: new URLSearchParams({
+      grant_type: "authorization_code",
+      code,
+      redirect_uri: redirect,
+      client_id: "hubstore-web",
+      code_verifier: verifier,
+    }),
+  }).then((r) => r.json() as Promise<{ access_token?: string }>);
+  if (!token.access_token) throw new Error("mint: token response thiếu access_token");
+  return token.access_token;
+}
+
 const failures: string[] = [];
 function assert(cond: boolean, label: string, detail?: unknown) {
   const tag = cond ? "PASS" : "FAIL";
@@ -42,12 +116,15 @@ function assert(cond: boolean, label: string, detail?: unknown) {
   if (!cond) failures.push(label);
 }
 
+let ACCESS_TOKEN = "";
+
 function call<TReq, TRes>(
   fn: (req: TReq, md: Metadata, opts: { deadline: number }, cb: (e: unknown, r: TRes) => void) => unknown,
   req: TReq,
 ): Promise<TRes> {
   const md = new Metadata();
   md.set("x-user-role", ROLE);
+  if (ACCESS_TOKEN) md.set("authorization", `Bearer ${ACCESS_TOKEN}`);
   return new Promise((resolve, reject) =>
     fn(req, md, { deadline: Date.now() + DEADLINE }, (err, res) =>
       err ? reject(err) : resolve(res),
@@ -114,6 +191,8 @@ const getOrdersByCodes = (req: GetOrdersByCodesRequest) =>
   };
 
 async function main() {
+  ACCESS_TOKEN = await mintAccessToken();
+  console.log(">> minted access token (PKCE, user " + E2E_USER + ")");
   await waitReady("fulfillment-service (Java)", JAVA);
   await waitReady("batching-service (Go)", GO);
 

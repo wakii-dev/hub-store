@@ -48,7 +48,7 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
           toHub,
           reason: request.body.reason ?? '',
         },
-        user.role,
+        user,
         user.sub,
       );
       // ts-proto field optional — response thiếu ticket = upstream bug → 500.
@@ -110,7 +110,7 @@ export function registerTransferRoutes(app: FastifyInstance, deps: TransferRoute
       try {
         const resp = await transfer.listTransferTickets(
           { orderFulfillCodes: codes, status: status ?? '' },
-          user.role,
+          user,
           user.sub,
         );
         return await reply.send({ items: (resp.tickets ?? []).map(mapTransferTicket) });

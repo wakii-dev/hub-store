@@ -43,12 +43,12 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
   app.get<{ Querystring: { titleCode?: string; query?: string; regionCode?: string } }>(
     '/service-employees',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       const q = request.query;
       try {
         const resp = await s.listServiceEmployees(
           { titleCode: q.titleCode ?? '', query: q.query ?? '', regionCode: q.regionCode ?? '' },
-          role,
+          caller,
         );
         const items = (resp.items ?? []).map(mapServiceEmployee);
         return await reply.send(paginated(items, Number(resp.total), 1, Math.max(items.length, 1)));
@@ -60,9 +60,9 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
 
   // Detail.
   app.get<{ Params: { code: string } }>('/service-employees/:code', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     try {
-      const resp = await s.getServiceEmployee({ employeeCode: request.params.code }, role);
+      const resp = await s.getServiceEmployee({ employeeCode: request.params.code }, caller);
       if (!resp.employee) {
         return sendGrpcError(
           reply,
@@ -79,7 +79,7 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
   // Create — validation (format code/account, cap 100) ở upstream gRPC (BFF pass-through).
   app.post<{ Body: ServiceEmployeeBody }>('/service-employees', async (request, reply) => {
     if (!requireRole(request, reply, 'Admin')) return reply;
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     const b = request.body;
     try {
       const resp = await s.createServiceEmployee(
@@ -95,7 +95,7 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
             updatedAt: '',
           },
         },
-        role,
+        caller,
       );
       if (!resp.employee) {
         return sendGrpcError(
@@ -115,7 +115,7 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
     '/service-employees/:code',
     async (request, reply) => {
       if (!requireRole(request, reply, 'Admin')) return reply;
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       const b = request.body;
       try {
         const resp = await s.updateServiceEmployee(
@@ -132,7 +132,7 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
               updatedAt: '',
             },
           },
-          role,
+          caller,
         );
         if (!resp.employee) {
           return sendGrpcError(
@@ -153,11 +153,11 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
     '/service-employees/:code/active',
     async (request, reply) => {
       if (!requireRole(request, reply, 'Admin')) return reply;
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await s.setServiceEmployeeActive(
           { employeeCode: request.params.code, isActive: request.body.active ?? true },
-          role,
+          caller,
         );
         if (!resp.employee) {
           return sendGrpcError(
@@ -178,11 +178,11 @@ export function registerServiceEmployeesRoutes(app: FastifyInstance, deps: Staff
     '/service-employees/payment-account/verify',
     async (request, reply) => {
       if (!requireRole(request, reply, 'Admin')) return reply;
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await s.verifyPaymentAccount(
           { paymentAccount: request.body.paymentAccount ?? '' },
-          role,
+          caller,
         );
         return await reply.send(mapVerifyResult(resp));
       } catch (err) {

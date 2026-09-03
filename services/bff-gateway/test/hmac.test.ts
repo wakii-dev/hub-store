@@ -177,6 +177,7 @@ describe('SF-26 route fail-closed (secret rỗng) + warn-once', () => {
       kafka: { enabled: false, bootstrapServers: 'localhost:9092' },
       webhookHmacSecret: '', // fail-closed
       webhookMapping: '',
+      internalServiceToken: '',
     };
   }
 

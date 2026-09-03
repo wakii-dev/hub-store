@@ -40,6 +40,9 @@ type fixture struct {
 
 func startFixture(t *testing.T) *fixture {
 	t.Helper()
+	// SF-12: test gọi gRPC với bare metadata → AUTH_DISABLED=1 trong test
+	// harness (interceptor bypass; matrix cases ở auth_interceptor_test.go).
+	t.Setenv("AUTH_DISABLED", "1")
 	java, err := mockfulfillment.New(seedPath)
 	if err != nil {
 		t.Fatalf("mock java: %v", err)
@@ -72,7 +75,7 @@ func startFixture(t *testing.T) *fixture {
 	srv := New(st, fulfillment.NewGRPCClientFromConn(jconn))
 
 	blis := bufconn.Listen(1024 * 1024)
-	bgrpc := grpc.NewServer(grpc.UnaryInterceptor(RoleUnaryInterceptor))
+	bgrpc := grpc.NewServer(grpc.ChainUnaryInterceptor(AuthUnaryInterceptor, RoleUnaryInterceptor))
 	batchingv1.RegisterBatchingServiceServer(bgrpc, srv)
 	go func() { _ = bgrpc.Serve(blis) }()
 	t.Cleanup(bgrpc.Stop)

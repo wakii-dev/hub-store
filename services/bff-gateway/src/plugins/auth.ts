@@ -4,8 +4,9 @@
  * BffOidcConfig (config.ts derive /realms/hubstore). Role lấy từ claim
  * `realm_access.roles` ∩ KNOWN_ROLES (Coordinator/WarehouseOps/Manager/
  * WarehouseEmployee/InsideTechnician/OutsideTechnician) →
- * request.user; gRPC calls truyền metadata { x-user-role: role } — services
- * KHÔNG đổi (vẫn tin BFF, zero-trust s2s = M-3 out-of-scope).
+ * request.user (SF-12: giữ cả raw token); gRPC calls forward
+ * `authorization: Bearer <token>` — Go/Java verify JWKS độc lập (token
+ * passthrough), x-user-role chỉ được tin sau khi verify (claim wins).
  *
  * Public routes: /healthz (liveness) + /auth/reset-password (dev-only,
  * KHÔNG có token để verify — chính nó là endpoint cấp lại password) +
@@ -37,6 +38,9 @@ export interface RequestUser {
    *  given/family/full-name trên hubstore-mobile) — ép driverName cho KTV/CTV. */
   name?: string;
   role: (typeof KNOWN_ROLES)[number];
+  /** SF-12 s2s token passthrough: raw access token đã verify — grpc clients
+   *  forward `authorization: Bearer` xuống Go/Java (verify JWKS độc lập). */
+  token: string;
 }
 
 declare module 'fastify' {
@@ -110,6 +114,7 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
         sub,
         name: typeof payload.name === 'string' ? payload.name : undefined,
         role: matched,
+        token, // SF-12 — raw access token cho s2s passthrough
       };
     } catch {
       return unauthorized(reply, 'Invalid or expired token.');

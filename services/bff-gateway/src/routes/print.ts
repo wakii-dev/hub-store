@@ -25,14 +25,14 @@ export function registerPrintRoutes(
   app.get<{ Querystring: { shopCode?: string } }>(
     '/fulfillment/print/printers',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         // SF-21 D1: nguồn = fulfillment-service (DB-backed registry) thay vì
         // print-service. Response shape { items } GIỮ NGUYÊN (api-contracts pin)
         // + additive printerIp/mac/type (T1 DTO).
         const resp = await deps.fulfillment.listPrinters(
           { shopCode: request.query.shopCode ?? '' },
-          role,
+          caller,
         );
         const body: PrintersResponse = {
           items: (resp.printers ?? []).map((p) => ({
@@ -59,11 +59,11 @@ export function registerPrintRoutes(
   app.get<{ Querystring: { batchCode?: string } }>(
     '/fulfillment/print-errors/counts',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await deps.fulfillment.getPrintErrorCounts(
           { batchCode: request.query.batchCode ?? '' },
-          role,
+          caller,
         );
         const body: PrintErrorCountsResponse = {
           items: (resp.counts ?? []).map((c) => ({
@@ -81,7 +81,7 @@ export function registerPrintRoutes(
   app.post<{ Body: { batchCode: string; printType: string; printerId: string } }>(
     '/fulfillment/print',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       const { batchCode, printType, printerId } = request.body;
 
       // BFF-side reject printType không nằm trong 5 loại (proto UNSPECIFIED pin).
@@ -112,7 +112,7 @@ export function registerPrintRoutes(
                 errorMessage: reason,
               },
             },
-            role,
+            caller,
           );
         } catch (err) {
           request.log.error(
@@ -128,7 +128,7 @@ export function registerPrintRoutes(
         // In THẬT: validate printerId trước khi proxy (D1) — list một lần
         // (shopCode trống = tất cả; membership theo printerId là đủ ở BFF).
         try {
-          const printers = await deps.fulfillment.listPrinters({ shopCode: '' }, role);
+          const printers = await deps.fulfillment.listPrinters({ shopCode: '' }, caller);
           const known = (printers.printers ?? []).some((p) => p.printerId === printerId);
           if (!known) {
             // Đơn chưa hydrate ở bước này → record với order_code rỗng
@@ -156,7 +156,7 @@ export function registerPrintRoutes(
       try {
         // 1. Hydrate batch từ Go (batching-service) — lỗi ở bước này báo tên
         // batching-service (resilience policy §3.1).
-        const detail = await deps.batching.getBatchDetail({ batchCode }, role);
+        const detail = await deps.batching.getBatchDetail({ batchCode }, caller);
         if (!detail.batch) {
           // Batch không tồn tại = resource missing → 404 NOT_FOUND (nhất quán
           // với GET /fulfillment/batches/:code), KHÔNG phải 422 validation.
@@ -178,7 +178,7 @@ export function registerPrintRoutes(
               printType: protoType,
               printerId,
             },
-            role,
+            caller,
           );
           // 3. Stream bytes — KHÔNG wrap JSON envelope (spec §3.7).
           return await reply

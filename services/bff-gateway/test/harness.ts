@@ -538,6 +538,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     // SF-26 — webhook HMAC; secret test để route chạm được nhánh verifyHmac.
     webhookHmacSecret: opts.webhookHmacSecret ?? 'test-webhook-secret',
     webhookMapping: '',
+    internalServiceToken: '',
   };
   const app = buildApp(config);
 

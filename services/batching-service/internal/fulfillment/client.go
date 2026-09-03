@@ -80,6 +80,7 @@ func NewGRPCClient(ctx context.Context, addr string) (*GRPCClient, error) {
 // ctx — outbound metadata cho call Go→Java (SF-12 s2s auth, spec §3.1):
 //   - luồng BFF đi qua (ctx có user token) → forward authorization Bearer;
 //   - ngược lại (reconciler / luồng máy-máy) → x-internal-token từ env.
+//
 // Role vẫn forward để Java ghi actor/audit.
 func (c *GRPCClient) ctx(ctx context.Context) context.Context {
 	if md, ok := metadata.FromIncomingContext(ctx); ok {

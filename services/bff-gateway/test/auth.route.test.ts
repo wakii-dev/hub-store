@@ -84,6 +84,7 @@ function buildTestApp(opts: { devResetPassword?: boolean } = {}): ReturnType<typ
     kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 — off trong test
     webhookHmacSecret: '', // SF-26 — test auth/events không chạm webhook
     webhookMapping: '',
+    internalServiceToken: '',
   };
   return buildApp(config);
 }

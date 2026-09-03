@@ -53,11 +53,11 @@ export function registerPrinterRoutes(app: FastifyInstance, deps: PrinterRouteDe
   app.get<{ Querystring: { shopCode?: string } }>(
     '/fulfillment/printers',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await f.listPrinters(
           { shopCode: request.query.shopCode ?? '' },
-          role,
+          caller,
         );
         return await reply.send({ items: (resp.printers ?? []).map(mapPrinter) });
       } catch (err) {
@@ -69,7 +69,7 @@ export function registerPrinterRoutes(app: FastifyInstance, deps: PrinterRouteDe
   // Create — Admin. Validate type bill|a4 ở BFF (nhanh, 422 trước khi gRPC).
   app.post<{ Body: PrinterBody }>('/fulfillment/printers', async (request, reply) => {
     if (!requireRole(request, reply, 'Admin')) return reply;
-    const { role, sub } = requireUser(request);
+    const { sub, ...caller } = requireUser(request);
     const b = request.body;
     try {
       const resp = await f.createPrinter(
@@ -84,7 +84,7 @@ export function registerPrinterRoutes(app: FastifyInstance, deps: PrinterRouteDe
             type: b.type ?? '',
           },
         },
-        role,
+        caller,
         sub,
       );
       if (!resp.printer) {
@@ -106,7 +106,7 @@ export function registerPrinterRoutes(app: FastifyInstance, deps: PrinterRouteDe
     '/fulfillment/printers/:shopCode/:printerId',
     async (request, reply) => {
       if (!requireRole(request, reply, 'Admin')) return reply;
-      const { role, sub } = requireUser(request);
+      const { sub, ...caller } = requireUser(request);
       const b = request.body;
       try {
         const resp = await f.updatePrinter(
@@ -123,7 +123,7 @@ export function registerPrinterRoutes(app: FastifyInstance, deps: PrinterRouteDe
               type: b.type ?? '',
             },
           },
-          role,
+          caller,
           sub,
         );
         if (!resp.printer) {

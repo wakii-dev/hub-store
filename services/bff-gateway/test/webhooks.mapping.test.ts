@@ -83,8 +83,9 @@ describe('SF-26 POST /webhooks/orders — mapping + RPC (Task 4)', () => {
     const order = captured.request.order as Record<string, unknown>;
     expect(order.quantity).toBe(5); // Σ items[].quantity — validator SF-13 bắt buộc
     expect(order.codAmount).toBe(1500000);
-    // role MANAGER + actor 'webhook:<source>' cho audit trail
-    expect(captured.role).toBe('MANAGER');
+    // SF-12: webhook machine-call — role 'Manager' + actor 'webhook:<source>'
+    // cho audit trail (auth downstream = x-internal-token, KHÔNG JWT).
+    expect(captured.role).toBe('Manager');
     expect(captured.actor).toBe('webhook:shopee');
   });
 

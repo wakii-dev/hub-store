@@ -87,7 +87,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
           page: b.page ?? 0,
           pageSize: b.pageSize ?? 0,
         },
-        user.role,
+        user,
       );
       return await reply.send(
         paginated(resp.items.map(mapDeliveryOrder), Number(resp.total), resp.page, resp.pageSize),
@@ -122,7 +122,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
           page: b.page ?? 0,
           pageSize: b.pageSize ?? 0,
         },
-        user.role,
+        user,
       );
       return await reply.send(
         paginated(
@@ -156,7 +156,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
       try {
         const resp = await t.assignTechnician(
           { serviceOrderCode: request.params.code, technicianCode },
-          gate.role,
+          gate,
         );
         return await reply.send({ order: resp.order ? mapInstallationOrder(resp.order) : null });
       } catch (err) {
@@ -180,7 +180,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
       try {
         const resp = await t.acceptOrder(
           { serviceOrderCode: request.params.code, technicianCode: roleGate.sub },
-          roleGate.role,
+          roleGate,
         );
         return await reply.send({ order: resp.order ? mapInstallationOrder(resp.order) : null });
       } catch (err) {
@@ -197,7 +197,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
       try {
         const resp = await t.completeOrder(
           { serviceOrderCode: request.params.code, technicianCode: roleGate.sub },
-          roleGate.role,
+          roleGate,
         );
         return await reply.send({ order: resp.order ? mapInstallationOrder(resp.order) : null });
       } catch (err) {
@@ -226,7 +226,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
           note: request.body?.note ?? '',
           technicianCode: roleGate.sub,
         },
-        roleGate.role,
+        roleGate,
       );
       return await reply.send({ order: resp.order ? mapInstallationOrder(resp.order) : null });
     } catch (err) {
@@ -238,7 +238,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
   app.get<{ Querystring: { regionCode?: string } }>(
     '/technicians/suggest',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       const regionCode = request.query.regionCode ?? '';
       if (!regionCode.trim()) {
         return sendBadRequest(reply, [
@@ -246,7 +246,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
         ]);
       }
       try {
-        const resp = await t.suggestTechnicians({ regionCode }, role);
+        const resp = await t.suggestTechnicians({ regionCode }, caller);
         return await reply.send({ items: (resp.items ?? []).map(mapSuggestedTechnician) });
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);

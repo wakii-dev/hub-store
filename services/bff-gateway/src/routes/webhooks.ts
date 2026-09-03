@@ -123,9 +123,14 @@ export function registerWebhookRoutes(
           request.body,
           resolveFieldMap(deps.config.webhookMapping),
         );
+        // SF-12: webhook KHÔNG có user JWT → machine-call qua x-internal-token
+        // (Go/Java interceptor matrix — role rỗng-ý-nghĩa, actor ghi audit).
         const r = await deps.intake.createWebhookOrder(
           { source, externalId, order },
-          'MANAGER',
+          {
+            role: 'Manager',
+            internalToken: deps.config.internalServiceToken,
+          },
           'webhook:' + source,
         );
         return reply.code(200).send({ fulfillCode: r.fulfillCode, replayed: r.replayed });
