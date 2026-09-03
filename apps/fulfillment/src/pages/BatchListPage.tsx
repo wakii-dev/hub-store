@@ -56,6 +56,7 @@ import {
 import { fulfillmentStore } from "../store";
 import { registerFulfillmentResources } from "../i18n";
 import { MarkFailModal } from "../features/MarkFailModal";
+import { TrackingModal } from "../delivery/TrackingModal";
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
 registerFulfillmentResources();
@@ -158,9 +159,11 @@ function ProductTable({ products }: { products: Product[] }) {
 function OrderExpandContent({
   record,
   onMarkFail,
+  onTrackOrder,
 }: {
   record: BatchRow;
   onMarkFail: (orderCode: string) => void;
+  onTrackOrder: (orderCode: string) => void;
 }) {
   const { t, i18n } = useTranslation("fulfillment");
   const locale: Locale = i18n.language.startsWith("vi") ? "vi" : "en";
@@ -271,6 +274,15 @@ function OrderExpandContent({
             {t("action.cancelDelivery")}
           </Button>
         )}
+        {planningEntry && (
+          <Button
+            size="small"
+            data-testid={`order-track-${item.orderCode}`}
+            onClick={() => onTrackOrder(item.orderCode)}
+          >
+            {t("action.tracking")}
+          </Button>
+        )}
       </Space>
       <ProductTable products={item.items} />
       <Modal
@@ -347,6 +359,13 @@ function BatchListPageInner() {
 
   // Mark thất bại (D7) — mã đơn đang mở modal (mount theo điều kiện → reset state).
   const [failTarget, setFailTarget] = useState<string | null>(null);
+
+  // SF-16 Task 8 — tracking modal: full batch (orderCode rỗng) hoặc 1 đơn.
+  const [tracking, setTracking] = useState<{
+    batchCode: string;
+    planningIds: string[];
+    orderCode?: string;
+  } | null>(null);
 
   const batches = data?.items ?? [];
   const total = data?.total ?? 0;
@@ -543,6 +562,22 @@ function BatchListPageInner() {
                     {t("action.cancelDeliveryBatch")}
                   </Button>
                 )}
+              {/* SF-16 §2.7 (Task 8) — tracking modal full batch (planning map gate). */}
+              {batch.status === BATCH_ENTITY_STATUS.ACTIVE &&
+                loadPlanningMap(batch.batchCode).length > 0 && (
+                  <Button
+                    size="small"
+                    data-testid={`batch-track-${batch.batchCode}`}
+                    onClick={() =>
+                      setTracking({
+                        batchCode: batch.batchCode,
+                        planningIds: loadPlanningMap(batch.batchCode).map((e) => e.planningId),
+                      })
+                    }
+                  >
+                    {t("action.tracking")}
+                  </Button>
+                )}
             </Space>
           </Space>
         );
@@ -633,7 +668,17 @@ function BatchListPageInner() {
           }}
           expandable={{
             expandedRowRender: (record) => (
-              <OrderExpandContent record={record} onMarkFail={setFailTarget} />
+              <OrderExpandContent
+                record={record}
+                onMarkFail={setFailTarget}
+                onTrackOrder={(orderCode) =>
+                  setTracking({
+                    batchCode: record.batch.batchCode,
+                    planningIds: loadPlanningMap(record.batch.batchCode).map((e) => e.planningId),
+                    orderCode,
+                  })
+                }
+              />
             ),
           }}
         />
@@ -660,6 +705,17 @@ function BatchListPageInner() {
 
       {failTarget !== null && (
         <MarkFailModal open orderCode={failTarget} onClose={() => setFailTarget(null)} />
+      )}
+
+      {/* SF-16 Task 8 — tracking modal (timeline 2 cột BE | PARTNER). */}
+      {tracking && (
+        <TrackingModal
+          open
+          batchCode={tracking.batchCode}
+          planningIds={tracking.planningIds}
+          orderCode={tracking.orderCode}
+          onClose={() => setTracking(null)}
+        />
       )}
 
       {/* SF-16 Task 7 — modal reason hủy vận đơn cả phiếu (auto-note prefill). */}

@@ -38,6 +38,7 @@ export const fulfillmentResources: I18nResources = {
       "action.rebook": "Book lại vận đơn",
       "action.cancelDelivery": "Hủy vận đơn",
       "action.cancelDeliveryBatch": "Hủy vận đơn (cả phiếu)",
+      "action.tracking": "Theo dõi vận đơn",
 
       "batch.status": "Trạng thái phiếu",
 
@@ -60,6 +61,17 @@ export const fulfillmentResources: I18nResources = {
       "cancelDelivery.planningId": "Planning ID",
       "cancelDelivery.status": "Trạng thái",
       "cancelDelivery.close": "Đóng",
+
+      "tracking.title": "Theo dõi vận đơn — {{code}}",
+      "tracking.colSystem": "Hệ thống",
+      "tracking.colPartner": "Đối tác",
+      "tracking.notBooked": "Chưa book vận đơn",
+      "tracking.notBookedSub": "Đơn chưa được book với nhà vận chuyển",
+      "tracking.driver": "Tài xế",
+      "tracking.licensePlate": "Biển số xe",
+      "tracking.carrierBookingId": "Mã booking NVC",
+      "tracking.bookedAt": "Thời điểm book",
+      "tracking.trackingLink": "Xem trên NVC",
 
       "complete.title": "Hoàn tất soạn hàng",
       "complete.content": "Hoàn tất phiếu {{code}}? Đơn hàng sẽ chuyển sang Đã soạn.",
@@ -155,6 +167,7 @@ export const fulfillmentResources: I18nResources = {
       "action.rebook": "Re-book shipment",
       "action.cancelDelivery": "Cancel shipment",
       "action.cancelDeliveryBatch": "Cancel shipments (whole batch)",
+      "action.tracking": "Track shipment",
 
       "batch.status": "Batch status",
 
@@ -177,6 +190,17 @@ export const fulfillmentResources: I18nResources = {
       "cancelDelivery.planningId": "Planning ID",
       "cancelDelivery.status": "Status",
       "cancelDelivery.close": "Close",
+
+      "tracking.title": "Track shipment — {{code}}",
+      "tracking.colSystem": "System",
+      "tracking.colPartner": "Partner",
+      "tracking.notBooked": "Shipment not booked yet",
+      "tracking.notBookedSub": "This order has not been booked with the carrier",
+      "tracking.driver": "Driver",
+      "tracking.licensePlate": "License plate",
+      "tracking.carrierBookingId": "Carrier booking ID",
+      "tracking.bookedAt": "Booked at",
+      "tracking.trackingLink": "View on carrier",
 
       "complete.title": "Complete picking",
       "complete.content": "Complete batch {{code}}? Orders will move to Prepared.",

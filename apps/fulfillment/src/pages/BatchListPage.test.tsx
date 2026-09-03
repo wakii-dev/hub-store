@@ -89,6 +89,8 @@ const navigateMock = vi.hoisted(() => vi.fn());
 // SF-16 Task 7 — delivery-batch cancel mutations.
 const cancelOrderMutate = vi.hoisted(() => vi.fn());
 const cancelDeliveryBatchMutate = vi.hoisted(() => vi.fn());
+// SF-16 Task 8 — tracking searchbookingdetail query.
+const searchDetailMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../api/batchesApi", () => ({
   useFilterBatchesQuery: (arg: unknown) => filterMock(arg),
@@ -108,6 +110,8 @@ vi.mock("../api/deliveryBatchApi", () => ({
   useCancelDeliveryOrderMutation: () => [cancelOrderMutate, { isLoading: false }] as any,
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useCancelDeliveryBatchMutation: () => [cancelDeliveryBatchMutate, { isLoading: false }] as any,
+  // SF-16 Task 8 — tracking query (mock chi tiết trong TrackingModal.test.tsx).
+  useSearchBookingDetailQuery: (arg: unknown, opts: unknown) => searchDetailMock(arg, opts),
 }));
 
 vi.mock("react-router-dom", async (importOriginal) => ({
@@ -152,6 +156,8 @@ beforeEach(() => {
   navigateMock.mockReset();
   cancelOrderMutate.mockReset();
   cancelDeliveryBatchMutate.mockReset();
+  searchDetailMock.mockReset();
+  searchDetailMock.mockReturnValue({ data: undefined, isLoading: false });
   cancelMutate.mockReturnValue({ unwrap: () => Promise.resolve(null) });
   completeMutate.mockReturnValue({ unwrap: () => Promise.resolve(null) });
   redeliverMutate.mockReturnValue({ unwrap: () => Promise.resolve({ fulfillCode: "ORD-9001" }) });
@@ -494,5 +500,35 @@ describe("BatchListPage (D2)", () => {
     expect(resultsTable.textContent).toContain("102");
     expect(resultsTable.textContent).toContain("DRAFT");
     expect(await screen.findByText("Đã hủy 1/2 vận đơn")).toBeTruthy();
+  });
+
+  // ─── SF-16 Task 8: tracking modal wiring (batch action + per-order expand) ───
+
+  it("SF-16 T8: tracking — ẨN khi không có map; có map → batch-track mở modal (fetch full ids)", () => {
+    mockListResult([ACTIVE_BATCH]);
+    renderPage();
+    expect(screen.queryByTestId("batch-track-BATCH-0001")).toBeNull();
+
+    savePlanningMap("BATCH-0001", [mapEntry("101", "RSA-700107"), mapEntry("102", "RSA-700108")]);
+    cleanup();
+    renderPage();
+
+    fireEvent.click(screen.getByTestId("batch-track-BATCH-0001"));
+    // Modal mở → fetch searchbookingdetail full batch planningIds (join ',').
+    expect(searchDetailMock).toHaveBeenCalledWith("101,102", expect.anything());
+  });
+
+  it("SF-16 T8: per-order tracking trong expand — testid order-track-{code} mở modal lọc 1 entry", () => {
+    savePlanningMap("BATCH-0001", [mapEntry("101", "RSA-700107"), mapEntry("102", "RSA-700108")]);
+    mockListResult([ACTIVE_BATCH]);
+    renderPage();
+
+    fireEvent.click(document.querySelector(".ant-table-row-expand-icon")!);
+    const trackBtn = screen.getByTestId("order-track-RSA-700107");
+    fireEvent.click(trackBtn);
+
+    // Modal mở với orderCode → TrackingModal tự lọc entry theo planning map.
+    expect(searchDetailMock).toHaveBeenCalledWith("101,102", expect.anything());
+    expect(screen.getByText("Theo dõi vận đơn — RSA-700107")).toBeTruthy();
   });
 });

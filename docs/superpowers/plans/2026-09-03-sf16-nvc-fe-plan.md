@@ -214,13 +214,13 @@ export const savePlanningMap = (batchCode: string, entries: PlanningMapEntry[]) 
 - Modify: `BatchListPage.tsx` (action "Tracking"), i18n, css nếu cần
 
 **Steps:**
-- [ ] 8.1 Action "Tracking" testid `batch-track-{code}`: hiện khi map có entries. Click → `TrackingModal` mở: fetch `searchBookingDetail` (planningIds từ map).
-- [ ] 8.2 Modal (`width={720}`, `sf6-modal-animation`): header mỗi planning — `ShipmentStatusTag` (booking.status), driver "name - phone" (split ` - ` cuối), `licensePlate`, `carrierBookingId`, bookedAt formatPeriodOfTime; **link `urltracking`**: `('urltracking' in booking) && booking.urltracking` → `<a target="_blank" rel="noreferrer">` (BE chưa có field → tự ẩn — contract-ready). Planning chưa book (booking null) → EmptyState "Chưa book vận đơn".
-- [ ] 8.3 **Timeline 2 cột** (antd `Row/Col` 2× `Timeline`): cột "Hệ thống" (source=BE) | cột "Đối tác" (source=PARTNER). Mỗi mốc: `shipmentStatusLabel` + occurredAt (formatPeriodOfTime) + note (nếu có). Testid `tracking-timeline-be` / `tracking-timeline-partner`.
-- [ ] 8.4 Per-order entry: expand row action "Tracking" testid `order-track-{orderCode}` mở modal lọc entry đó.
-- [ ] 8.5 i18n vi/en.
-- [ ] 8.6 Test: render modal từ mock searchBookingDetail (timeline BE/PARTNER tách đúng cột; unknown status → code; booking null → EmptyState).
-- [ ] 8.7 test + tsc → commit `feat(sf16): tracking modal timeline 2 cột + urltracking slot`.
+- [x] 8.1 Action "Tracking" testid `batch-track-{code}`: hiện khi map có entries. Click → `TrackingModal` mở: fetch `searchBookingDetail` (planningIds từ map).
+- [x] 8.2 Modal (`width={720}`, `sf6-modal-animation`): header mỗi planning — `ShipmentStatusTag` (booking.status), driver "name - phone" (split ` - ` cuối), `licensePlate`, `carrierBookingId`, bookedAt formatPeriodOfTime; **link `urltracking`**: `('urltracking' in booking) && booking.urltracking` → `<a target="_blank" rel="noreferrer">` (BE chưa có field → tự ẩn — contract-ready). Planning chưa book (booking null) → EmptyState "Chưa book vận đơn".
+- [x] 8.3 **Timeline 2 cột** (antd `Row/Col` 2× `Timeline`): cột "Hệ thống" (source=BE) | cột "Đối tác" (source=PARTNER). Mỗi mốc: `shipmentStatusLabel` + occurredAt (formatPeriodOfTime) + note (nếu có). Testid `tracking-timeline-be` / `tracking-timeline-partner`.
+- [x] 8.4 Per-order entry: expand row action "Tracking" testid `order-track-{orderCode}` mở modal lọc entry đó.
+- [x] 8.5 i18n vi/en.
+- [x] 8.6 Test: render modal từ mock searchBookingDetail (timeline BE/PARTNER tách đúng cột; unknown status → code; booking null → EmptyState).
+- [x] 8.7 test + tsc → commit `feat(sf16): tracking modal timeline 2 cột + urltracking slot`.
 
 ### Task 9: e2e-nvc-fe-spec — `e2e/tests/07-nvc-fe.spec.ts`
 
