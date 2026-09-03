@@ -111,7 +111,9 @@ describe('listNotifications', () => {
         createdAt: '2026-09-03T01:02:03.000Z',
       },
     ]);
-    const [itemsSql, params] = queryMock.mock.calls.find((c) => !(c[0] as string).startsWith('SELECT COUNT'));
+    const found = queryMock.mock.calls.find((c) => !(c[0] as string).startsWith('SELECT COUNT'));
+    if (!found) throw new Error('no INSERT call recorded');
+    const [itemsSql, params] = found;
     expect(itemsSql).toContain('ORDER BY created_at DESC');
     expect(params).toEqual([10, 10]); // pageSize 10, offset (2-1)*10
   });

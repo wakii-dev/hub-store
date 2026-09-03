@@ -29,7 +29,7 @@ describe('sendOneSignalPush', () => {
       true,
     );
     expect(fetchMock).toHaveBeenCalledTimes(1);
-    const [url, init] = fetchMock.mock.calls[0];
+    const [url, init] = fetchMock.mock.calls[0]!;
     expect(url).toBe('https://onesignal.com/api/v1/notifications');
     expect(init.method).toBe('POST');
     expect(init.headers).toEqual({
