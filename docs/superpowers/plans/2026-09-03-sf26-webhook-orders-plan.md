@@ -49,7 +49,7 @@ Hệ thống bán hàng/sàn TMĐT không tự đẩy đơn vào hệ thống đ
 - Create: `services/bff-gateway/src/routes/webhooks.ts`
 - Modify: `.env.example`
 
-- [ ] **Step 1: Proto additive** — thêm vào `service IntakeService`:
+- [x] **Step 1: Proto additive** — thêm vào `service IntakeService`:
 
 ```proto
 // SF-26 — webhook nhận đơn từ sàn (FI-271). Additive-only.
@@ -65,7 +65,7 @@ message CreateWebhookOrderResponse {
 }
 ```
 
-- [ ] **Step 2: Codegen ts + java** (chạy từ repo root; SOAT header file gen cũ để khớp import paths):
+- [x] **Step 2: Codegen ts + java** (chạy từ repo root; SOAT header file gen cũ để khớp import paths):
 
 ```bash
 # TS (ts-proto 2.7.7, outputServices=grpc-js, forceLong=number, esModuleInterop=true)
@@ -82,7 +82,7 @@ protoc -I api/proto --java_out=api/proto/gen/java \
 # Verify: cd services/bff-gateway && npx tsc --noEmit ; cd ../fulfillment-service && mvn -q compile
 ```
 
-- [ ] **Step 3: V11 migration** `V11__webhook_events.sql`:
+- [x] **Step 3: V11 migration** `V11__webhook_events.sql`:
 
 ```sql
 -- SF-26 (FI-271): webhook idempotency — dedupe (source, external_id).
@@ -101,7 +101,7 @@ CREATE TABLE IF NOT EXISTS webhook_events (
 CREATE INDEX IF NOT EXISTS idx_webhook_events_fulfill_code ON webhook_events (fulfill_code);
 ```
 
-- [ ] **Step 4: BFF config + auth skip + client + route skeleton.**
+- [x] **Step 4: BFF config + auth skip + client + route skeleton.**
 
 `config.ts` — thêm vào loadConfig (pattern existing): `webhookHmacSecret: env.WEBHOOK_HMAC_SECRET ?? ''`, `webhookMapping: env.WEBHOOK_MAPPING ?? ''`.
 
@@ -173,8 +173,8 @@ WEBHOOK_HMAC_SECRET=dev-webhook-secret-change-me
 # WEBHOOK_CLAIM_STALE_SECONDS=120
 ```
 
-- [ ] **Step 5: Tests skeleton + verify build + regression parser** — unit test auth-skip exact-path (request `/webhooks/orders` không JWT không bị 401-JWT; `/webhooks/other` VẪN bị 401-JWT); **chạy FULL BFF unit suite** chứng minh scoped parser không vỡ route khác; `pnpm install` rồi `npx tsc --noEmit` (bff) + `mvn -q compile` (java) sạch.
-- [ ] **Step 6: Commit** `feat(sf26): webhook endpoint skeleton — proto additive + V11 + auth skip + raw-body route`
+- [x] **Step 5: Tests skeleton + verify build + regression parser** — unit test auth-skip exact-path (request `/webhooks/orders` không JWT không bị 401-JWT; `/webhooks/other` VẪN bị 401-JWT); **chạy FULL BFF unit suite** chứng minh scoped parser không vỡ route khác; `pnpm install` rồi `npx tsc --noEmit` (bff) + `mvn -q compile` (java) sạch.
+- [x] **Step 6: Commit** `feat(sf26): webhook endpoint skeleton — proto additive + V11 + auth skip + raw-body route`
 
 ### Task 2: hmac-auth — timing-safe verify + 401 + fail-closed 503
 
