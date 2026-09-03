@@ -98,3 +98,15 @@ export type {
   ImportConfirmResponse,
   AuditEntryDto,
 } from './intake';
+
+// SF-14 (FI-259) — COD confirm + settlement đối soát.
+export type {
+  SettlementShopRow,
+  SettlementDetailItem,
+  SettlementQuery,
+  SettlementDetailQuery,
+  ConfirmCodBody,
+  ConfirmBatchCodBody,
+  CodPendingDto,
+  ConfirmCodResultDto,
+} from './settlement';

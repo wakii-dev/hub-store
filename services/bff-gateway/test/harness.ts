@@ -294,6 +294,12 @@ const fulfillmentDefaults: Record<string, UnaryHandler> = {
   // "FilterD2cOrders" → filterD2COrders — chữ C hoa).
   filterD2COrders: (_c, cb) => cb(null, d2cResponses.filterD2cOrders),
   updateD2COrderNote: (_c, cb) => cb(null, d2cResponses.updateD2cOrderNote),
+  // SF-14 COD (FI-259) — defaults happy-path; test chi tiết override per-test.
+  confirmCod: (_c, cb) => cb(null, { results: [] }),
+  confirmBatchCod: (_c, cb) => cb(null, { confirmedCount: 0, totalAmount: 0 }),
+  getCodPending: (_c, cb) => cb(null, { pendingCount: 0, totalAmount: 0 }),
+  getSettlement: (_c, cb) => cb(null, { rows: [] }),
+  getSettlementDetail: (_c, cb) => cb(null, { confirmations: [] }),
 };
 
 const techDefaults: Record<string, UnaryHandler> = {

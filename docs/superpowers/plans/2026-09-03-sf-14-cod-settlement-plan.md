@@ -120,10 +120,10 @@ function requireRoles(request, reply, roles): boolean { /* pattern requireD2cRol
 ```
 Period: query `from`/`to` date-only `YYYY-MM-DD` → `Instant` wrap full-day +07:00 (`from` 00:00+07:00 inclusive, `to` ngày+1 00:00 exclusive — equivalent d2c.ts:264-265 nhưng chọn exclusive-bound làm convention của mình).
 Envelope: `reply.send(paginated(rows, total, page, pageSize))` cho `/cod/settlement` (page/pageSize chuẩn SF-7), detail tương tự.
-- [ ] Step 1: shared DTOs + enums (wire-code mirror rules: `enums.ts` comment "0 = PENDING").
-- [ ] Step 2: Java aggregate + detail impl + unit test (InMemory: 3 shops, đếm pending/mismatch đúng).
-- [ ] Step 3: BFF client + routes + guards + tests (403 khi role sai — test cả 4 role confirm + 2 role settlement).
-- [ ] Step 4: typecheck + tests toàn BFF. Commit `feat(cod): settlement aggregate API + BFF /cod/* routes with role guards`.
+- [x] Step 1: shared DTOs + enums (wire-code mirror rules: `enums.ts` comment "0 = PENDING").
+- [x] Step 2: Java aggregate + detail impl + unit test (InMemory: 3 shops, đếm pending/mismatch đúng).
+- [x] Step 3: BFF client + routes + guards + tests (403 khi role sai — test cả 4 role confirm + 2 role settlement).
+- [x] Step 4: typecheck + tests toàn BFF. Commit `feat(cod): settlement aggregate API + BFF /cod/* routes with role guards`.
 
 ### Task 4: fe-settlement-screen — shell page (direction B) + nav/permission + D2 badge/confirm
 

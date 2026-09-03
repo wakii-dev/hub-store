@@ -25,6 +25,12 @@ import com.hubstore.fulfillment.v1.FilterD2cOrdersRequest;
 import com.hubstore.fulfillment.v1.FilterD2cOrdersResponse;
 import com.hubstore.fulfillment.v1.GetCodPendingRequest;
 import com.hubstore.fulfillment.v1.GetCodPendingResponse;
+import com.hubstore.fulfillment.v1.CodCollectionStatus;
+import com.hubstore.fulfillment.v1.GetSettlementDetailRequest;
+import com.hubstore.fulfillment.v1.GetSettlementDetailResponse;
+import com.hubstore.fulfillment.v1.GetSettlementRequest;
+import com.hubstore.fulfillment.v1.GetSettlementResponse;
+import com.hubstore.fulfillment.v1.SettlementShopRow;
 import com.hubstore.fulfillment.v1.UpdateD2cOrderNoteRequest;
 import com.hubstore.fulfillment.v1.UpdateD2cOrderNoteResponse;
 import com.hubstore.fulfillment.v1.AssignShopHubRequest;
@@ -524,6 +530,69 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
         }
     }
 
+    /**
+     * Đối soát theo shop — GROUP BY trong repo (D5), kỳ [from, to) trên
+     * completed_at, đơn FAILED loại (D7). shopCode điền → lọc 1 shop (repo
+     * aggregate trả tất cả — filter tại service, semantics tương đương WHERE).
+     */
+    @Override
+    public void getSettlement(GetSettlementRequest request, StreamObserver<GetSettlementResponse> responseObserver) {
+        try {
+            if (!request.hasPeriodFrom() || !request.hasPeriodTo()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "period", "periodFrom/periodTo bắt buộc.")));
+            }
+            Instant from = Instant.ofEpochSecond(request.getPeriodFrom().getSeconds(),
+                    request.getPeriodFrom().getNanos());
+            Instant to = Instant.ofEpochSecond(request.getPeriodTo().getSeconds(),
+                    request.getPeriodTo().getNanos());
+            GetSettlementResponse.Builder resp = GetSettlementResponse.newBuilder();
+            boolean shopFilter = request.hasShopCode() && !request.getShopCode().isBlank();
+            for (com.hubstore.fulfillment.store.SettlementShopRow r : codRepo.aggregate(from, to)) {
+                if (shopFilter && !request.getShopCode().equals(r.shopCode())) {
+                    continue;
+                }
+                resp.addRows(toSettlementRow(r));
+            }
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /** Drill-down theo shop + kỳ; chỉMismatch = PENDING HOẶC confirm lệch tiền. */
+    @Override
+    public void getSettlementDetail(GetSettlementDetailRequest request,
+            StreamObserver<GetSettlementDetailResponse> responseObserver) {
+        try {
+            if (request.getShopCode().isBlank()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "shopCode", "shopCode bắt buộc.")));
+            }
+            if (!request.hasPeriodFrom() || !request.hasPeriodTo()) {
+                throw GrpcErrors.invalidArgument(List.of(new GrpcErrors.ErrorDetail(
+                        "period", "periodFrom/periodTo bắt buộc.")));
+            }
+            Instant from = Instant.ofEpochSecond(request.getPeriodFrom().getSeconds(),
+                    request.getPeriodFrom().getNanos());
+            Instant to = Instant.ofEpochSecond(request.getPeriodTo().getSeconds(),
+                    request.getPeriodTo().getNanos());
+            GetSettlementDetailResponse.Builder resp = GetSettlementDetailResponse.newBuilder();
+            for (CodConfirmation c : codRepo.detail(request.getShopCode(), from, to, false)) {
+                resp.addConfirmations(toCodConfirmation(c));
+            }
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
     // ---------------- Master data / order-promising ----------------
 
     @Override
@@ -757,5 +826,44 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
         Set<Integer> out = new LinkedHashSet<>();
         values.forEach(v -> out.add(toNumber.apply(v)));
         return out;
+    }
+
+    // ---------------- COD settlement mapping helpers (SF-14) ----------------
+
+    private static SettlementShopRow toSettlementRow(com.hubstore.fulfillment.store.SettlementShopRow r) {
+        return SettlementShopRow.newBuilder()
+                .setShopCode(orEmpty(r.shopCode()))
+                .setShopName(orEmpty(r.shopName()))
+                .setTotalOrders((int) r.totalOrders())
+                .setTotalExpected(r.totalExpected())
+                .setTotalCollected(r.totalCollected())
+                .setDiffAmount(r.diffAmount())
+                .setPendingCount(r.pendingCount())
+                .setMismatchCount(r.mismatchCount())
+                .build();
+    }
+
+    /** FQN proto CodConfirmation — trùng tên với store record (import alias không có trong Java). */
+    private static com.hubstore.fulfillment.v1.CodConfirmation toCodConfirmation(CodConfirmation c) {
+        com.hubstore.fulfillment.v1.CodConfirmation.Builder b =
+                com.hubstore.fulfillment.v1.CodConfirmation.newBuilder()
+                        .setFulfillCode(orEmpty(c.fulfillCode()))
+                        .setBatchCode(orEmpty(c.batchCode()))
+                        .setShopCode(orEmpty(c.shopCode()))
+                        .setShopName(orEmpty(c.shopName()))
+                        .setExpectedAmount(c.expectedAmount())
+                        .setCollectedBy(orEmpty(c.collectedBy()))
+                        .setStatus(c.status() == CodConfirmation.STATUS_CONFIRMED
+                                ? CodCollectionStatus.COD_CONFIRMED : CodCollectionStatus.COD_PENDING);
+        if (c.collectedAmount() != null) {
+            b.setCollectedAmount(c.collectedAmount());
+        }
+        if (c.collectedAt() != null) {
+            b.setCollectedAt(tsOf(c.collectedAt()));
+        }
+        if (c.completedAt() != null) {
+            b.setCompletedAt(tsOf(c.completedAt()));
+        }
+        return b.build();
     }
 }

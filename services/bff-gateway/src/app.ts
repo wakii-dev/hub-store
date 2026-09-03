@@ -31,6 +31,7 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerUsersRoutes } from './routes/users.js';
 import { KcAdminClient } from './kc-admin.js';
 import { registerD2cRoutes } from './routes/d2c.js';
+import { registerCodRoutes } from './routes/cod.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -98,6 +99,8 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerServiceEmployeesRoutes(app, { staffArea });
   // SF-18 — D2C orders (consumer trực tiếp) — dùng fulfillment client.
   registerD2cRoutes(app, { fulfillment });
+  // SF-14 — COD confirm + settlement đối soát — dùng fulfillment client.
+  registerCodRoutes(app, { fulfillment });
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });
