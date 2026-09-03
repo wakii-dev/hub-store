@@ -34,6 +34,7 @@ import { KcAdminClient } from './kc-admin.js';
 import { registerD2cRoutes } from './routes/d2c.js';
 import { registerTransferRoutes } from './routes/transfer.js';
 import { registerBatchingPresetRoutes } from './routes/batching-presets.js';
+import { registerEventsRoutes } from './routes/events.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -108,6 +109,9 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerTransferRoutes(app, { transfer });
   // SF-28 — criteria presets (static BFF-side, không gọi batching service).
   registerBatchingPresetRoutes(app);
+  // SF-10 — SSE /events realtime (không cần gRPC client; nguồn là bffEvents).
+  // corsOrigins: hijack discard headers của @fastify/cors → route tự tính CORS.
+  registerEventsRoutes(app, { corsOrigins: config.corsOrigins });
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });

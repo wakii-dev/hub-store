@@ -39,6 +39,17 @@ export function setTokenGetter(fn: TokenGetter): void {
   tokenGetter = fn;
 }
 
+/**
+ * Read-only accessor (SF-10 T4): token hiện tại từ getter đã đăng ký — dùng cho
+ * SSE `?access_token=` (EventSource không set header được). Đồng bộ theo spec §2
+ * (shell đăng ký getter đồng bộ); getter async → null (SSE path không await).
+ */
+export function getStoredToken(): string | null {
+  if (!tokenGetter) return null;
+  const token = tokenGetter();
+  return typeof token === 'string' ? token : null;
+}
+
 axiosInstance.interceptors.request.use(async (config: InternalAxiosRequestConfig) => {
   if (!tokenGetter) return config;
   const token = await tokenGetter();
