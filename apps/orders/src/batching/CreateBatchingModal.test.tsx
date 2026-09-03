@@ -12,7 +12,7 @@
 import { cleanup, fireEvent, render, screen, waitFor } from "@testing-library/react";
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
-import { formatVnd, initI18n, type DeliveryQuoteDto, type HubStoreOrderFilterItem, type TimeRange } from "@hub-store/shared";
+import { formatVnd, initI18n, type DeliveryAddonDto, type DeliveryQuoteDto, type HubStoreOrderFilterItem, type TimeRange } from "@hub-store/shared";
 import { useGetDeliveryStaffQuery, useListOrdersQuery } from "@hub-store/api-client";
 import { ordersResources } from "../i18n";
 import { CreateBatchingModal } from "./CreateBatchingModal";
@@ -591,5 +591,138 @@ describe("CreateBatchingModal", () => {
       </I18nextProvider>,
     );
     expect(screen.getByText("Book lại vận đơn")).toBeTruthy();
+  });
+
+  // ─── SF-16 Task 4: addon selector (grp radio exclusive / checkbox multi / reset theo xe) ───
+
+  const ADDONS: DeliveryAddonDto[] = [
+    { code: "EXPRESS_2H", name: "Giao nhanh 2h", grp: "ROUTE", fee: 10000 },
+    { code: "EXPRESS_4H", name: "Giao nhanh 4h", grp: "ROUTE", fee: 5000 },
+    { code: "LOADINGS", name: "Bốc xếp", grp: "LOADING", fee: 20000 },
+    { code: "INSURANCE", name: "Bảo hiểm", grp: "DOCUMENT", fee: 3000 },
+    { code: "ROUND_TRIP", name: "Chiều về", grp: "ROUND_TRIP", fee: 15000 },
+  ];
+
+  const QUOTE_1T: DeliveryQuoteDto = { ...SIX_QUOTES[2], addonServices: ADDONS }; // fee 50000
+  const QUOTE_2T: DeliveryQuoteDto = { ...SIX_QUOTES[3], addonServices: ADDONS }; // fee 80000
+
+  const addonInput = (code: string) =>
+    screen.getByTestId(`addon-${code}`).querySelector("input") as HTMLInputElement;
+
+  async function selectQuote(serviceId: string) {
+    fireEvent.click(screen.getByTestId(`quote-${serviceId}`).querySelector("input")!);
+    await flush();
+  }
+
+  async function renderWithAddonQuotes(quotes: DeliveryQuoteDto[]) {
+    quotesMock.mockReturnValue(unwrapResult({ quotes, meta: { mock: false } }));
+    renderModal();
+    await flush();
+    await selectTruckAndGetQuotes(ALL_STOPS);
+  }
+
+  it("SF-16 T4: radio exclusive TRONG grp — chọn EXPRESS_4H thay EXPRESS_2H, grp LOADING giữ nguyên", async () => {
+    await renderWithAddonQuotes([QUOTE_1T]);
+
+    await selectQuote("1T");
+    fireEvent.click(addonInput("EXPRESS_2H"));
+    fireEvent.click(addonInput("LOADINGS"));
+    expect(addonInput("EXPRESS_2H").checked).toBe(true);
+    expect(addonInput("LOADINGS").checked).toBe(true);
+
+    // Chọn ROUTE khác trong cùng grp → thay thế, grp khác (LOADING) không bị đụng
+    fireEvent.click(addonInput("EXPRESS_4H"));
+    expect(addonInput("EXPRESS_4H").checked).toBe(true);
+    expect(addonInput("EXPRESS_2H").checked).toBe(false);
+    expect(addonInput("LOADINGS").checked).toBe(true);
+  });
+
+  it("SF-16 T4: checkbox multi — DOCUMENT + ROUND_TRIP chọn đồng thời + bỏ tick được", async () => {
+    await renderWithAddonQuotes([QUOTE_1T]);
+
+    await selectQuote("1T");
+    fireEvent.click(addonInput("INSURANCE"));
+    fireEvent.click(addonInput("ROUND_TRIP"));
+    expect(addonInput("INSURANCE").checked).toBe(true);
+    expect(addonInput("ROUND_TRIP").checked).toBe(true);
+
+    fireEvent.click(addonInput("ROUND_TRIP")); // toggle off
+    expect(addonInput("ROUND_TRIP").checked).toBe(false);
+    expect(addonInput("INSURANCE").checked).toBe(true); // grp khác không bị ảnh hưởng
+  });
+
+  it("SF-16 T4: tổng phí gồm addon — sumbar + review cập nhật khi tick/bỏ tick", async () => {
+    await renderWithAddonQuotes([QUOTE_1T]);
+
+    await selectQuote("1T");
+    // 1T fee 50000 + EXPRESS_2H 10000 + INSURANCE 3000 = 63000
+    fireEvent.click(addonInput("EXPRESS_2H"));
+    fireEvent.click(addonInput("INSURANCE"));
+    expect(screen.getByTestId("sum-shipping-fee").textContent).toContain(formatVnd(63000));
+    expect(screen.getByTestId("review-shipping-fee").textContent).toContain(formatVnd(63000));
+
+    fireEvent.click(addonInput("EXPRESS_2H")); // radio đã chọn — không đổi (không untick được)
+    expect(screen.getByTestId("sum-shipping-fee").textContent).toContain(formatVnd(63000));
+
+    fireEvent.click(addonInput("INSURANCE")); // bỏ tick checkbox → 60000
+    expect(screen.getByTestId("sum-shipping-fee").textContent).toContain(formatVnd(60000));
+    expect(screen.getByTestId("review-shipping-fee").textContent).toContain(formatVnd(60000));
+  });
+
+  it("SF-16 T4: đổi xe → reset selection addon (stale-addon guard)", async () => {
+    await renderWithAddonQuotes([QUOTE_1T, QUOTE_2T]);
+
+    await selectQuote("1T");
+    fireEvent.click(addonInput("LOADINGS"));
+    fireEvent.click(addonInput("INSURANCE"));
+    expect(addonInput("LOADINGS").checked).toBe(true);
+
+    await selectQuote("2T"); // đổi quote → addonServices của 2T — selection phải reset
+    expect(addonInput("LOADINGS").checked).toBe(false);
+    expect(addonInput("INSURANCE").checked).toBe(false);
+  });
+
+  it("SF-16 T4: addon codes truyền vào confirmPlanning payload khi submit TRUCK", async () => {
+    quotesMock.mockReturnValue(unwrapResult({ quotes: [QUOTE_1T], meta: { mock: false } }));
+    createMock.mockReturnValue(
+      unwrapResult({
+        batchCode: "BATCH-9",
+        items: [
+          { batchCode: "BATCH-9", stopOrder: 1, orderCode: "ORD-3001", customerAddress: "Địa chỉ ORD-3001", distance: 3.5, fromDeliveryTime: "", toDeliveryTime: "", orderStatus: 1, orderType: 0, items: [], totalQuantity: 2, codAmount: 15000000 },
+        ],
+      }),
+    );
+    confirmPlanningMock.mockReturnValue(
+      unwrapResult({ plannings: [], meta: { mock: false } }),
+    );
+    bookingMock.mockReturnValue(unwrapResult({ bookings: [], meta: { mock: false } }));
+    timeDeliveryHook = createTimeDelivery([{ from: "2026-09-05T01:00:00.000Z", to: "2026-09-05T05:00:00.000Z" }]);
+
+    renderModal(selection.slice(0, 1));
+    await flush();
+
+    await selectTruckAndGetQuotes(ALL_STOPS.slice(0, 1));
+    await selectQuote("1T");
+    fireEvent.click(addonInput("EXPRESS_2H"));
+    fireEvent.click(addonInput("INSURANCE"));
+
+    const shipperSelector = document.querySelector<HTMLElement>("[data-testid='batch-shipper-select'] .ant-select-selector")!;
+    fireEvent.mouseDown(shipperSelector);
+    await waitFor(() => document.querySelector(".ant-select-item-option"));
+    const option = document.querySelector<HTMLElement>(".ant-select-item-option")!;
+    fireEvent.mouseDown(option);
+    fireEvent.mouseUp(option);
+    fireEvent.click(option);
+    fireEvent.click(screen.getByTestId("batch-time-hint-0"));
+
+    fireEvent.click(screen.getByTestId("batch-submit"));
+    await flush();
+
+    expect(confirmPlanningMock).toHaveBeenCalledWith({
+      batchCode: "BATCH-9",
+      plannings: [
+        { stopOrder: 1, orderCode: "ORD-3001", vehicleType: "1T", serviceId: "1T", addons: ["EXPRESS_2H", "INSURANCE"] },
+      ],
+    });
   });
 });

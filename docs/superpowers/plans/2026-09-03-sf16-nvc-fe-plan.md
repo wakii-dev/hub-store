@@ -143,12 +143,12 @@ export function shipmentStatusLabel(s: string, locale: 'vi'|'en'): string // i18
 - Modify: `CarrierSection.tsx`, `CreateBatchingModal.tsx` (truyền addons vào confirm), i18n, css
 
 **Steps:**
-- [ ] 4.1 `AddonSelector.tsx`: props `{addons: DeliveryAddonDto[]; value: string[]; onChange: (codes: string[]) => void; disabled?: boolean}`. Nhóm theo `grp`: ROUTE/LOADING → `Radio.Group` (exclusive trong grp); DOCUMENT/ROUND_TRIP → `Checkbox`. Item disabled khi `disabled` (unavailable — tooltip). Testid `addon-{code}`.
-- [ ] 4.2 Wire vào modal: `selectedAddons: string[]` từ `selectedQuote.addonServices`; **đổi quote → reset `selectedAddons`** (useEffect on selectedServiceId). Confirm payload `addons: selectedAddons`.
-- [ ] 4.3 Tổng phí đã gồm addon (computeTotalFee Task 3) — verify review/sumbar cập nhật khi tick addon.
-- [ ] 4.4 i18n: `orders:batching.addon.grp.*` (ROUTE/LOADING/DOCUMENT/ROUND_TRIP labels vi/en).
-- [ ] 4.5 Test: chọn radio ROUTE thay LOADINGS exclusive; checkbox multi; đổi xe reset selection; total cập nhật.
-- [ ] 4.6 test + tsc → commit `feat(sf16): addon selector radio/checkbox + reset theo xe`.
+- [x] 4.1 `AddonSelector.tsx`: props `{addons: DeliveryAddonDto[]; value: string[]; onChange: (codes: string[]) => void; disabled?: boolean}`. Nhóm theo `grp`: ROUTE/LOADING → `Radio.Group` (exclusive trong grp); DOCUMENT/ROUND_TRIP → `Checkbox`. Item disabled khi `disabled` (unavailable — tooltip). Testid `addon-{code}`.
+- [x] 4.2 Wire vào modal: `selectedAddons: string[]` từ `selectedQuote.addonServices`; **đổi quote → reset `selectedAddons`** (useEffect on selectedServiceId). Confirm payload `addons: selectedAddons`.
+- [x] 4.3 Tổng phí đã gồm addon (computeTotalFee Task 3) — verify review/sumbar cập nhật khi tick addon.
+- [x] 4.4 i18n: `orders:batching.addon.grp.*` (ROUTE/LOADING/DOCUMENT/ROUND_TRIP labels vi/en).
+- [x] 4.5 Test: chọn radio ROUTE thay LOADINGS exclusive; checkbox multi; đổi xe reset selection; total cập nhật.
+- [x] 4.6 test + tsc → commit `feat(sf16): addon selector radio/checkbox + reset theo xe`.
 
 ### Task 5: fee-limit-gates — disable radio + block submit + message
 

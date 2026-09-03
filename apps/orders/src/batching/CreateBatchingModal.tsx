@@ -56,6 +56,7 @@ import {
 import { buildAddOrderFilterRequest, extractRejectMessages } from "./batchingHelpers";
 import { computeTotalFee, toStopOrders } from "./carrierHelpers";
 import { CarrierSection } from "./CarrierSection";
+import { AddonSelector } from "./AddonSelector";
 import type { CarrierGroup } from "./carrierHelpers";
 import "./batching-modal.css";
 
@@ -152,6 +153,8 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
   const [quotes, setQuotes] = useState<DeliveryQuoteDto[] | null>(null);
   const [metaMock, setMetaMock] = useState(false);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  // SF-16 §2.3 — addons (Task 4): mã addon đã tick theo quote đang chọn.
+  const [selectedAddonCodes, setSelectedAddonCodes] = useState<string[]>([]);
   const [bookingResults, setBookingResults] = useState<DeliveryBookingDto[] | null>(null);
   const [nvcSubmitting, setNvcSubmitting] = useState(false);
   const [shipperId, setShipperId] = useState<string | undefined>(undefined);
@@ -187,6 +190,7 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
       setQuotes(null);
       setMetaMock(false);
       setSelectedServiceId(null);
+      setSelectedAddonCodes([]);
       setBookingResults(null);
       setNvcSubmitting(false);
       setShipperId(undefined);
@@ -200,6 +204,12 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
 
   // P1: unmount (navigate/destroyOnClose) → không fire onClose sau khi chết.
   useEffect(() => () => clearCloseTimer(), []);
+
+  // SF-16 §2.3 (Task 4) — stale-addon guard (CRITICAL): addonServices là CỦA
+  // từng quote — đổi xe → mã addon cũ không còn hợp lệ → reset selection.
+  useEffect(() => {
+    setSelectedAddonCodes([]);
+  }, [selectedServiceId]);
 
   const shopCode = rows[0]?.shopAssignment.shopCode ?? "";
 
@@ -308,9 +318,12 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
   // TRUCK: phải chọn quote trước khi submit (fee gates chi tiết ở Task 5).
   const canSubmit = rows.length > 0 && !!shipperId && deliveryTime !== null && (carrierGroup !== "TRUCK" || !!selectedServiceId);
 
-  // SF-16 §2.2 — addons Task 4 nối AddonSelector; Task 3 truyền [] (tổng = quote.fee).
-  const selectedAddons: DeliveryAddonDto[] = [];
+  // SF-16 §2.3 — addons Task 4: addon DTO của quote đang chọn theo mã đã tick
+  // (computeTotalFee = quote.fee + Σ addon.fee).
   const selectedQuote = (quotes ?? []).find((q) => q.serviceId === selectedServiceId) ?? null;
+  const selectedAddons: DeliveryAddonDto[] = (selectedQuote?.addonServices ?? []).filter((a) =>
+    selectedAddonCodes.includes(a.code),
+  );
   const shippingFee = selectedQuote !== null ? computeTotalFee(selectedQuote, selectedAddons) : null;
 
   const handleCreate = async () => {
@@ -359,7 +372,7 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
           orderCode: it.orderCode,
           vehicleType: selectedQuote.vehicleType,
           serviceId: selectedQuote.serviceId,
-          addons: [], // Task 4 nối AddonSelector
+          addons: selectedAddonCodes, // Task 4 — mã addon đã tick
         })),
       }).unwrap();
       const plannings = confirmResp.plannings ?? [];
@@ -560,11 +573,19 @@ export function CreateBatchingModal({ open, orders, onClose, mode = "create" }: 
                     <Tag className="quote-vehicle">{q.vehicleType}</Tag>
                     <span className="quote-eta">{t("batching.quotes.eta", { minutes: q.etaMinutes })}</span>
                     {metaMock && <Tag className="quote-mock-tag">[MOCK]</Tag>}
-                    <span className="quote-fee">{formatVnd(computeTotalFee(q, selectedAddons))}</span>
+                    <span className="quote-fee">{formatVnd(computeTotalFee(q, q.serviceId === selectedServiceId ? selectedAddons : []))}</span>
                   </label>
                 ))}
               </div>
             ))}
+          {/* SF-16 §2.3 — AddonSelector theo quote đang chọn (Task 4) */}
+          {selectedQuote !== null && selectedQuote.addonServices.length > 0 && (
+            <AddonSelector
+              addons={selectedQuote.addonServices}
+              value={selectedAddonCodes}
+              onChange={setSelectedAddonCodes}
+            />
+          )}
         </CarrierSection>
         <div className="batch-form-row">
           <div className="sf6-form-card">

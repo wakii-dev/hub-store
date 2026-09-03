@@ -440,3 +440,59 @@
   font-variant-numeric: tabular-nums;
   color: #eb6e09; /* primary */
 }
+
+/* ─── AddonSelector (SF-16 §2.3 — dịch vụ gia tăng theo quote, mirror DESIGN_TOKENS) ─── */
+.addon-selector {
+  margin-top: 10px;
+  padding: 10px 12px;
+  border: 1px solid #f2f4f7; /* dividerSoft */
+  border-radius: 10px;
+  background: #f9fafb; /* bgSubtle */
+  color: #344054; /* textSecondary */
+  font-size: 12.5px;
+}
+.addon-selector-label {
+  display: block;
+  font-size: 12.5px;
+  margin-bottom: 6px;
+}
+.addon-grp {
+  display: flex;
+  align-items: baseline;
+  gap: 10px;
+  padding: 3px 0;
+}
+.addon-grp-label {
+  min-width: 78px;
+  flex-shrink: 0;
+  font-size: 11px;
+  font-weight: 600;
+  color: #667085; /* textMuted */
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+.addon-items {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 14px;
+}
+.addon-item {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  cursor: pointer;
+}
+.addon-item:has(.ant-checkbox-disabled, .ant-radio-disabled) {
+  cursor: not-allowed;
+  color: #98a2b3;
+}
+.addon-name {
+  font-size: 12.5px;
+  color: #344054; /* textSecondary */
+}
+.addon-fee {
+  font-size: 12px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
+  color: #eb6e09; /* primary */
+}
