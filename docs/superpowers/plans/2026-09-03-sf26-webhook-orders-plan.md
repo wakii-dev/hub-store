@@ -313,8 +313,8 @@ export function mapWebhookPayload(payload: unknown, fieldMap?: WebhookMappingCon
 **Files:**
 - Create: `e2e/tests/09-webhook.spec.ts` + `/tmp/story/sf-26/run-sf26-private.sh` (runner — /tmp OK theo precedent SF-14/23; NẾU muốn bền: `e2e/scripts/run-sf26-private.sh` trong repo)
 
-- [ ] **Step 1: Runner private seam** (pattern /tmp/story/sf-23/run-private-stack.sh — ĐỌC file đó trước): containers docker tên prefix `sf-26-` (postgres :56441, kafka :56442 nội bộ, java :53051, bff :19080; Keycloak DÙNG chung :8081). **Bearer token strategy CHỐT TRƯỚC: mint token bằng script Keycloak (precedent SF-14/15 — memory fi245-sf15: PKCE mint script; password-grant đã fail; nếu script không chạy được thì mint bằng client-credentials service-account hoặc đưa shell vào seam — KHÔNG dùng bearerToken() localStorage pattern vì không có shell page).** Java env: `KAFKA_ENABLED='true'`, `WEBHOOK_HMAC_SECRET=e2e-sf26-secret`, `GRPC_FULFILLMENT`/datasource trỏ sf-26-pg, migrate-on-boot tự chạy V11. Kafka compose riêng sf-26-* (port KHÔNG đụng 9092/29092 global).
-- [ ] **Step 2: Spec** `09-webhook.spec.ts` — API-level (pattern 05-kafka.spec.ts: helper sign(payload)):
+- [x] **Step 1: Runner private seam** (pattern /tmp/story/sf-23/run-private-stack.sh — ĐỌC file đó trước): containers docker tên prefix `sf-26-` (postgres :56441, kafka :56442 nội bộ, java :53051, bff :19080; Keycloak DÙNG chung :8081). **Bearer token strategy CHỐT TRƯỚC: mint token bằng script Keycloak (precedent SF-14/15 — memory fi245-sf15: PKCE mint script; password-grant đã fail; nếu script không chạy được thì mint bằng client-credentials service-account hoặc đưa shell vào seam — KHÔNG dùng bearerToken() localStorage pattern vì không có shell page).** Java env: `KAFKA_ENABLED='true'`, `WEBHOOK_HMAC_SECRET=e2e-sf26-secret`, `GRPC_FULFILLMENT`/datasource trỏ sf-26-pg, migrate-on-boot tự chạy V11. Kafka compose riêng sf-26-* (port KHÔNG đụng 9092/29092 global).
+- [x] **Step 2: Spec** `09-webhook.spec.ts` — API-level (pattern 05-kafka.spec.ts: helper sign(payload)):
 ```ts
 // skip-gate: E2E_SF26 !== '1' → skip toàn bộ (chạy qua runner đặt env)
 const SECRET = 'e2e-sf26-secret';
@@ -329,8 +329,8 @@ Scenarios (serial, một worker):
 4. Payload sai phone format + items rỗng → 422 + `details[]` có đúng field từng lỗi.
 5. 422 → sửa payload cùng externalId → 200 fulfillCode MỚI `replayed:false`.
 6. Kafka: `GET {kafka-ui}/api/clusters/local/topics/order-events/messages` là **SSE stream — parse `data:` lines** (đúng pattern 05-kafka.spec.ts), poll ≤ 30s → thấy message có `"type":"order.created"` với fulfillCode scenario 1.
-- [ ] **Step 3: Chạy e2e** qua runner → TẤT CẢ PASS (chụp output). Chạy thêm 1 bộ e2e cũ nhỏ (05-kafka hoặc 01-main-flow tương thích runner) để chứng minh không vỡ chung.
-- [ ] **Step 4: Commit** `test(sf26): e2e 09-webhook — 6 scenarios private seam sf-26-* + kafka order.created assert`
+- [x] **Step 3: Chạy e2e** qua runner → TẤT CẢ PASS (chụp output). Chạy thêm 1 bộ e2e cũ nhỏ (05-kafka hoặc 01-main-flow tương thích runner) để chứng minh không vỡ chung.
+- [x] **Step 4: Commit** `test(sf26): e2e 09-webhook — 6 scenarios private seam sf-26-* + kafka order.created assert`
 
 ## 6. Risks & unknowns
 - Must verify: codegen flags khớp file gen cũ (soat header intake.ts gen); `request.rawBody` trick với parser scoped; bearer token D1 list-orders trong runner (Keycloak shared hay mint riêng).
