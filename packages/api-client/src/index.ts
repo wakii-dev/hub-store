@@ -1,6 +1,7 @@
 export {
   axiosBaseQuery,
   getAxiosInstance,
+  getStoredToken,
   setTokenGetter,
   type AxiosBaseQueryArg,
   type AxiosBaseQueryError,

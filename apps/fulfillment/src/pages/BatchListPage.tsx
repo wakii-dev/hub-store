@@ -46,6 +46,7 @@ import {
 } from "../api/batchesApi";
 import { fulfillmentStore } from "../store";
 import { registerFulfillmentResources } from "../i18n";
+import RealtimeBridge from "../realtime/RealtimeBridge";
 import { MarkFailModal } from "../features/MarkFailModal";
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
@@ -182,6 +183,8 @@ function OrderExpandContent({
 export default function BatchListPage() {
   return (
     <Provider store={fulfillmentStore}>
+      {/* SF-10: SSE bridge — invalidate Fulfillment/Batches khi BFF forward event. */}
+      <RealtimeBridge />
       <BatchListPageInner />
     </Provider>
   );
