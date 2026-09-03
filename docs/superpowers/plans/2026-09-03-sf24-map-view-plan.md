@@ -499,7 +499,7 @@ git commit -m "feat(shell): SF-24 tech service map tab — pins theo trạng th�
 
 **Dep:** Task 2.
 
-- [ ] **Step 4.1: mfShared leaflet singleton (3 configs)**
+- [x] **Step 4.1: mfShared leaflet singleton (3 configs)**
 
 Thêm dòng vào `mfShared` trong CẢ 3 file (đặt cạnh antd):
 
@@ -507,7 +507,7 @@ Thêm dòng vào `mfShared` trong CẢ 3 file (đặt cạnh antd):
 leaflet: { singleton: true, requiredVersion: "1.9.4" },
 ```
 
-- [ ] **Step 4.2: Wire stopMeta từ BatchListPage**
+- [x] **Step 4.2: Wire stopMeta từ BatchListPage**
 
 Đọc `BatchListPage.tsx` (hiện mở TrackingModal với `batchCode`/`planningIds`/`orderCode` — tìm chỗ render `<TrackingModal`). Data orders đã có trong tay qua `useGetBatchOrdersQuery` → `HubStoreOrderFilterItem[]` (có `customerAddress`, `codAmount`) — join THEO `batch.items[].orderCode` (KHÔNG theo index — spec-critic P2):
 
@@ -524,13 +524,13 @@ const stopMeta = useMemo(() => {
 
 (Executor đọc field names thật của `HubStoreOrderFilterItem` trong `packages/shared/src/types/order.ts` — `customerAddress` + `codAmount` đã được spec-critic verify tồn tại dòng 31/35.)
 
-- [ ] **Step 4.3: Build/typecheck cả 3 apps + test smoke + verify CSP**
+- [x] **Step 4.3: Build/typecheck cả 3 apps + test smoke + verify CSP**
 
 Run: `pnpm install` (nếu chưa) → `pnpm --filter fulfillment build && pnpm --filter shell build && pnpm --filter orders build` (hoặc typecheck script tương đương — đọc scripts) → tất cả sạch. Run unit tests 3 apps → PASS (test cũ không vỡ).
 
 Verify CSP (spec §4.6 — plan-critic P1): grep CSP headers trong BFF (`services/bff-gateway/**` — `Content-Security-Policy`) + shell index.html. Kết quả (có/không CSP; nếu có → `img-src`/`connect-src` có `tile.openstreetmap.org` chưa) ghi vào commit message + comment Linear cuối task.
 
-- [ ] **Step 4.4: Commit**
+- [x] **Step 4.4: Commit**
 
 ```bash
 git add apps/fulfillment/vite.config.ts apps/shell/vite.config.ts apps/orders/vite.config.ts apps/fulfillment/src/pages/BatchListPage.tsx

@@ -44,6 +44,8 @@ const mfShared = {
   "react/jsx-runtime": { singleton: true, requiredVersion: "^18.0.0" },
   "react/jsx-dev-runtime": { singleton: true, requiredVersion: "^18.0.0" },
   antd: { singleton: true, requiredVersion: "4.24.16" },
+  // SF-24: leaflet singleton chung shell + remotes.
+  leaflet: { singleton: true, requiredVersion: "1.9.4" },
   "@reduxjs/toolkit": { singleton: true, requiredVersion: "^2.12.0" },
   "react-redux": { singleton: true, requiredVersion: "^9.0.0" },
   "react-router-dom": { singleton: true, requiredVersion: "^6.30.0" },
