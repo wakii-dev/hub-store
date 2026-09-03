@@ -433,7 +433,15 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
                   key={p.id}
                   role="radio"
                   aria-checked={selected}
-                  tabIndex={-1}
+                  // a11y (P1 review): role="radio" phải focusable + Enter/Space
+                  // select — trước đây tabIndex={-1} + click-only.
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handlePickPreset(p.id);
+                    }
+                  }}
                   className={`batch-preset-card${selected ? " batch-preset-card-selected" : ""}`}
                   data-testid={`wizard-preset-${p.id}`}
                   onClick={() => handlePickPreset(p.id)}

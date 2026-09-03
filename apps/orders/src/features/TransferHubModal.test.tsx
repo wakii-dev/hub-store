@@ -117,4 +117,31 @@ describe("TransferHubModal — tạo ticket chuyển kho (SF-28 T2)", () => {
     // không hiện suggest list khi bị chặn
     expect(screen.queryByTestId("transfer-hub-target")).toBeNull();
   });
+
+  it("mutation 409 trùng PENDING → message.error hiển thị message BFF + modal GIỮ MỞ", async () => {
+    // P1 review: BFF reject trùng PENDING (envelope {statusCode,message}) —
+    // FE catch → message.error(data.message), modal KHÔNG đóng.
+    create.mockImplementationOnce(() => ({
+      unwrap: async () => {
+        throw { status: 409, data: { message: "Đơn này đã có ticket chuyển kho đang chờ duyệt" } };
+      },
+    }));
+    renderModal();
+    fireEvent.click(screen.getAllByTestId("transfer-hub-target")[0]);
+    fireEvent.change(screen.getByTestId("transfer-hub-reason"), {
+      target: { value: "Chuyển kho gấp" },
+    });
+    fireEvent.click(screen.getByTestId("transfer-hub-confirm"));
+    // message BFF hiển thị qua antd message.error (portal vào body)
+    await waitFor(() =>
+      expect(
+        screen.getByText("Đơn này đã có ticket chuyển kho đang chờ duyệt"),
+      ).toBeTruthy(),
+    );
+    // modal giữ mở: confirm không chuyển "✓ Đã tạo yêu cầu", vẫn enable để sửa lý do
+    const confirm = screen.getByTestId("transfer-hub-confirm") as HTMLButtonElement;
+    expect(confirm.textContent).not.toContain("✓");
+    expect(confirm.disabled).toBe(false);
+    expect(screen.getByTestId("transfer-hub-modal")).toBeTruthy();
+  });
 });

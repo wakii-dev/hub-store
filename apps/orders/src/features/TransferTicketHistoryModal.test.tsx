@@ -71,8 +71,8 @@ describe("TransferTicketHistoryModal — lịch sử ticket (SF-28 T3)", () => {
     expect(table.textContent).toContain("Đơn nằm sai khu vực giao");
     // thời gian format VN (TZ test +07 → cùng ngày 03/09/2026)
     expect(table.textContent).toContain("03/09/2026");
-    // PENDING → confirmed_by trống → "—"
-    expect(table.textContent).toContain("Người duyệt: —");
+    // PENDING → confirmed_by trống → "— chưa có người duyệt" (design §2.2)
+    expect(table.textContent).toContain("— chưa có người duyệt");
     // footer hint count
     expect(screen.getByText("1 ticket · mới nhất lên đầu")).toBeTruthy();
   });
@@ -100,7 +100,9 @@ describe("TransferTicketHistoryModal — lịch sử ticket (SF-28 T3)", () => {
     renderModal();
     const table = screen.getByTestId("transfer-history-table");
     expect(table.textContent).toContain("Đã duyệt");
-    expect(table.textContent).toContain("Người duyệt: mg1");
+    // design §2.2: avatar gradient + tên người duyệt (API chưa có role approver
+    // → chỉ tên; initials "M" render trong avatar)
+    expect(table.textContent).toContain("mg1");
   });
 
   it("empty state: không có ticket → transfer-history-empty (không render bảng)", () => {

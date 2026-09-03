@@ -13,7 +13,7 @@
  * - Confirm → POST /fulfillment/{code}/transfer-tickets → "✓ Đã tạo yêu cầu"
  *   800ms → onClose (invalidate Fulfillment LIST → badge D1 refetch).
  */
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Button, Input, Modal, Radio, message } from "antd";
 import { useTranslation } from "react-i18next";
 import {
@@ -84,6 +84,16 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
 
   const [create, { isLoading: creating }] = useCreateTransferTicketMutation();
 
+  // P2 review: timer flash "✓" 800ms phải clear được khi unmount/ESC trong
+  // window — không thì resetAndClose fire sau khi modal đã chết.
+  const closeTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(
+    () => () => {
+      if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+    },
+    [],
+  );
+
   // Search chỉ chạy khi có từ khóa (debounce 300ms — design §6 dev-decided).
   const { data: shopsData, isLoading: shopsLoading } = useSearchShopsQuery(debouncedSearch, {
     skip: !open || debouncedSearch.length === 0,
@@ -129,7 +139,8 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
         reason: reason.trim(),
       }).unwrap();
       setConfirmed(true);
-      setTimeout(resetAndClose, CONFIRMED_FLASH_MS);
+      if (closeTimerRef.current !== null) clearTimeout(closeTimerRef.current);
+      closeTimerRef.current = setTimeout(resetAndClose, CONFIRMED_FLASH_MS);
     } catch (err) {
       const data = (err as { data?: { message?: string } }).data;
       message.error(data?.message ?? t("transferHub.error"));
@@ -386,6 +397,8 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
           />
           {!debtSplit && (
             <div
+              role="listbox"
+              aria-label={t("transferHub.targetLabel")}
               style={{
                 marginTop: 10,
                 borderRadius: DESIGN_TOKENS.radius.xl,
@@ -417,6 +430,17 @@ export function TransferHubModal({ open, order, onClose }: TransferHubModalProps
                   <div
                     key={shop.shopCode}
                     onClick={() => setTargetCode(shop.shopCode)}
+                    // a11y (P1 review): row select bằng keyboard — role="option"
+                    // trong listbox + tabIndex + Enter/Space.
+                    role="option"
+                    aria-selected={targetCode === shop.shopCode}
+                    tabIndex={0}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setTargetCode(shop.shopCode);
+                      }
+                    }}
                     style={{
                       display: "flex",
                       alignItems: "center",

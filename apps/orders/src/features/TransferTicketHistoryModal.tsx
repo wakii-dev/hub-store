@@ -1,6 +1,6 @@
 /**
  * TransferTicketHistoryModal — SF-28 T3 (design §2.2): lịch sử ticket chuyển
- * kho của 1 đơn, modal 640px, testid transfer-ticket-history-modal.
+ * kho của 1 đơn, modal 760px (§2.2), testid transfer-ticket-history-modal.
  *
  * - Dữ liệu: getTransferTickets(orderCode) — API trả ORDER BY created_at DESC
  *   (mới nhất lên đầu, đúng thứ tự design yêu cầu).
@@ -42,6 +42,21 @@ const STATUS_TAG_META: Record<string, { color: string; bg: string; line: string 
   },
 };
 
+/** Design §2.2 — grid header + data row dùng chung 4 track. */
+const HISTORY_GRID = "88px 108px 1fr 96px";
+
+/** Avatar initials: "Nguyễn Văn A" → "NA" (tối đa 2 chữ cái). */
+function initialsOf(name: string): string {
+  return (
+    name
+      .trim()
+      .split(/\s+/)
+      .slice(0, 2)
+      .map((w) => w.charAt(0).toUpperCase())
+      .join("") || "?"
+  );
+}
+
 function statusTagStyle(meta: { color: string; bg: string; line: string }): React.CSSProperties {
   return {
     display: "inline-flex",
@@ -78,11 +93,12 @@ export function TransferTicketHistoryModal({ orderCode, open, onClose }: Transfe
     });
   }, [i18n.language]);
 
+  // Design §2.2: grid 4 track `88px 108px 1fr 96px` — "Kho đích · Lý do" chung
+  // 1 cột (lý do bên dưới), "Thời gian & Người duyệt" chung cột cuối.
   const columns = [
     t("transferHistory.col.ticket"),
     t("transferHistory.col.status"),
-    t("transferHistory.col.toHub"),
-    t("transferHistory.col.reason"),
+    `${t("transferHistory.col.toHub")} · ${t("transferHistory.col.reason")}`,
     t("transferHistory.col.time"),
   ];
 
@@ -115,7 +131,7 @@ export function TransferTicketHistoryModal({ orderCode, open, onClose }: Transfe
       }
       open={open}
       onCancel={onClose}
-      width={640}
+      width={760}
       destroyOnClose
       footer={
         <div
@@ -175,10 +191,10 @@ export function TransferTicketHistoryModal({ orderCode, open, onClose }: Transfe
             <div
               style={{
                 display: "grid",
-                gridTemplateColumns: "90px 100px 1fr 1fr 160px",
-                gap: 8,
+                gridTemplateColumns: HISTORY_GRID,
+                gap: 14,
                 background: DESIGN_TOKENS.color.bgHeaderSticky,
-                padding: "10px 14px",
+                padding: "9px 16px",
                 fontSize: 11.5,
                 fontWeight: 600,
                 color: DESIGN_TOKENS.color.textMuted,
@@ -196,19 +212,20 @@ export function TransferTicketHistoryModal({ orderCode, open, onClose }: Transfe
                   : ticket.status === "REJECTED"
                     ? t("transferHub.tagRejected")
                     : t("transferHistory.tagPending");
-              const confirmed =
-                ticket.confirmedBy && ticket.confirmedBy.length > 0
-                  ? ticket.confirmedBy
-                  : t("common.empty");
+              const hasApprover = !!ticket.confirmedBy && ticket.confirmedBy.length > 0;
+              // Design §2.2: avatar gradient cam 22px cho người duyệt (neutral
+              // gradient khi từ chối) + "tên · role" — API TransferTicket hiện
+              // KHÔNG trả role approver (chỉ confirmedBy) → hiển thị tên; thêm
+              // " · {role}" khi backend bổ sung field.
               return (
                 <div
                   key={ticket.ticketCode}
                   style={{
                     display: "grid",
-                    gridTemplateColumns: "90px 100px 1fr 1fr 160px",
-                    gap: 8,
+                    gridTemplateColumns: HISTORY_GRID,
+                    gap: 14,
                     alignItems: "start",
-                    padding: "12px 14px",
+                    padding: "13px 16px",
                     borderTop:
                       i === 0 ? undefined : `1px solid ${DESIGN_TOKENS.color.dividerSoft}`,
                   }}
@@ -226,25 +243,33 @@ export function TransferTicketHistoryModal({ orderCode, open, onClose }: Transfe
                   <span>
                     <span style={statusTagStyle(meta)}>{statusLabel}</span>
                   </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      color: DESIGN_TOKENS.color.textSecondary,
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {ticket.toHub}
+                  {/* Kho đích + lý do chung 1 cột (lý do bên dưới — §2.2) */}
+                  <span>
+                    <span
+                      style={{
+                        display: "block",
+                        fontSize: 12.5,
+                        fontWeight: 500,
+                        color: DESIGN_TOKENS.color.textStrong,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {ticket.toHub}
+                    </span>
+                    <span
+                      style={{
+                        display: "block",
+                        marginTop: 2,
+                        fontSize: 12.5,
+                        lineHeight: 1.45,
+                        color: DESIGN_TOKENS.color.textSecondary,
+                        wordBreak: "break-word",
+                      }}
+                    >
+                      {ticket.reason || t("common.empty")}
+                    </span>
                   </span>
-                  <span
-                    style={{
-                      fontSize: 13,
-                      color: DESIGN_TOKENS.color.textSecondary,
-                      maxWidth: 170,
-                      wordBreak: "break-word",
-                    }}
-                  >
-                    {ticket.reason || t("common.empty")}
-                  </span>
+                  {/* Thời gian + người duyệt chung 1 cột (§2.2) */}
                   <span>
                     <span
                       style={{
@@ -256,9 +281,58 @@ export function TransferTicketHistoryModal({ orderCode, open, onClose }: Transfe
                     >
                       {timeFormatter.format(new Date(ticket.createdAt))}
                     </span>
-                    <span style={{ display: "block", fontSize: 12.5, color: DESIGN_TOKENS.color.textMuted }}>
-                      {t("transferHistory.confirmedBy")}: {confirmed}
-                    </span>
+                    {hasApprover ? (
+                      <span
+                        style={{
+                          display: "flex",
+                          alignItems: "center",
+                          gap: 6,
+                          marginTop: 4,
+                        }}
+                      >
+                        <span
+                          aria-hidden="true"
+                          style={{
+                            flexShrink: 0,
+                            width: 22,
+                            height: 22,
+                            borderRadius: DESIGN_TOKENS.radius.pill,
+                            background:
+                              ticket.status === "REJECTED"
+                                ? "linear-gradient(135deg, #98A2B3 0%, #667085 100%)"
+                                : DESIGN_TOKENS.color.primaryGradient,
+                            color: DESIGN_TOKENS.color.bgWhite,
+                            fontSize: 9.5,
+                            fontWeight: 700,
+                            display: "inline-flex",
+                            alignItems: "center",
+                            justifyContent: "center",
+                          }}
+                        >
+                          {initialsOf(ticket.confirmedBy)}
+                        </span>
+                        <span
+                          style={{
+                            fontSize: 12,
+                            color: DESIGN_TOKENS.color.textMuted,
+                            wordBreak: "break-word",
+                          }}
+                        >
+                          {ticket.confirmedBy}
+                        </span>
+                      </span>
+                    ) : (
+                      <span
+                        style={{
+                          display: "block",
+                          marginTop: 4,
+                          fontSize: 12,
+                          color: DESIGN_TOKENS.color.textMuted,
+                        }}
+                      >
+                        — {t("transferHistory.noApprover")}
+                      </span>
+                    )}
                   </span>
                 </div>
               );

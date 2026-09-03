@@ -110,6 +110,17 @@ function TransferTicketBadge({
     <Tag
       data-testid={`transfer-badge-${ticket.orderFulfillCode}`}
       onClick={onOpenHistory}
+      // a11y (P1 review): tag click-được phải keyboard-accessible — Enter/Space
+      // mở history; role="button" + aria-label cho screen reader.
+      tabIndex={0}
+      role="button"
+      aria-label={`${label} — ${ticket.orderFulfillCode}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenHistory();
+        }
+      }}
       style={{
         borderRadius: DESIGN_TOKENS.radius.pill,
         marginInlineEnd: 0,
@@ -189,9 +200,11 @@ function D1Content() {
 
   // Tickets của các đơn trên trang hiện tại (skip khi trang rỗng — BFF 400 nếu
   // codes trống). API trả ORDER BY created_at DESC → lần đầu gặp = mới nhất.
+  // P1 review: BFF requireRole Coordinator/Manager/Admin → role khác phải skip
+  // query (mỗi load D1 sẽ fire 403 vô ích).
   const pageCodes = rows.map((r) => r.fulfillCode).join(",");
   const { data: ticketsData } = useGetTransferTicketsQuery(pageCodes, {
-    skip: pageCodes.length === 0,
+    skip: pageCodes.length === 0 || !canTransferTicket,
   });
   const latestTicketByCode = useMemo(() => {
     const map = new Map<string, TransferTicket>();
@@ -304,20 +317,25 @@ function D1Content() {
       width: 230,
       render: (_: unknown, record) => <DeliveryTimeCell order={record} />,
     },
-    {
-      title: t("columns.transferTicket"),
-      key: "transferTicket",
-      width: 130,
-      render: (_: unknown, record) => {
-        const ticket = latestTicketByCode.get(record.fulfillCode);
-        return ticket ? (
-          <TransferTicketBadge
-            ticket={ticket}
-            onOpenHistory={() => setHistoryOrderCode(record.fulfillCode)}
-          />
-        ) : null;
-      },
-    },
+    // P1 review: role không đủ quyền → ẨN hẳn cột "Chuyển kho" (badge chết).
+    ...(canTransferTicket
+      ? [
+          {
+            title: t("columns.transferTicket"),
+            key: "transferTicket",
+            width: 130,
+            render: (_: unknown, record: HubStoreOrderFilterItem) => {
+              const ticket = latestTicketByCode.get(record.fulfillCode);
+              return ticket ? (
+                <TransferTicketBadge
+                  ticket={ticket}
+                  onOpenHistory={() => setHistoryOrderCode(record.fulfillCode)}
+                />
+              ) : null;
+            },
+          },
+        ]
+      : []),
     {
       title: t("columns.actions"),
       key: "actions",

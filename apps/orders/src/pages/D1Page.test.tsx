@@ -292,7 +292,8 @@ describe("D1Page", () => {
     const modal = screen.getByTestId("transfer-ticket-history-modal");
     expect(modal.textContent).toContain("TT-0002");
     expect(modal.textContent).toContain("Đã duyệt");
-    expect(modal.textContent).toContain("Người duyệt: mg1");
+    // design §2.2: avatar + tên người duyệt (bỏ prefix "Người duyệt:")
+    expect(modal.textContent).toContain("mg1");
     setRole(null);
   });
 
