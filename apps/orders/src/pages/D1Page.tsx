@@ -170,7 +170,7 @@ function D1Content() {
       dataIndex: "batchStatus",
       key: "batchStatus",
       width: 180,
-      render: (value: number) => <StatusTag kind="batchStatus" value={value} />,
+      render: (value: number) => <StatusTag kind="batchStatus" value={value} locale={statusLocale} />,
     },
     {
       title: t("columns.shop"),

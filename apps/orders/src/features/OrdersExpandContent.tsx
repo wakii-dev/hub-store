@@ -10,7 +10,8 @@ import { useTranslation } from "react-i18next";
 import { formatVnd, type HubStoreOrderFilterItem, type HubStoreOrderProduct } from "@hub-store/shared";
 
 export function OrdersExpandContent({ order }: { order: HubStoreOrderFilterItem }) {
-  const { t } = useTranslation("orders");
+  const { t, i18n } = useTranslation("orders");
+  const locale: "vi" | "en" = (i18n.language ?? "vi").startsWith("vi") ? "vi" : "en";
 
   const columns = [
     { title: t("expand.productCode"), dataIndex: "productCode", key: "productCode" },
@@ -33,7 +34,7 @@ export function OrdersExpandContent({ order }: { order: HubStoreOrderFilterItem 
           {t("expand.totalQuantity")}: <strong>{order.totalQuantity}</strong>
         </Typography.Text>
         <Typography.Text data-testid={`cod-${order.fulfillCode}`}>
-          {t("expand.cod")}: <strong>{formatVnd(order.codAmount)}</strong>
+          {t("expand.cod")}: <strong>{formatVnd(order.codAmount, locale)}</strong>
         </Typography.Text>
         {(order.customerName || order.customerPhone) && (
           <Typography.Text data-testid={`customer-${order.fulfillCode}`}>

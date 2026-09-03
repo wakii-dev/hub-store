@@ -76,7 +76,8 @@ interface SortableRowValue {
 // react-sortable-hoc@2 typings không infer P qua WrappedComponentFactory union —
 // cast tường minh (runtime ĐÃ verify spike-3 trên react 18.3.1).
 const SortableRow = SortableElement(({ value }: { value: SortableRowValue }) => {
-  const { t } = useTranslation("orders");
+  const { t, i18n } = useTranslation("orders");
+  const statusLocale = (i18n.language ?? "vi").startsWith("vi") ? "vi" : "en";
   const { order, stopOrder, groupIndex } = value;
   const color = groupIndex >= 0 ? groupColor(groupIndex) : null;
   return (
@@ -96,12 +97,12 @@ const SortableRow = SortableElement(({ value }: { value: SortableRowValue }) => 
       <span className="batch-cell-distance">
         {order.distance != null ? `${order.distance} km` : t("common.empty")}
       </span>
-      <span className="batch-cell-time">{formatPeriodOfTime(order.deliveryTime.from, order.deliveryTime.to)}</span>
+      <span className="batch-cell-time">{formatPeriodOfTime(order.deliveryTime.from, order.deliveryTime.to, statusLocale)}</span>
       <span className="batch-cell-status">
-        <StatusTag kind="orderStatus" value={order.orderStatus} />
+        <StatusTag kind="orderStatus" value={order.orderStatus} locale={statusLocale} />
       </span>
       <span className="batch-cell-qty">{order.totalQuantity}</span>
-      <span className="batch-cell-cod">{formatVnd(order.codAmount)}</span>
+      <span className="batch-cell-cod">{formatVnd(order.codAmount, statusLocale)}</span>
     </li>
   );
 }) as unknown as ComponentClass<{ index: number; value: SortableRowValue }>;
@@ -122,7 +123,8 @@ export interface CreateBatchingModalProps {
 }
 
 export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingModalProps) {
-  const { t } = useTranslation("orders");
+  const { t, i18n } = useTranslation("orders");
+  const fmtLocale = (i18n.language ?? "vi").startsWith("vi") ? "vi" : "en";
 
   // Rows state — sync khi MỞ modal (snapshot selection); DnD/thêm đơn/recalc đổi state.
   const [rows, setRows] = useState<HubStoreOrderFilterItem[]>([]);
@@ -488,7 +490,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
           </div>
           <div className="sf6-sum-cell">
             <span className="sf6-sum-key">{t("createBatch.sum.cod")}</span>
-            <span className="sf6-sum-val">{formatVnd(totalCod)}</span>
+            <span className="sf6-sum-val">{formatVnd(totalCod, fmtLocale)}</span>
           </div>
         </div>
 
@@ -514,7 +516,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
           </div>
           <div className="sf6-review-row">
             <span className="sf6-review-key">{t("createBatch.review.cod")}</span>
-            <span className="sf6-review-val">{formatVnd(totalCod)}</span>
+            <span className="sf6-review-val">{formatVnd(totalCod, fmtLocale)}</span>
           </div>
           <div className="sf6-review-row">
             <span className="sf6-review-key">{t("createBatch.review.note")}</span>
