@@ -52,11 +52,11 @@ DAG 3 tiers — Tier 1: T1 ∥ T3 (disjoint); Tier 2: T2 (deps T1), T4 (deps T3)
 
 ### Task 2: Kafka consumer wiring + dual-source local emit + degraded signal (`bff-kafka-consumer`) — deps T1
 **Files:** Create `src/lib/realtime-publish.ts` + test · Modify mutation routes `fulfillment.ts`, `deliverybatch.ts`, `intake.ts`, `src/kafka/consumer.ts`
-- [ ] **Step 1:** Verify SF-27 pipeline hoạt động (server.ts đã emit `kafka:event` khi KAFKA_ENABLED=true — đọc lại, không sửa nếu đúng).
-- [ ] **Step 2:** `realtime-publish.ts` — `emitLocalEvent(topic, type, payload)` build envelope + emit `bffEvents`; chỉ active khi `config.kafka.enabled === false` (guard tại call-site hoặc trong helper — chọn 1, ghi rõ). Import allow-list từ `lib/realtime-events.ts` (T1).
-- [ ] **Step 3:** Wire emit post-success vào mutation routes tương ứng allow-list (map route → event type; grep Java publish sites để lấy đúng tên type + payload gọn: fulfillCode/batchCode). Kiểm tra `routes/d2c.ts`: Java producer có publish event cho D2C mutation không — có → không cần gì; không → thêm local emit cho d2c mutation tương ứng HOẶC flag ghi rõ D2C stale là known-gap.
-- [ ] **Step 4:** **Degraded signal (spec slice 4 — fallback cả khi Kafka consumer lỗi):** consumer.ts — khi consumer error/disconnect (sau khi đã connected) → emit `bffEvents` synthetic event `{type:'stream.degraded'}`; SSE route forward cho client; FE hook (T5) coi là failure → polling. Không crash BFF.
-- [ ] **Step 5:** Unit tests emitLocalEvent (envelope shape, topic mapping order-* vs batch-*) + test 1 route emit đúng sau success + test degraded signal emit khi consumer error callback fire.
+- [x] **Step 1:** Verify SF-27 pipeline hoạt động (server.ts đã emit `kafka:event` khi KAFKA_ENABLED=true — đọc lại, không sửa nếu đúng).
+- [x] **Step 2:** `realtime-publish.ts` — `emitLocalEvent(topic, type, payload)` build envelope + emit `bffEvents`; chỉ active khi `config.kafka.enabled === false` (guard tại call-site hoặc trong helper — chọn 1, ghi rõ). Import allow-list từ `lib/realtime-events.ts` (T1).
+- [x] **Step 3:** Wire emit post-success vào mutation routes tương ứng allow-list (map route → event type; grep Java publish sites để lấy đúng tên type + payload gọn: fulfillCode/batchCode). Kiểm tra `routes/d2c.ts`: Java producer có publish event cho D2C mutation không — có → không cần gì; không → thêm local emit cho d2c mutation tương ứng HOẶC flag ghi rõ D2C stale là known-gap.
+- [x] **Step 4:** **Degraded signal (spec slice 4 — fallback cả khi Kafka consumer lỗi):** consumer.ts — khi consumer error/disconnect (sau khi đã connected) → emit `bffEvents` synthetic event `{type:'stream.degraded'}`; SSE route forward cho client; FE hook (T5) coi là failure → polling. Không crash BFF.
+- [x] **Step 5:** Unit tests emitLocalEvent (envelope shape, topic mapping order-* vs batch-*) + test 1 route emit đúng sau success + test degraded signal emit khi consumer error callback fire.
 
 ### Task 3: FE SSE hook (`fe-sse-hook`)
 **Files:** Create `packages/api-client/src/realtime.ts` + test
@@ -65,9 +65,9 @@ DAG 3 tiers — Tier 1: T1 ∥ T3 (disjoint); Tier 2: T2 (deps T1), T4 (deps T3)
 
 ### Task 4: D1/D2 live update (`d1-d2-live-update`)
 **Files:** Modify `apps/orders/src/**` (root wire), `apps/fulfillment/src/**` (root wire)
-- [ ] **Step 1:** Orders (D1): mount hook invalidate `[{type:'Fulfillment', id:'LIST'}]`.
-- [ ] **Step 2:** Fulfillment (D2): mount hook invalidate `[{type:'Fulfillment', id:'LIST'}, {type:'Batches', id:'LIST'}, {type:'Batches', id:'CRITERIA'}]`.
-- [ ] **Step 3:** Unit/App tests vẫn xanh (2 remotes).
+- [x] **Step 1:** Orders (D1): mount hook invalidate `[{type:'Fulfillment', id:'LIST'}]`.
+- [x] **Step 2:** Fulfillment (D2): mount hook invalidate `[{type:'Fulfillment', id:'LIST'}, {type:'Batches', id:'LIST'}, {type:'Batches', id:'CRITERIA'}]`.
+- [x] **Step 3:** Unit/App tests vẫn xanh (2 remotes).
 
 ### Task 5: Reconnect + fallback polling (`reconnect-fallback`) — deps T3
 **Files:** Modify `packages/api-client/src/realtime.ts`
