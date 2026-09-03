@@ -47,8 +47,12 @@ self.addEventListener('fetch', (e) => {
         (hit) =>
           hit ??
           fetch(req).then((res) => {
+            if (!res.ok) return res; // 500/404 tạm — KHÔNG pin vào cache
             const copy = res.clone();
-            void caches.open(CACHE).then((c) => c.put(req, copy));
+            void caches
+              .open(CACHE)
+              .then((c) => c.put(req, copy))
+              .catch(() => {});
             return res;
           }),
       ),
@@ -61,8 +65,12 @@ self.addEventListener('fetch', (e) => {
     e.respondWith(
       fetch(req)
         .then((res) => {
+          if (!res.ok) return res; // 500/404 tạm — KHÔNG pin vào cache
           const copy = res.clone();
-          void caches.open(CACHE).then((c) => c.put(req, copy));
+          void caches
+            .open(CACHE)
+            .then((c) => c.put(req, copy))
+            .catch(() => {});
           return res;
         })
         .catch(() =>
