@@ -58,13 +58,24 @@ describe("service worker fetch-guard (SF-23 T1 — đúng thứ tự spec §4.1)
 
   it("cache.put chỉ khi res.ok — 500 tạm không bị pin vĩnh viễn (review P1)", () => {
     // cả 2 nhánh cache (cache-first + network-first) đều gate res.ok trước put
+    // (window 400: nhánh network-first có thêm guard OIDC P2-1 + comment trước put)
     const putCalls = sw.matchAll(/\.put\(req, copy\)/g);
     const okGates = [...putCalls].map((m) => {
       const before = sw.slice(0, m.index);
-      return /if \(!res\.ok\) return res;/.test(before.slice(-200));
+      return /if \(!res\.ok\) return res;/.test(before.slice(-400));
     });
     expect(okGates.length).toBeGreaterThanOrEqual(2);
     expect(okGates.every(Boolean)).toBe(true);
+  });
+
+  it("network-first skip cache.put khi OIDC callback (code/state/token trong query) — security P2-1", () => {
+    expect(sw).toContain("/[?&](code|state|token)=/.test(url.search)");
+    // guard nằm trong nhánh network-first (giữa isNav/isRemoteEntry respondWith và put cuối)
+    const iNav = sw.indexOf("isNav || isRemoteEntry");
+    const iGuard = sw.indexOf("/[?&](code|state|token)=/.test(url.search)");
+    const iLastPut = sw.lastIndexOf(".put(req, copy)");
+    expect(iGuard).toBeGreaterThan(iNav);
+    expect(iGuard).toBeLessThan(iLastPut);
   });
 
   it("cache name hubstore-v1 + skipWaiting + clients.claim", () => {

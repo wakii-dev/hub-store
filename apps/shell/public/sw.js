@@ -66,6 +66,9 @@ self.addEventListener('fetch', (e) => {
       fetch(req)
         .then((res) => {
           if (!res.ok) return res; // 500/404 tạm — KHÔNG pin vào cache
+          // Security P2-1: OIDC callback URLs (code/state/token trong query) —
+          // KHÔNG persist vào cache (authorization codes là one-time secret).
+          if (/[?&](code|state|token)=/.test(url.search)) return res;
           const copy = res.clone();
           void caches
             .open(CACHE)

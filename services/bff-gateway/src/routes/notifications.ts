@@ -24,8 +24,23 @@ export function registerNotificationsRoutes(app: FastifyInstance): void {
       await reply.send({ items: [], total: 0 });
       return;
     }
-    const { items, total } = await listNotifications(page, pageSize);
-    await reply.send({ items, total });
+    try {
+      const { items, total } = await listNotifications(page, pageSize);
+      await reply.send({ items, total });
+    } catch (err) {
+      // Security P1-1: raw pg err.message không được leak vào 500 envelope —
+      // log chi tiết server-side, client nhận envelope chuẩn (pattern audit
+      // route 'Audit query failed.' fulfillment.ts).
+      request.log.error(err);
+      console.warn(
+        `[notifications] list failed: ${err instanceof Error ? err.message : String(err)}`,
+      );
+      await reply.status(503).send({
+        statusCode: 503,
+        code: 'NOTIFICATIONS_UNAVAILABLE',
+        message: 'Notification feed tạm thời không khả dụng.',
+      });
+    }
   };
 
   app.get('/notifications', handler);

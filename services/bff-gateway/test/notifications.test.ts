@@ -146,6 +146,11 @@ describe('normalizeNotificationPage', () => {
     expect(normalizeNotificationPage({ page: '3', pageSize: '15' })).toEqual({ page: 3, pageSize: 15, offset: 30 });
     expect(normalizeNotificationPage({ page: 0, pageSize: 0 }).page).toBe(1);
   });
+
+  it('page=1e21 (Number.isFinite=true nhưng OFFSET vượt bigint) → clamp 10_000 (security P2-4)', () => {
+    expect(normalizeNotificationPage({ page: '1e21' })).toEqual({ page: 10_000, pageSize: 20, offset: 199_980 });
+    expect(normalizeNotificationPage({ page: 1e21 }).page).toBe(10_000);
+  });
 });
 
 describe('getNotificationPool', () => {
@@ -236,5 +241,34 @@ describe('GET /notifications (+ /api/notifications)', () => {
     expect(res.statusCode).toBe(200);
     const itemsCall = queryMock.mock.calls.find((c) => !(c[0] as string).startsWith('SELECT COUNT'));
     expect(itemsCall?.[1]).toEqual([100, 0]);
+  });
+
+  it('page=1e21 → không 500, clamp về page 10_000 (security P2-4)', async () => {
+    h = await startHarness();
+    const res = await authedInject(h.app, 'GET', '/notifications?page=1e21');
+    expect(res.statusCode).toBe(200);
+    const itemsCall = queryMock.mock.calls.find((c) => !(c[0] as string).startsWith('SELECT COUNT'));
+    expect(itemsCall?.[1]).toEqual([20, 199_980]); // pageSize default 20, offset (10000-1)*20
+  });
+
+  it('pool query throw → 503 envelope chuẩn, KHÔNG leak err.message (security P1-1)', async () => {
+    queryMock.mockRejectedValue(new Error('FATAL: password authentication failed for user "hubstore"'));
+    h = await startHarness();
+    const warnSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
+    try {
+      const res = await authedInject(h.app, 'GET', '/notifications');
+      expect(res.statusCode).toBe(503);
+      expect(res.body).toEqual({
+        statusCode: 503,
+        code: 'NOTIFICATIONS_UNAVAILABLE',
+        message: 'Notification feed tạm thời không khả dụng.',
+      });
+      expect(JSON.stringify(res.body)).not.toContain('password authentication');
+      // chi tiết lỗi vẫn log server-side
+      expect(warnSpy).toHaveBeenCalledTimes(1);
+      expect(String(warnSpy.mock.calls[0]?.[0])).toContain('password authentication');
+    } finally {
+      warnSpy.mockRestore();
+    }
   });
 });

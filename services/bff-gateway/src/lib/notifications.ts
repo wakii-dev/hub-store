@@ -73,12 +73,19 @@ export function logNotification(
  * runtime là string/array (?page=a&page=b) — Number.isFinite guard, input rác
  * về default thay vì 500; cap 100 chống dump toàn bảng.
  */
+/** Cap page chống OFFSET bigint overflow: 1e21 pass Number.isFinite nhưng
+ * (1e21 - 1) * pageSize vượt int8 → pg 500 (security P2-4). */
+export const NOTIFICATIONS_PAGE_CAP = 10_000;
+
 export function normalizeNotificationPage(input: {
   page?: unknown;
   pageSize?: unknown;
 }): { page: number; pageSize: number; offset: number } {
   const pageRaw = Number(input.page ?? 1);
-  const page = Math.max(Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.floor(pageRaw) : 1, 1);
+  const page = Math.min(
+    Math.max(Number.isFinite(pageRaw) && pageRaw >= 1 ? Math.floor(pageRaw) : 1, 1),
+    NOTIFICATIONS_PAGE_CAP,
+  );
   const sizeRaw = Number(input.pageSize ?? NOTIFICATIONS_PAGE_SIZE_DEFAULT);
   const size = Number.isFinite(sizeRaw)
     ? Math.max(Math.floor(sizeRaw), 1)
