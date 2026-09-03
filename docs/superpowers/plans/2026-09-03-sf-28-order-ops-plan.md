@@ -164,11 +164,11 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - Modify: `apps/orders/src/batching/CreateBatchingModal.tsx` (stepper 3→4 bước, step 1 preset radio)
 - Modify: `apps/orders/src/api/batchingApi.ts` (getCriteriaPresets query + selectCriteriaPreset mutation)
 
-- [ ] **Step 1: RTKQ endpoints** presets + select.
-- [ ] **Step 2: Renumber stepper** — state `1|2|3` → `1|2|3|4`; footer `activeSection < 3` → `< 4`; scrollToSection union mở rộng. Step 1 MỚI: Radio group `data-testid="wizard-step1-preset"` — mỗi preset: name + description; default chọn `balanced`; Next → step 2 (DnD NGUYÊN — KHÔNG đổi logic). Header step 2/3 hiện preset đã chọn (Chip nhỏ — chỉ hiển thị). GIỮ nguyên Deviation D1: content step cũ không bị ẩn ngầm (sf6-direction §0 — kiểm tra cách modal hiện tại render sections rồi giữ pattern). KHÔNG đổi testid control cũ (DnD list, shipper select, date picker).
-- [ ] **Step 3: FE test** — CreateBatchingModal.test.tsx cập nhật: step 1 render 4 preset, chọn → step 2 DnD hoạt động như cũ (test cũ phải vẫn pass).
+- [x] **Step 1: RTKQ endpoints** presets + select.
+- [x] **Step 2: Renumber stepper** — state `1|2|3` → `1|2|3|4`; footer `activeSection < 3` → `< 4`; scrollToSection union mở rộng. Step 1 MỚI: Radio group `data-testid="wizard-step1-preset"` — mỗi preset: name + description; default chọn `balanced`; Next → step 2 (DnD NGUYÊN — KHÔNG đổi logic). Header step 2/3 hiện preset đã chọn (Chip nhỏ — chỉ hiển thị). GIỮ nguyên Deviation D1: content step cũ không bị ẩn ngầm (sf6-direction §0 — kiểm tra cách modal hiện tại render sections rồi giữ pattern). KHÔNG đổi testid control cũ (DnD list, shipper select, date picker).
+- [x] **Step 3: FE test** — CreateBatchingModal.test.tsx cập nhật: step 1 render 4 preset, chọn → step 2 DnD hoạt động như cũ (test cũ phải vẫn pass).
 - [ ] **Step 4: Verify browser** — mở wizard → thấy 4 bước → chọn preset → DnD như cũ. Screenshot.
-- [ ] **Step 5: Commit** `feat(batching): wizard step 1 criteria preset`
+- [x] **Step 5: Commit** `feat(batching): wizard step 1 criteria preset`
 
 ### Task 8: order-note-endpoint — verify-only
 
