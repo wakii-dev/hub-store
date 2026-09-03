@@ -26,6 +26,8 @@ export const NAV_ROUTES: NavRoute[] = [
   // SF-14 — đối soát COD (Manager + Admin) — append CUỐI: landing path mọi role
   // giữ nguyên (Manager/Admin vẫn rơi vào dashboard.view đầu bảng).
   { path: '/settlement', labelKey: 'nav.settlement', permission: 'settlement.view' },
+  // SF-21 — quản lý máy in (Admin duy nhất) — append CUỐI để không đổi landing.
+  { path: '/printers', labelKey: 'nav.printers', permission: 'printers.manage' },
 ];
 
 // Fallback theo permission (KHÔNG hard-code index — mảng có thể thêm entry đầu).

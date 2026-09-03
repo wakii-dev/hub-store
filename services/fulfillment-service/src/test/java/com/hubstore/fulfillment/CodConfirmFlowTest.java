@@ -6,6 +6,7 @@ import com.hubstore.fulfillment.service.FulfillmentServiceImpl;
 import com.hubstore.fulfillment.store.AuditEntry;
 import com.hubstore.fulfillment.store.CodConfirmation;
 import com.hubstore.fulfillment.store.InMemoryCodConfirmationRepository;
+import com.hubstore.fulfillment.store.InMemoryPrinterRepository;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.v1.BatchStatus;
 import com.hubstore.fulfillment.v1.ConfirmBatchCodRequest;
@@ -63,7 +64,8 @@ class CodConfirmFlowTest {
         publisher = new RecordingEventPublisher();
         service = new FulfillmentServiceImpl(repo, publisher,
                 new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()),
-                codRepo, TestTx.noop());
+                codRepo,
+                new InMemoryPrinterRepository(), TestTx.noop());
     }
 
     // ---------------- helpers ----------------

@@ -5,6 +5,7 @@ import com.hubstore.fulfillment.seed.SeedModels;
 import com.hubstore.fulfillment.service.FulfillmentServiceImpl;
 import com.hubstore.fulfillment.store.CodConfirmation;
 import com.hubstore.fulfillment.store.InMemoryCodConfirmationRepository;
+import com.hubstore.fulfillment.store.InMemoryPrinterRepository;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.v1.CodCollectionStatus;
 import com.hubstore.fulfillment.v1.GetSettlementDetailRequest;
@@ -61,7 +62,8 @@ class SettlementAggregateTest {
         codRepo = new InMemoryCodConfirmationRepository(repo::isFailed);
         service = new FulfillmentServiceImpl(repo, new RecordingEventPublisher(),
                 new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()),
-                codRepo, TestTx.noop());
+                codRepo,
+                new InMemoryPrinterRepository(), TestTx.noop());
 
         // S1: 1 PENDING + 1 CONFIRMED lệch tiền (collected 70k ≠ expected 100k).
         insert(s1a, IN_PERIOD, CodConfirmation.STATUS_PENDING, null);

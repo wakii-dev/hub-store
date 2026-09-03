@@ -121,6 +121,12 @@ export function mapGrpcError(
         statusCode: 404,
         body: errorEnvelope(404, err.details ?? 'Not found.', { code: 'NOT_FOUND' }),
       };
+    case GrpcStatus.ALREADY_EXISTS:
+      // SF-21 (D9): duplicate (shopCode, printerId) → 409 CONFLICT.
+      return {
+        statusCode: 409,
+        body: errorEnvelope(409, err.details ?? 'Already exists.', { code: 'CONFLICT' }),
+      };
     case GrpcStatus.FAILED_PRECONDITION:
       // SF-19 (merge): FAILED_PRECONDITION toàn cục = xung đột trạng thái
       // (assign/re-assign sai trạng thái đơn) → 409 CONFLICT.

@@ -36,8 +36,14 @@ import type {
   ListDeliveryStaffResponse,
   ListDistinctShopsRequest,
   ListDistinctShopsResponse,
+  ListPrintersRequest,
+  ListPrintersResponse,
   ListRegionsRequest,
   ListRegionsResponse,
+  CreatePrinterRequest,
+  CreatePrinterResponse,
+  UpdatePrinterRequest,
+  UpdatePrinterResponse,
   UpdateDeliveryTimeRequest,
   UpdateDeliveryTimeResponse,
   UpdateD2cOrderNoteResponse,
@@ -80,6 +86,11 @@ export interface FulfillmentApi {
     req: GetSettlementDetailRequest,
     role: string,
   ): Promise<GetSettlementDetailResponse>;
+  // SF-21 printer management (FI-266) — create/update truyền actor (x-user-name)
+  // cho audit trail activity_log (pattern confirmCod).
+  listPrinters(req: ListPrintersRequest, role: string): Promise<ListPrintersResponse>;
+  createPrinter(req: CreatePrinterRequest, role: string, actor: string): Promise<CreatePrinterResponse>;
+  updatePrinter(req: UpdatePrinterRequest, role: string, actor: string): Promise<UpdatePrinterResponse>;
   close(): void;
 }
 
@@ -109,6 +120,11 @@ export function createFulfillmentClient(addr: string, deadlineMs: number): Fulfi
     getSettlement: (req, role) => callUnary(c.getSettlement.bind(c), req, role, deadlineMs),
     getSettlementDetail: (req, role) =>
       callUnary(c.getSettlementDetail.bind(c), req, role, deadlineMs),
+    listPrinters: (req, role) => callUnary(c.listPrinters.bind(c), req, role, deadlineMs),
+    createPrinter: (req, role, actor) =>
+      callUnary(c.createPrinter.bind(c), req, role, deadlineMs, actor),
+    updatePrinter: (req, role, actor) =>
+      callUnary(c.updatePrinter.bind(c), req, role, deadlineMs, actor),
     close: () => c.close(),
   };
 }

@@ -14,6 +14,7 @@ import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.FilterResult;
 import com.hubstore.fulfillment.store.OrderFilter;
 import com.hubstore.fulfillment.store.OrderRepository;
+import com.hubstore.fulfillment.store.PrinterRepository;
 import com.hubstore.fulfillment.v1.ConfirmBatchCodRequest;
 import com.hubstore.fulfillment.v1.ConfirmBatchCodResponse;
 import com.hubstore.fulfillment.v1.ConfirmCodItem;
@@ -58,8 +59,14 @@ import com.hubstore.fulfillment.v1.ListDeliveryStaffRequest;
 import com.hubstore.fulfillment.v1.ListDeliveryStaffResponse;
 import com.hubstore.fulfillment.v1.ListDistinctShopsRequest;
 import com.hubstore.fulfillment.v1.ListDistinctShopsResponse;
+import com.hubstore.fulfillment.v1.ListPrintersRequest;
+import com.hubstore.fulfillment.v1.ListPrintersResponse;
 import com.hubstore.fulfillment.v1.ListRegionsRequest;
 import com.hubstore.fulfillment.v1.ListRegionsResponse;
+import com.hubstore.fulfillment.v1.CreatePrinterRequest;
+import com.hubstore.fulfillment.v1.CreatePrinterResponse;
+import com.hubstore.fulfillment.v1.UpdatePrinterRequest;
+import com.hubstore.fulfillment.v1.UpdatePrinterResponse;
 import com.hubstore.fulfillment.v1.MutateOrderStatusRequest;
 import com.hubstore.fulfillment.v1.MutateOrderStatusResponse;
 import com.hubstore.fulfillment.v1.MutateOrderStatusResult;
@@ -110,15 +117,17 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
     private final OrderEventPublisher events;
     private final D2cOrderRepository d2cRepo;
     private final CodConfirmationRepository codRepo;
+    private final PrinterRepository printers;
     private final TransactionTemplate transactions;
 
     public FulfillmentServiceImpl(OrderRepository repo, OrderEventPublisher events,
             D2cOrderRepository d2cRepo, CodConfirmationRepository codRepo,
-            TransactionTemplate transactions) {
+            PrinterRepository printers, TransactionTemplate transactions) {
         this.repo = repo;
         this.events = events;
         this.d2cRepo = d2cRepo;
         this.codRepo = codRepo;
+        this.printers = printers;
         this.transactions = transactions;
     }
 
@@ -794,6 +803,132 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
         } catch (Exception e) {
             return "{}";
         }
+    }
+
+    // ---------------- Printer management (SF-21, FI-266) ----------------
+
+    /**
+     * List máy in theo kho (D3 print dùng). shop_code trống = tất cả
+     * (defensive — BFF luôn truyền shop). Role check KHÔNG ở Java: services
+     * trust BFF (convention SF-17) — gate Admin ở BFF (spec SF-21 D9).
+     */
+    @Override
+    public void listPrinters(ListPrintersRequest request, StreamObserver<ListPrintersResponse> responseObserver) {
+        try {
+            ListPrintersResponse.Builder resp = ListPrintersResponse.newBuilder();
+            printers.list(request.getShopCode()).forEach(p -> resp.addPrinters(toPrinter(p)));
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /**
+     * Tạo máy in — duplicate (shop_code, printer_id) → ALREADY_EXISTS
+     * (BFF map 409). Audit: activity_log print.managed (actor từ
+     * x-user-name — ActorInterceptor, pattern confirmCod).
+     */
+    @Override
+    public void createPrinter(CreatePrinterRequest request, StreamObserver<CreatePrinterResponse> responseObserver) {
+        try {
+            com.hubstore.fulfillment.v1.Printer proto = request.getPrinter();
+            List<GrpcErrors.ErrorDetail> details = validatePrinter(proto, true);
+            if (!details.isEmpty()) {
+                throw GrpcErrors.invalidArgument(details);
+            }
+            PrinterRepository.Printer created = printers.create(new PrinterRepository.Printer(
+                    proto.getShopCode().trim(), proto.getPrinterId().trim(),
+                    proto.getName(), proto.getPrinterIp(), proto.getMac(),
+                    proto.getType().trim()));
+            String actor = ActorInterceptor.currentActor();
+            repo.appendAudit(actor, "printer.created", created.printerId(), json(Map.of(
+                    "shopCode", created.shopCode(), "type", orEmpty(created.type()))));
+            responseObserver.onNext(CreatePrinterResponse.newBuilder()
+                    .setPrinter(toPrinter(created)).build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (PrinterRepository.DuplicatePrinterException e) {
+            responseObserver.onError(GrpcErrors.withDetails(
+                    Status.ALREADY_EXISTS, e.getMessage(),
+                    List.of(new GrpcErrors.ErrorDetail("printerId", e.getMessage()))));
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /**
+     * Sửa máy in — identity (shop_code, printer_id) từ request fields CHỐT:
+     * chỉ name/printer_ip/mac/type có hiệu lực (D9). Không thấy → NOT_FOUND.
+     */
+    @Override
+    public void updatePrinter(UpdatePrinterRequest request, StreamObserver<UpdatePrinterResponse> responseObserver) {
+        try {
+            List<GrpcErrors.ErrorDetail> details = new java.util.ArrayList<>();
+            if (request.getShopCode().isBlank()) {
+                details.add(new GrpcErrors.ErrorDetail("shopCode", "shopCode bắt buộc."));
+            }
+            if (request.getPrinterId().isBlank()) {
+                details.add(new GrpcErrors.ErrorDetail("printerId", "printerId bắt buộc."));
+            }
+            details.addAll(validatePrinter(request.getPrinter(), false));
+            if (!details.isEmpty()) {
+                throw GrpcErrors.invalidArgument(details);
+            }
+            PrinterRepository.Printer updated = printers.update(
+                    request.getShopCode().trim(), request.getPrinterId().trim(),
+                    new PrinterRepository.Printer(request.getShopCode().trim(),
+                            request.getPrinterId().trim(),
+                            request.getPrinter().getName(), request.getPrinter().getPrinterIp(),
+                            request.getPrinter().getMac(), request.getPrinter().getType().trim()));
+            String actor = ActorInterceptor.currentActor();
+            repo.appendAudit(actor, "printer.updated", updated.printerId(), json(Map.of(
+                    "shopCode", updated.shopCode(), "type", orEmpty(updated.type()))));
+            responseObserver.onNext(UpdatePrinterResponse.newBuilder()
+                    .setPrinter(toPrinter(updated)).build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (PrinterRepository.PrinterNotFoundException e) {
+            responseObserver.onError(GrpcErrors.withDetails(
+                    Status.NOT_FOUND, e.getMessage(),
+                    List.of(new GrpcErrors.ErrorDetail("printerId", e.getMessage()))));
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /**
+     * Validate input create/update printer. create=true: identity bắt buộc;
+     * type phải 'bill'|'a4'. Static để unit test không cần gRPC runtime.
+     */
+    static List<GrpcErrors.ErrorDetail> validatePrinter(com.hubstore.fulfillment.v1.Printer proto,
+                                                        boolean create) {
+        List<GrpcErrors.ErrorDetail> details = new java.util.ArrayList<>();
+        if (create && proto.getShopCode().isBlank()) {
+            details.add(new GrpcErrors.ErrorDetail("shopCode", "shopCode bắt buộc."));
+        }
+        if (create && proto.getPrinterId().isBlank()) {
+            details.add(new GrpcErrors.ErrorDetail("printerId", "printerId bắt buộc."));
+        }
+        if (!"bill".equals(proto.getType()) && !"a4".equals(proto.getType())) {
+            details.add(new GrpcErrors.ErrorDetail("type", "type phải là 'bill' hoặc 'a4'."));
+        }
+        return details;
+    }
+
+    private static com.hubstore.fulfillment.v1.Printer toPrinter(PrinterRepository.Printer p) {
+        return com.hubstore.fulfillment.v1.Printer.newBuilder()
+                .setShopCode(orEmpty(p.shopCode()))
+                .setPrinterId(orEmpty(p.printerId()))
+                .setName(orEmpty(p.name()))
+                .setPrinterIp(orEmpty(p.printerIp()))
+                .setMac(orEmpty(p.mac()))
+                .setType(orEmpty(p.type()))
+                .build();
     }
 
     // ---------------- D2C mapping helpers (SF-18) ----------------

@@ -224,10 +224,27 @@ function PrintPageInner() {
           loading={printersLoading}
           disabled={busy}
           notFoundContent={printersLoading ? <Spin size="small" /> : t('print.printer.empty')}
-          options={printers.map((p) => ({
-            value: p.printerId,
-            label: p.location ? `${p.name} — ${p.location}` : p.name,
-          }))}
+          options={
+            // SF-21: registry DB-backed có `type` — nhóm máy in Bill vs A4
+            // (optional chaining: field có thể vắng — fallback 'a4', flat list
+            // khi KHÔNG printer nào có type — pin E2E cũ vẫn xanh).
+            printers.some((p) => p.type)
+              ? (['bill', 'a4'] as const)
+                  .map((type) => ({
+                    label: type === 'bill' ? 'Bill' : 'A4',
+                    options: printers
+                      .filter((p) => (p.type ?? 'a4') === type)
+                      .map((p) => ({
+                        value: p.printerId,
+                        label: p.location ? `${p.name} — ${p.location}` : p.name,
+                      })),
+                  }))
+                  .filter((group) => group.options.length > 0)
+              : printers.map((p) => ({
+                  value: p.printerId,
+                  label: p.location ? `${p.name} — ${p.location}` : p.name,
+                }))
+          }
         />
         <Button
           type="primary"

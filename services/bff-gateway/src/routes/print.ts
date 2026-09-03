@@ -10,7 +10,7 @@
 import type { FastifyInstance } from 'fastify';
 import { status as GrpcStatus } from '@grpc/grpc-js';
 import type { PrintersResponse, BatchDto } from '@hub-store/shared';
-import type { BatchingApi, PrintApi } from '../clients/index.js';
+import type { BatchingApi, FulfillmentApi, PrintApi } from '../clients/index.js';
 import { SERVICE_NAMES } from '../config.js';
 import { requireUser } from '../plugins/auth.js';
 import { sendGrpcError, sendBadRequest, grpcError } from '../lib/grpc-error.js';
@@ -19,27 +19,33 @@ import { mapBatch } from '../mappers/batching.js';
 
 export function registerPrintRoutes(
   app: FastifyInstance,
-  deps: { batching: BatchingApi; print: PrintApi },
+  deps: { batching: BatchingApi; print: PrintApi; fulfillment: FulfillmentApi },
 ): void {
   app.get<{ Querystring: { shopCode?: string } }>(
     '/fulfillment/print/printers',
     async (request, reply) => {
       const { role } = requireUser(request);
       try {
-        const resp = await deps.print.listPrinters(
+        // SF-21 D1: nguồn = fulfillment-service (DB-backed registry) thay vì
+        // print-service. Response shape { items } GIỮ NGUYÊN (api-contracts pin)
+        // + additive printerIp/mac/type (T1 DTO).
+        const resp = await deps.fulfillment.listPrinters(
           { shopCode: request.query.shopCode ?? '' },
           role,
         );
         const body: PrintersResponse = {
           items: (resp.printers ?? []).map((p) => ({
-            printerId: p.id,
+            printerId: p.printerId,
             name: p.name,
             shopCode: p.shopCode,
+            printerIp: p.printerIp || undefined,
+            mac: p.mac || undefined,
+            type: (p.type || undefined) as 'bill' | 'a4' | undefined,
           })),
         };
         return await reply.send(body);
       } catch (err) {
-        return sendGrpcError(reply, err, SERVICE_NAMES.print);
+        return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
       }
     },
   );

@@ -25,6 +25,7 @@ import { registerTechRoutes } from './routes/tech.js';
 import { registerIntakeRoutes } from './routes/intake.js';
 import { registerBatchRoutes } from './routes/batches.js';
 import { registerPrintRoutes } from './routes/print.js';
+import { registerPrinterRoutes } from './routes/printers.js';
 import { registerDeliveryBatchRoutes } from './routes/deliverybatch.js';
 import { registerServiceEmployeesRoutes } from './routes/serviceEmployees.js';
 import { registerAuthRoutes } from './routes/auth.js';
@@ -96,7 +97,9 @@ export function buildApp(config: BffConfig): FastifyInstance {
   // SF-13 intake routes — đăng ký SAU fulfillment (plan T6).
   registerIntakeRoutes(app, { intake, fulfillment, batching });
   registerBatchRoutes(app, batching);
-  registerPrintRoutes(app, { batching, print });
+  registerPrintRoutes(app, { batching, print, fulfillment });
+  // SF-21 — printer CRUD (Admin) — dùng fulfillment client (DB-backed registry).
+  registerPrinterRoutes(app, { fulfillment });
   registerDeliveryBatchRoutes(app, deliveryBatch);
   registerServiceEmployeesRoutes(app, { staffArea });
   // SF-18 — D2C orders (consumer trực tiếp) — dùng fulfillment client.

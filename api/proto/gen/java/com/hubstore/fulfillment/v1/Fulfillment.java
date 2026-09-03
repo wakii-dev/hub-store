@@ -305,6 +305,41 @@ public final class Fulfillment {
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_hubstore_fulfillment_v1_GetSettlementDetailResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_Printer_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_Printer_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_ListPrintersRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_ListPrintersRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_ListPrintersResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_ListPrintersResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_CreatePrinterRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_CreatePrinterRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_CreatePrinterResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_CreatePrinterResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_UpdatePrinterRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_UpdatePrinterRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_UpdatePrinterResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_UpdatePrinterResponse_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -490,81 +525,103 @@ public final class Fulfillment {
       "_to\030\003 \001(\0132\032.google.protobuf.Timestamp\"^\n" +
       "\033GetSettlementDetailResponse\022?\n\rconfirma" +
       "tions\030\001 \003(\0132(.hubstore.fulfillment.v1.Co" +
-      "dConfirmation*\205\001\n\013BatchStatus\022\035\n\031BATCH_S" +
-      "TATUS_NOT_PREPARED\020\000\022\032\n\026BATCH_STATUS_PRE" +
-      "PARING\020\001\022\031\n\025BATCH_STATUS_PREPARED\020\002\022 \n\034B" +
-      "ATCH_STATUS_WEIGHT_EXCEEDED\020\003*f\n\013OrderSt" +
-      "atus\022!\n\035ORDER_STATUS_PENDING_APPROVAL\020\000\022" +
-      "\031\n\025ORDER_STATUS_APPROVED\020\001\022\031\n\025ORDER_STAT" +
-      "US_REJECTED\020\002*}\n\022CoordinationStatus\022\037\n\033C" +
-      "OORDINATION_STATUS_PENDING\020\000\022#\n\037COORDINA" +
-      "TION_STATUS_IN_PROGRESS\020\001\022!\n\035COORDINATIO" +
-      "N_STATUS_COMPLETED\020\002*<\n\nRegionType\022\030\n\024RE" +
-      "GION_TYPE_PROVINCE\020\000\022\024\n\020REGION_TYPE_WARD" +
-      "\020\001*9\n\023CodCollectionStatus\022\017\n\013COD_PENDING" +
-      "\020\000\022\021\n\rCOD_CONFIRMED\020\0012\301\022\n\022FulfillmentSer" +
-      "vice\022k\n\014FilterOrders\022,.hubstore.fulfillm" +
-      "ent.v1.FilterOrdersRequest\032-.hubstore.fu" +
-      "lfillment.v1.FilterOrdersResponse\022q\n\016Get" +
-      "OrderDetail\022..hubstore.fulfillment.v1.Ge" +
-      "tOrderDetailRequest\032/.hubstore.fulfillme" +
-      "nt.v1.GetOrderDetailResponse\022z\n\021MutateOr" +
-      "derStatus\0221.hubstore.fulfillment.v1.Muta" +
-      "teOrderStatusRequest\0322.hubstore.fulfillm" +
-      "ent.v1.MutateOrderStatusResponse\022w\n\020GetO" +
-      "rdersByCodes\0220.hubstore.fulfillment.v1.G" +
-      "etOrdersByCodesRequest\0321.hubstore.fulfil" +
-      "lment.v1.GetOrdersByCodesResponse\022n\n\rAss" +
-      "ignShopHub\022-.hubstore.fulfillment.v1.Ass" +
-      "ignShopHubRequest\032..hubstore.fulfillment" +
-      ".v1.AssignShopHubResponse\022w\n\020GetAssignHi" +
-      "story\0220.hubstore.fulfillment.v1.GetAssig" +
-      "nHistoryRequest\0321.hubstore.fulfillment.v" +
-      "1.GetAssignHistoryResponse\022}\n\022UpdateDeli" +
-      "veryTime\0222.hubstore.fulfillment.v1.Updat" +
-      "eDeliveryTimeRequest\0323.hubstore.fulfillm" +
-      "ent.v1.UpdateDeliveryTimeResponse\022e\n\nUpd" +
-      "ateNote\022*.hubstore.fulfillment.v1.Update" +
-      "NoteRequest\032+.hubstore.fulfillment.v1.Up" +
-      "dateNoteResponse\022h\n\013ListRegions\022+.hubsto" +
-      "re.fulfillment.v1.ListRegionsRequest\032,.h" +
-      "ubstore.fulfillment.v1.ListRegionsRespon" +
-      "se\022z\n\021ListDeliveryStaff\0221.hubstore.fulfi" +
-      "llment.v1.ListDeliveryStaffRequest\0322.hub" +
-      "store.fulfillment.v1.ListDeliveryStaffRe" +
-      "sponse\022z\n\021ListDistinctShops\0221.hubstore.f" +
-      "ulfillment.v1.ListDistinctShopsRequest\0322" +
-      ".hubstore.fulfillment.v1.ListDistinctSho" +
-      "psResponse\022t\n\017GetTimeDelivery\022/.hubstore" +
-      ".fulfillment.v1.GetTimeDeliveryRequest\0320" +
-      ".hubstore.fulfillment.v1.GetTimeDelivery" +
-      "Response\022z\n\021GetDashboardStats\0221.hubstore" +
-      ".fulfillment.v1.GetDashboardStatsRequest" +
-      "\0322.hubstore.fulfillment.v1.GetDashboardS" +
-      "tatsResponse\022t\n\017FilterD2cOrders\022/.hubsto" +
-      "re.fulfillment.v1.FilterD2cOrdersRequest" +
-      "\0320.hubstore.fulfillment.v1.FilterD2cOrde" +
-      "rsResponse\022}\n\022UpdateD2cOrderNote\0222.hubst" +
-      "ore.fulfillment.v1.UpdateD2cOrderNoteReq" +
-      "uest\0323.hubstore.fulfillment.v1.UpdateD2c" +
-      "OrderNoteResponse\022e\n\nConfirmCod\022*.hubsto" +
-      "re.fulfillment.v1.ConfirmCodRequest\032+.hu" +
-      "bstore.fulfillment.v1.ConfirmCodResponse" +
-      "\022t\n\017ConfirmBatchCod\022/.hubstore.fulfillme" +
-      "nt.v1.ConfirmBatchCodRequest\0320.hubstore." +
-      "fulfillment.v1.ConfirmBatchCodResponse\022n" +
-      "\n\rGetCodPending\022-.hubstore.fulfillment.v" +
-      "1.GetCodPendingRequest\032..hubstore.fulfil" +
-      "lment.v1.GetCodPendingResponse\022n\n\rGetSet" +
-      "tlement\022-.hubstore.fulfillment.v1.GetSet" +
-      "tlementRequest\032..hubstore.fulfillment.v1" +
-      ".GetSettlementResponse\022\200\001\n\023GetSettlement" +
-      "Detail\0223.hubstore.fulfillment.v1.GetSett" +
-      "lementDetailRequest\0324.hubstore.fulfillme" +
-      "nt.v1.GetSettlementDetailResponseBV\n\033com" +
-      ".hubstore.fulfillment.v1P\001Z5hubstore/gen" +
-      "/go/hubstore/fulfillment/v1;fulfillmentv" +
-      "1b\006proto3"
+      "dConfirmation\"m\n\007Printer\022\021\n\tshop_code\030\001 " +
+      "\001(\t\022\022\n\nprinter_id\030\002 \001(\t\022\014\n\004name\030\003 \001(\t\022\022\n" +
+      "\nprinter_ip\030\004 \001(\t\022\013\n\003mac\030\005 \001(\t\022\014\n\004type\030\006" +
+      " \001(\t\"(\n\023ListPrintersRequest\022\021\n\tshop_code" +
+      "\030\001 \001(\t\"J\n\024ListPrintersResponse\0222\n\010printe" +
+      "rs\030\001 \003(\0132 .hubstore.fulfillment.v1.Print" +
+      "er\"I\n\024CreatePrinterRequest\0221\n\007printer\030\001 " +
+      "\001(\0132 .hubstore.fulfillment.v1.Printer\"J\n" +
+      "\025CreatePrinterResponse\0221\n\007printer\030\001 \001(\0132" +
+      " .hubstore.fulfillment.v1.Printer\"p\n\024Upd" +
+      "atePrinterRequest\022\021\n\tshop_code\030\001 \001(\t\022\022\n\n" +
+      "printer_id\030\002 \001(\t\0221\n\007printer\030\003 \001(\0132 .hubs" +
+      "tore.fulfillment.v1.Printer\"J\n\025UpdatePri" +
+      "nterResponse\0221\n\007printer\030\001 \001(\0132 .hubstore" +
+      ".fulfillment.v1.Printer*\205\001\n\013BatchStatus\022" +
+      "\035\n\031BATCH_STATUS_NOT_PREPARED\020\000\022\032\n\026BATCH_" +
+      "STATUS_PREPARING\020\001\022\031\n\025BATCH_STATUS_PREPA" +
+      "RED\020\002\022 \n\034BATCH_STATUS_WEIGHT_EXCEEDED\020\003*" +
+      "f\n\013OrderStatus\022!\n\035ORDER_STATUS_PENDING_A" +
+      "PPROVAL\020\000\022\031\n\025ORDER_STATUS_APPROVED\020\001\022\031\n\025" +
+      "ORDER_STATUS_REJECTED\020\002*}\n\022CoordinationS" +
+      "tatus\022\037\n\033COORDINATION_STATUS_PENDING\020\000\022#" +
+      "\n\037COORDINATION_STATUS_IN_PROGRESS\020\001\022!\n\035C" +
+      "OORDINATION_STATUS_COMPLETED\020\002*<\n\nRegion" +
+      "Type\022\030\n\024REGION_TYPE_PROVINCE\020\000\022\024\n\020REGION" +
+      "_TYPE_WARD\020\001*9\n\023CodCollectionStatus\022\017\n\013C" +
+      "OD_PENDING\020\000\022\021\n\rCOD_CONFIRMED\020\0012\216\025\n\022Fulf" +
+      "illmentService\022k\n\014FilterOrders\022,.hubstor" +
+      "e.fulfillment.v1.FilterOrdersRequest\032-.h" +
+      "ubstore.fulfillment.v1.FilterOrdersRespo" +
+      "nse\022q\n\016GetOrderDetail\022..hubstore.fulfill" +
+      "ment.v1.GetOrderDetailRequest\032/.hubstore" +
+      ".fulfillment.v1.GetOrderDetailResponse\022z" +
+      "\n\021MutateOrderStatus\0221.hubstore.fulfillme" +
+      "nt.v1.MutateOrderStatusRequest\0322.hubstor" +
+      "e.fulfillment.v1.MutateOrderStatusRespon" +
+      "se\022w\n\020GetOrdersByCodes\0220.hubstore.fulfil" +
+      "lment.v1.GetOrdersByCodesRequest\0321.hubst" +
+      "ore.fulfillment.v1.GetOrdersByCodesRespo" +
+      "nse\022n\n\rAssignShopHub\022-.hubstore.fulfillm" +
+      "ent.v1.AssignShopHubRequest\032..hubstore.f" +
+      "ulfillment.v1.AssignShopHubResponse\022w\n\020G" +
+      "etAssignHistory\0220.hubstore.fulfillment.v" +
+      "1.GetAssignHistoryRequest\0321.hubstore.ful" +
+      "fillment.v1.GetAssignHistoryResponse\022}\n\022" +
+      "UpdateDeliveryTime\0222.hubstore.fulfillmen" +
+      "t.v1.UpdateDeliveryTimeRequest\0323.hubstor" +
+      "e.fulfillment.v1.UpdateDeliveryTimeRespo" +
+      "nse\022e\n\nUpdateNote\022*.hubstore.fulfillment" +
+      ".v1.UpdateNoteRequest\032+.hubstore.fulfill" +
+      "ment.v1.UpdateNoteResponse\022h\n\013ListRegion" +
+      "s\022+.hubstore.fulfillment.v1.ListRegionsR" +
+      "equest\032,.hubstore.fulfillment.v1.ListReg" +
+      "ionsResponse\022z\n\021ListDeliveryStaff\0221.hubs" +
+      "tore.fulfillment.v1.ListDeliveryStaffReq" +
+      "uest\0322.hubstore.fulfillment.v1.ListDeliv" +
+      "eryStaffResponse\022z\n\021ListDistinctShops\0221." +
+      "hubstore.fulfillment.v1.ListDistinctShop" +
+      "sRequest\0322.hubstore.fulfillment.v1.ListD" +
+      "istinctShopsResponse\022t\n\017GetTimeDelivery\022" +
+      "/.hubstore.fulfillment.v1.GetTimeDeliver" +
+      "yRequest\0320.hubstore.fulfillment.v1.GetTi" +
+      "meDeliveryResponse\022z\n\021GetDashboardStats\022" +
+      "1.hubstore.fulfillment.v1.GetDashboardSt" +
+      "atsRequest\0322.hubstore.fulfillment.v1.Get" +
+      "DashboardStatsResponse\022t\n\017FilterD2cOrder" +
+      "s\022/.hubstore.fulfillment.v1.FilterD2cOrd" +
+      "ersRequest\0320.hubstore.fulfillment.v1.Fil" +
+      "terD2cOrdersResponse\022}\n\022UpdateD2cOrderNo" +
+      "te\0222.hubstore.fulfillment.v1.UpdateD2cOr" +
+      "derNoteRequest\0323.hubstore.fulfillment.v1" +
+      ".UpdateD2cOrderNoteResponse\022e\n\nConfirmCo" +
+      "d\022*.hubstore.fulfillment.v1.ConfirmCodRe" +
+      "quest\032+.hubstore.fulfillment.v1.ConfirmC" +
+      "odResponse\022t\n\017ConfirmBatchCod\022/.hubstore" +
+      ".fulfillment.v1.ConfirmBatchCodRequest\0320" +
+      ".hubstore.fulfillment.v1.ConfirmBatchCod" +
+      "Response\022n\n\rGetCodPending\022-.hubstore.ful" +
+      "fillment.v1.GetCodPendingRequest\032..hubst" +
+      "ore.fulfillment.v1.GetCodPendingResponse" +
+      "\022n\n\rGetSettlement\022-.hubstore.fulfillment" +
+      ".v1.GetSettlementRequest\032..hubstore.fulf" +
+      "illment.v1.GetSettlementResponse\022\200\001\n\023Get" +
+      "SettlementDetail\0223.hubstore.fulfillment." +
+      "v1.GetSettlementDetailRequest\0324.hubstore" +
+      ".fulfillment.v1.GetSettlementDetailRespo" +
+      "nse\022k\n\014ListPrinters\022,.hubstore.fulfillme" +
+      "nt.v1.ListPrintersRequest\032-.hubstore.ful" +
+      "fillment.v1.ListPrintersResponse\022n\n\rCrea" +
+      "tePrinter\022-.hubstore.fulfillment.v1.Crea" +
+      "tePrinterRequest\032..hubstore.fulfillment." +
+      "v1.CreatePrinterResponse\022n\n\rUpdatePrinte" +
+      "r\022-.hubstore.fulfillment.v1.UpdatePrinte" +
+      "rRequest\032..hubstore.fulfillment.v1.Updat" +
+      "ePrinterResponseBV\n\033com.hubstore.fulfill" +
+      "ment.v1P\001Z5hubstore/gen/go/hubstore/fulf" +
+      "illment/v1;fulfillmentv1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -907,6 +964,48 @@ public final class Fulfillment {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_hubstore_fulfillment_v1_GetSettlementDetailResponse_descriptor,
         new java.lang.String[] { "Confirmations", });
+    internal_static_hubstore_fulfillment_v1_Printer_descriptor =
+      getDescriptor().getMessageTypes().get(56);
+    internal_static_hubstore_fulfillment_v1_Printer_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_Printer_descriptor,
+        new java.lang.String[] { "ShopCode", "PrinterId", "Name", "PrinterIp", "Mac", "Type", });
+    internal_static_hubstore_fulfillment_v1_ListPrintersRequest_descriptor =
+      getDescriptor().getMessageTypes().get(57);
+    internal_static_hubstore_fulfillment_v1_ListPrintersRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_ListPrintersRequest_descriptor,
+        new java.lang.String[] { "ShopCode", });
+    internal_static_hubstore_fulfillment_v1_ListPrintersResponse_descriptor =
+      getDescriptor().getMessageTypes().get(58);
+    internal_static_hubstore_fulfillment_v1_ListPrintersResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_ListPrintersResponse_descriptor,
+        new java.lang.String[] { "Printers", });
+    internal_static_hubstore_fulfillment_v1_CreatePrinterRequest_descriptor =
+      getDescriptor().getMessageTypes().get(59);
+    internal_static_hubstore_fulfillment_v1_CreatePrinterRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_CreatePrinterRequest_descriptor,
+        new java.lang.String[] { "Printer", });
+    internal_static_hubstore_fulfillment_v1_CreatePrinterResponse_descriptor =
+      getDescriptor().getMessageTypes().get(60);
+    internal_static_hubstore_fulfillment_v1_CreatePrinterResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_CreatePrinterResponse_descriptor,
+        new java.lang.String[] { "Printer", });
+    internal_static_hubstore_fulfillment_v1_UpdatePrinterRequest_descriptor =
+      getDescriptor().getMessageTypes().get(61);
+    internal_static_hubstore_fulfillment_v1_UpdatePrinterRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_UpdatePrinterRequest_descriptor,
+        new java.lang.String[] { "ShopCode", "PrinterId", "Printer", });
+    internal_static_hubstore_fulfillment_v1_UpdatePrinterResponse_descriptor =
+      getDescriptor().getMessageTypes().get(62);
+    internal_static_hubstore_fulfillment_v1_UpdatePrinterResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_UpdatePrinterResponse_descriptor,
+        new java.lang.String[] { "Printer", });
     descriptor.resolveAllFeaturesImmutable();
     com.google.protobuf.TimestampProto.getDescriptor();
   }

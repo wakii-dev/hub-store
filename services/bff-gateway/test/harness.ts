@@ -300,6 +300,42 @@ const fulfillmentDefaults: Record<string, UnaryHandler> = {
   getCodPending: (_c, cb) => cb(null, { pendingCount: 0, totalAmount: 0 }),
   getSettlement: (_c, cb) => cb(null, { rows: [] }),
   getSettlementDetail: (_c, cb) => cb(null, { confirmations: [] }),
+  // SF-21 printer management (FI-266) — defaults happy-path; override per-test.
+  listPrinters: (_c, cb) =>
+    cb(null, {
+      printers: [
+        {
+          shopCode: '30201',
+          printerId: 'PRN-30201-01',
+          name: 'HP LaserJet M404',
+          printerIp: '192.168.30.21',
+          mac: 'AA:BB:CC:30:21:01',
+          type: 'bill',
+        },
+      ],
+    }),
+  createPrinter: (_c, cb) =>
+    cb(null, {
+      printer: {
+        shopCode: '30201',
+        printerId: 'PRN-NEW',
+        name: 'New',
+        printerIp: '',
+        mac: '',
+        type: 'bill',
+      },
+    }),
+  updatePrinter: (_c, cb) =>
+    cb(null, {
+      printer: {
+        shopCode: '30201',
+        printerId: 'PRN-30201-01',
+        name: 'Renamed',
+        printerIp: '192.168.30.21',
+        mac: 'AA:BB:CC:30:21:01',
+        type: 'a4',
+      },
+    }),
 };
 
 const techDefaults: Record<string, UnaryHandler> = {
