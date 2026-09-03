@@ -547,11 +547,11 @@ git commit -m "feat(mf): SF-24 leaflet singleton 3 apps + wire stopMeta vào tra
 
 **Dep:** Task 2, 3, 4.
 
-- [ ] **Step 5.1: Config seam riêng**
+- [x] **Step 5.1: Config seam riêng**
 
 Đọc `e2e/playwright.nvc-fe.config.ts` + script private-port tương ứng (tìm trong `e2e/scripts/` — pattern: postgres/keycloak container riêng tên `sf-*-...`, env override ports). Tạo `playwright.map.config.ts` với container prefix `sf-24-` + port offset KHÔNG trùng (shell/bff/... theo bảng nvc-fe nhưng +10 hoặc offset hiện có — kiểm tra port đang dùng trước khi chọn). Auth: reuse `mint_nvc_auth.py` pattern (đổi env port).
 
-- [ ] **Step 5.2: Spec 08 — batch route map**
+- [x] **Step 5.2: Spec 08 — batch route map**
 
 `08-map.spec.ts` test 1:
 
@@ -588,15 +588,15 @@ test("tracking modal → tab bản đồ: warehouse + stops theo stopOrder", asy
 
 (LƯU Ý executor: part điều hướng batch list → mở tracking modal phải copy từ spec `07-nvc-fe.spec.ts` thật — seed batch qua API/setup hook của seam; testid `tracking-entry-*` giữ nguyên behavior.)
 
-- [ ] **Step 5.3: Spec 08 — tech pins (route-mock)**
+- [x] **Step 5.3: Spec 08 — tech pins (route-mock)**
 
 Test 2: route-mock `/delivery-orders/filter` trả fixture 2 orders (1 có `receiver.location {lat,long}` HCMC, 1 `location: null` + status khác nhau) — `page.route("**/delivery-orders/filter", ...)` fulfill JSON `PaginationEnvelope` shape (đọc shape thật từ techApi/BFF test). Navigate `/hub-store-order/tech?tab=map` → assert: `tech-map-view` visible, `tech-map-pin-<code1>` visible, click pin → `tech-map-popup-<code1>` + `tech-map-call-<code1>` (href tel:), `map-no-coords-note` chứa "1".
 
-- [ ] **Step 5.4: Chạy e2e + smoke**
+- [x] **Step 5.4: Chạy e2e + smoke**
 
 Boot seam sf-24 (script riêng — KHÔNG đụng stack SF-11/21/23). Run: `pnpm --filter e2e test --config playwright.map.config.ts` (hoặc lệnh pattern repo dùng) → 08 PASS. Smoke: chạy spec 07 (nvc-fe tracking flow) TRÊN SEAM sf-24 → PASS (regression testid cũ). Nếu không boot được seam độc lập → ghi rõ BLOCKED + chạy trên seam nvc-fe có sẵn, KHÔNG tự cói port người khác.
 
-- [ ] **Step 5.5: Commit**
+- [x] **Step 5.5: Commit**
 
 ```bash
 git add e2e/playwright.map.config.ts e2e/tests/08-map.spec.ts
