@@ -140,11 +140,11 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 - Modify: `apps/orders/src/features/DeliveryTimeCell.tsx` (+ test file DeliveryTimeCell.test.tsx — cập nhật)
 - Modify: `apps/orders/src/api/ordersApi.ts` (getDeliveryTimeSlots query)
 
-- [ ] **Step 1: RTKQ query** getDeliveryTimeSlots(date).
-- [ ] **Step 2: Widen modal** — GIỮ testid `edit-delivery-${code}` + hành vi editable-when-batchStatus-0. **Thêm role-hide: `usePermissions` — nút edit chỉ render cho Coordinator/Manager/Admin (D1Page/DeliveryTimeCell chưa import hook — thêm).** Thay RangePicker thô bằng: DatePicker (`disabledDate` = ngày < hôm nay, TZ Asia/Ho_Chi_Minh), chọn date → fetch slots → Radio chips slot (testid `delivery-slot-${index}`), disabled khi slot quá khứ (today). Confirm → mutation PUT delivery-time với from/to ISO +07:00 từ slot mapping (spec Q4). Testid control mới KHÔNG đụng testid assert cũ.
-- [ ] **Step 3: FE test** — cập nhật DeliveryTimeCell.test.tsx: past date disabled, slot render, confirm gọi đúng from/to.
-- [ ] **Step 4: Verify browser** — chỉnh giờ đơn → chọn ngày mai + slot → row update. Ngày quá khứ không chọn được. Screenshot.
-- [ ] **Step 5: Commit** `feat(delivery-time): FE slot picker + past-date guard`
+- [x] **Step 1: RTKQ query** getDeliveryTimeSlots(date).
+- [x] **Step 2: Widen modal** — GIỮ testid `edit-delivery-${code}` + hành vi editable-when-batchStatus-0. **Thêm role-hide: `usePermissions` — nút edit chỉ render cho Coordinator/Manager/Admin (D1Page/DeliveryTimeCell chưa import hook — thêm).** Thay RangePicker thô bằng: DatePicker (`disabledDate` = ngày < hôm nay, TZ Asia/Ho_Chi_Minh), chọn date → fetch slots → Radio chips slot (testid `delivery-slot-${index}`), disabled khi slot quá khứ (today). Confirm → mutation PUT delivery-time với from/to ISO +07:00 từ slot mapping (spec Q4). Testid control mới KHÔNG đụng testid assert cũ.
+- [x] **Step 3: FE test** — cập nhật DeliveryTimeCell.test.tsx: past date disabled, slot render, confirm gọi đúng from/to.
+- [ ] **Step 4: Verify browser** — chỉnh giờ đơn → chọn ngày mai + slot → row update. Ngày quá khứ không chọn được. Screenshot. (Phase 5 — coordinator)
+- [x] **Step 5: Commit** `feat(delivery-time): FE slot picker + past-date guard`
 
 ### Task 6: criteria-presets-api — BFF presets endpoint
 
