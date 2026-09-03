@@ -146,9 +146,9 @@ function useHotkeys(bindings: HotkeyBinding[]): void
 - Verify: `packages/shared/src/components/EmptyState/EmptyState.tsx` API (đọc props trước khi dùng)
 
 **Steps:**
-- [ ] Áp EmptyState cho: PrintersPage khi shop chưa có printer (CTA "Thêm máy in"), PrintPage panel lỗi khi 0 errors, PrintPage khi batch không còn đơn hợp lệ để in.
-- [ ] Test render empty state mỗi màn: `pnpm -F shell test` + `pnpm -F fulfillment test` → PASS.
-- [ ] Commit `feat(sf-21): shared empty-states cho print screens`.
+- [x] Áp EmptyState cho: PrintersPage khi shop chưa có printer (CTA "Thêm máy in"), PrintPage khi batch không còn đơn hợp lệ để in. (PrintPage 0 errors: GIỮ list nguyên trạng — "no errors = good state"; thay list bằng EmptyState tại 0 lỗi sẽ phá pin test T3 "counts rỗng → vẫn render danh sách đơn".)
+- [x] Test render empty state mỗi màn: `pnpm -F shell test` + `pnpm -F fulfillment test` → PASS.
+- [x] Commit `feat(sf-21): shared empty-states cho print screens`.
 
 ### Task 8: avatar-upload — V10 + BFF routes + FE crop
 

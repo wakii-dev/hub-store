@@ -4,7 +4,7 @@ import { Alert, Badge, Button, Progress, Result, Select, Slider, Space, Spin, Ta
 import { PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { BATCH_ENTITY_STATUS, DESIGN_TOKENS, PRINT_TYPES, type PrintType } from '@hub-store/shared';
+import { BATCH_ENTITY_STATUS, DESIGN_TOKENS, EmptyState, PRINT_TYPES, type PrintType } from '@hub-store/shared';
 import { fulfillmentStore } from '../store';
 import {
   printDocument,
@@ -257,8 +257,10 @@ function PrintPageInner() {
       </Typography.Text>
 
       {/* SF-21 D2 — danh sách đơn phiếu, sort lỗi in desc (tie → code asc);
-          Badge đếm lỗi chỉ hiện khi count > 0. */}
-      {sortedOrders.length > 0 && (
+          Badge đếm lỗi chỉ hiện khi count > 0. T7: batch load xong nhưng
+          không còn đơn hợp lệ → shared EmptyState (spec §2). Khi còn đơn,
+          0 lỗi in là trạng thái tốt — list hiển thị nguyên trạng. */}
+      {sortedOrders.length > 0 ? (
         <ul data-testid="print-order-list" style={{ listStyle: 'none', padding: 0, marginTop: 12, maxWidth: 480 }}>
           {sortedOrders.map((item) => {
             const count = errorCounts[item.orderCode] ?? 0;
@@ -285,6 +287,13 @@ function PrintPageInner() {
             );
           })}
         </ul>
+      ) : (
+        batch && (
+          <EmptyState
+            title={t('print.orders.empty.title')}
+            sub={t('print.orders.empty.sub')}
+          />
+        )
       )}
 
       <Space wrap style={{ display: 'flex', marginTop: 16, gap: 12 }} align="center">

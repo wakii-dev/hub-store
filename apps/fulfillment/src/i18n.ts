@@ -119,6 +119,8 @@ export const fulfillmentResources: I18nResources = {
       "print.all.progress": "Đang in {{done}}/{{total}}: {{doc}}",
       "print.all.done": "Hoàn tất in {{ok}}/{{total}} phiếu",
       "print.orders.label": "Đơn trong phiếu (nhiều lỗi in nhất lên đầu)",
+      "print.orders.empty.title": "Không còn đơn để in",
+      "print.orders.empty.sub": "Phiếu này không còn đơn hợp lệ nào để in.",
 
       "cod.pendingBadge": "COD chờ thu ({{count}})",
       "cod.confirmButton": "Xác nhận thu",
@@ -256,6 +258,8 @@ export const fulfillmentResources: I18nResources = {
       "print.all.progress": "Printing {{done}}/{{total}}: {{doc}}",
       "print.all.done": "Finished printing {{ok}}/{{total}} documents",
       "print.orders.label": "Orders in batch (most print errors first)",
+      "print.orders.empty.title": "No orders left to print",
+      "print.orders.empty.sub": "This batch has no valid orders to print.",
 
       "cod.pendingBadge": "COD pending ({{count}})",
       "cod.confirmButton": "Confirm collection",

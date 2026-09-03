@@ -395,6 +395,25 @@ describe("PrintPage (SF-21 T3 — print-error badge + sort)", () => {
 });
 
 /**
+ * SF-21 T7 — shared EmptyState (spec §2): batch load xong nhưng không còn
+ * đơn hợp lệ nào → EmptyState thay danh sách đơn. Còn đơn + 0 lỗi in là
+ * trạng thái tốt — list hiển thị nguyên trạng (pin T3 ở trên giữ nguyên).
+ */
+describe("PrintPage (SF-21 T7 — empty states)", () => {
+  it("batch load xong, 0 đơn → EmptyState hiển thị, không có print-order-list", async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText("Không còn đơn để in")).toBeTruthy(),
+    );
+    expect(
+      screen.getByText("Phiếu này không còn đơn hợp lệ nào để in."),
+    ).toBeTruthy();
+    expect(screen.queryByTestId("print-order-list")).toBeNull();
+    expect(screen.queryByTestId("print-order-row")).toBeNull();
+  });
+});
+
+/**
  * SF-21 T5 — print-all gate theo batch status (spec §2): batch CANCELLED →
  * disable "In" + "In tất cả" kèm Tooltip lý do; status khác (ACTIVE/COMPLETED)
  * → enabled (re-print OK). Fail-open: batch thiếu status → ENABLED.

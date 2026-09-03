@@ -19,7 +19,7 @@ import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import { getAxiosInstance } from "@hub-store/api-client";
 import type { PrinterDto } from "@hub-store/shared";
-import { useHotkeys } from "@hub-store/shared";
+import { EmptyState, useHotkeys } from "@hub-store/shared";
 
 const TYPE_OPTIONS = [
   { value: "bill", label: "Bill" },
@@ -196,7 +196,18 @@ export default function PrintersPage() {
             loading={isLoading}
             dataSource={filtered}
             columns={columns}
-            locale={{ emptyText: t("printers.empty") }}
+            // SF-21 T7 — shared EmptyState (spec §2) khi shop chưa có máy in,
+            // CTA mở luôn modal thêm (openAdd hiện có).
+            locale={{
+              emptyText: (
+                <EmptyState
+                  title={t("printers.empty")}
+                  sub={t("printers.empty.sub")}
+                  actionLabel={t("printers.add")}
+                  onAction={openAdd}
+                />
+              ),
+            }}
             onRow={(record) =>
               ({ "data-testid": `printer-row-${record.shopCode}-${record.printerId}` }) as never
             }

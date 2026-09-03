@@ -4,7 +4,7 @@
  * singleton mock toàn bộ (pattern AvatarUpload.test). i18n KHÔNG init trong
  * test → t() trả key (assert trên key/testid).
  */
-import { render, screen, fireEvent, waitFor, cleanup } from '@testing-library/react';
+import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import PrintersPage from './PrintersPage';
 
@@ -113,6 +113,18 @@ describe('PrintersPage', () => {
     await openAddModalAndFill();
     fireEvent.click(screen.getByText('printers.form.submit'));
     await waitFor(() => expect(screen.getByText('printers.duplicate')).toBeTruthy());
+  });
+
+  // SF-21 T7 — shared EmptyState (spec §2) khi shop chưa có máy in.
+  it('bảng rỗng → EmptyState hiển thị + CTA mở modal thêm máy in', async () => {
+    axiosMock.request.mockResolvedValue({ data: { items: [] } });
+    render(<PrintersPage />);
+    await waitFor(() => expect(screen.getByText('printers.empty')).toBeTruthy());
+    expect(screen.getByText('printers.empty.sub')).toBeTruthy();
+    // CTA trong empty-state (header button cùng label — scope vào bảng).
+    const table = screen.getByTestId('printers-table');
+    fireEvent.click(within(table).getByText('printers.add'));
+    await waitFor(() => expect(screen.getByTestId('printers-add-modal')).toBeTruthy());
   });
 
   it('edit mode — shopCode + printerId disabled (identity immutable D9)', async () => {
