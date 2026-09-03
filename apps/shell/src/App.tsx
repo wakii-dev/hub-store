@@ -155,7 +155,11 @@ export default function App() {
       clearInterval(timer);
       pushLogout();
     };
-  }, [session]);
+    // Review nhóm C: dep trên object `session` — identity đổi mỗi setSession
+    // (silent renew, poll update) dù sub giữ nguyên → poll/login bị reset vô ích.
+    // Chỉ rerun khi identity (sub) thực sự đổi — guard !session bên trong xử
+    // lý null.
+  }, [session?.sub]);
 
   const toggleLanguage = () => {
     const next = lang.startsWith("vi") ? "en" : "vi";

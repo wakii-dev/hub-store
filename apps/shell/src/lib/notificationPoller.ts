@@ -36,7 +36,7 @@ export async function pollNotifications(): Promise<NewNotification[]> {
   const seen = seenIds();
   const items = (data?.items ?? []) as Array<{ id: number; title?: string; body?: string }>;
   const fresh = items
-    .filter((n) => !seen.has(n.id))
+    .filter((n) => typeof n.id === "number" && Number.isFinite(n.id) && !seen.has(n.id))
     .map((n) => ({ id: n.id, title: n.title ?? "", body: n.body ?? "" }));
   fresh.forEach((n) => seen.add(n.id));
   saveSeen(seen);

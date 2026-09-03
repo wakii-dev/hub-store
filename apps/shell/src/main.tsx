@@ -8,7 +8,7 @@ import React from "react";
 import ReactDOM from "react-dom/client";
 import { I18nextProvider } from "react-i18next";
 import { BrowserRouter } from "react-router-dom";
-import { initI18n } from "@hub-store/shared";
+import { initAnalytics, initI18n } from "@hub-store/shared";
 import {
   installUnauthorizedInterceptor,
   registerTokenGetter,
@@ -54,3 +54,6 @@ ReactDOM.createRoot(document.getElementById("root")!).render(
 registerServiceWorker();
 // SF-23 T6: OneSignal web push (env-gated — VITE_ONESIGNAL_APP_ID trống → no-op).
 initOneSignal();
+// SF-23 T7: GA4 dual-mode (env-gated — VITE_GA_MEASUREMENT_ID trống → off-mode
+// buffer, không network). Review P0 nhóm C: thiếu lệnh gọi này → on-mode chết.
+initAnalytics();

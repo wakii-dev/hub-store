@@ -63,4 +63,17 @@ describe("pollNotifications (SF-23 T6)", () => {
       { id: 9, title: "X", body: "Y" },
     ]);
   });
+
+  it("items thiếu id (không phải số finite) bị loại trước seen-set (review nhóm C)", async () => {
+    mockItems([
+      { title: "no-id" },
+      { id: null, title: "null-id" },
+      { id: "7", title: "string-id" },
+      { id: 7, title: "OK", body: "B" },
+    ]);
+    await expect(pollNotifications()).resolves.toEqual([
+      { id: 7, title: "OK", body: "B" },
+    ]);
+    expect(seenIds()).toEqual(new Set([7]));
+  });
 });
