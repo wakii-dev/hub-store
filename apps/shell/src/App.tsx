@@ -2,9 +2,9 @@ import { lazy, useEffect, useRef, useState } from "react";
 import { ConfigProvider, Result, Spin } from "antd";
 import enUS from "antd/es/locale/en_US";
 import viVN from "antd/es/locale/vi_VN";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { usePermissions, type Permission } from "@hub-store/shared";
+import { pageview, usePermissions, type Permission } from "@hub-store/shared";
 import {
   loadCurrentUser,
   onSessionChange,
@@ -34,6 +34,15 @@ const PrintPage = lazy(() => import("fulfillment/PrintPage"));
 function NotFound() {
   const { t } = useTranslation("shell");
   return <Result status="404" title={t("notfound.title")} />;
+}
+
+/** SF-23 T7 — GA pageview theo route change (off-mode → window.__gaBuffer). */
+function RouteTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    pageview(location.pathname);
+  }, [location.pathname]);
+  return null;
 }
 
 /** Route gating §2 — chặn Ở TẦNG SHELL ROUTE MOUNT (trước remote render). */
@@ -152,6 +161,7 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="*" element={<LoginPage />} />
         </Routes>
+        <RouteTracker />
       </ConfigProvider>
     );
   }
@@ -273,6 +283,7 @@ export default function App() {
           }
         />
       </Routes>
+      <RouteTracker />
     </ConfigProvider>
   );
 }

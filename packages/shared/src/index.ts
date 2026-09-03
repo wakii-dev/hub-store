@@ -1,8 +1,9 @@
 // @hub-store/shared — FE foundation (SF-1). Public API.
-// NOTE: packages/shared FROZEN sau SF-1, trừ api-contracts/ (SF-2) + events/ (SF-27).
+// NOTE: packages/shared FROZEN sau SF-1, trừ api-contracts/ (SF-2) + events/ (SF-27) + analytics/ (SF-23).
 export * from './enums';
 export type * from './api-contracts';
 export * from './events/envelope'; // SF-27 (FI-273) — Kafka event envelope canonical
+export * from './analytics/ga'; // SF-23 freeze exception (pattern SF-2/SF-27 amendment)
 export * from './auth/fake-jwt';
 export * from './types';
 export * from './formatters';

@@ -26,6 +26,7 @@ import {
   MultiSelect,
   StatusTag,
   TextSearch,
+  trackEvent,
   formatPeriodOfTime,
   formatVnd,
   useUrlState,
@@ -261,6 +262,7 @@ function BatchListPageInner() {
         try {
           await completePicking({ batchCode: batch.batchCode }).unwrap();
           message.success(t("complete.success", { code: batch.batchCode }));
+          trackEvent("batch_completed"); // SF-23 T7
         } catch (err) {
           message.error(`${t("complete.failed")}: ${errMessage(err)}`);
         }

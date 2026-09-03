@@ -33,6 +33,7 @@ import {
   StatusTag,
   formatPeriodOfTime,
   formatVnd,
+  trackEvent,
   type DeliveryStaffResponse,
   type HubStoreOrderFilterItem,
   type PackingGroup,
@@ -258,6 +259,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
         deliveryTime,
       }).unwrap();
       message.success(t("createBatch.success"));
+      trackEvent("batch_created"); // SF-23 T7
       // SF-6 §3 micro-interaction: label "✓" 800ms trước khi đóng.
       setCreated(true);
       closeTimerRef.current = setTimeout(onClose, 800); // ref để clear (P1 review)
