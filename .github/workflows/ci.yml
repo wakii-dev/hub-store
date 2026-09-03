@@ -27,6 +27,12 @@ on:
   push:
     branches: [main]
 
+# Security-audit P1-1 (FI-257): least-privilege GITHUB_TOKEN — untrusted PR
+# deps (postinstall scripts) chỉ được contents:read, không write bất kể
+# repo settings default.
+permissions:
+  contents: read
+
 concurrency:
   group: ci-${{ github.ref }}
   cancel-in-progress: true
