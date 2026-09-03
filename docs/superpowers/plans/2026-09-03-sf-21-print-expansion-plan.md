@@ -135,9 +135,9 @@ function useHotkeys(bindings: HotkeyBinding[]): void
 // window keydown, ignore khi target input/textarea/[contenteditable], preventDefault,
 // unregister cleanup, StrictMode-safe (useEffect return)
 ```
-- [ ] Test hook: renderTestHook → dispatch keydown F4 → handler gọi; focus input → KHÔNG gọi; unmount → listener gỡ.
-- [ ] Wire từng form + register context cho Task 10 đọc (export module-level registry `hotkeyRegistry` — map id → bindings để helper modal list; keep nhẹ).
-- [ ] Run `pnpm -F shared test -- useHotkeys` + touched apps → PASS. Commit `feat(sf-21): useHotkeys hook + F4/F6/F8 wiring`.
+- [x] Test hook: renderTestHook → dispatch keydown F4 → handler gọi; focus input → KHÔNG gọi; unmount → listener gỡ.
+- [x] Wire từng form + register context cho Task 10 đọc (export module-level registry `hotkeyRegistry` — map id → bindings để helper modal list; keep nhẹ).
+- [x] Run `pnpm -F shared test -- useHotkeys` + touched apps → PASS. Commit `feat(sf-21): useHotkeys hook + F4/F6/F8 wiring`.
 
 ### Task 7: empty-states-shared — áp EmptyState screens mới
 

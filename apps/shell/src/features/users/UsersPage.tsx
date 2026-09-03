@@ -17,7 +17,7 @@ import {
   useSetUserPasswordMutation,
   type UserListItem,
 } from "@hub-store/api-client";
-import { ROLES } from "@hub-store/shared";
+import { ROLES, useHotkeys } from "@hub-store/shared";
 
 const ROLE_OPTIONS = ROLES.map((r) => ({ value: r, label: r }));
 
@@ -75,6 +75,19 @@ export default function UsersPage(props: { currentUsername: string }) {
       messageApi.error(t("users.error"));
     }
   };
+
+  // SF-21 D5 — F6 mở modal tạo; khi modal mở: F4 submit / F8 đóng
+  // (helper modal T10 đọc registry theo contextId 'users-page').
+  useHotkeys(
+    "users-page",
+    t("users.title"),
+    addOpen
+      ? [
+          { key: "F4", handler: () => void submitAdd(), description: t("users.form.submit") },
+          { key: "F8", handler: () => setAddOpen(false), description: t("users.form.cancel") },
+        ]
+      : [{ key: "F6", handler: () => setAddOpen(true), description: t("users.add") }],
+  );
 
   const columns: ColumnsType<UserListItem> = [
     { title: t("users.column.username"), dataIndex: "username" },

@@ -19,6 +19,7 @@ import { useTranslation } from "react-i18next";
 import type { ColumnsType } from "antd/es/table";
 import { getAxiosInstance } from "@hub-store/api-client";
 import type { PrinterDto } from "@hub-store/shared";
+import { useHotkeys } from "@hub-store/shared";
 
 const TYPE_OPTIONS = [
   { value: "bill", label: "Bill" },
@@ -122,6 +123,19 @@ export default function PrintersPage() {
       setSaving(false);
     }
   };
+
+  // SF-21 D5 — F6 mở modal thêm; khi modal mở: F4 lưu / F8 đóng
+  // (helper modal T10 đọc registry theo contextId 'printers-page').
+  useHotkeys(
+    "printers-page",
+    t("nav.printers"),
+    modalOpen
+      ? [
+          { key: "F4", handler: () => void submit(), description: t("printers.form.submit") },
+          { key: "F8", handler: () => setModalOpen(false), description: t("common.cancel") },
+        ]
+      : [{ key: "F6", handler: openAdd, description: t("printers.add") }],
+  );
 
   const columns: ColumnsType<PrinterDto> = [
     { title: t("printers.col.shop"), dataIndex: "shopCode", width: 90 },
