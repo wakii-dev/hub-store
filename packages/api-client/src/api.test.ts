@@ -35,7 +35,7 @@ describe('api singleton', () => {
     } finally {
       errorSpy.mockRestore();
     }
-    expect(tagTypes).toEqual(['Fulfillment', 'Batches', 'MasterData', 'D2c']);
+    expect(tagTypes).toEqual(['Fulfillment', 'Batches', 'MasterData', 'Users', 'D2c']);
   });
 
   it('ships the refetchOnMount:"always" default via the api config (spec §2)', () => {

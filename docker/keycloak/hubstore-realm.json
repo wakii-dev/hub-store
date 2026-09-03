@@ -92,13 +92,6 @@
   ],
   "users": [
     {
-      "username": "service-account-hubstore-admin",
-      "enabled": true,
-      "clientRoles": {
-        "realm-management": ["manage-users"]
-      }
-    },
-    {
       "username": "coordinator",
       "enabled": true,
       "emailVerified": true,

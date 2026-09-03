@@ -36,6 +36,7 @@ async function startMockKeycloak(): Promise<void> {
 function buildTestApp(): FastifyInstance {
   const config: BffConfig = {
     port: 0,
+    onesignal: { appId: '', restApiKey: '' },
     oidc: {
       issuer: TEST_ISSUER,
       audience: TEST_AUDIENCE,
@@ -59,6 +60,8 @@ function buildTestApp(): FastifyInstance {
     },
     devResetPassword: false,
     kafka: { enabled: false, bootstrapServers: 'localhost:9092' },
+    webhookHmacSecret: '', // SF-26 — test auth/events không chạm webhook
+    webhookMapping: '',
   };
   return buildApp(config);
 }

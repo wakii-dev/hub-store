@@ -376,6 +376,12 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
             }
             SeedModels.OrderSeed updated = repo.updateDeliveryTime(request.getFulfillCode(),
                     fromProto(request.getDeliveryTime()));
+            // SF-28 — side-channel publish order.updated (best-effort, không block
+            // response; pattern order.assigned ở trên — envelope do EventEnvelope.of wrap).
+            events.publish("order.updated", updated.fulfillCode(), Map.of(
+                    "fulfillCode", updated.fulfillCode(),
+                    "deliveryTime", Map.of("from", request.getDeliveryTime().getFrom(),
+                            "to", request.getDeliveryTime().getTo())));
             responseObserver.onNext(UpdateDeliveryTimeResponse.newBuilder()
                     .setOrder(toFilterItem(updated))
                     .build());

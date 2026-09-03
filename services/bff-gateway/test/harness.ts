@@ -29,6 +29,7 @@ import {
   techResponses,
   intakeResponses,
   staffAreaResponses,
+  transferResponses,
 } from './fixtures.js';
 import { FulfillmentServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import { TechServiceService } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
@@ -37,6 +38,7 @@ import { DeliveryBatchServiceService } from '../../../api/proto/gen/ts/hubstore/
 import { PrintServiceService } from '../../../api/proto/gen/ts/hubstore/print/v1/print';
 import { IntakeServiceService } from '../../../api/proto/gen/ts/hubstore/intake/v1/intake';
 import { StaffAreaServiceService } from '../../../api/proto/gen/ts/hubstore/staffarea/v1/staffarea';
+import { TransferServiceService } from '../../../api/proto/gen/ts/hubstore/transfer/v1/transfer';
 
 export const TEST_ISSUER = 'https://keycloak.test/realms/hubstore';
 export const TEST_AUDIENCE = 'hubstore-api';
@@ -174,6 +176,8 @@ export interface Harness {
   deliverybatch: MockUpstream;
   print: MockUpstream;
   intake: MockUpstream;
+  /** SF-28 — cùng server/addr với fulfillment (override qua chung current). */
+  transfer: MockUpstream;
   app: FastifyInstance;
   identity: TestIdentity;
   kc: MockKcAdmin;
@@ -381,9 +385,16 @@ const intakeDefaults: Record<string, UnaryHandler> = {
   validateImportOrders: (_c, cb) => cb(null, intakeResponses.validateImportOrders),
   confirmImportOrders: (_c, cb) => cb(null, intakeResponses.confirmImportOrders),
   createManualOrder: (_c, cb) => cb(null, intakeResponses.createManualOrder),
+  // SF-26 — webhook sàn (FI-27); test chi tiết override qua intakeHandlers.
+  createWebhookOrder: (_c, cb) => cb(null, intakeResponses.createWebhookOrder),
   markOrderFailed: (_c, cb) => cb(null, intakeResponses.markOrderFailed),
   redeliverOrder: (_c, cb) => cb(null, intakeResponses.redeliverOrder),
   getOrderAudit: (_c, cb) => cb(null, intakeResponses.getOrderAudit),
+};
+
+const transferDefaults: Record<string, UnaryHandler> = {
+  createTransferTicket: (_c, cb) => cb(null, transferResponses.createTransferTicket),
+  listTransferTickets: (_c, cb) => cb(null, transferResponses.listTransferTickets),
 };
 
 /** Port "chắc chắn chết": bind rồi đóng — dùng cho test 503 conn-refused. */
@@ -403,6 +414,8 @@ export interface HarnessOptions {
   deadlineMs?: number;
   /** Trỏ 1 upstream tới port chết — test 503 UPSTREAM_UNAVAILABLE. */
   deadUpstream?: 'fulfillment' | 'batching' | 'deliverybatch' | 'print' | 'intake';
+  /** SF-26 — override secret test (vd rỗng → nhánh fail-closed 503). */
+  webhookHmacSecret?: string;
   /** Override handler mặc định lúc boot. */
   fulfillmentHandlers?: Record<string, UnaryHandler>;
   techHandlers?: Record<string, UnaryHandler>;
@@ -410,6 +423,7 @@ export interface HarnessOptions {
   deliverybatchHandlers?: Record<string, UnaryHandler>;
   printHandlers?: Record<string, UnaryHandler>;
   intakeHandlers?: Record<string, UnaryHandler>;
+  transferHandlers?: Record<string, UnaryHandler>;
 }
 
 export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> {
@@ -441,9 +455,19 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
           verifyPaymentAccount: (_c, cb) => cb(null, staffAreaResponses.verifyPaymentAccount),
         },
       },
+      {
+        definition: TransferServiceService,
+        defaults: { ...transferDefaults, ...opts.transferHandlers },
+      },
     ],
   );
   const tech: MockUpstream = {
+    addr: fulfillment.addr,
+    close: async () => {}, // đóng chung qua fulfillment.close()
+    override: fulfillment.override,
+  };
+  // SF-28 — TransferService sống cùng fulfillment-service → chung mock server.
+  const transfer: MockUpstream = {
     addr: fulfillment.addr,
     close: async () => {}, // đóng chung qua fulfillment.close()
     override: fulfillment.override,
@@ -478,6 +502,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
 
   const config: BffConfig = {
     port: 0,
+    onesignal: { appId: '', restApiKey: '' },
     oidc: {
       issuer: TEST_ISSUER,
       audience: TEST_AUDIENCE,
@@ -501,6 +526,9 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     },
     devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
     kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 side-channel — off trong test
+    // SF-26 — webhook HMAC; secret test để route chạm được nhánh verifyHmac.
+    webhookHmacSecret: opts.webhookHmacSecret ?? 'test-webhook-secret',
+    webhookMapping: '',
   };
   const app = buildApp(config);
 
@@ -511,6 +539,7 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
     deliverybatch,
     print,
     intake,
+    transfer,
     app,
     identity,
     kc,

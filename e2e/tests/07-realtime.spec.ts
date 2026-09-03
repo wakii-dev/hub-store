@@ -28,8 +28,8 @@ import { expect, test, type APIRequestContext, type Page } from "@playwright/tes
  */
 test.skip(process.env.E2E_REALTIME === "false", "E2E_REALTIME=false — realtime spec skipped");
 
-const APP = "http://localhost:3000";
-const BFF = "http://localhost:8080";
+const APP = process.env.E2E_SHELL_URL ?? "http://localhost:3000"; // private-port seam
+const BFF = process.env.E2E_BFF_URL ?? "http://localhost:8080"; // private-port seam (SF-15/SF-14 precedent)
 
 /** Poll interval spec B inject (thay POLL_INTERVAL_MS=30_000 — xem header). */
 const TEST_POLL_INTERVAL_MS = 1_000;

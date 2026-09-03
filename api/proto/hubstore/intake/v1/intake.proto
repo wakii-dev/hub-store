@@ -69,6 +69,17 @@ message AuditEntry {
 message GetOrderAuditRequest { string fulfill_code = 1; }
 message GetOrderAuditResponse { repeated AuditEntry entries = 1; }
 
+// SF-26 — webhook nhận đơn từ sàn (FI-27). Additive-only.
+message CreateWebhookOrderRequest {
+  string source = 1;       // từ header X-Source (BFF truyền), vd "shopee"
+  string external_id = 2;  // mã đơn phía sàn — dedupe key
+  hubstore.intake.v1.IntakeOrder order = 3;  // đã map + quantity = Σ items
+}
+message CreateWebhookOrderResponse {
+  string fulfill_code = 1; // lần đầu hoặc kết quả lần đầu (replay)
+  bool replayed = 2;
+}
+
 // IntakeService — SF-13 (Java fulfillment-service :50051, CÙNG DB orders).
 service IntakeService {
   rpc ValidateImportOrders(ValidateImportOrdersRequest) returns (ValidateImportOrdersResponse);
@@ -77,4 +88,6 @@ service IntakeService {
   rpc MarkOrderFailed(MarkOrderFailedRequest) returns (MarkOrderFailedResponse);
   rpc RedeliverOrder(RedeliverOrderRequest) returns (RedeliverOrderResponse);
   rpc GetOrderAudit(GetOrderAuditRequest) returns (GetOrderAuditResponse);
+  // SF-26 — webhook nhận đơn từ sàn (FI-271). Additive-only.
+  rpc CreateWebhookOrder(CreateWebhookOrderRequest) returns (CreateWebhookOrderResponse);
 }

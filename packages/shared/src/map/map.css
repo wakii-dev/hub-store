@@ -1,0 +1,56 @@
+/**
+ * SF-24 marker + popup styles. Shared ship CSS ở source path (pattern
+ * sf6-antd-overrides.css — app import thẳng hoặc qua MapView side-effect).
+ * Box-shadow copy literal khớp DESIGN_TOKENS.shadow.sm; border-radius popup
+ * 10 = radius.md — icon nhận color qua string param (inline style), không hex
+ * trạng thái nào nằm ở đây.
+ */
+
+/* divIcon wrapper — thay className mặc định leaflet-div-icon → bỏ nền/trắng viền */
+.sf24-stop-marker-wrapper,
+.sf24-status-pin-wrapper,
+.sf24-warehouse-marker-wrapper {
+  background: transparent;
+  border: none;
+}
+
+.sf24-stop-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+  border-radius: 50%;
+  color: #fff;
+  font-size: 12px;
+  font-weight: 700;
+  /* DESIGN_TOKENS.shadow.sm */
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  cursor: pointer;
+}
+
+/* Giọt nước — tip ở dưới (iconAnchor khớp [11, 30]) */
+.sf24-status-pin {
+  display: block;
+  width: 22px;
+  height: 22px;
+  margin: 0 auto;
+  border-radius: 50% 50% 50% 0;
+  transform: rotate(-45deg);
+  /* DESIGN_TOKENS.shadow.sm */
+  box-shadow: 0 1px 3px rgba(16, 24, 40, 0.08), 0 1px 2px rgba(16, 24, 40, 0.04);
+  cursor: pointer;
+}
+
+.sf24-warehouse-marker {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 26px;
+  height: 26px;
+}
+
+/* DESIGN_TOKENS.radius.md */
+.leaflet-popup-content-wrapper {
+  border-radius: 10px;
+}

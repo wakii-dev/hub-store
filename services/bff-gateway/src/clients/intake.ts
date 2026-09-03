@@ -7,6 +7,8 @@ import { IntakeServiceClient } from '../../../../api/proto/gen/ts/hubstore/intak
 import type {
   ConfirmImportOrdersRequest,
   ConfirmImportOrdersResponse,
+  CreateWebhookOrderRequest,
+  CreateWebhookOrderResponse,
   CreateManualOrderRequest,
   CreateManualOrderResponse,
   GetOrderAuditRequest,
@@ -36,6 +38,12 @@ export interface IntakeApi {
     role: string,
     actor?: string,
   ): Promise<CreateManualOrderResponse>;
+  // SF-26 — webhook sàn: source + external_id để Java dedupe webhook_events.
+  createWebhookOrder(
+    req: CreateWebhookOrderRequest,
+    role: string,
+    actor?: string,
+  ): Promise<CreateWebhookOrderResponse>;
   markOrderFailed(
     req: MarkOrderFailedRequest,
     role: string,
@@ -63,6 +71,8 @@ export function createIntakeClient(addr: string, deadlineMs: number): IntakeApi 
       callUnary(c.confirmImportOrders.bind(c), req, role, deadlineMs, actor),
     createManualOrder: (req, role, actor) =>
       callUnary(c.createManualOrder.bind(c), req, role, deadlineMs, actor),
+    createWebhookOrder: (req, role, actor) =>
+      callUnary(c.createWebhookOrder.bind(c), req, role, deadlineMs, actor),
     markOrderFailed: (req, role, actor) =>
       callUnary(c.markOrderFailed.bind(c), req, role, deadlineMs, actor),
     redeliverOrder: (req, role, actor) =>

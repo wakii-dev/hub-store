@@ -19,6 +19,7 @@ import {
   createTechClient,
   createIntakeClient,
   createStaffAreaClient,
+  createTransferClient,
 } from './clients/index.js';
 import { registerFulfillmentRoutes } from './routes/fulfillment.js';
 import { registerTechRoutes } from './routes/tech.js';
@@ -32,10 +33,14 @@ import { registerAuthRoutes } from './routes/auth.js';
 import { registerUsersRoutes } from './routes/users.js';
 import { KcAdminClient } from './kc-admin.js';
 import { registerD2cRoutes } from './routes/d2c.js';
+import { registerTransferRoutes } from './routes/transfer.js';
+import { registerBatchingPresetRoutes } from './routes/batching-presets.js';
 import { registerCodRoutes } from './routes/cod.js';
 import { registerEventsRoutes } from './routes/events.js';
 import { registerAvatarRoutes } from './routes/avatar.js';
 import { registerMetaRoutes } from './routes/meta.js';
+import { registerNotificationsRoutes } from './routes/notifications.js';
+import { registerWebhookRoutes } from './routes/webhooks.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -83,6 +88,8 @@ export function buildApp(config: BffConfig): FastifyInstance {
   const print = createPrintClient(config.grpc.print, config.grpc.deadlineMs);
   const intake = createIntakeClient(config.grpc.intake, config.grpc.deadlineMs);
   const staffArea = createStaffAreaClient(config.grpc.fulfillment, config.grpc.deadlineMs);
+  // TransferService (SF-28) sống cùng fulfillment-service — chung addr.
+  const transfer = createTransferClient(config.grpc.fulfillment, config.grpc.deadlineMs);
   app.addHook('onClose', async () => {
     fulfillment.close();
     tech.close();
@@ -91,6 +98,7 @@ export function buildApp(config: BffConfig): FastifyInstance {
     print.close();
     intake.close();
     staffArea.close();
+    transfer.close();
   });
 
   registerFulfillmentRoutes(app, { fulfillment, batching });
@@ -105,6 +113,10 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerServiceEmployeesRoutes(app, { staffArea });
   // SF-18 — D2C orders (consumer trực tiếp) — dùng fulfillment client.
   registerD2cRoutes(app, { fulfillment });
+  // SF-28 — transfer tickets (tạo + lịch sử) — TransferService cùng fulfillment.
+  registerTransferRoutes(app, { transfer });
+  // SF-28 — criteria presets (static BFF-side, không gọi batching service).
+  registerBatchingPresetRoutes(app);
   // SF-14 — COD confirm + settlement đối soát — dùng fulfillment client.
   registerCodRoutes(app, { fulfillment });
   // SF-10 — SSE /events realtime (không cần gRPC client; nguồn là bffEvents).
@@ -114,6 +126,12 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerAvatarRoutes(app);
   // SF-21 — GET /version metadata (public, không JWT — plugins/auth exempt).
   registerMetaRoutes(app);
+  // SF-23 — notifications feed cho FE polling (không cần gRPC client; nguồn
+  // là notification_log DB trực tiếp — pattern audit pool).
+  registerNotificationsRoutes(app);
+  // SF-26 — webhook nhận đơn từ sàn (public, auth HMAC trong route; scoped
+  // raw-body parser tự encapsulate trong app.register scope con).
+  registerWebhookRoutes(app, { intake, config });
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });

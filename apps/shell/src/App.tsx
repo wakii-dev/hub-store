@@ -1,10 +1,10 @@
 import { lazy, useEffect, useRef, useState } from "react";
-import { ConfigProvider, Result, Spin } from "antd";
+import { ConfigProvider, notification, Result, Spin } from "antd";
 import enUS from "antd/es/locale/en_US";
 import viVN from "antd/es/locale/vi_VN";
-import { Navigate, Route, Routes, useNavigate } from "react-router-dom";
+import { Navigate, Route, Routes, useLocation, useNavigate } from "react-router-dom";
 import { useTranslation } from "react-i18next";
-import { usePermissions, type Permission } from "@hub-store/shared";
+import { pageview, usePermissions, type Permission } from "@hub-store/shared";
 import {
   loadCurrentUser,
   onSessionChange,
@@ -14,12 +14,15 @@ import {
   type ShellSession,
 } from "./auth/oidc";
 import { LANG_STORAGE_KEY } from "./i18n";
+import { pollNotifications, type NewNotification } from "./lib/notificationPoller";
+import { pushLogin, pushLogout } from "./lib/push";
 import { firstPathForRole } from "./nav";
 import AppLayout from "./features/layout/AppLayout";
 import LoginPage from "./features/login/LoginPage";
 import ForgotPasswordPage from "./features/login/ForgotPasswordPage";
 import TechServicePage from "./features/tech/TechServicePage";
 import UsersPage from "./features/users/UsersPage";
+import AuditPage from "./features/audit/AuditPage";
 import PrintersPage from "./pages/PrintersPage";
 import AreaListPage from "./pages/area-staff/AreaListPage";
 import AreaFormPage from "./pages/area-staff/AreaFormPage";
@@ -36,6 +39,15 @@ const PrintPage = lazy(() => import("fulfillment/PrintPage"));
 function NotFound() {
   const { t } = useTranslation("shell");
   return <Result status="404" title={t("notfound.title")} />;
+}
+
+/** SF-23 T7 — GA pageview theo route change (off-mode → window.__gaBuffer). */
+function RouteTracker() {
+  const location = useLocation();
+  useEffect(() => {
+    pageview(location.pathname);
+  }, [location.pathname]);
+  return null;
 }
 
 /** Route gating §2 — chặn Ở TẦNG SHELL ROUTE MOUNT (trước remote render). */
@@ -124,6 +136,34 @@ export default function App() {
       .finally(() => setBooted(true));
   }, []);
 
+  // SF-23 T6 ⚠ MECHANISM (plan-critic P1): onSessionChange KHÔNG fire khi
+  // restore từ storage (boot đi qua loadCurrentUser() → setSession, bypass
+  // manager events) — hook pushLogin/pushLogout + polling trên session STATE
+  // ở đây che phủ CẢ login mới LẪN boot-restore (external_id sống qua reload).
+  // ShellSession = {sub, role} — external_id = sub (preferred_username).
+  useEffect(() => {
+    if (!session) {
+      pushLogout();
+      return;
+    }
+    pushLogin(session.sub);
+    const show = (items: NewNotification[]) =>
+      items.forEach((n) => notification.info({ message: n.title, description: n.body }));
+    const poll = () => pollNotifications().then(show).catch(() => {
+      /* poll fail (BFF chưa lên / mạng) — im lặng, chu kỳ sau thử lại */
+    });
+    void poll();
+    const timer = setInterval(() => void poll(), 30_000);
+    return () => {
+      clearInterval(timer);
+      pushLogout();
+    };
+    // Review nhóm C: dep trên object `session` — identity đổi mỗi setSession
+    // (silent renew, poll update) dù sub giữ nguyên → poll/login bị reset vô ích.
+    // Chỉ rerun khi identity (sub) thực sự đổi — guard !session bên trong xử
+    // lý null.
+  }, [session?.sub]);
+
   const toggleLanguage = () => {
     const next = lang.startsWith("vi") ? "en" : "vi";
     void i18n.changeLanguage(next);
@@ -154,6 +194,7 @@ export default function App() {
           <Route path="/forgot-password" element={<ForgotPasswordPage />} />
           <Route path="*" element={<LoginPage />} />
         </Routes>
+        <RouteTracker />
       </ConfigProvider>
     );
   }
@@ -262,6 +303,15 @@ export default function App() {
                     </RequirePermission>
                   }
                 />
+                {/* SF-11 — Audit viewer (Manager-only, shell-local page). */}
+                <Route
+                  path="/audit"
+                  element={
+                    <RequirePermission permission="audit.view">
+                      <AuditPage />
+                    </RequirePermission>
+                  }
+                />
                 {/* SF-21 — quản lý máy in, shell-local (Admin duy nhất). */}
                 <Route
                   path="/printers"
@@ -293,6 +343,7 @@ export default function App() {
           }
         />
       </Routes>
+      <RouteTracker />
     </ConfigProvider>
   );
 }

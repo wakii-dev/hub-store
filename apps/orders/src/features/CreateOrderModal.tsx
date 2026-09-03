@@ -10,7 +10,7 @@ import { useMemo } from "react";
 import { Button, Form, Input, InputNumber, Modal, Select, Space, message } from "antd";
 import { useTranslation } from "react-i18next";
 import { useCreateManualOrderMutation, useGetShopsQuery } from "@hub-store/api-client";
-import { useHotkeys, type IntakeOrderDto, type Product, type ShopsResponse } from "@hub-store/shared";
+import { trackEvent, useHotkeys, type IntakeOrderDto, type Product, type ShopsResponse } from "@hub-store/shared"; // SF-23 T7 + SF-21 D5
 
 interface ItemRow {
   productCode: string;
@@ -61,6 +61,7 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
     try {
       await createManualOrder(payload).unwrap();
       message.success(t("intake.createOrder.success"));
+      trackEvent("order_created"); // SF-23 T7
       form.resetFields();
       onClose();
     } catch (err) {

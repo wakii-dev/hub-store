@@ -8,7 +8,8 @@
  * MF singleton — batchCode link cross-remote navigate /hub-store-order/batch.
  */
 import { useEffect, useMemo, useState } from "react";
-import { Button, Space, Table, Tooltip, Typography, message } from "antd";
+import { DownloadOutlined } from "@ant-design/icons";
+import { Button, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -34,10 +35,15 @@ import {
   type HubStoreOrderFilterItem,
   type PlanningMapEntry,
   type RegionsResponse,
+  type Role,
   type ShopsResponse,
+  usePermissions,
 } from "@hub-store/shared";
 import {
+  buildExportParams,
   createAppStore,
+  fetchOrdersExport,
+  isCsvHeaderOnly,
   useGetRegionsQuery,
   useGetShopsQuery,
   useListOrdersQuery,
@@ -56,6 +62,10 @@ import { buildRegionOptions } from "../utils/regions";
 import { OrdersExpandContent } from "../features/OrdersExpandContent";
 import { DeliveryTimeCell } from "../features/DeliveryTimeCell";
 import { HubStoreTransferModal } from "../features/HubStoreTransferModal";
+import { TransferHubModal } from "../features/TransferHubModal";
+import { TransferTicketHistoryModal } from "../features/TransferTicketHistoryModal";
+import type { TransferTicket } from "../api/ordersApi";
+import { useGetTransferTicketsQuery } from "../api/ordersApi";
 import { CreateOrderModal } from "../features/CreateOrderModal";
 import { ImportOrdersModal } from "../features/ImportOrdersModal";
 import { CreateBatchingModal } from "../batching/CreateBatchingModal";
@@ -67,6 +77,75 @@ registerOrdersResources();
 
 /** Store per-remote — module singleton của bundle orders (createAppStore). */
 const ordersStore: AppStore = createAppStore();
+
+/** SF-28: nút/modal "YC chuyển kho" chỉ cho Coordinator/Manager/Admin (khớp requireRole BFF). */
+const TRANSFER_TICKET_ROLES: readonly Role[] = ["Coordinator", "Manager", "Admin"];
+
+/** Tag màu theo trạng thái ticket MỚI NHẤT (tokens sf6 semantic). */
+const TICKET_TAG_META: Record<string, { color: string; bg: string; line: string }> = {
+  PENDING: {
+    color: DESIGN_TOKENS.color.status.warning,
+    bg: DESIGN_TOKENS.color.status.warningBg,
+    line: DESIGN_TOKENS.color.status.warningLine,
+  },
+  APPROVED: {
+    color: DESIGN_TOKENS.color.status.success,
+    bg: DESIGN_TOKENS.color.status.successBg,
+    line: DESIGN_TOKENS.color.status.successLine,
+  },
+  REJECTED: {
+    color: DESIGN_TOKENS.color.status.error,
+    bg: DESIGN_TOKENS.color.status.errorBg,
+    line: DESIGN_TOKENS.color.status.errorLine,
+  },
+};
+
+function TransferTicketBadge({
+  ticket,
+  onOpenHistory,
+}: {
+  ticket: TransferTicket;
+  onOpenHistory: () => void;
+}) {
+  const { t } = useTranslation("orders");
+  const meta = TICKET_TAG_META[ticket.status] ?? TICKET_TAG_META.PENDING;
+  const label =
+    ticket.status === "APPROVED"
+      ? t("transferHub.tagApproved")
+      : ticket.status === "REJECTED"
+        ? t("transferHub.tagRejected")
+        : t("transferHub.tagPending");
+  return (
+    <Tag
+      data-testid={`transfer-badge-${ticket.orderFulfillCode}`}
+      onClick={onOpenHistory}
+      // a11y (P1 review): tag click-được phải keyboard-accessible — Enter/Space
+      // mở history; role="button" + aria-label cho screen reader.
+      tabIndex={0}
+      role="button"
+      aria-label={`${label} — ${ticket.orderFulfillCode}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenHistory();
+        }
+      }}
+      style={{
+        borderRadius: DESIGN_TOKENS.radius.pill,
+        marginInlineEnd: 0,
+        fontSize: 12,
+        lineHeight: "18px",
+        padding: "1px 8px",
+        color: meta.color,
+        background: meta.bg,
+        border: `1px solid ${meta.line}`,
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </Tag>
+  );
+}
 
 function D1Content() {
   const { t, i18n } = useTranslation("orders");
@@ -124,8 +203,31 @@ function D1Content() {
     selectedRows.every((r) => r.shopAssignment.shopCode === selectedRows[0].shopAssignment.shopCode);
   const bulk = bulkActionsState(selectedRows.length, sameShop);
 
+  // SF-28 — role gate nút "YC chuyển kho" + badge ticket trên row.
+  const { role } = usePermissions();
+  const canTransferTicket = role !== null && TRANSFER_TICKET_ROLES.includes(role);
+
+  // Tickets của các đơn trên trang hiện tại (skip khi trang rỗng — BFF 400 nếu
+  // codes trống). API trả ORDER BY created_at DESC → lần đầu gặp = mới nhất.
+  // P1 review: BFF requireRole Coordinator/Manager/Admin → role khác phải skip
+  // query (mỗi load D1 sẽ fire 403 vô ích).
+  const pageCodes = rows.map((r) => r.fulfillCode).join(",");
+  const { data: ticketsData } = useGetTransferTicketsQuery(pageCodes, {
+    skip: pageCodes.length === 0 || !canTransferTicket,
+  });
+  const latestTicketByCode = useMemo(() => {
+    const map = new Map<string, TransferTicket>();
+    for (const ticket of ticketsData?.items ?? []) {
+      if (!map.has(ticket.orderFulfillCode)) map.set(ticket.orderFulfillCode, ticket);
+    }
+    return map;
+  }, [ticketsData]);
+
   // Modals
   const [transferOrder, setTransferOrder] = useState<HubStoreOrderFilterItem | null>(null);
+  const [transferTicketOrder, setTransferTicketOrder] = useState<HubStoreOrderFilterItem | null>(null);
+  // SF-28 T3 — history modal (mở bằng click badge transfer-badge-${code})
+  const [historyOrderCode, setHistoryOrderCode] = useState<string | null>(null);
   const [createBatchOpen, setCreateBatchOpen] = useState(false);
   // SF-13 — tạo đơn tay + nhập đơn file
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
@@ -231,6 +333,53 @@ function D1Content() {
     setFilters({ ...FILTER_URL_DEFAULTS });
   };
 
+  // --- SF-11 (Task 2) — Export CSV: derive querystring từ filter state (D5) ---
+  const exportDerive = useMemo(() => buildExportParams(filters), [filters]);
+  const [exporting, setExporting] = useState(false);
+
+  const exportTooltip = exportDerive.disabled
+    ? t(
+        exportDerive.reason === "createdRange"
+          ? "export.tooltip.createdRange"
+          : "export.tooltip.unsupportedFields",
+      )
+    : undefined;
+
+  const handleExport = async () => {
+    if (exportDerive.disabled || exporting) return;
+    setExporting(true);
+    try {
+      const result = await fetchOrdersExport(exportDerive.params);
+      if (!result.ok || !result.blob) {
+        message.error(result.message ?? t("export.error"));
+        return;
+      }
+      // Header-only (byte-precise — mọi byte sau newline đầu là whitespace/EOF)
+      // → KHÔNG tải file, chỉ báo rỗng (spec §4.2).
+      if (isCsvHeaderOnly(new Uint8Array(await result.blob.arrayBuffer()))) {
+        message.info(t("export.empty"));
+        return;
+      }
+      const p = (n: number) => String(n).padStart(2, "0");
+      const now = new Date();
+      const fallbackName = `orders-export-${now.getFullYear()}${p(now.getMonth() + 1)}${p(
+        now.getDate(),
+      )}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}.csv`;
+      const url = URL.createObjectURL(result.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename ?? fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      message.error(t("export.error"));
+    } finally {
+      setExporting(false);
+    }
+  };
+
   const toggleExpand = (code: string) => {
     setExpandedRowKeys((keys) =>
       keys.includes(code) ? keys.filter((k) => k !== code) : [...keys, code],
@@ -313,6 +462,25 @@ function D1Content() {
       width: 230,
       render: (_: unknown, record) => <DeliveryTimeCell order={record} />,
     },
+    // P1 review: role không đủ quyền → ẨN hẳn cột "Chuyển kho" (badge chết).
+    ...(canTransferTicket
+      ? [
+          {
+            title: t("columns.transferTicket"),
+            key: "transferTicket",
+            width: 130,
+            render: (_: unknown, record: HubStoreOrderFilterItem) => {
+              const ticket = latestTicketByCode.get(record.fulfillCode);
+              return ticket ? (
+                <TransferTicketBadge
+                  ticket={ticket}
+                  onOpenHistory={() => setHistoryOrderCode(record.fulfillCode)}
+                />
+              ) : null;
+            },
+          },
+        ]
+      : []),
     {
       title: t("columns.actions"),
       key: "actions",
@@ -367,7 +535,23 @@ function D1Content() {
             {t("page.subtitle", { total })}
           </div>
         </div>
-        <Button onClick={() => void refetch()}>{t("action.refresh")}</Button>
+        <Space>
+          <Tooltip title={exportTooltip}>
+            {/* span wrapper — antd4 disabled button không fire mouse event → tooltip không hiện */}
+            <span>
+              <Button
+                icon={<DownloadOutlined />}
+                loading={exporting}
+                disabled={exportDerive.disabled}
+                onClick={() => void handleExport()}
+                data-testid="export-csv-button"
+              >
+                {t("export.button")}
+              </Button>
+            </span>
+          </Tooltip>
+          <Button onClick={() => void refetch()}>{t("action.refresh")}</Button>
+        </Space>
       </div>
 
       {/* Stat-strip — SF-6 §2.2 (page-scoped, Deviation D2) */}
@@ -484,6 +668,23 @@ function D1Content() {
           >
             {t("bulk.transfer")}
           </Button>
+          {canTransferTicket && (
+            <Tooltip
+              title={
+                selectedRows.length === 1 && selectedRows[0].isDebtSplittingOrder
+                  ? t("transferHub.debtTitle")
+                  : undefined
+              }
+            >
+              <Button
+                disabled={!(selectedRows.length === 1 && !selectedRows[0].isDebtSplittingOrder)}
+                onClick={() => setTransferTicketOrder(selectedRows[0] ?? null)}
+                data-testid="bulk-transfer-ticket"
+              >
+                {t("bulk.transferTicket")}
+              </Button>
+            </Tooltip>
+          )}
           <Typography.Text type="secondary">{t("bulk.hint")}</Typography.Text>
         </Space>
       )}
@@ -537,6 +738,16 @@ function D1Content() {
         open={transferOrder !== null}
         order={transferOrder}
         onClose={() => setTransferOrder(null)}
+      />
+      <TransferHubModal
+        open={transferTicketOrder !== null}
+        order={transferTicketOrder}
+        onClose={() => setTransferTicketOrder(null)}
+      />
+      <TransferTicketHistoryModal
+        open={historyOrderCode !== null}
+        orderCode={historyOrderCode}
+        onClose={() => setHistoryOrderCode(null)}
       />
       <CreateBatchingModal
         open={createBatchOpen}

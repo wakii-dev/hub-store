@@ -1,0 +1,44 @@
+syntax = "proto3";
+
+package hubstore.transfer.v1;
+
+option go_package = "hubstore/gen/go/hubstore/transfer/v1;transferv1";
+option java_multiple_files = true;
+option java_package = "com.hubstore.transfer.v1";
+
+// TransferTicket — yêu cầu chuyển kho giữa 2 hub (SF-28, spec §3 Q6-Q7).
+// KHÔNG đụng fulfillment.proto — service MỚI chạy cùng fulfillment-service :50051
+// (pattern intake/v1). status: PENDING | APPROVED | REJECTED (chỉ PENDING trong
+// scope này — 2 giá trị còn lại reserved epic duyệt ticket).
+message TransferTicket {
+  string ticket_code = 1;         // TT-0001 (DB sequence transfer_ticket_code_seq)
+  string order_fulfill_code = 2;
+  string from_hub = 3;
+  string to_hub = 4;
+  string reason = 5;
+  string status = 6;
+  string created_by = 7;
+  string created_at = 8;          // ISO-8601
+  string confirmed_by = 9;        // rỗng khi PENDING
+  string confirmed_at = 10;
+}
+
+message CreateTransferTicketRequest {
+  string order_fulfill_code = 1;
+  string from_hub = 2;  // tùy chọn — hub hiện tại của đơn
+  string to_hub = 3;    // bắt buộc
+  string reason = 4;    // tùy chọn
+}
+message CreateTransferTicketResponse { TransferTicket ticket = 1; }
+
+message ListTransferTicketsRequest {
+  repeated string order_fulfill_codes = 1; // BFF map từ ?codes=a,b (comma split)
+  string status = 2;                       // optional filter (PENDING|APPROVED|REJECTED)
+}
+message ListTransferTicketsResponse { repeated TransferTicket tickets = 1; }
+
+// TransferService — SF-28 (Java fulfillment-service :50051, CÙNG DB orders).
+service TransferService {
+  rpc CreateTransferTicket(CreateTransferTicketRequest) returns (CreateTransferTicketResponse);
+  rpc ListTransferTickets(ListTransferTicketsRequest) returns (ListTransferTicketsResponse);
+}

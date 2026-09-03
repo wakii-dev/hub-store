@@ -374,6 +374,138 @@
   color: #667085;
 }
 
+/* ─── Step 1: criteria preset (SF-28 T7 — design §2.4, hướng B) ─── */
+.batch-preset {
+  padding-bottom: 4px;
+}
+.batch-preset-overline {
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+  color: #98a2b3; /* textFaint */
+}
+.batch-preset-grid {
+  display: grid;
+  grid-template-columns: 1fr 1fr; /* 2×2 */
+  gap: 12px;
+  margin-top: 10px;
+  max-width: 760px;
+}
+.batch-preset-card {
+  position: relative;
+  border-radius: 14px; /* radius.xl */
+  border: 1px solid #eaecf0; /* lineLight */
+  background: #ffffff;
+  padding: 15px 16px;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+.batch-preset-card:hover {
+  box-shadow: 0 6px 16px -4px rgba(16, 24, 40, 0.1), 0 2px 6px -2px rgba(16, 24, 40, 0.06); /* shadow.md */
+  transform: translateY(-1px);
+}
+.batch-preset-card-selected {
+  border-color: #eb6e09; /* primary */
+  background: #fef6ee; /* primaryBg */
+  box-shadow: 0 0 0 3px rgba(235, 110, 9, 0.08);
+}
+.batch-preset-radio {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  width: 17px;
+  height: 17px;
+  border-radius: 50%;
+  border: 1.5px solid #d0d5dd; /* border */
+  background: #ffffff;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.batch-preset-card-selected .batch-preset-radio {
+  border-color: #eb6e09;
+}
+.batch-preset-radio-dot {
+  width: 9px;
+  height: 9px;
+  border-radius: 50%;
+  background: #eb6e09;
+}
+.batch-preset-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+.batch-preset-icon {
+  width: 36px;
+  height: 36px;
+  border-radius: 10px; /* radius.md */
+  background: #eaecf0; /* divider */
+  border: 1px solid transparent;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 18px;
+  flex-shrink: 0;
+}
+.batch-preset-card-selected .batch-preset-icon {
+  background: #fef6ee; /* primaryBg */
+  border-color: #fdeada; /* primaryBorder */
+}
+.batch-preset-name {
+  font-size: 14px;
+  font-weight: 700;
+  color: #101828; /* textStrong */
+  padding-right: 22px; /* tránh radio góc phải */
+}
+.batch-preset-desc {
+  margin-top: 8px;
+  font-size: 12.5px;
+  line-height: 1.45;
+  color: #667085; /* textMuted */
+}
+.batch-preset-chips {
+  margin-top: 10px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.batch-preset-chip {
+  padding: 2px 9px;
+  border-radius: 999px; /* pill */
+  font-size: 11px;
+  font-weight: 500;
+  background: #eaecf0; /* divider */
+  color: #475467; /* neutral.text */
+}
+.batch-preset-card-selected .batch-preset-chip {
+  background: #fdeada; /* primaryBorder */
+  color: #c25a06;
+}
+.batch-preset-error {
+  margin-top: 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 12.5px;
+  color: #d92d20; /* error.text */
+}
+.batch-preset-header-chip {
+  display: inline-flex;
+  align-items: center;
+  margin-left: 8px;
+  padding: 1px 9px;
+  border-radius: 999px;
+  font-size: 11px;
+  font-weight: 500;
+  background: #fef6ee; /* primaryBg */
+  border: 1px solid #fdeada; /* primaryBorder */
+  color: #c25a06;
+  vertical-align: middle;
+  white-space: nowrap;
+}
+
 /* ─── Carrier section (SF-16 D1b — mirror DESIGN_TOKENS theo convention file này) ─── */
 .carrier-section {
   margin-bottom: 12px;

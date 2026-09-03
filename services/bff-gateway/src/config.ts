@@ -84,6 +84,28 @@ export interface BffConfig {
   devResetPassword: boolean;
   /** SF-27 — Kafka side-channel consumer. */
   kafka: BffKafkaConfig;
+  /** SF-23 — OneSignal REST push (dual-mode). */
+  onesignal: BffOnesignalConfig;
+  /** SF-26 — HMAC secret cho webhook sàn (rỗng → 503 fail-closed). */
+  webhookHmacSecret: string;
+  /**
+   * SF-26 — raw WEBHOOK_MAPPING env (JSON flat rename map canonical→payload
+   * field). Parse ở lib/webhook-mapping (Task 4) — invalid JSON → warn + default.
+   */
+  webhookMapping: string;
+}
+
+export interface BffOnesignalConfig {
+  /**
+   * REST API key — rỗng → mock mode (sendOneSignalPush trả false ngay,
+   * chỉ notification_log; KHÔNG gọi OneSignal).
+   */
+  restApiKey: string;
+  /**
+   * OneSignal App ID (BFF-side env ONESIGNAL_APP_ID — KHÔNG nhầm
+   * VITE_ONESIGNAL_APP_ID build-time của FE). Thiếu → mock mode.
+   */
+  appId: string;
 }
 
 export interface BffKafkaConfig {
@@ -160,5 +182,12 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       enabled: env.KAFKA_ENABLED === 'true', // 'true' duy nhất — thống nhất Go/Java/e2e (review SF-27)
       bootstrapServers: env.KAFKA_BOOTSTRAP_SERVERS ?? 'localhost:9092',
     },
+    onesignal: {
+      restApiKey: env.ONESIGNAL_REST_API_KEY ?? '',
+      appId: env.ONESIGNAL_APP_ID ?? '',
+    },
+    // SF-26 — webhook sàn (FI-271): secret rỗng → verifyHmac 503 fail-closed.
+    webhookHmacSecret: env.WEBHOOK_HMAC_SECRET ?? '',
+    webhookMapping: env.WEBHOOK_MAPPING ?? '',
   };
 }

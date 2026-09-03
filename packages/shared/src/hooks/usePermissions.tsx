@@ -12,6 +12,8 @@
  *   - 'areastaff.view'    → SF-17 Khu vực hoạt động NV (/area-staff)
  *   - 'areastaff.manage'  → SF-17 tạo/sửa/toggle định nghĩa NV (/area-staff/new|edit)
  *   - 'd2c.view'          → D2C/Dropship (/hub-store-order/d2c) — SF-18
+ *   - 'audit.view'        → Audit viewer (/audit) — SF-11, Manager only
+ *                            (BFF cũng gate Manager-only — D2).
  *   - 'settlement.view'   → SF-14 Đối soát COD (/settlement) — Manager + Admin.
  *
  * Role source: module-level store (setRole) HOẶC RoleProvider (context
@@ -44,6 +46,7 @@ export const PERMISSIONS = [
   'areastaff.view',
   'areastaff.manage',
   'd2c.view',
+  'audit.view',
   'settlement.view',
   'printers.manage', // SF-21 — quản lý máy in (Admin duy nhất)
 ] as const;
@@ -65,6 +68,7 @@ export const PERMISSION_MATRIX = {
     'users.manage',
     'areastaff.view',
     'd2c.view',
+    'audit.view',
     'settlement.view',
   ],
   Admin: [

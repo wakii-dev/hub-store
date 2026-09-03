@@ -1,4 +1,4 @@
-import { useState, type CSSProperties, type ReactNode } from 'react';
+import { useEffect, useState, type CSSProperties, type ReactNode } from 'react';
 import { useLocation, useNavigate } from 'react-router-dom';
 import { useTranslation } from 'react-i18next';
 import { Button, Tooltip } from 'antd';
@@ -11,8 +11,11 @@ import {
   TeamOutlined,
   EnvironmentOutlined,
   SendOutlined,
+  FileSearchOutlined,
   LogoutOutlined,
   KeyOutlined,
+  MenuOutlined,
+  MenuFoldOutlined,
 } from '@ant-design/icons';
 import { DESIGN_TOKENS, usePermissions, sharedCssVariables } from '@hub-store/shared';
 import type { ShellSession } from '../../auth/oidc';
@@ -37,6 +40,7 @@ const NAV_ICONS: Record<string, ReactNode> = {
   '/users': <TeamOutlined />,
   '/area-staff': <EnvironmentOutlined />,
   '/hub-store-order/d2c': <SendOutlined />,
+  '/audit': <FileSearchOutlined />,
 };
 
 /** Logo gradient cam — hand-off §2.1 (34×34 header, 36×36 rail). */
@@ -87,6 +91,14 @@ export default function AppLayout(props: {
   const location = useLocation();
   const [hotkeyHelpOpen, setHotkeyHelpOpen] = useState(false);
 
+  // SF-11 (FI-256 Task 3) — nav off-canvas ≤768px: hamburger toggle class
+  // sf11-nav-open trên wrapper (CSS trong sf6-antd-overrides.css); route change
+  // → auto-close. Desktop (1440×900): navOpen luôn false → không render thêm gì.
+  const [navOpen, setNavOpen] = useState(false);
+  useEffect(() => {
+    setNavOpen(false);
+  }, [location.pathname]);
+
   const visibleNav = NAV_ROUTES.filter((item) => can(item.permission));
 
   const langPillStyle: CSSProperties = {
@@ -107,8 +119,16 @@ export default function AppLayout(props: {
 
   return (
     <div
+      className={navOpen ? 'sf11-nav-open' : undefined}
       style={{ ...(sharedCssVariables as CSSProperties), display: 'flex', flexDirection: 'column', minHeight: '100vh', background: DESIGN_TOKENS.color.bgSubtle }}
     >
+      {navOpen && (
+        <div
+          aria-hidden="true"
+          className="sf11-nav-backdrop"
+          onClick={() => setNavOpen(false)}
+        />
+      )}
       <header
         style={{
           height: HEADER_HEIGHT,
@@ -126,6 +146,17 @@ export default function AppLayout(props: {
         data-testid="app-header"
       >
         <div style={{ display: 'flex', alignItems: 'center', gap: 10 }}>
+          {/* SF-11 — hamburger nav ≤768px (element MỚI, display:none desktop qua CSS) */}
+          <button
+            type="button"
+            className="sf11-nav-toggle"
+            aria-label={navOpen ? 'Close navigation' : 'Open navigation'}
+            aria-expanded={navOpen}
+            onClick={() => setNavOpen((v) => !v)}
+            data-testid="sf11-nav-toggle"
+          >
+            {navOpen ? <MenuFoldOutlined /> : <MenuOutlined />}
+          </button>
           <GradientLogo size={34} />
           <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
             <strong style={{ fontSize: 14.5, fontWeight: 700, color: DESIGN_TOKENS.color.textStrong }}>

@@ -7,7 +7,7 @@
 import { useCallback, useMemo, useRef } from 'react';
 import { useUrlState, type UrlStateValue } from '@hub-store/shared';
 
-export const TECH_TABS = ['delivery', 'installation', 'staff'] as const;
+export const TECH_TABS = ['delivery', 'installation', 'staff', 'map'] as const;
 export type TechTab = (typeof TECH_TABS)[number];
 
 const SESSION_KEY = 'hub-store.tech.filters';

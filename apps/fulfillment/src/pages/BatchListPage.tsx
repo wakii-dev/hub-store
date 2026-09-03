@@ -28,6 +28,7 @@ import {
   MultiSelect,
   StatusTag,
   TextSearch,
+  trackEvent,
   formatPeriodOfTime,
   formatVnd,
   loadPlanningMap,
@@ -354,6 +355,41 @@ function CodBatchActions({ batchCode }: { batchCode: string }) {
   );
 }
 
+/**
+ * SF-24 Task 4 — wrapper tracking modal: wire stopMeta (address + COD) cho tab
+ * bản đồ. Nguồn = useGetBatchOrdersQuery CÙNG batch (cache RTKQ dùng chung với
+ * expand row — KHÔNG thêm endpoint fetch mới). Key Record là
+ * batch.items[].orderCode: by-batch orders trả fulfillCode TRÙNG GIÁ TRỊ
+ * (BFF GET /orders/by-batch truyền item.orderCodes làm fulfillCodes cho
+ * getOrdersByCodes — intake.ts), nên join theo giá trị chứ KHÔNG theo index.
+ */
+function TrackingModalWithMeta({
+  target,
+  onClose,
+}: {
+  target: { batchCode: string; planningIds: string[]; orderCode?: string };
+  onClose: () => void;
+}) {
+  const { data: batchOrders } = useGetBatchOrdersQuery(target.batchCode);
+  const stopMeta = useMemo(() => {
+    const meta: Record<string, { address?: string; cod?: number }> = {};
+    for (const o of batchOrders ?? []) {
+      meta[o.fulfillCode] = { address: o.customerAddress, cod: o.codAmount };
+    }
+    return meta;
+  }, [batchOrders]);
+  return (
+    <TrackingModal
+      open
+      batchCode={target.batchCode}
+      planningIds={target.planningIds}
+      orderCode={target.orderCode}
+      stopMeta={stopMeta}
+      onClose={onClose}
+    />
+  );
+}
+
 /** Exposed qua federation là `fulfillment/BatchListPage` → route /hub-store-order/batch. */
 export default function BatchListPage() {
   return (
@@ -486,6 +522,7 @@ function BatchListPageInner() {
         try {
           await completePicking({ batchCode: batch.batchCode }).unwrap();
           message.success(t("complete.success", { code: batch.batchCode }));
+          trackEvent("batch_completed"); // SF-23 T7
         } catch (err) {
           message.error(`${t("complete.failed")}: ${errMessage(err)}`);
         }
@@ -703,6 +740,10 @@ function BatchListPageInner() {
           loading={isLoading || isFetching}
           dataSource={rows}
           columns={columns}
+          /* SF-11 (FI-256 D2) — scroll ngang ≤768px: tổng cột cố định
+             90+130+100+260+130+100+140+230 = 1180 + ~220 (address ellipsis)
+             = 1400 (mirror D1). */
+          scroll={{ x: 1400 }}
           locale={{
             emptyText: (
               <EmptyState
@@ -761,15 +802,10 @@ function BatchListPageInner() {
         <MarkFailModal open orderCode={failTarget} onClose={() => setFailTarget(null)} />
       )}
 
-      {/* SF-16 Task 8 — tracking modal (timeline 2 cột BE | PARTNER). */}
+      {/* SF-16 Task 8 — tracking modal (timeline 2 cột BE | PARTNER).
+          SF-24 Task 4 — wrapper wire stopMeta cho tab bản đồ. */}
       {tracking && (
-        <TrackingModal
-          open
-          batchCode={tracking.batchCode}
-          planningIds={tracking.planningIds}
-          orderCode={tracking.orderCode}
-          onClose={() => setTracking(null)}
-        />
+        <TrackingModalWithMeta target={tracking} onClose={() => setTracking(null)} />
       )}
 
       {/* SF-16 Task 7 — modal reason hủy vận đơn cả phiếu (auto-note prefill). */}

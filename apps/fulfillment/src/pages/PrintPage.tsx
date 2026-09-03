@@ -4,7 +4,7 @@ import { Alert, Badge, Button, Progress, Result, Select, Slider, Space, Spin, Ta
 import { PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { BATCH_ENTITY_STATUS, DESIGN_TOKENS, EmptyState, PRINT_TYPES, type PrintType } from '@hub-store/shared';
+import { BATCH_ENTITY_STATUS, DESIGN_TOKENS, EmptyState, PRINT_TYPES, trackEvent, type PrintType } from '@hub-store/shared';
 import { fulfillmentStore } from '../store';
 import {
   printDocument,
@@ -162,6 +162,7 @@ function PrintPageInner() {
     try {
       await printDocument({ batchCode, printType: activeType, printerId: pid });
       message.success(t('print.success', { doc: t(`print.tab.${activeType}`) }));
+      trackEvent('print'); // SF-23 T7
     } catch (err) {
       message.error(`${t('print.failed')}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -296,7 +297,8 @@ function PrintPageInner() {
         )
       )}
 
-      <Space wrap style={{ display: 'flex', marginTop: 16, gap: 12 }} align="center">
+      {/* SF-11 (FI-256 D3) — className cho stack dọc ≤768px (CSS sf6-antd-overrides) */}
+      <Space wrap className="sf11-print-controls" style={{ display: 'flex', marginTop: 16, gap: 12 }} align="center">
         <Select
           style={{ minWidth: 240 }}
           placeholder={t('print.printer.placeholder')}

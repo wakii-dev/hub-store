@@ -62,7 +62,15 @@ BEGIN
      OR to_regclass('public.batch_items') IS NULL THEN
     RAISE EXCEPTION 'batching: thiếu bảng — %', 'chạy migration trước — see SF-2/SF-3';
   END IF;
-  TRUNCATE public.batches, public.batch_items RESTART IDENTITY;
+  -- SF-16 (FI-245) thêm 3 bảng runtime NVC — truncate cùng batch, KHÔNG đụng
+  -- addon_services/fee_limits (catalog/fixture, mock carrier tự nạp).
+  -- Bỏ truncate plannings/bookings → lần chạy sau trùng batch_code (seq replay
+  -- từ seed max) → confirmPlanning dính UNIQUE(batch_code, stop_order) → NVC
+  -- booking fail âm thầm (e2e 07-nvc Flow 1 red không định trước).
+  TRUNCATE public.batches, public.batch_items,
+           public.shipment_plannings, public.bookings,
+           public.shipment_tracking_events
+           RESTART IDENTITY;
 END
 $reset$;
 SQL

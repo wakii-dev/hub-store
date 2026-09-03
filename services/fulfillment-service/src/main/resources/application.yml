@@ -51,3 +51,8 @@ payment:
     # SF-17: chọn PaymentAccountVerifier — mock (default) | zalopay.
     # zalopay yêu cầu env ZALOPAY_APP_ID/ZALOPAY_KEY1 (fail-loud lúc boot nếu thiếu).
     provider: ${PAYMENT_VERIFY_PROVIDER:mock}
+
+webhook:
+  # SF-26 (FI-271) — ngưỡng stale reclaim claim webhook (giây): PENDING cũ hơn
+  # ngưỡng = crash mồ côi → reclaim + xử lý lại; PENDING mới → UNAVAILABLE.
+  claim-stale-seconds: ${WEBHOOK_CLAIM_STALE_SECONDS:120}

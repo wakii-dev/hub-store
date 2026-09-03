@@ -235,3 +235,124 @@ body {
 .ant-card {
   font-size: inherit;
 }
+
+/* ─── §4 SF-11 Mobile ≤768px (FI-256 Task 3) ───
+ * Desktop 1440×900 pixel-identical: mọi rule layout nằm trong @media bên dưới;
+ * ngoài media CHỈ class definition (display:none toggle). Sidebar rail off-canvas
+ * bằng transform — element [data-testid="app-sidebar"] LUÔN trong DOM (frozen
+ * testid sống). Hamburger + backdrop là elements MỚI (chỉ hiện khi navOpen,
+ * navOpen chỉ set được từ hamburger ≤768px). Values mirror DESIGN_TOKENS
+ * (convention mirror-token của file này).
+ */
+
+/* Toggle nav — ẩn desktop, hiện ≤768px */
+.sf11-nav-toggle {
+  display: none;
+}
+
+@media (max-width: 768px) {
+  /* Hamburger trong app-header (element mới) */
+  .sf11-nav-toggle {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 34px;
+    height: 34px;
+    flex-shrink: 0;
+    padding: 0;
+    border: 1px solid #eaecf0; /* divider */
+    border-radius: 8px; /* radius.control */
+    background: #ffffff;
+    color: #344054; /* textSecondary */
+    cursor: pointer;
+    font-size: 16px;
+    box-shadow: 0 1px 2px rgba(16, 24, 40, 0.05); /* shadow.xs */
+  }
+
+  /* Header co padding (inline style → !important) + user chip rút gọn */
+  [data-testid="app-header"] {
+    padding: 0 8px !important;
+  }
+  [data-testid="header-user"] {
+    display: none;
+  }
+
+  /* Sidebar rail → off-canvas (element VẪN trong DOM) */
+  [data-testid="app-sidebar"] {
+    position: fixed;
+    top: 60px; /* HEADER_HEIGHT */
+    bottom: 0;
+    left: 0;
+    z-index: 1000; /* trên backdrop */
+    transform: translateX(-100%);
+    transition: transform 0.2s ease;
+  }
+  .sf11-nav-open [data-testid="app-sidebar"] {
+    transform: translateX(0);
+  }
+
+  /* Backdrop dưới sidebar, trên content — click đóng (AppLayout setState) */
+  .sf11-nav-backdrop {
+    position: fixed;
+    top: 60px; /* HEADER_HEIGHT */
+    left: 0;
+    right: 0;
+    bottom: 0;
+    z-index: 900;
+    background: rgba(16, 24, 40, 0.5); /* sidebar */
+  }
+
+  /* Utility: stack flex hàng dọc */
+  .sf11-stack {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+
+  /* FilterBar — grid 2 hàng × 4 cột → 2 cột */
+  [data-testid="filter-bar"] > div:first-child {
+    grid-template-columns: repeat(2, 1fr) !important;
+  }
+
+  /* StatStrip — wrap 2 cột (root flex là inline-style, không class → :has) */
+  div:has(> .sf6-stat-card) {
+    flex-wrap: wrap !important;
+    row-gap: 10px;
+  }
+  .sf6-stat-card {
+    flex: 1 1 calc(50% - 5px) !important;
+  }
+
+  /* Bulk-bar (antd Space nowrap inline-style) — wrap */
+  [data-testid="bulk-bar"] {
+    flex-wrap: wrap !important;
+    row-gap: 8px;
+  }
+
+  /* Dashboard — stat grid 4 → 2 cột (charts là block cards, tự stack) */
+  [data-testid="dashboard-root"] .ant-col-6 {
+    flex: 0 0 50% !important;
+    max-width: 50% !important;
+  }
+
+  /* D3 Print — controls stack dọc (zoom space bỏ margin-left auto) */
+  .sf11-print-controls {
+    flex-direction: column !important;
+    align-items: stretch !important;
+  }
+  .sf11-print-controls > .ant-space-item {
+    width: 100%;
+  }
+  .sf11-print-controls .ant-space {
+    margin-left: 0 !important;
+  }
+
+  /* Bảng không có scroll prop (Users…) — wrapper cho phép scroll ngang */
+  .ant-table-wrapper {
+    overflow-x: auto;
+  }
+
+  /* D1b CreateBatchingModal — width prop 1240 inline → !important override */
+  .create-batching-modal {
+    width: min(960px, calc(100vw - 16px)) !important;
+  }
+}
