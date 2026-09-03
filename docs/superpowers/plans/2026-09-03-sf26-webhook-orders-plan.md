@@ -272,9 +272,9 @@ export function mapWebhookPayload(payload: unknown, fieldMap?: WebhookMappingCon
 - Modify: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/service/IntakeServiceImpl.java`
 - Test: unit (Noop + verify publish call args)
 
-- [ ] **Step 1: Wire publish** — thay TODO Task 3: sau khi tx TRẢ VỀ (đã commit), `events.publish("order.created", fulfillCode, Map.of("fulfillCode", fulfillCode, "source", source, "externalId", externalId, "customerName", order.getCustomerName()))`. Best-effort — OrderEventPublisher KHÔNG BAO GIỜ throw (đã cam kết SF-27). Publish cả replay? KHÔNG — chỉ lần đầu tạo (replayed=false path); replay không publish (đơn không mới). Chỉ publish khi casProcess thành công lần đầu.
-- [ ] **Step 2: Test**: Unit — spy publisher: lần đầu → 1 publish type `order.created` key=fulfillCode; replay → 0 publish; validation fail → 0 publish.
-- [ ] **Step 3: Commit** `feat(sf26): publish order.created lên Kafka sau commit (best-effort, không replay)`
+- [x] **Step 1: Wire publish** — thay TODO Task 3: sau khi tx TRẢ VỀ (đã commit), `events.publish("order.created", fulfillCode, Map.of("fulfillCode", fulfillCode, "source", source, "externalId", externalId, "customerName", order.getCustomerName()))`. Best-effort — OrderEventPublisher KHÔNG BAO GIỜ throw (đã cam kết SF-27). Publish cả replay? KHÔNG — chỉ lần đầu tạo (replayed=false path); replay không publish (đơn không mới). Chỉ publish khi casProcess thành công lần đầu.
+- [x] **Step 2: Test**: Unit — spy publisher: lần đầu → 1 publish type `order.created` key=fulfillCode; replay → 0 publish; validation fail → 0 publish.
+- [x] **Step 3: Commit** `feat(sf26): publish order.created lên Kafka sau commit (best-effort, không replay)`
 
 ### Task 6: retry-semantics — hợp đồng lỗi end-to-end
 

@@ -144,7 +144,8 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
      *       (PENDING→PROCESSED keyed claimed ts) TRONG CÙNG tx. casProcess
      *       != 1 → throw INTERNAL → rollback TOÀN BỘ: order KHÔNG tồn tại,
      *       KHÔNG publish — reclaimer thắng race sẽ tự xử lý.</li>
-     *   <li>Publish order.created SAU commit — Task 5 (TODO bên dưới).</li>
+     *   <li>Publish order.created SAU commit — chỉ lần đầu (replayed=false);
+     *       replay trả kết quả cũ KHÔNG publish.</li>
      * </ol>
      */
     @Override
@@ -241,9 +242,16 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
             }
             return code;
         });
-        // Bước 6 — TODO(SF-26 Task 5): publish "order.created" best-effort SAU
-        // commit qua events.publish(...), CHỈ khi xử lý thành công lần đầu
-        // (replayed=false path) — replay/rollback KHÔNG publish.
+        // Bước 6 — publish SAU commit (tx.execute đã trả về = committed).
+        // Best-effort: OrderEventPublisher KHÔNG bao giờ throw (SF-27 contract —
+        // KafkaEventPublisher tự swallow sync + async error), không try/catch.
+        // CHỈ lần đầu xử lý thành công tới đây — replay (return sớm ở
+        // webhookProcess) và rollback (throw trước dòng này) KHÔNG publish.
+        events.publish("order.created", fulfillCode, java.util.Map.of(
+                "fulfillCode", fulfillCode,
+                "source", source,
+                "externalId", externalId,
+                "customerName", order.getCustomerName()));
         return webhookResponse(fulfillCode, false);
     }
 

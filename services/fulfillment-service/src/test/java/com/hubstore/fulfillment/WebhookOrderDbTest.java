@@ -175,6 +175,7 @@ class WebhookOrderDbTest {
 
     @Test
     void replayProcessedReturnsSameCodeWithoutSecondOrder() {
+        publisher.events.clear(); // publisher static dùng chung — đo riêng test này
         CreateWebhookOrderResponse first = call("ext-replay", WebhookOrderValidationTest.validOrder());
         track(first);
         assertThat(first.getReplayed()).isFalse();
@@ -187,6 +188,10 @@ class WebhookOrderDbTest {
         // Replay KHÔNG tạo đơn thứ 2 + status vẫn PROCESSED.
         assertThat(orderCount(first.getFulfillCode())).isEqualTo(1);
         assertThat(webhookStatus("ext-replay")).isEqualTo("PROCESSED");
+        // Task 5: đúng 1 publish "order.created" (lần đầu) — replay KHÔNG publish.
+        assertThat(publisher.events).hasSize(1);
+        assertThat(publisher.events.get(0).type()).isEqualTo("order.created");
+        assertThat(publisher.events.get(0).key()).isEqualTo(first.getFulfillCode());
     }
 
     @Test
@@ -309,8 +314,10 @@ class WebhookOrderDbTest {
 
     @Test
     void validationFailureDoesNotPublishEvent() {
-        // Task 3 chưa wire publish (TODO Task 5) — nhưng hợp đồng: validate fail
-        // KHÔNG publish. RecordingEventPublisher chứng minh không có event nào.
+        // Hợp đồng Task 5: validate fail KHÔNG publish. Publisher là static dùng
+        // chung các test (test success khác đã publish) — clear trước khi gọi để
+        // assert chính xác bất kể thứ tự chạy test.
+        publisher.events.clear();
         CollectingObserver<CreateWebhookOrderResponse> obs = new CollectingObserver<>();
         service.createWebhookOrder(request("ext-nopublish", invalidOrder()), obs);
         assertThat(obs.error).isNotNull();
