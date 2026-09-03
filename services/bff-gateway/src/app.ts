@@ -35,6 +35,7 @@ import { registerD2cRoutes } from './routes/d2c.js';
 import { registerCodRoutes } from './routes/cod.js';
 import { registerEventsRoutes } from './routes/events.js';
 import { registerAvatarRoutes } from './routes/avatar.js';
+import { registerMetaRoutes } from './routes/meta.js';
 
 export function buildApp(config: BffConfig): FastifyInstance {
   const app = Fastify({ logger: false });
@@ -111,6 +112,8 @@ export function buildApp(config: BffConfig): FastifyInstance {
   registerEventsRoutes(app, { corsOrigins: config.corsOrigins });
   // SF-21 — avatar upload/serve (DB fulfillment qua pg Pool, precedent audit).
   registerAvatarRoutes(app);
+  // SF-21 — GET /version metadata (public, không JWT — plugins/auth exempt).
+  registerMetaRoutes(app);
   // SF-8 — users management (Manager-only) qua KC Admin REST.
   const kcAdmin = new KcAdminClient(config.oidc);
   registerUsersRoutes(app, { kcAdmin });

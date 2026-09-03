@@ -18,6 +18,8 @@ import type { ShellSession } from '../../auth/oidc';
 import { NAV_ROUTES } from '../../nav';
 import { AvatarUpload } from './AvatarUpload';
 import FontSizeSlider from './FontSizeSlider';
+import FullscreenToggle from './FullscreenToggle';
+import VersionCheck from './VersionCheck';
 
 // Tokens SF-6 §1.4 — rail 64px #101828, header 60px trắng, FPT orange gradient.
 const SIDEBAR_WIDTH = DESIGN_TOKENS.layout.sidebarWidth; // 64
@@ -134,6 +136,9 @@ export default function AppLayout(props: {
         <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
           {/* SF-21 D6: font-size slider — node MỚI, không đổi testid header có sẵn. */}
           <FontSizeSlider />
+          {/* SF-21 D7/D8: fullscreen toggle + version badge/prompt — nodes MỚI. */}
+          <FullscreenToggle />
+          <VersionCheck />
           <span
             style={{ ...langPillStyle }}
             onClick={props.onToggleLanguage}

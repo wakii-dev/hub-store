@@ -214,8 +214,8 @@ body { font-size: var(--app-font-size); }
 **Behavior:**
 - Fullscreen: `document.documentElement.requestFullscreen()` / `document.exitFullscreen()` toggle; F11 keydown preventDefault (webkitRequestFullscreen fallback Safari); macOS Fn-intercept graceful — nút luôn hoạt động.
 - Version: `APP_VERSION` unset → badge ẩn + check skip (không prompt-loop). Có version → so localStorage `sf.seenVersion`; khác → antd Modal "Phiên bản mới" + nút reload (reload set seenVersion TRƯỚC khi reload để không lặp). Check khi window focus + interval 5'.
-- [ ] Tests cho cả hai (mock fullscreen API + fetch): `pnpm -F shell test` → PASS.
-- [ ] Commit `feat(sf-21): fullscreen toggle + version check prompt`.
+- [x] Tests cho cả hai (mock fullscreen API + fetch): `pnpm -F shell test` → PASS.
+- [x] Commit `feat(sf-21): fullscreen toggle + version check prompt`.
 
 ### Task 12: e2e-print-expansion
 

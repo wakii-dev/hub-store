@@ -55,6 +55,10 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
     if (request.url === '/auth/reset-password' || request.url.startsWith('/auth/reset-password?')) {
       return;
     }
+    // SF-21 — /version là harmless metadata (build version) → public.
+    if (request.url === '/version' || request.url.startsWith('/version?')) {
+      return;
+    }
     // SF-10 — EventSource (SSE) KHÔNG set được Authorization header → CHỈ url
     // /events (kể cả query) cho phép token từ query `access_token` thay Bearer.
     // Verify JWKS y như Bearer; MỌI route khác vẫn bắt buộc header (không hồi quy).
