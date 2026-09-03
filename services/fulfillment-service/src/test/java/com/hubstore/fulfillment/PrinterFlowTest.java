@@ -44,7 +44,8 @@ class PrinterFlowTest {
                 new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()),
                 new com.hubstore.fulfillment.store.InMemoryCodConfirmationRepository(
                         c -> false),
-                repo, TestTx.noop());
+                repo, new com.hubstore.fulfillment.store.InMemoryPrintErrorRepository(),
+                TestTx.noop());
     }
 
     private static Printer printer(String shopCode, String printerId, String type) {

@@ -57,7 +57,8 @@ class D2cFilterAndNoteTest {
                 orders,
                 new RecordingEventPublisher(), repo,
                 new InMemoryCodConfirmationRepository(orders::isFailed),
-                new InMemoryPrinterRepository(), TestTx.noop());
+                new InMemoryPrinterRepository(),
+                new com.hubstore.fulfillment.store.InMemoryPrintErrorRepository(), TestTx.noop());
     }
 
     // ---------------- repo filter semantics ----------------

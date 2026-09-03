@@ -63,7 +63,8 @@ class SettlementAggregateTest {
         service = new FulfillmentServiceImpl(repo, new RecordingEventPublisher(),
                 new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()),
                 codRepo,
-                new InMemoryPrinterRepository(), TestTx.noop());
+                new InMemoryPrinterRepository(),
+                new com.hubstore.fulfillment.store.InMemoryPrintErrorRepository(), TestTx.noop());
 
         // S1: 1 PENDING + 1 CONFIRMED lệch tiền (collected 70k ≠ expected 100k).
         insert(s1a, IN_PERIOD, CodConfirmation.STATUS_PENDING, null);

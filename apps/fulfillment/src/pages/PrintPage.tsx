@@ -1,12 +1,17 @@
-import { Component, type ReactNode, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Component, type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Provider } from 'react-redux';
-import { Alert, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Typography, message } from 'antd';
+import { Alert, Badge, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Typography, message } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
 import { DESIGN_TOKENS, PRINT_TYPES, type PrintType } from '@hub-store/shared';
 import { fulfillmentStore } from '../store';
-import { printDocument, useGetBatchDetailQuery, useGetPrintersQuery } from '../api/printApi';
+import {
+  printDocument,
+  useGetBatchDetailQuery,
+  useGetPrintErrorCountsQuery,
+  useGetPrintersQuery,
+} from '../api/printApi';
 import { registerFulfillmentResources } from '../i18n';
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
@@ -91,6 +96,28 @@ function PrintPageInner() {
     skip: !shopCode,
   });
   const printers = printersData?.items ?? [];
+
+  // SF-21 (spec D2): số lỗi in per đơn — badge + sort đơn nhiều lỗi nhất lên đầu.
+  const { data: errorCountsData } = useGetPrintErrorCountsQuery(batchCode, {
+    skip: !batchCode,
+  });
+  const errorCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of errorCountsData?.items ?? []) {
+      map[c.orderCode] = c.count;
+    }
+    return map;
+  }, [errorCountsData]);
+
+  // Sort: count DESC trước, tie → orderCode asc (stable per spec D2).
+  const sortedOrders = useMemo(() => {
+    return [...(batch?.items ?? [])].sort((a, b) => {
+      const ca = errorCounts[a.orderCode] ?? 0;
+      const cb = errorCounts[b.orderCode] ?? 0;
+      if (ca !== cb) return cb - ca;
+      return a.orderCode.localeCompare(b.orderCode);
+    });
+  }, [batch?.items, errorCounts]);
 
   // Load PDF bytes cho tab active (cache per tab — không refetch tab đã load;
   // lỗi/loading theo TỪNG type — không chấm nhầm tab kế).
@@ -214,6 +241,37 @@ function PrintPageInner() {
         {t('print.batch.label')}: {batchCode}
         {batch?.shopCode ? ` · ${t('print.shop.label')}: ${shopCode}` : ''}
       </Typography.Text>
+
+      {/* SF-21 D2 — danh sách đơn phiếu, sort lỗi in desc (tie → code asc);
+          Badge đếm lỗi chỉ hiện khi count > 0. */}
+      {sortedOrders.length > 0 && (
+        <ul data-testid="print-order-list" style={{ listStyle: 'none', padding: 0, marginTop: 12, maxWidth: 480 }}>
+          {sortedOrders.map((item) => {
+            const count = errorCounts[item.orderCode] ?? 0;
+            return (
+              <li
+                key={item.orderCode}
+                data-testid="print-order-row"
+                data-order-code={item.orderCode}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '6px 0',
+                  borderBottom: `1px solid ${DESIGN_TOKENS.color.border}`,
+                }}
+              >
+                <Badge count={count} overflowCount={999} offset={[0, 0]}>
+                  <Typography.Text strong>{item.orderCode}</Typography.Text>
+                </Badge>
+                <Typography.Text type="secondary" ellipsis style={{ flex: 1 }}>
+                  {item.customerAddress}
+                </Typography.Text>
+              </li>
+            );
+          })}
+        </ul>
+      )}
 
       <Space wrap style={{ display: 'flex', marginTop: 16, gap: 12 }} align="center">
         <Select

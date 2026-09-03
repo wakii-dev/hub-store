@@ -14,6 +14,7 @@ import com.hubstore.fulfillment.store.DashboardStatsData;
 import com.hubstore.fulfillment.store.FilterResult;
 import com.hubstore.fulfillment.store.OrderFilter;
 import com.hubstore.fulfillment.store.OrderRepository;
+import com.hubstore.fulfillment.store.PrintErrorRepository;
 import com.hubstore.fulfillment.store.PrinterRepository;
 import com.hubstore.fulfillment.v1.ConfirmBatchCodRequest;
 import com.hubstore.fulfillment.v1.ConfirmBatchCodResponse;
@@ -53,6 +54,8 @@ import com.hubstore.fulfillment.v1.GetOrderDetailResponse;
 import com.hubstore.fulfillment.v1.GetOrdersByCodesRequest;
 import com.hubstore.fulfillment.v1.GetOrdersByCodesResponse;
 import com.hubstore.fulfillment.v1.GetTimeDeliveryRequest;
+import com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest;
+import com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse;
 import com.hubstore.fulfillment.v1.GetTimeDeliveryResponse;
 import com.hubstore.fulfillment.v1.HubStoreOrderFilterItem;
 import com.hubstore.fulfillment.v1.ListDeliveryStaffRequest;
@@ -68,6 +71,8 @@ import com.hubstore.fulfillment.v1.CreatePrinterResponse;
 import com.hubstore.fulfillment.v1.UpdatePrinterRequest;
 import com.hubstore.fulfillment.v1.UpdatePrinterResponse;
 import com.hubstore.fulfillment.v1.MutateOrderStatusRequest;
+import com.hubstore.fulfillment.v1.RecordPrintErrorRequest;
+import com.hubstore.fulfillment.v1.RecordPrintErrorResponse;
 import com.hubstore.fulfillment.v1.MutateOrderStatusResponse;
 import com.hubstore.fulfillment.v1.MutateOrderStatusResult;
 import com.hubstore.fulfillment.v1.OrderStatus;
@@ -118,16 +123,19 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
     private final D2cOrderRepository d2cRepo;
     private final CodConfirmationRepository codRepo;
     private final PrinterRepository printers;
+    private final PrintErrorRepository printErrors;
     private final TransactionTemplate transactions;
 
     public FulfillmentServiceImpl(OrderRepository repo, OrderEventPublisher events,
             D2cOrderRepository d2cRepo, CodConfirmationRepository codRepo,
-            PrinterRepository printers, TransactionTemplate transactions) {
+            PrinterRepository printers, PrintErrorRepository printErrors,
+            TransactionTemplate transactions) {
         this.repo = repo;
         this.events = events;
         this.d2cRepo = d2cRepo;
         this.codRepo = codRepo;
         this.printers = printers;
+        this.printErrors = printErrors;
         this.transactions = transactions;
     }
 
@@ -929,6 +937,50 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                 .setMac(orEmpty(p.mac()))
                 .setType(orEmpty(p.type()))
                 .build();
+    }
+
+    // ---------------- Print errors (SF-21, FI-266 — spec D2) ----------------
+
+    /**
+     * Ghi nhận 1 lỗi in thật — BFF gọi trên failure path (invalid printer /
+     * batching fail / print-service fail). order_code rỗng khi batch chưa
+     * hydrate được (D2). Không audit — table print_errors chính là trail.
+     */
+    @Override
+    public void recordPrintError(RecordPrintErrorRequest request,
+            StreamObserver<RecordPrintErrorResponse> responseObserver) {
+        try {
+            var r = request.getRecord();
+            printErrors.insert(new PrintErrorRepository.PrintError(
+                    r.getOrderCode(), r.getBatchCode(), r.getPrintType(),
+                    r.getPrinterId(), r.getErrorMessage()));
+            responseObserver.onNext(RecordPrintErrorResponse.newBuilder().build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
+    }
+
+    /** Đếm lỗi per đơn theo phiếu — badge + sort D3 (GROUP BY order_code). */
+    @Override
+    public void getPrintErrorCounts(GetPrintErrorCountsRequest request,
+            StreamObserver<GetPrintErrorCountsResponse> responseObserver) {
+        try {
+            GetPrintErrorCountsResponse.Builder resp = GetPrintErrorCountsResponse.newBuilder();
+            for (PrintErrorRepository.OrderErrorCount c : printErrors.countsByBatch(request.getBatchCode())) {
+                resp.addCounts(com.hubstore.fulfillment.v1.PrintErrorCount.newBuilder()
+                        .setOrderCode(c.orderCode())
+                        .setCount(c.count()));
+            }
+            responseObserver.onNext(resp.build());
+            responseObserver.onCompleted();
+        } catch (StatusRuntimeException e) {
+            responseObserver.onError(e);
+        } catch (RuntimeException e) {
+            responseObserver.onError(Status.INTERNAL.withDescription(e.getMessage()).asRuntimeException());
+        }
     }
 
     // ---------------- D2C mapping helpers (SF-18) ----------------

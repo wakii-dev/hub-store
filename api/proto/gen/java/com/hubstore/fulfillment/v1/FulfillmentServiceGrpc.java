@@ -728,6 +728,68 @@ public final class FulfillmentServiceGrpc {
     return getUpdatePrinterMethod;
   }
 
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.RecordPrintErrorRequest,
+      com.hubstore.fulfillment.v1.RecordPrintErrorResponse> getRecordPrintErrorMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "RecordPrintError",
+      requestType = com.hubstore.fulfillment.v1.RecordPrintErrorRequest.class,
+      responseType = com.hubstore.fulfillment.v1.RecordPrintErrorResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.RecordPrintErrorRequest,
+      com.hubstore.fulfillment.v1.RecordPrintErrorResponse> getRecordPrintErrorMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.RecordPrintErrorRequest, com.hubstore.fulfillment.v1.RecordPrintErrorResponse> getRecordPrintErrorMethod;
+    if ((getRecordPrintErrorMethod = FulfillmentServiceGrpc.getRecordPrintErrorMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getRecordPrintErrorMethod = FulfillmentServiceGrpc.getRecordPrintErrorMethod) == null) {
+          FulfillmentServiceGrpc.getRecordPrintErrorMethod = getRecordPrintErrorMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.RecordPrintErrorRequest, com.hubstore.fulfillment.v1.RecordPrintErrorResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "RecordPrintError"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.RecordPrintErrorRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.RecordPrintErrorResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("RecordPrintError"))
+              .build();
+        }
+      }
+    }
+    return getRecordPrintErrorMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest,
+      com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse> getGetPrintErrorCountsMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "GetPrintErrorCounts",
+      requestType = com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest.class,
+      responseType = com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest,
+      com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse> getGetPrintErrorCountsMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest, com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse> getGetPrintErrorCountsMethod;
+    if ((getGetPrintErrorCountsMethod = FulfillmentServiceGrpc.getGetPrintErrorCountsMethod) == null) {
+      synchronized (FulfillmentServiceGrpc.class) {
+        if ((getGetPrintErrorCountsMethod = FulfillmentServiceGrpc.getGetPrintErrorCountsMethod) == null) {
+          FulfillmentServiceGrpc.getGetPrintErrorCountsMethod = getGetPrintErrorCountsMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest, com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "GetPrintErrorCounts"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new FulfillmentServiceMethodDescriptorSupplier("GetPrintErrorCounts"))
+              .build();
+        }
+      }
+    }
+    return getGetPrintErrorCountsMethod;
+  }
+
   /**
    * Creates a new async stub that supports all call types for the service
    */
@@ -1005,6 +1067,26 @@ public final class FulfillmentServiceGrpc {
     default void updatePrinter(com.hubstore.fulfillment.v1.UpdatePrinterRequest request,
         io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.UpdatePrinterResponse> responseObserver) {
       io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getUpdatePrinterMethod(), responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2).
+     * </pre>
+     */
+    default void recordPrintError(com.hubstore.fulfillment.v1.RecordPrintErrorRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.RecordPrintErrorResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getRecordPrintErrorMethod(), responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9).
+     * </pre>
+     */
+    default void getPrintErrorCounts(com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getGetPrintErrorCountsMethod(), responseObserver);
     }
   }
 
@@ -1288,6 +1370,28 @@ public final class FulfillmentServiceGrpc {
       io.grpc.stub.ClientCalls.asyncUnaryCall(
           getChannel().newCall(getUpdatePrinterMethod(), getCallOptions()), request, responseObserver);
     }
+
+    /**
+     * <pre>
+     * SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2).
+     * </pre>
+     */
+    public void recordPrintError(com.hubstore.fulfillment.v1.RecordPrintErrorRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.RecordPrintErrorResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getRecordPrintErrorMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     * <pre>
+     * SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9).
+     * </pre>
+     */
+    public void getPrintErrorCounts(com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getGetPrintErrorCountsMethod(), getCallOptions()), request, responseObserver);
+    }
   }
 
   /**
@@ -1535,6 +1639,26 @@ public final class FulfillmentServiceGrpc {
     public com.hubstore.fulfillment.v1.UpdatePrinterResponse updatePrinter(com.hubstore.fulfillment.v1.UpdatePrinterRequest request) {
       return io.grpc.stub.ClientCalls.blockingUnaryCall(
           getChannel(), getUpdatePrinterMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2).
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.RecordPrintErrorResponse recordPrintError(com.hubstore.fulfillment.v1.RecordPrintErrorRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getRecordPrintErrorMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9).
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse getPrintErrorCounts(com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getGetPrintErrorCountsMethod(), getCallOptions(), request);
     }
   }
 
@@ -1807,6 +1931,28 @@ public final class FulfillmentServiceGrpc {
       return io.grpc.stub.ClientCalls.futureUnaryCall(
           getChannel().newCall(getUpdatePrinterMethod(), getCallOptions()), request);
     }
+
+    /**
+     * <pre>
+     * SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2).
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.RecordPrintErrorResponse> recordPrintError(
+        com.hubstore.fulfillment.v1.RecordPrintErrorRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getRecordPrintErrorMethod(), getCallOptions()), request);
+    }
+
+    /**
+     * <pre>
+     * SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9).
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse> getPrintErrorCounts(
+        com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getGetPrintErrorCountsMethod(), getCallOptions()), request);
+    }
   }
 
   private static final int METHODID_FILTER_ORDERS = 0;
@@ -1832,6 +1978,8 @@ public final class FulfillmentServiceGrpc {
   private static final int METHODID_LIST_PRINTERS = 20;
   private static final int METHODID_CREATE_PRINTER = 21;
   private static final int METHODID_UPDATE_PRINTER = 22;
+  private static final int METHODID_RECORD_PRINT_ERROR = 23;
+  private static final int METHODID_GET_PRINT_ERROR_COUNTS = 24;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -1941,6 +2089,14 @@ public final class FulfillmentServiceGrpc {
         case METHODID_UPDATE_PRINTER:
           serviceImpl.updatePrinter((com.hubstore.fulfillment.v1.UpdatePrinterRequest) request,
               (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.UpdatePrinterResponse>) responseObserver);
+          break;
+        case METHODID_RECORD_PRINT_ERROR:
+          serviceImpl.recordPrintError((com.hubstore.fulfillment.v1.RecordPrintErrorRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.RecordPrintErrorResponse>) responseObserver);
+          break;
+        case METHODID_GET_PRINT_ERROR_COUNTS:
+          serviceImpl.getPrintErrorCounts((com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -2121,6 +2277,20 @@ public final class FulfillmentServiceGrpc {
               com.hubstore.fulfillment.v1.UpdatePrinterRequest,
               com.hubstore.fulfillment.v1.UpdatePrinterResponse>(
                 service, METHODID_UPDATE_PRINTER)))
+        .addMethod(
+          getRecordPrintErrorMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.RecordPrintErrorRequest,
+              com.hubstore.fulfillment.v1.RecordPrintErrorResponse>(
+                service, METHODID_RECORD_PRINT_ERROR)))
+        .addMethod(
+          getGetPrintErrorCountsMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.GetPrintErrorCountsRequest,
+              com.hubstore.fulfillment.v1.GetPrintErrorCountsResponse>(
+                service, METHODID_GET_PRINT_ERROR_COUNTS)))
         .build();
   }
 
@@ -2192,6 +2362,8 @@ public final class FulfillmentServiceGrpc {
               .addMethod(getListPrintersMethod())
               .addMethod(getCreatePrinterMethod())
               .addMethod(getUpdatePrinterMethod())
+              .addMethod(getRecordPrintErrorMethod())
+              .addMethod(getGetPrintErrorCountsMethod())
               .build();
         }
       }

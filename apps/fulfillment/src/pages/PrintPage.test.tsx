@@ -16,9 +16,15 @@ import { printDocument } from "../api/printApi";
 
 const printDocMock = vi.hoisted(() => vi.fn());
 
+// SF-21 T3 — dữ liệu điều khiển được cho batch items + print-error counts.
+const sf21Mocks = vi.hoisted(() => ({
+  batchItems: [] as Array<Record<string, unknown>>,
+  countsItems: [] as Array<{ orderCode: string; count: number }>,
+}));
+
 vi.mock("../api/printApi", () => ({
   useGetBatchDetailQuery: () => ({
-    data: { batchCode: "BATCH-0001", shopCode: "30201" },
+    data: { batchCode: "BATCH-0001", shopCode: "30201", items: sf21Mocks.batchItems },
     isLoading: false,
   }),
   useGetPrintersQuery: () => ({
@@ -28,6 +34,10 @@ vi.mock("../api/printApi", () => ({
         { printerId: "PTR-30201-02", name: "Máy in phụ", shopCode: "30201" },
       ],
     },
+    isLoading: false,
+  }),
+  useGetPrintErrorCountsQuery: () => ({
+    data: { items: sf21Mocks.countsItems },
     isLoading: false,
   }),
   printDocument: printDocMock,
@@ -99,6 +109,8 @@ beforeEach(() => {
   initI18n({ resources: fulfillmentResources });
   printDocMock.mockReset();
   printDocMock.mockResolvedValue(PDF_BYTES);
+  sf21Mocks.batchItems.length = 0;
+  sf21Mocks.countsItems.length = 0;
 });
 
 afterEach(cleanup);
@@ -298,5 +310,52 @@ describe("PrintPage (SF-21 T1 — pin 5 print types)", () => {
     expect(printDocMock).toHaveBeenCalledTimes(5);
     const types = printDocMock.mock.calls.map((c) => (c[0] as { printType: string }).printType);
     expect([...new Set(types)].sort()).toEqual([...PRINT_TYPES].sort());
+  });
+});
+
+/**
+ * SF-21 T3 — print-error badge + sort (spec D2): Badge đếm lỗi per đơn
+ * (chỉ khi count > 0), danh sách đơn sort count DESC trước, tie → code asc.
+ */
+describe("PrintPage (SF-21 T3 — print-error badge + sort)", () => {
+  it("badge count trên đơn có lỗi; đơn nhiều lỗi nhất đứng đầu; tie → code asc", async () => {
+    sf21Mocks.batchItems.push(
+      { orderCode: "RSA-D", customerAddress: "Địa chỉ D", stopOrder: 4 },
+      { orderCode: "RSA-B", customerAddress: "Địa chỉ B", stopOrder: 1 },
+      { orderCode: "RSA-A", customerAddress: "Địa chỉ A", stopOrder: 3 },
+      { orderCode: "RSA-C", customerAddress: "Địa chỉ C", stopOrder: 2 },
+    );
+    sf21Mocks.countsItems.push(
+      { orderCode: "RSA-B", count: 2 },
+      { orderCode: "RSA-C", count: 1 },
+    );
+
+    renderPage();
+    const list = await screen.findByTestId("print-order-list");
+    const rows = within(list).getAllByTestId("print-order-row");
+    // 2 lỗi (RSA-B) → 1 lỗi (RSA-C) → 0 lỗi tie RSA-A < RSA-D (code asc).
+    expect(rows.map((r) => r.getAttribute("data-order-code"))).toEqual([
+      "RSA-B",
+      "RSA-C",
+      "RSA-A",
+      "RSA-D",
+    ]);
+    // Badge chỉ hiện khi count > 0 — RSA-A/RSA-D không có số.
+    expect(within(rows[0]).getByText("2")).toBeTruthy();
+    expect(within(rows[1]).getByText("1")).toBeTruthy();
+    expect(rows[2].textContent).not.toMatch(/\b0\b/);
+    expect(rows[3].textContent).not.toMatch(/\b0\b/);
+  });
+
+  it("counts rỗng → vẫn render danh sách đơn theo code asc, không badge", async () => {
+    sf21Mocks.batchItems.push(
+      { orderCode: "RSA-2", customerAddress: "Địa chỉ 2", stopOrder: 2 },
+      { orderCode: "RSA-1", customerAddress: "Địa chỉ 1", stopOrder: 1 },
+    );
+    renderPage();
+    const list = await screen.findByTestId("print-order-list");
+    const rows = within(list).getAllByTestId("print-order-row");
+    expect(rows.map((r) => r.getAttribute("data-order-code"))).toEqual(["RSA-1", "RSA-2"]);
+    expect(within(list).queryByText(/^1$/)).toBeNull();
   });
 });

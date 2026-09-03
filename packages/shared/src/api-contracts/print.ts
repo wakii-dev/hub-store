@@ -52,3 +52,17 @@ export interface PrintResponseMeta {
   readonly responseType: 'blob';
   readonly contentType: 'application/pdf';
 }
+
+// ---------------------------------------------------------------------------
+// SF-21 (spec D2) — GET /fulfillment/print-errors/counts?batchCode=
+// Số lỗi in per đơn trong phiếu (badge + sort D3). Additive.
+// ---------------------------------------------------------------------------
+
+export interface PrintErrorCountDto {
+  orderCode: string;
+  count: number;
+}
+
+export interface PrintErrorCountsResponse {
+  items: PrintErrorCountDto[];
+}

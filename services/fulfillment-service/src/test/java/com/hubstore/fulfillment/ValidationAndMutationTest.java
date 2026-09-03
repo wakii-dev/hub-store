@@ -56,7 +56,8 @@ class ValidationAndMutationTest {
         service = new FulfillmentServiceImpl(repo, publisher,
                 new D2cFilterAndNoteTest.InMemoryD2cRepo(List.of()),
                 new InMemoryCodConfirmationRepository(repo::isFailed),
-                new InMemoryPrinterRepository(), TestTx.noop());
+                new InMemoryPrinterRepository(),
+                new com.hubstore.fulfillment.store.InMemoryPrintErrorRepository(), TestTx.noop());
     }
 
     // ---------------- helpers ----------------

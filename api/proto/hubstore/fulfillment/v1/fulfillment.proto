@@ -210,6 +210,10 @@ service FulfillmentService {
   rpc CreatePrinter(CreatePrinterRequest) returns (CreatePrinterResponse);
   // SF-21: sửa máy in — (shop_code, printer_id) immutable, chỉ name/ip/mac/type.
   rpc UpdatePrinter(UpdatePrinterRequest) returns (UpdatePrinterResponse);
+  // SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2).
+  rpc RecordPrintError(RecordPrintErrorRequest) returns (RecordPrintErrorResponse);
+  // SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9).
+  rpc GetPrintErrorCounts(GetPrintErrorCountsRequest) returns (GetPrintErrorCountsResponse);
 }
 
 // --- Filter ---
@@ -585,4 +589,37 @@ message UpdatePrinterRequest {
 
 message UpdatePrinterResponse {
   Printer printer = 1;
+}
+
+// --- SF-21 print errors (additive only, spec D2) ---
+
+// PrintErrorRecord — 1 lỗi in thật. BFF ghi qua rpc này; order_code rỗng
+// khi batch chưa hydrate được (lỗi xảy ra trước khi biết danh sách đơn).
+message PrintErrorRecord {
+  string order_code = 1;
+  string batch_code = 2;
+  string print_type = 3;
+  string printer_id = 4;
+  string error_message = 5;
+}
+
+message RecordPrintErrorRequest {
+  PrintErrorRecord record = 1;
+}
+
+message RecordPrintErrorResponse {
+}
+
+// PrintErrorCount — số lỗi in của 1 đơn trong phiếu (badge D3).
+message PrintErrorCount {
+  string order_code = 1;
+  int64 count = 2;
+}
+
+message GetPrintErrorCountsRequest {
+  string batch_code = 1;
+}
+
+message GetPrintErrorCountsResponse {
+  repeated PrintErrorCount counts = 1;
 }

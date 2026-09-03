@@ -336,6 +336,9 @@ const fulfillmentDefaults: Record<string, UnaryHandler> = {
         type: 'a4',
       },
     }),
+  // SF-21 print errors (FI-266) — defaults happy-path; override per-test.
+  recordPrintError: (_c, cb) => cb(null, {}),
+  getPrintErrorCounts: (_c, cb) => cb(null, { counts: [] }),
 };
 
 const techDefaults: Record<string, UnaryHandler> = {

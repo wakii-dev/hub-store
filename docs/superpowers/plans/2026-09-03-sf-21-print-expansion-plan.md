@@ -91,12 +91,12 @@ Dispatch discipline (orca task deps không sửa được — coordinator enforc
 - Modify: `packages/shared/src/api-contracts/print.ts` — additive `PrintErrorCountDto { orderCode: string; count: number }` + response type cho counts endpoint
 
 **Steps:**
-- [ ] V9 SQL: `print_errors(id bigserial PK, order_code varchar NOT NULL, batch_code varchar, print_type varchar NOT NULL, printer_id varchar, error_message text, occurred_at timestamptz NOT NULL DEFAULT now())` + index `(order_code)` + index `(batch_code, order_code)`.
-- [ ] Proto additive: `RecordPrintError(PrintErrorRecord) → Empty-ish response`; `GetPrintErrorCounts(batch_code, repeat order_codes) → map/repeated {order_code, count}`. Regen java + ts.
-- [ ] Java repo + impl (insert + group-count query). Unit test.
-- [ ] BFF print.ts: theo đúng semantic spec D2 (xem §4 spec) — record SAU KHI xác định printerId hợp lệ; failure nào cũng record (invalid → record + 400; batching fail → record + gRPC error; print-service fail → record + pass-through error). Fail-open record.
-- [ ] FE: counts API + Badge trên row đơn + sort desc count trong PrintPage order list; test PrintPage badge + sort (mock counts).
-- [ ] Run tests touched → PASS. Commit `feat(sf-21): print errors per-order — V9 + record at BFF + badge/sort`.
+- [x] V9 SQL: `print_errors(id bigserial PK, order_code varchar NOT NULL, batch_code varchar, print_type varchar NOT NULL, printer_id varchar, error_message text, occurred_at timestamptz NOT NULL DEFAULT now())` + index `(order_code)` + index `(batch_code, order_code)`.
+- [x] Proto additive: `RecordPrintError(PrintErrorRecord) → Empty-ish response`; `GetPrintErrorCounts(batch_code, repeat order_codes) → map/repeated {order_code, count}`. Regen java + ts.
+- [x] Java repo + impl (insert + group-count query). Unit test.
+- [x] BFF print.ts: theo đúng semantic spec D2 (xem §4 spec) — record SAU KHI xác định printerId hợp lệ; failure nào cũng record (invalid → record + 400; batching fail → record + gRPC error; print-service fail → record + pass-through error). Fail-open record.
+- [x] FE: counts API + Badge trên row đơn + sort desc count trong PrintPage order list; test PrintPage badge + sort (mock counts).
+- [x] Run tests touched → PASS. Commit `feat(sf-21): print errors per-order — V9 + record at BFF + badge/sort`.
 
 ### Task 4: preview-improve — zoom 25–200%
 

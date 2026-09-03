@@ -9,11 +9,12 @@
  */
 import type { FastifyInstance } from 'fastify';
 import { status as GrpcStatus } from '@grpc/grpc-js';
-import type { PrintersResponse, BatchDto } from '@hub-store/shared';
+import type { PrintersResponse, BatchDto, PrintErrorCountsResponse } from '@hub-store/shared';
 import type { BatchingApi, FulfillmentApi, PrintApi } from '../clients/index.js';
 import { SERVICE_NAMES } from '../config.js';
 import { requireUser } from '../plugins/auth.js';
 import { sendGrpcError, sendBadRequest, grpcError } from '../lib/grpc-error.js';
+import { errorEnvelope } from '../lib/envelope.js';
 import { printTypeToProto } from '../mappers/print.js';
 import { mapBatch } from '../mappers/batching.js';
 
@@ -50,6 +51,30 @@ export function registerPrintRoutes(
     },
   );
 
+  // SF-21 (spec D2) — GET /fulfillment/print-errors/counts?batchCode= —
+  // badge + sort D3: số lỗi in per đơn theo phiếu (V9 qua fulfillment-service).
+  app.get<{ Querystring: { batchCode?: string } }>(
+    '/fulfillment/print-errors/counts',
+    async (request, reply) => {
+      const { role } = requireUser(request);
+      try {
+        const resp = await deps.fulfillment.getPrintErrorCounts(
+          { batchCode: request.query.batchCode ?? '' },
+          role,
+        );
+        const body: PrintErrorCountsResponse = {
+          items: (resp.counts ?? []).map((c) => ({
+            orderCode: c.orderCode,
+            count: Number(c.count),
+          })),
+        };
+        return await reply.send(body);
+      } catch (err) {
+        return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
+      }
+    },
+  );
+
   app.post<{ Body: { batchCode: string; printType: string; printerId: string } }>(
     '/fulfillment/print',
     async (request, reply) => {
@@ -67,6 +92,64 @@ export function registerPrintRoutes(
         ]);
       }
 
+      // SF-21 (spec D2) — record 1 lỗi print-thật vào fulfillment-service.
+      // FAIL-OPEN: lỗi ghi nhận chỉ log — KHÔNG BAO GIỜ mask lỗi gốc.
+      const recordError = async (
+        orderCode: string,
+        reason: string,
+      ): Promise<void> => {
+        try {
+          await deps.fulfillment.recordPrintError(
+            {
+              record: {
+                orderCode,
+                batchCode,
+                printType,
+                printerId,
+                errorMessage: reason,
+              },
+            },
+            role,
+          );
+        } catch (err) {
+          request.log.error(
+            { err },
+            'print-errors: record failed (fail-open — original error response preserved)',
+          );
+        }
+      };
+
+      // SF-21 D2 — PREVIEW (printerId ''): pass-through nguyên trạng —
+      // KHÔNG validate printer, KHÔNG record (hành vi cũ giữ nguyên).
+      if (printerId !== '') {
+        // In THẬT: validate printerId trước khi proxy (D1) — list một lần
+        // (shopCode trống = tất cả; membership theo printerId là đủ ở BFF).
+        try {
+          const printers = await deps.fulfillment.listPrinters({ shopCode: '' }, role);
+          const known = (printers.printers ?? []).some((p) => p.printerId === printerId);
+          if (!known) {
+            // Đơn chưa hydrate ở bước này → record với order_code rỗng
+            // (batch_code only — spec D2). 400 Bad Request (D2: invalid
+            // printerId → 400 + record — KHÔNG 422 validation như printType).
+            await recordError('', `Unknown printer "${printerId}".`);
+            return await reply.code(400).send(
+              errorEnvelope(400, `printerId "${printerId}" does not exist.`, {
+                code: 'BAD_REQUEST',
+                details: [
+                  {
+                    field: 'printerId',
+                    message: `printerId "${printerId}" does not exist.`,
+                  },
+                ],
+              }),
+            );
+          }
+        } catch (err) {
+          // Lỗi khi ĐỌC printers — không phải lỗi in; trả upstream error như cũ.
+          return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
+        }
+      }
+
       try {
         // 1. Hydrate batch từ Go (batching-service) — lỗi ở bước này báo tên
         // batching-service (resilience policy §3.1).
@@ -74,6 +157,9 @@ export function registerPrintRoutes(
         if (!detail.batch) {
           // Batch không tồn tại = resource missing → 404 NOT_FOUND (nhất quán
           // với GET /fulfillment/batches/:code), KHÔNG phải 422 validation.
+          if (printerId !== '') {
+            await recordError('', `Batch ${batchCode} not found.`);
+          }
           return sendGrpcError(
             reply,
             grpcError(GrpcStatus.NOT_FOUND, `Batch ${batchCode} not found.`),
@@ -97,9 +183,23 @@ export function registerPrintRoutes(
             .header('content-disposition', `inline; filename="${batchCode}-${printType}.pdf"`)
             .send(Buffer.from(printed.pdfContent));
         } catch (err) {
+          // SF-21 D2 — print-service fail trên lệnh IN THẬT: record 1 dòng
+          // per đơn trong phiếu (đơn đã biết sau hydrate).
+          if (printerId !== '') {
+            const reason = err instanceof Error ? err.message : String(err);
+            for (const item of batch.items) {
+              await recordError(item.orderCode, reason.slice(0, 500));
+            }
+          }
           return sendGrpcError(reply, err, SERVICE_NAMES.print);
         }
       } catch (err) {
+        // SF-21 D2 — batching hydration fail trên lệnh IN THẬT: đơn chưa
+        // biết → record với order_code rỗng (batch_code only).
+        if (printerId !== '') {
+          const reason = err instanceof Error ? err.message : String(err);
+          await recordError('', reason.slice(0, 500));
+        }
         return sendGrpcError(reply, err, SERVICE_NAMES.batching);
       }
     },

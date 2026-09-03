@@ -44,6 +44,10 @@ import type {
   CreatePrinterResponse,
   UpdatePrinterRequest,
   UpdatePrinterResponse,
+  RecordPrintErrorRequest,
+  RecordPrintErrorResponse,
+  GetPrintErrorCountsRequest,
+  GetPrintErrorCountsResponse,
   UpdateDeliveryTimeRequest,
   UpdateDeliveryTimeResponse,
   UpdateD2cOrderNoteResponse,
@@ -91,6 +95,9 @@ export interface FulfillmentApi {
   listPrinters(req: ListPrintersRequest, role: string): Promise<ListPrintersResponse>;
   createPrinter(req: CreatePrinterRequest, role: string, actor: string): Promise<CreatePrinterResponse>;
   updatePrinter(req: UpdatePrinterRequest, role: string, actor: string): Promise<UpdatePrinterResponse>;
+  // SF-21 print errors (FI-266, spec D2) — record fail-open ở route (log-only).
+  recordPrintError(req: RecordPrintErrorRequest, role: string): Promise<RecordPrintErrorResponse>;
+  getPrintErrorCounts(req: GetPrintErrorCountsRequest, role: string): Promise<GetPrintErrorCountsResponse>;
   close(): void;
 }
 
@@ -125,6 +132,9 @@ export function createFulfillmentClient(addr: string, deadlineMs: number): Fulfi
       callUnary(c.createPrinter.bind(c), req, role, deadlineMs, actor),
     updatePrinter: (req, role, actor) =>
       callUnary(c.updatePrinter.bind(c), req, role, deadlineMs, actor),
+    recordPrintError: (req, role) => callUnary(c.recordPrintError.bind(c), req, role, deadlineMs),
+    getPrintErrorCounts: (req, role) =>
+      callUnary(c.getPrintErrorCounts.bind(c), req, role, deadlineMs),
     close: () => c.close(),
   };
 }

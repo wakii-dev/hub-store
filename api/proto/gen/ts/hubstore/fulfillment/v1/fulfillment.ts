@@ -725,6 +725,39 @@ export interface UpdatePrinterResponse {
   printer: Printer | undefined;
 }
 
+/**
+ * PrintErrorRecord — 1 lỗi in thật. BFF ghi qua rpc này; order_code rỗng
+ * khi batch chưa hydrate được (lỗi xảy ra trước khi biết danh sách đơn).
+ */
+export interface PrintErrorRecord {
+  orderCode: string;
+  batchCode: string;
+  printType: string;
+  printerId: string;
+  errorMessage: string;
+}
+
+export interface RecordPrintErrorRequest {
+  record: PrintErrorRecord | undefined;
+}
+
+export interface RecordPrintErrorResponse {
+}
+
+/** PrintErrorCount — số lỗi in của 1 đơn trong phiếu (badge D3). */
+export interface PrintErrorCount {
+  orderCode: string;
+  count: number;
+}
+
+export interface GetPrintErrorCountsRequest {
+  batchCode: string;
+}
+
+export interface GetPrintErrorCountsResponse {
+  counts: PrintErrorCount[];
+}
+
 function createBaseTimeRange(): TimeRange {
   return { from: "", to: "" };
 }
@@ -6671,6 +6704,429 @@ export const UpdatePrinterResponse: MessageFns<UpdatePrinterResponse> = {
   },
 };
 
+function createBasePrintErrorRecord(): PrintErrorRecord {
+  return { orderCode: "", batchCode: "", printType: "", printerId: "", errorMessage: "" };
+}
+
+export const PrintErrorRecord: MessageFns<PrintErrorRecord> = {
+  encode(message: PrintErrorRecord, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.orderCode !== "") {
+      writer.uint32(10).string(message.orderCode);
+    }
+    if (message.batchCode !== "") {
+      writer.uint32(18).string(message.batchCode);
+    }
+    if (message.printType !== "") {
+      writer.uint32(26).string(message.printType);
+    }
+    if (message.printerId !== "") {
+      writer.uint32(34).string(message.printerId);
+    }
+    if (message.errorMessage !== "") {
+      writer.uint32(42).string(message.errorMessage);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PrintErrorRecord {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePrintErrorRecord();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.orderCode = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.batchCode = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.printType = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.printerId = reader.string();
+          continue;
+        }
+        case 5: {
+          if (tag !== 42) {
+            break;
+          }
+
+          message.errorMessage = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PrintErrorRecord {
+    return {
+      orderCode: isSet(object.orderCode) ? globalThis.String(object.orderCode) : "",
+      batchCode: isSet(object.batchCode) ? globalThis.String(object.batchCode) : "",
+      printType: isSet(object.printType) ? globalThis.String(object.printType) : "",
+      printerId: isSet(object.printerId) ? globalThis.String(object.printerId) : "",
+      errorMessage: isSet(object.errorMessage) ? globalThis.String(object.errorMessage) : "",
+    };
+  },
+
+  toJSON(message: PrintErrorRecord): unknown {
+    const obj: any = {};
+    if (message.orderCode !== "") {
+      obj.orderCode = message.orderCode;
+    }
+    if (message.batchCode !== "") {
+      obj.batchCode = message.batchCode;
+    }
+    if (message.printType !== "") {
+      obj.printType = message.printType;
+    }
+    if (message.printerId !== "") {
+      obj.printerId = message.printerId;
+    }
+    if (message.errorMessage !== "") {
+      obj.errorMessage = message.errorMessage;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PrintErrorRecord>, I>>(base?: I): PrintErrorRecord {
+    return PrintErrorRecord.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PrintErrorRecord>, I>>(object: I): PrintErrorRecord {
+    const message = createBasePrintErrorRecord();
+    message.orderCode = object.orderCode ?? "";
+    message.batchCode = object.batchCode ?? "";
+    message.printType = object.printType ?? "";
+    message.printerId = object.printerId ?? "";
+    message.errorMessage = object.errorMessage ?? "";
+    return message;
+  },
+};
+
+function createBaseRecordPrintErrorRequest(): RecordPrintErrorRequest {
+  return { record: undefined };
+}
+
+export const RecordPrintErrorRequest: MessageFns<RecordPrintErrorRequest> = {
+  encode(message: RecordPrintErrorRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.record !== undefined) {
+      PrintErrorRecord.encode(message.record, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RecordPrintErrorRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseRecordPrintErrorRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.record = PrintErrorRecord.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): RecordPrintErrorRequest {
+    return { record: isSet(object.record) ? PrintErrorRecord.fromJSON(object.record) : undefined };
+  },
+
+  toJSON(message: RecordPrintErrorRequest): unknown {
+    const obj: any = {};
+    if (message.record !== undefined) {
+      obj.record = PrintErrorRecord.toJSON(message.record);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<RecordPrintErrorRequest>, I>>(base?: I): RecordPrintErrorRequest {
+    return RecordPrintErrorRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RecordPrintErrorRequest>, I>>(object: I): RecordPrintErrorRequest {
+    const message = createBaseRecordPrintErrorRequest();
+    message.record = (object.record !== undefined && object.record !== null)
+      ? PrintErrorRecord.fromPartial(object.record)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseRecordPrintErrorResponse(): RecordPrintErrorResponse {
+  return {};
+}
+
+export const RecordPrintErrorResponse: MessageFns<RecordPrintErrorResponse> = {
+  encode(_: RecordPrintErrorResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RecordPrintErrorResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseRecordPrintErrorResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(_: any): RecordPrintErrorResponse {
+    return {};
+  },
+
+  toJSON(_: RecordPrintErrorResponse): unknown {
+    const obj: any = {};
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<RecordPrintErrorResponse>, I>>(base?: I): RecordPrintErrorResponse {
+    return RecordPrintErrorResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RecordPrintErrorResponse>, I>>(_: I): RecordPrintErrorResponse {
+    const message = createBaseRecordPrintErrorResponse();
+    return message;
+  },
+};
+
+function createBasePrintErrorCount(): PrintErrorCount {
+  return { orderCode: "", count: 0 };
+}
+
+export const PrintErrorCount: MessageFns<PrintErrorCount> = {
+  encode(message: PrintErrorCount, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.orderCode !== "") {
+      writer.uint32(10).string(message.orderCode);
+    }
+    if (message.count !== 0) {
+      writer.uint32(16).int64(message.count);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): PrintErrorCount {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBasePrintErrorCount();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.orderCode = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.count = longToNumber(reader.int64());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): PrintErrorCount {
+    return {
+      orderCode: isSet(object.orderCode) ? globalThis.String(object.orderCode) : "",
+      count: isSet(object.count) ? globalThis.Number(object.count) : 0,
+    };
+  },
+
+  toJSON(message: PrintErrorCount): unknown {
+    const obj: any = {};
+    if (message.orderCode !== "") {
+      obj.orderCode = message.orderCode;
+    }
+    if (message.count !== 0) {
+      obj.count = Math.round(message.count);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<PrintErrorCount>, I>>(base?: I): PrintErrorCount {
+    return PrintErrorCount.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<PrintErrorCount>, I>>(object: I): PrintErrorCount {
+    const message = createBasePrintErrorCount();
+    message.orderCode = object.orderCode ?? "";
+    message.count = object.count ?? 0;
+    return message;
+  },
+};
+
+function createBaseGetPrintErrorCountsRequest(): GetPrintErrorCountsRequest {
+  return { batchCode: "" };
+}
+
+export const GetPrintErrorCountsRequest: MessageFns<GetPrintErrorCountsRequest> = {
+  encode(message: GetPrintErrorCountsRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.batchCode !== "") {
+      writer.uint32(10).string(message.batchCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetPrintErrorCountsRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetPrintErrorCountsRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.batchCode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetPrintErrorCountsRequest {
+    return { batchCode: isSet(object.batchCode) ? globalThis.String(object.batchCode) : "" };
+  },
+
+  toJSON(message: GetPrintErrorCountsRequest): unknown {
+    const obj: any = {};
+    if (message.batchCode !== "") {
+      obj.batchCode = message.batchCode;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetPrintErrorCountsRequest>, I>>(base?: I): GetPrintErrorCountsRequest {
+    return GetPrintErrorCountsRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetPrintErrorCountsRequest>, I>>(object: I): GetPrintErrorCountsRequest {
+    const message = createBaseGetPrintErrorCountsRequest();
+    message.batchCode = object.batchCode ?? "";
+    return message;
+  },
+};
+
+function createBaseGetPrintErrorCountsResponse(): GetPrintErrorCountsResponse {
+  return { counts: [] };
+}
+
+export const GetPrintErrorCountsResponse: MessageFns<GetPrintErrorCountsResponse> = {
+  encode(message: GetPrintErrorCountsResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    for (const v of message.counts) {
+      PrintErrorCount.encode(v!, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): GetPrintErrorCountsResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseGetPrintErrorCountsResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.counts.push(PrintErrorCount.decode(reader, reader.uint32()));
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): GetPrintErrorCountsResponse {
+    return {
+      counts: globalThis.Array.isArray(object?.counts)
+        ? object.counts.map((e: any) => PrintErrorCount.fromJSON(e))
+        : [],
+    };
+  },
+
+  toJSON(message: GetPrintErrorCountsResponse): unknown {
+    const obj: any = {};
+    if (message.counts?.length) {
+      obj.counts = message.counts.map((e) => PrintErrorCount.toJSON(e));
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<GetPrintErrorCountsResponse>, I>>(base?: I): GetPrintErrorCountsResponse {
+    return GetPrintErrorCountsResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<GetPrintErrorCountsResponse>, I>>(object: I): GetPrintErrorCountsResponse {
+    const message = createBaseGetPrintErrorCountsResponse();
+    message.counts = object.counts?.map((e) => PrintErrorCount.fromPartial(e)) || [];
+    return message;
+  },
+};
+
 export type FulfillmentServiceService = typeof FulfillmentServiceService;
 export const FulfillmentServiceService = {
   /** D1 list — filter + pagination. exclude_fulfill_codes = extension pin v1. */
@@ -6939,6 +7395,30 @@ export const FulfillmentServiceService = {
       Buffer.from(UpdatePrinterResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): UpdatePrinterResponse => UpdatePrinterResponse.decode(value),
   },
+  /** SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2). */
+  recordPrintError: {
+    path: "/hubstore.fulfillment.v1.FulfillmentService/RecordPrintError",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: RecordPrintErrorRequest): Buffer =>
+      Buffer.from(RecordPrintErrorRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): RecordPrintErrorRequest => RecordPrintErrorRequest.decode(value),
+    responseSerialize: (value: RecordPrintErrorResponse): Buffer =>
+      Buffer.from(RecordPrintErrorResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): RecordPrintErrorResponse => RecordPrintErrorResponse.decode(value),
+  },
+  /** SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9). */
+  getPrintErrorCounts: {
+    path: "/hubstore.fulfillment.v1.FulfillmentService/GetPrintErrorCounts",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: GetPrintErrorCountsRequest): Buffer =>
+      Buffer.from(GetPrintErrorCountsRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): GetPrintErrorCountsRequest => GetPrintErrorCountsRequest.decode(value),
+    responseSerialize: (value: GetPrintErrorCountsResponse): Buffer =>
+      Buffer.from(GetPrintErrorCountsResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): GetPrintErrorCountsResponse => GetPrintErrorCountsResponse.decode(value),
+  },
 } as const;
 
 export interface FulfillmentServiceServer extends UntypedServiceImplementation {
@@ -6991,6 +7471,10 @@ export interface FulfillmentServiceServer extends UntypedServiceImplementation {
   createPrinter: handleUnaryCall<CreatePrinterRequest, CreatePrinterResponse>;
   /** SF-21: sửa máy in — (shop_code, printer_id) immutable, chỉ name/ip/mac/type. */
   updatePrinter: handleUnaryCall<UpdatePrinterRequest, UpdatePrinterResponse>;
+  /** SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2). */
+  recordPrintError: handleUnaryCall<RecordPrintErrorRequest, RecordPrintErrorResponse>;
+  /** SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9). */
+  getPrintErrorCounts: handleUnaryCall<GetPrintErrorCountsRequest, GetPrintErrorCountsResponse>;
 }
 
 export interface FulfillmentServiceClient extends Client {
@@ -7364,6 +7848,38 @@ export interface FulfillmentServiceClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: UpdatePrinterResponse) => void,
+  ): ClientUnaryCall;
+  /** SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2). */
+  recordPrintError(
+    request: RecordPrintErrorRequest,
+    callback: (error: ServiceError | null, response: RecordPrintErrorResponse) => void,
+  ): ClientUnaryCall;
+  recordPrintError(
+    request: RecordPrintErrorRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: RecordPrintErrorResponse) => void,
+  ): ClientUnaryCall;
+  recordPrintError(
+    request: RecordPrintErrorRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: RecordPrintErrorResponse) => void,
+  ): ClientUnaryCall;
+  /** SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9). */
+  getPrintErrorCounts(
+    request: GetPrintErrorCountsRequest,
+    callback: (error: ServiceError | null, response: GetPrintErrorCountsResponse) => void,
+  ): ClientUnaryCall;
+  getPrintErrorCounts(
+    request: GetPrintErrorCountsRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: GetPrintErrorCountsResponse) => void,
+  ): ClientUnaryCall;
+  getPrintErrorCounts(
+    request: GetPrintErrorCountsRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: GetPrintErrorCountsResponse) => void,
   ): ClientUnaryCall;
 }
 

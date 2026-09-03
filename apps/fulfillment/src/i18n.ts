@@ -117,6 +117,7 @@ export const fulfillmentResources: I18nResources = {
       "print.missingBatch": "Thiếu mã phiếu (batchCode) trên đường dẫn",
       "print.all.progress": "Đang in {{done}}/{{total}}: {{doc}}",
       "print.all.done": "Hoàn tất in {{ok}}/{{total}} phiếu",
+      "print.orders.label": "Đơn trong phiếu (nhiều lỗi in nhất lên đầu)",
 
       "cod.pendingBadge": "COD chờ thu ({{count}})",
       "cod.confirmButton": "Xác nhận thu",
@@ -252,6 +253,7 @@ export const fulfillmentResources: I18nResources = {
       "print.missingBatch": "Missing batchCode query parameter",
       "print.all.progress": "Printing {{done}}/{{total}}: {{doc}}",
       "print.all.done": "Finished printing {{ok}}/{{total}} documents",
+      "print.orders.label": "Orders in batch (most print errors first)",
 
       "cod.pendingBadge": "COD pending ({{count}})",
       "cod.confirmButton": "Confirm collection",

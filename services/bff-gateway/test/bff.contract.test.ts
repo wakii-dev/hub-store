@@ -253,7 +253,7 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     const res = await h.app.inject({
       method: 'POST',
       url: '/fulfillment/print',
-      payload: { batchCode: 'BAT-1001', printType: 'bill', printerId: 'P-30201-01' },
+      payload: { batchCode: 'BAT-1001', printType: 'bill', printerId: 'PRN-30201-01' },
       headers: { authorization: `Bearer ${await signTestToken('Manager')}` },
     });
     expect(res.statusCode).toBe(200);
@@ -269,7 +269,7 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     const res = await h.app.inject({
       method: 'POST',
       url: '/fulfillment/print',
-      payload: { batchCode: 'BAT-1001', printType: 'printAll', printerId: 'P' },
+      payload: { batchCode: 'BAT-1001', printType: 'printAll', printerId: 'PRN-30201-01' },
       headers: { authorization: `Bearer ${await signTestToken()}` },
     });
     expect(res.statusCode).toBe(422);
@@ -284,7 +284,7 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     const res = await h.app.inject({
       method: 'POST',
       url: '/fulfillment/print',
-      payload: { batchCode: 'BAT-KHONG-TON-TAI', printType: 'bill', printerId: 'P' },
+      payload: { batchCode: 'BAT-KHONG-TON-TAI', printType: 'bill', printerId: 'PRN-30201-01' },
       headers: { authorization: `Bearer ${await signTestToken()}` },
     });
     expect(res.statusCode).toBe(404);
