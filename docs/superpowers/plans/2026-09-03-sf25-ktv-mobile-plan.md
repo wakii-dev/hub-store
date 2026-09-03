@@ -115,13 +115,13 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 
 ### Task 7: order-detail-map-tel — chi tiết đơn + map + gọi KH
 **Files:** `apps/ktv-mobile/src/features/order-detail/**` (OrderDetailPage, Timeline, AddressMapCard), unit tests.
-- [ ] OrderDetailPage route `/order/:code`: fetch detail từ my-orders list state (nếu thiếu → refetch filter theo code… filter endpoint không có code param — fetch 2 filters hôm nay rồi tìm code; đơn giản, đủ). Header code + status; nút thao tác dùng chung components Task 5/6.
-- [ ] Timeline: render timeline_json `{at,status,note,actor}` sắp theo at — status pill + note + giờ (vi-VN).
-- [ ] AddressMapCard: địa chỉ (province + coordination lat/long nếu có) — tap → mở MapView inline (MapView từ @hub-store/shared, height 220, marker stop từ lat/long; **chú ý plan-critic P2: MapView built cho desktop — check horizontal overflow 375px trong browser verify**) + nút "Mở bản đồ" → deep-link `https://www.openstreetmap.org/?mlat=<lat>&mlon=<long>#map=17/<lat>/<long>` (target _blank).
-- [ ] PhoneLink: `tel:` (pattern shell PhoneLink, testid `tech-phone-link`).
-- [ ] Unit tests: timeline sort + render, map deep-link URL build (escapeHtml cho mọi interpolation).
-- [ ] Browser verify 3 tầng: detail → timeline → tap map → OSM tab; tap SĐT → dialer intent (mobile emulation).
-- [ ] Commit: `feat(ktv-mobile): SF-25 order detail — timeline + MapView deep-link + tel:`
+- [x] OrderDetailPage route `/order/:code`: fetch detail từ my-orders list state (nếu thiếu → refetch filter theo code… filter endpoint không có code param — fetch 2 filters hôm nay rồi tìm code; đơn giản, đủ). Header code + status; nút thao tác dùng chung components Task 5/6 (mount point `ktv-detail-actions` placeholder — T5/T6 mount vào).
+- [x] Timeline: render timeline_json `{at,status,note,actor}` sắp theo at — status pill + note + giờ (vi-VN).
+- [x] AddressMapCard: địa chỉ (province + coordination lat/long nếu có) — tap → mở MapView inline (MapView từ @hub-store/shared, height 220, marker stop từ lat/long; **chú ý plan-critic P2: MapView built cho desktop — check horizontal overflow 375px trong browser verify**) + nút "Mở bản đồ" → deep-link `https://www.openstreetmap.org/?mlat=<lat>&mlon=<long>#map=17/<lat>/<long>` (target _blank). Ghi nhận: installation DTO KHÔNG có receiver/coords (proto InstallationOrder) → coords chỉ từ delivery receiver.location; install không coords → ẩn map card.
+- [x] PhoneLink: `tel:` (pattern shell PhoneLink, testid `tech-phone-link`).
+- [x] Unit tests: timeline sort + render, map deep-link URL build (escapeHtml cho mọi interpolation).
+- [ ] Browser verify 3 tầng: detail → timeline → tap map → OSM tab; tap SĐT → dialer intent (mobile emulation). — **VERIFY-PENDING (T7): docker daemon DOWN; mini-stack `/tmp/sf25/mini-stack.sh` chạy khi docker lên (T5/T6 dùng chung). Lưu ý: tel:/map chỉ có ở delivery TD-0007 — SO-0004 (install) không có receiver/coords trên DTO.**
+- [x] Commit: `feat(ktv-mobile): SF-25 order detail — timeline + MapView deep-link + tel:`
 
 ### Task 8: e2e-mobile-spec — private seam + spec mobile viewport
 **Files:** `e2e/scripts/run-ktv-private.sh`, `e2e/playwright.ktv.config.ts`, `e2e/tests/09-ktv-mobile.spec.ts`, storageState mint helper.
