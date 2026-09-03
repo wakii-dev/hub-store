@@ -17,6 +17,8 @@
 //	HEALTH_PORT          default 8082 (SF-12 HTTP /health side-port)
 //	KAFKA_ENABLED        "true" bật publisher SF-27; off (mặc định) = Noop
 //	KAFKA_BOOTSTRAP_SERVERS default localhost:9092 (chỉ đọc khi KAFKA_ENABLED=true)
+//	RECONCILE_INTERVAL   giây giữa 2 tick reconciler (SF-12 Task 10);
+//	                     unset/<=0 = KHÔNG start (mặc định off)
 package main
 
 import (
@@ -33,9 +35,11 @@ import (
 	"hubstore/batching-service/internal/health"
 	"hubstore/batching-service/internal/kafka"
 	"hubstore/batching-service/internal/logging"
+	"hubstore/batching-service/internal/reconcile"
 	"hubstore/batching-service/internal/server"
 	"hubstore/batching-service/internal/store"
 	batchingv1 "hubstore/gen/go/hubstore/batching/v1"
+	fulfillmentv1 "hubstore/gen/go/hubstore/fulfillment/v1"
 
 	"github.com/jackc/pgx/v5/pgxpool"
 	"google.golang.org/grpc"
@@ -145,8 +149,31 @@ func main() {
 	}()
 
 	logging.Info("listening", "component", "batching", "grpc_port", port, "health_http_port", healthPort)
+
+	// SF-12 Task 10 — reconciliation job: dọn orphan PREPARING (spec §3.6).
+	// Off mặc định (RECONCILE_INTERVAL unset/<=0). Dùng chung conn lazy tới
+	// Java; actor audit x-user-name=reconciler do reconciler tự gắn metadata.
+	recInterval := reconcile.IntervalFromEnv()
+	var recCancel context.CancelFunc
+	if recInterval > 0 {
+		recCtx, cancel := context.WithCancel(ctx)
+		recCancel = cancel
+		go func() {
+			logging.Info("reconciler started", "component", "reconciler",
+				"interval", recInterval.String())
+			reconcile.New(
+				fulfillmentv1.NewFulfillmentServiceClient(jconn),
+				st.Pool(), recInterval, 30*time.Second).Run(recCtx)
+		}()
+	} else {
+		logging.Info("reconciler disabled", "component", "reconciler")
+	}
+
 	serveErr := grpcServer.Serve(lis)
-	// Graceful stop — HTTP health tắt trước khi process thoát.
+	// Graceful stop — reconciler + HTTP health tắt trước khi process thoát.
+	if recCancel != nil {
+		recCancel()
+	}
 	shCtx, shCancel := context.WithTimeout(context.Background(), 3*time.Second)
 	_ = healthSrv.Shutdown(shCtx)
 	shCancel()
