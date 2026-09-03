@@ -65,6 +65,10 @@ describe('SF-26 verifyHmac (lib)', () => {
     expect(verifyHmac(Buffer.from(body), `sha256=${sign(body)}`, SECRET).ok).toBe(true);
   });
 
+  it('prefix SHA256= (HOA) → vẫn chấp nhận (strip case-insensitive)', () => {
+    expect(verifyHmac(Buffer.from(body), `SHA256=${sign(body)}`, SECRET).ok).toBe(true);
+  });
+
   it('length khác → KHÔNG throw, 401 (timingSafeEqual an toàn)', () => {
     expect(() => verifyHmac(Buffer.from(body), 'abc', SECRET)).not.toThrow();
     expect(verifyHmac(Buffer.from(body), 'abc', SECRET).status).toBe(401);
@@ -111,11 +115,24 @@ describe('SF-26 HMAC route-level (harness, secret đã set)', () => {
   it('signature sai → 401; raw khác 1 byte → 401', async () => {
     const raw = JSON.stringify({ externalId: 'H11' });
     const good = sign(raw);
-    const res1 = await injectPost(raw, { 'x-signature': good.slice(0, -1) + '0' });
+    // Flip deterministic ký tự CUỐI ('0'↔'1') — slice(0,-1)+'0' có thể trùng
+    // nguyên signature gốc nếu chữ số cuối sẵn là '0'.
+    const tampered = good.slice(0, -1) + (good[good.length - 1] === '0' ? '1' : '0');
+    const res1 = await injectPost(raw, { 'x-signature': tampered });
     expect(res1.statusCode).toBe(401);
     // signer ký raw khác đúng 1 byte
     const res2 = await injectPost(raw, { 'x-signature': sign(raw + ' ') });
     expect(res2.statusCode).toBe(401);
+  });
+
+  it('POST không body → 401 (không 500 — rawBody rỗng fail-closed 401)', async () => {
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/webhooks/orders',
+      headers: { 'content-type': 'application/json', 'x-source': 'shopee', 'x-signature': 'deadbeef' },
+    });
+    expect(res.statusCode).toBe(401);
+    expect(JSON.parse(res.payload).message).toBe('invalid signature');
   });
 
   it('thiếu X-Signature → 401; prefix sha256= → qua auth', async () => {
@@ -188,6 +205,8 @@ describe('SF-26 route fail-closed (secret rỗng) + warn-once', () => {
       const res1 = await injectPost();
       expect(res1.statusCode).toBe(503);
       expect(JSON.parse(res1.payload).message).toBe('webhook auth unavailable');
+      // 503 fail-closed KHÔNG tái dùng code 'UNAUTHORIZED' — semantically khác.
+      expect(JSON.parse(res1.payload).code).toBe('SERVICE_UNAVAILABLE');
       expect(warnSpy).toHaveBeenCalledTimes(1);
       expect(String(warnSpy.mock.calls[0]?.[0])).not.toContain(SECRET);
       // request thứ 2 — KHÔNG warn thêm (flag chống spam)

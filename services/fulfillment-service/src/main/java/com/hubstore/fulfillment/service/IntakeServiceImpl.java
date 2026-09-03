@@ -188,7 +188,7 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
                     return webhookResponse(row.fulfillCode(), true);
                 }
                 if ("FAILED".equals(row.status())) {
-                    if (webhookEvents.casReprocess(source, externalId) == 1) {
+                    if (webhookEvents.casReprocess(source, externalId, payloadJson) == 1) {
                         return processClaim(source, externalId, order, claimedTs(source, externalId));
                     }
                     continue; // đối thủ reprocess trước → re-select
@@ -199,7 +199,7 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
                     throw Status.UNAVAILABLE.withDescription(
                             "Đơn webhook đang được xử lý bởi request khác — thử lại sau.").asRuntimeException();
                 }
-                if (webhookEvents.casReclaim(source, externalId, row.receivedAt()) == 1) {
+                if (webhookEvents.casReclaim(source, externalId, row.receivedAt(), payloadJson) == 1) {
                     return processClaim(source, externalId, order, claimedTs(source, externalId));
                 }
                 continue; // đối thủ reclaim trước → re-select
@@ -223,7 +223,9 @@ public class IntakeServiceImpl extends IntakeServiceGrpc.IntakeServiceImplBase {
         List<IntakeValidator.IntakeError> errors = IntakeValidator.validate(List.of(staged), shopCodes());
         if (!errors.isEmpty()) {
             // Bước 4 — markFailed commit ngay (ngoài tx xử lý): FAILED = lần gửi
-            // này bị từ chối; mark đúng holder (keyed claimedTs).
+            // này bị từ chối; mark đúng holder (keyed claimedTs). 0 rows = claim
+            // đã bị reclaim giữa validate → reclaimer owns the outcome (nó sẽ tự
+            // validate + mark trên claim của nó) — bỏ qua, KHÔNG throw.
             webhookEvents.markFailed(source, externalId, claimedTs);
             throw invalidArgumentRows("Đơn webhook có " + errors.size() + " lỗi dữ liệu.", errors);
         }

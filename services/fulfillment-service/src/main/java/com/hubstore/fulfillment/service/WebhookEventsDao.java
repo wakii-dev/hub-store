@@ -60,26 +60,30 @@ public class WebhookEventsDao {
     }
 
     /**
-     * FAILED → PENDING (caller sửa payload gửi lại): reset kết quả lần đầu.
+     * FAILED → PENDING (caller sửa payload gửi lại): reset kết quả lần đầu +
+     * REFRESH payload (contract spec §3 bước 4 — cột payload phải khớp order
+     * của lần gửi ĐANG xử lý, không phải payload lần đầu bị từ chối).
      * rowsAffected=0 → đối thủ đã claim trước (re-select).
      */
-    public int casReprocess(String source, String externalId) {
+    public int casReprocess(String source, String externalId, String payloadJson) {
         return jdbc.update(
                 "UPDATE webhook_events SET status = 'PENDING', received_at = now(), "
-                        + "fulfill_code = NULL, processed_at = NULL "
+                        + "payload = CAST(? AS jsonb), fulfill_code = NULL, processed_at = NULL "
                         + "WHERE source = ? AND external_id = ? AND status = 'FAILED'",
-                source, externalId);
+                payloadJson, source, externalId);
     }
 
     /**
      * PENDING STALE (crash mồ côi) → reclaim: khóa trên received_at ĐÃ SELECT
-     * (rowsAffected=0 → đối thủ reclaim trước — re-select).
+     * (rowsAffected=0 → đối thủ reclaim trước — re-select). REFRESH payload —
+     * body của reclaimer có thể khác body mồ côi ban đầu.
      */
-    public int casReclaim(String source, String externalId, Instant staleTs) {
+    public int casReclaim(String source, String externalId, Instant staleTs, String payloadJson) {
         return jdbc.update(
-                "UPDATE webhook_events SET status = 'PENDING', received_at = now() "
+                "UPDATE webhook_events SET status = 'PENDING', received_at = now(), "
+                        + "payload = CAST(? AS jsonb) "
                         + "WHERE source = ? AND external_id = ? AND status = 'PENDING' AND received_at = ?",
-                source, externalId, toTs(staleTs));
+                payloadJson, source, externalId, toTs(staleTs));
     }
 
     /**

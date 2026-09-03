@@ -200,7 +200,9 @@ describe('SF-26 retry semantics — error contract đầy đủ (Task 6)', () =>
       });
       expect(res.statusCode).toBe(503);
       const body = JSON.parse(res.payload);
-      expect(body.code).toBe('UNAUTHORIZED');
+      // 503 fail-closed = lỗi cấu hình phía mình — code riêng, không tái dùng
+      // 'UNAUTHORIZED' (401 dành cho chữ ký sai/thiếu).
+      expect(body.code).toBe('SERVICE_UNAVAILABLE');
       // message không bao giờ chứa giá trị secret (rỗng) hay signature
       expect(res.payload).not.toContain(sign(raw));
     } finally {

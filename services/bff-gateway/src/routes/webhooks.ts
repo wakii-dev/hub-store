@@ -44,6 +44,12 @@ export function registerWebhookRoutes(
       { parseAs: 'buffer', bodyLimit: 1024 * 1024 },
       (req, body: Buffer, done) => {
         (req as unknown as { rawBody?: Buffer }).rawBody = body; // giữ raw bytes cho HMAC
+        // Body rỗng → body undefined (KHÔNG JSON.parse('') → 400): route handler
+        // tự fail-closed 401 qua guard rawBody rỗng (HMAC trên rỗng vô nghĩa).
+        if (body.length === 0) {
+          done(null, undefined);
+          return;
+        }
         try {
           done(null, JSON.parse(body.toString('utf8')));
         } catch (e) {
@@ -64,6 +70,13 @@ export function registerWebhookRoutes(
       const source = String(request.headers['x-source'] ?? '').trim();
       const secret = deps.config.webhookHmacSecret;
       const raw = (request as unknown as { rawBody?: Buffer }).rawBody as Buffer;
+      // Body rỗng/thiếu (Fastify bỏ parser khi content-length 0) → 401, không
+      // để HMAC chạy trên rỗng rồi nổ TypeError → 500.
+      if (!raw || raw.length === 0) {
+        return reply
+          .code(401)
+          .send(errorEnvelope(401, 'invalid signature', { code: 'UNAUTHORIZED' }));
+      }
       const sig = request.headers['x-signature'];
       // HMAC — timing-safe fail-closed; KHÔNG log signature/secret.
       const auth = verifyHmac(raw, sig, secret);
@@ -74,9 +87,13 @@ export function registerWebhookRoutes(
             '[sf26] WEBHOOK_HMAC_SECRET rỗng/thiếu — webhook auth unavailable, fail-closed 503.',
           );
         }
-        return reply
-          .code(auth.status)
-          .send(errorEnvelope(auth.status, auth.message, { code: 'UNAUTHORIZED' }));
+        return reply.code(auth.status).send(
+          errorEnvelope(auth.status, auth.message, {
+            // 401 = chữ ký sai/thiếu; 503 fail-closed = lỗi cấu hình phía mình —
+            // dùng code riêng để caller không nhầm là auth reject.
+            code: auth.status === 503 ? 'SERVICE_UNAVAILABLE' : 'UNAUTHORIZED',
+          }),
+        );
       }
       // X-Source bắt buộc (spec §3) — sàn KHÔNG tự đặt tên mình trong payload.
       if (!source) {

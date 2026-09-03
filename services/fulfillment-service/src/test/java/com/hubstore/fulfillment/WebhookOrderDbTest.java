@@ -215,6 +215,14 @@ class WebhookOrderDbTest {
                 String.class, SRC, externalId);
     }
 
+    /** customerPhone trong cột payload JSONB — kiểm chứng payload không stale. */
+    private static String payloadPhone(String externalId) {
+        return jdbc.queryForObject(
+                "SELECT payload->>'customerPhone' FROM webhook_events "
+                        + "WHERE source = ? AND external_id = ?",
+                String.class, SRC, externalId);
+    }
+
     private static int orderCount(String fulfillCode) {
         Integer n = jdbc.queryForObject(
                 "SELECT count(*) FROM orders WHERE fulfill_code = ?", Integer.class, fulfillCode);
@@ -273,6 +281,25 @@ class WebhookOrderDbTest {
     }
 
     @Test
+    void failedReprocessRefreshesPayloadColumn() {
+        // Lần 1: payload lỗi (phone "123") → FAILED; cột payload = payload lỗi.
+        CollectingObserver<CreateWebhookOrderResponse> obs = new CollectingObserver<>();
+        service.createWebhookOrder(request("ext-payload", invalidOrder()), obs);
+        assertThat(obs.error).isNotNull();
+        assertThat(webhookStatus("ext-payload")).isEqualTo("FAILED");
+        assertThat(payloadPhone("ext-payload")).isEqualTo("123");
+
+        // Lần 2: gửi lại payload KHÁC (hợp lệ, phone 0912345678) cùng
+        // externalId → casReprocess phải REFRESH payload khớp lần gửi mới
+        // (P1 review: cột stale làm audit/Task 5 publish thấy order cũ).
+        CreateWebhookOrderResponse r = call("ext-payload", WebhookOrderValidationTest.validOrder());
+        track(r);
+        assertThat(r.getReplayed()).isFalse();
+        assertThat(webhookStatus("ext-payload")).isEqualTo("PROCESSED");
+        assertThat(payloadPhone("ext-payload")).isEqualTo("0912345678");
+    }
+
+    @Test
     void freshPendingClaimReturnsUnavailable() {
         // Row PENDING fresh (received_at = now()) — request song song đang giữ.
         assertThat(new WebhookEventsDao(jdbc).claimInsert(SRC, "ext-pending", "{}")).isTrue();
@@ -300,6 +327,9 @@ class WebhookOrderDbTest {
         assertThat(r.getFulfillCode()).matches("ORD-[0-9]+");
         assertThat(webhookStatus("ext-stale")).isEqualTo("PROCESSED");
         assertThat(orderCount(r.getFulfillCode())).isEqualTo(1);
+        // casReclaim REFRESH payload: trước reclaim là "{}" của claimInsert —
+        // sau reclaim phải là payload của reclaimer (phone hợp lệ).
+        assertThat(payloadPhone("ext-stale")).isEqualTo("0912345678");
     }
 
     @Test

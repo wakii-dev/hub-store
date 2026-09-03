@@ -19,7 +19,7 @@ export function verifyHmac(
   if (typeof signature !== 'string' || signature.length === 0) {
     return { ok: false, status: 401, message: 'missing X-Signature' };
   }
-  const provided = signature.replace(/^sha256=/, '').toLowerCase();
+  const provided = signature.replace(/^sha256=/i, '').toLowerCase();
   const expected = createHmac('sha256', secret).update(rawBody).digest('hex');
   const a = Buffer.from(expected, 'utf8');
   const b = Buffer.from(provided, 'utf8');
