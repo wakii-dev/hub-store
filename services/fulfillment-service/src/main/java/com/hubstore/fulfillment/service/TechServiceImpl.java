@@ -275,7 +275,10 @@ public class TechServiceImpl extends TechServiceGrpc.TechServiceImplBase {
         }
         TechModels.InstallationOrder order = repo.findInstallation(serviceOrderCode)
                 .orElseThrow(() -> GrpcErrors.notFound("serviceOrderCode", serviceOrderCode));
-        if (!technicianCode.equals(order.technicianCode())) {
+        // SF-25 security-audit P1: case-insensitive — KC 26 lowercase username khi
+        // import → token sub 'ktv-001' vs DB 'KTV-001'; check service-layer chạy
+        // TRƯỚC repo (repo cũng equalsIgnoreCase — parity 2 tầng).
+        if (!technicianCode.equalsIgnoreCase(order.technicianCode())) {
             throw Status.FAILED_PRECONDITION.withDescription("Đơn " + serviceOrderCode
                     + " không thuộc KTV " + technicianCode).asRuntimeException();
         }

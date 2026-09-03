@@ -17,6 +17,7 @@ import { SERVICE_NAMES } from '../config.js';
 import { requireRole, requireUser } from '../plugins/auth.js';
 import { paginated } from '../lib/envelope.js';
 import { sendGrpcError, sendBadRequest } from '../lib/grpc-error.js';
+import type { ErrorEnvelope } from '@hub-store/shared';
 
 /** SF-25 (spec §4.2) — role KTV/CTV cho mutate routes + read-side override. */
 const TECHNICIAN_ROLES = ['InsideTechnician', 'OutsideTechnician'] as const;
@@ -56,15 +57,27 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
   app.post<{ Body?: DeliveryFilterBody }>('/delivery-orders/filter', async (request, reply) => {
     const user = requireUser(request);
     const b = request.body ?? {};
-    // SF-25 read-side override (spec §4.2): KTV/CTV không tự filter hộ người
-    // khác — driverName ép từ token. request.user chỉ có {sub, role}, KHÔNG
-    // name claim (auth.ts SF-25 T1) → giữ driverName từ body (FE gửi
-    // user.profile.name — convention seed dev, spec §4.3 flag Linear).
+    // SF-25 read-side override (spec §4.2 + security-audit P1-2): KTV/CTV
+    // KHÔNG tự filter hộ người khác — driverName ép = token `name` claim.
+    // Fail-closed: token thiếu name → 403 (không rơi về không-filter → rò rỉ
+    // toàn bộ delivery orders).
+    const isTechnician = TECHNICIAN_ROLES.includes(
+      user.role as (typeof TECHNICIAN_ROLES)[number],
+    );
+    if (isTechnician && !user.name) {
+      const body: ErrorEnvelope = {
+        statusCode: 403,
+        message: 'Technician token missing name claim.',
+        code: 'PERMISSION_DENIED',
+      };
+      return await reply.code(403).send(body);
+    }
+    const driverName = isTechnician ? (user.name ?? '') : (b.driverName ?? '');
     try {
       const resp = await t.filterDeliveryOrders(
         {
           statuses: statusStringsToProto(b.statuses),
-          driverName: b.driverName ?? '',
+          driverName,
           categoryL1: b.categoryL1 ?? [],
           categoryL2: b.categoryL2 ?? [],
           regionCode: b.regionCode ?? '',
@@ -126,10 +139,14 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
 
   // Assign/re-assign KTV — server ENFORCE precondition (sai trạng thái →
   // FAILED_PRECONDITION → 409 CONFLICT). technicianCode blank → 422 BFF-side.
+  // SF-25 security-audit P1-3: gate staff roles — KTV/CTV (giờ có trong
+  // KNOWN_ROLES) KHÔNG được reassign đơn (coordinator-only theo spec matrix).
+  const STAFF_ROLES = ['Coordinator', 'Manager', 'WarehouseOps', 'Admin'] as const;
   app.post<{ Params: { code: string }; Body?: { technicianCode?: string } }>(
     '/service-orders/:code/assign',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const gate = requireRole(request, reply, ...STAFF_ROLES);
+      if (!gate) return reply;
       const technicianCode = request.body?.technicianCode ?? '';
       if (!technicianCode.trim()) {
         return sendBadRequest(reply, [
@@ -139,7 +156,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
       try {
         const resp = await t.assignTechnician(
           { serviceOrderCode: request.params.code, technicianCode },
-          role,
+          gate.role,
         );
         return await reply.send({ order: resp.order ? mapInstallationOrder(resp.order) : null });
       } catch (err) {
@@ -150,22 +167,19 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
 
   // ---------------- SF-25 — accept/complete/reschedule (spec §4.2) ----------------
   // Role gate KTV/CTV; sai trạng thái / không phải chủ đơn → FAILED_PRECONDITION
-  // → 409; blank → 422 BFF-side; SO lạ → NOT_FOUND → 404 (pattern assign).
+  // → 409; SO lạ → NOT_FOUND → 404 (pattern assign).
+  // SF-25 security-audit P0-1: technicianCode ÉP = token sub (không trust body —
+  // body `technicianCode` của FE chỉ là hint; BE ownership check so với giá trị
+  // BFF ép, mọi technician chỉ mutate được đơn của chính mình).
 
   app.post<{ Params: { code: string }; Body?: { technicianCode?: string } }>(
     '/service-orders/:code/accept',
     async (request, reply) => {
       const roleGate = requireRole(request, reply, ...TECHNICIAN_ROLES);
       if (!roleGate) return reply;
-      const technicianCode = request.body?.technicianCode ?? '';
-      if (!technicianCode.trim()) {
-        return sendBadRequest(reply, [
-          { field: 'technicianCode', message: 'technicianCode is required.' },
-        ]);
-      }
       try {
         const resp = await t.acceptOrder(
-          { serviceOrderCode: request.params.code, technicianCode },
+          { serviceOrderCode: request.params.code, technicianCode: roleGate.sub },
           roleGate.role,
         );
         return await reply.send({ order: resp.order ? mapInstallationOrder(resp.order) : null });
@@ -180,15 +194,9 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
     async (request, reply) => {
       const roleGate = requireRole(request, reply, ...TECHNICIAN_ROLES);
       if (!roleGate) return reply;
-      const technicianCode = request.body?.technicianCode ?? '';
-      if (!technicianCode.trim()) {
-        return sendBadRequest(reply, [
-          { field: 'technicianCode', message: 'technicianCode is required.' },
-        ]);
-      }
       try {
         const resp = await t.completeOrder(
-          { serviceOrderCode: request.params.code, technicianCode },
+          { serviceOrderCode: request.params.code, technicianCode: roleGate.sub },
           roleGate.role,
         );
         return await reply.send({ order: resp.order ? mapInstallationOrder(resp.order) : null });
@@ -204,13 +212,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
   }>('/service-orders/:code/reschedule', async (request, reply) => {
     const roleGate = requireRole(request, reply, ...TECHNICIAN_ROLES);
     if (!roleGate) return reply;
-    const technicianCode = request.body?.technicianCode ?? '';
     const expectedTime = request.body?.expectedTime ?? '';
-    if (!technicianCode.trim()) {
-      return sendBadRequest(reply, [
-        { field: 'technicianCode', message: 'technicianCode is required.' },
-      ]);
-    }
     if (!expectedTime.trim()) {
       return sendBadRequest(reply, [
         { field: 'expectedTime', message: 'expectedTime is required.' },
@@ -222,7 +224,7 @@ export function registerTechRoutes(app: FastifyInstance, deps: TechRouteDeps): v
           serviceOrderCode: request.params.code,
           newExpectedTime: expectedTime,
           note: request.body?.note ?? '',
-          technicianCode,
+          technicianCode: roleGate.sub,
         },
         roleGate.role,
       );

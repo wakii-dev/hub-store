@@ -32,6 +32,9 @@ export const KNOWN_ROLES = [
 
 export interface RequestUser {
   sub: string;
+  /** SF-25 security-audit P1-2: full name từ token claim `name` (realm mappers
+   *  given/family/full-name trên hubstore-mobile) — ép driverName cho KTV/CTV. */
+  name?: string;
   role: (typeof KNOWN_ROLES)[number];
 }
 
@@ -92,7 +95,11 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
       if (typeof sub !== 'string') {
         return unauthorized(reply, 'Token payload missing sub.');
       }
-      request.user = { sub, role: matched };
+      request.user = {
+        sub,
+        name: typeof payload.name === 'string' ? payload.name : undefined,
+        role: matched,
+      };
     } catch {
       return unauthorized(reply, 'Invalid or expired token.');
     }

@@ -374,23 +374,23 @@ describe('SF-25 — accept/complete/reschedule + read-side override', () => {
     expect(called).toBe(false);
   });
 
-  it('accept technicianCode blank → 422 BFF-side (không gọi upstream)', async () => {
-    let called = false;
+  it('accept — technicianCode ÉP từ token sub (body bị ignore — security P0-1)', async () => {
+    let captured: AcceptOrderRequest | undefined;
     h.tech.override({
-      acceptOrder: (_call, cb) => {
-        called = true;
+      acceptOrder: (call, cb) => {
+        captured = call.request as AcceptOrderRequest;
         cb(null, techResponses.acceptOrder);
       },
     });
+    // KTV-001 cố mutate đơn của CTV-001 qua body → BFF ép về token sub.
     const res = await h.app.inject({
       method: 'POST',
-      url: '/service-orders/SO-0006/accept',
-      payload: { technicianCode: ' ' },
-      headers: await techAuth(),
+      url: '/service-orders/SO-0007/accept',
+      payload: { technicianCode: 'CTV-001' },
+      headers: await techAuth('InsideTechnician', 'KTV-001'),
     });
-    expect(res.statusCode).toBe(422);
-    expect(res.json().code).toBe('VALIDATION_ERROR');
-    expect(called).toBe(false);
+    expect(res.statusCode).toBe(200);
+    expect(captured).toEqual({ serviceOrderCode: 'SO-0007', technicianCode: 'KTV-001' });
   });
 
   it('complete 200 + FAILED_PRECONDITION → 409 CONFLICT', async () => {
@@ -408,8 +408,8 @@ describe('SF-25 — accept/complete/reschedule + read-side override', () => {
       headers: await techAuth('OutsideTechnician', 'CTV-001'),
     });
     expect(ok.statusCode).toBe(200);
-    // technicianCode đi từ body nguyên trạng — ownership BE-side (spec §4.2).
-    expect(captured).toEqual({ serviceOrderCode: 'SO-0004', technicianCode: 'KTV-001' });
+    // Security P0-1: technicianCode ÉP = token sub 'CTV-001' (body 'KTV-001' bị ignore).
+    expect(captured).toEqual({ serviceOrderCode: 'SO-0004', technicianCode: 'CTV-001' });
 
     h.tech.override({
       completeOrder: (_call, cb) =>
@@ -505,6 +505,64 @@ describe('SF-25 — accept/complete/reschedule + read-side override', () => {
       headers: await techAuth('Manager'),
     });
     expect(captured?.technicianCode).toBe('KTV-002');
+  });
+
+  // Security-audit P1-2: delivery filter — KTV/CTV → driverName ép = token name
+  // claim (fail-closed 403 khi thiếu); role khác giữ body.
+  it('read-side override: technician delivery filter → driverName ép từ token name', async () => {
+    let captured: FilterDeliveryOrdersRequest | undefined;
+    h.tech.override({
+      filterDeliveryOrders: (call, cb) => {
+        captured = call.request as FilterDeliveryOrdersRequest;
+        cb(null, techResponses.filterDeliveryOrders);
+      },
+    });
+    const techAuthNamed = async (role = 'InsideTechnician', sub = 'KTV-001') => ({
+      authorization: `Bearer ${await signTestToken(role, sub, 'Nguyễn Văn An')}`,
+    });
+    await h.app.inject({
+      method: 'POST',
+      url: '/delivery-orders/filter',
+      payload: { driverName: 'Ai đó khác' },
+      headers: await techAuthNamed(),
+    });
+    expect(captured?.driverName).toBe('Nguyễn Văn An');
+
+    // Fail-closed: token technician thiếu name → 403 (không filter-all).
+    h.tech.override({
+      filterDeliveryOrders: (call, cb) => {
+        captured = call.request as FilterDeliveryOrdersRequest;
+        cb(null, techResponses.filterDeliveryOrders);
+      },
+    });
+    const noName = await h.app.inject({
+      method: 'POST',
+      url: '/delivery-orders/filter',
+      payload: { driverName: 'Ai đó khác' },
+      headers: await techAuth(),
+    });
+    expect(noName.statusCode).toBe(403);
+    expect(noName.json().code).toBe('PERMISSION_DENIED');
+  });
+
+  // Security-audit P1-3: assign — KTV/CTV không được reassign (staff-only).
+  it('assign role KTV/CTV → 403 (không gọi upstream)', async () => {
+    let called = false;
+    h.tech.override({
+      assignTechnician: (_call, cb) => {
+        called = true;
+        cb(null, techResponses.assignTechnician);
+      },
+    });
+    const res = await h.app.inject({
+      method: 'POST',
+      url: '/service-orders/SO-0001/assign',
+      payload: { technicianCode: 'KTV-002' },
+      headers: await techAuth(),
+    });
+    expect(res.statusCode).toBe(403);
+    expect(res.json().code).toBe('PERMISSION_DENIED');
+    expect(called).toBe(false);
   });
 });
 

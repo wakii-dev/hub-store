@@ -45,7 +45,7 @@ export const TEST_AUDIENCE = 'hubstore-api';
 
 /** Keypair + JWKS endpoint giả lập Keycloak — BFF verify JWKS thật qua HTTP. */
 export interface TestIdentity {
-  signToken(role: string, sub?: string): Promise<string>;
+  signToken(role: string, sub?: string, name?: string): Promise<string>;
   /** Thêm jwk vào JWKS đang serve (test unknown-kid refetch). */
   addKey(jwk: Record<string, unknown>): void;
   jwksUrl: string;
@@ -66,10 +66,11 @@ export async function startTestIdentity(): Promise<TestIdentity> {
   return {
     jwksUrl: `http://127.0.0.1:${address.port}/certs`,
     addKey: (j) => keys.push(j),
-    signToken: (role, sub = 'tester') =>
+    signToken: (role, sub = 'tester', name?: string) =>
       new SignJWT({
         realm_access: { roles: [role] },
         preferred_username: sub,
+        ...(name !== undefined ? { name } : {}),
       })
         .setProtectedHeader({ alg: 'RS256', kid: 'test-kid-1' })
         .setSubject(sub)
@@ -163,9 +164,13 @@ function startMockServer(
 
 /** RS256 token có claim Keycloak (realm_access.roles + iss/aud) — sign bằng
  * keypair của identity đang chạy (khác key → 401). */
-export async function signTestToken(role = 'Manager', sub = 'tester'): Promise<string> {
+export async function signTestToken(
+  role = 'Manager',
+  sub = 'tester',
+  name?: string,
+): Promise<string> {
   if (!currentIdentity) throw new Error('startHarness chưa chạy — không có identity');
-  return currentIdentity.signToken(role, sub);
+  return currentIdentity.signToken(role, sub, name);
 }
 
 export interface Harness {
