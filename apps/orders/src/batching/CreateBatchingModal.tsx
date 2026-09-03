@@ -248,8 +248,15 @@ export function CreateBatchingModal({
     const serviceId = entries[0].serviceId;
     const quote = quotes.find((q) => q.serviceId === serviceId);
     if (!quote) return;
-    prefillingAddonsRef.current = true; // stale-addon guard không xóa prefill
-    setSelectedServiceId(serviceId);
+    // P1 review (round 2): chỉ bật guard khi serviceId THẬT SỰ đổi — set cùng
+    // giá trị → React bail-out → guard effect không chạy → ref kẹt true vĩnh
+    // viễn, lần đổi xe sau đó của NG bị guard "tiêu" oan (stale addon không
+    // reset). Refetch cùng serviceId (toggle carrier / recalc) chỉ prefill lại
+    // addons — không đụng guard.
+    if (serviceId !== selectedServiceId) {
+      prefillingAddonsRef.current = true; // stale-addon guard không xóa prefill
+      setSelectedServiceId(serviceId);
+    }
     const oldAddons = new Set(entries.flatMap((e) => e.addons ?? []));
     setSelectedAddonCodes(quote.addonServices.filter((a) => oldAddons.has(a.code)).map((a) => a.code));
     // eslint-disable-next-line react-hooks/exhaustive-deps

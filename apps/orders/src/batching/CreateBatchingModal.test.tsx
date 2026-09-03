@@ -898,6 +898,48 @@ describe("CreateBatchingModal", () => {
     expect(screen.getByTestId("sum-shipping-fee").textContent).toContain(formatVnd(73000));
   });
 
+  it("SF-16 T6 (P1 round 2): refetch quotes cùng serviceId không disarm stale-addon guard — đổi xe sau đó vẫn reset addon", async () => {
+    quotesMock.mockReturnValue(
+      unwrapResult({ quotes: [{ ...SIX_QUOTES[2], addonServices: ADDONS }], meta: { mock: false } }),
+    );
+    const withAddons: PlanningMapEntry[] = REBOOK_ENTRIES.map((e) => ({
+      ...e,
+      addons: ["LOADINGS", "INSURANCE"],
+    }));
+    render(
+      <I18nextProvider i18n={testI18n}>
+        <CreateBatchingModal
+          open
+          mode="rebook"
+          orders={selection.slice(0, 2)}
+          batchCode="BATCH-9"
+          rebookEntries={withAddons}
+          onClose={vi.fn()}
+        />
+      </I18nextProvider>,
+    );
+    await flush();
+    await flushDebounce(); // prefill 1T + LOADINGS/INSURANCE
+    expect(addonInput("LOADINGS").checked).toBe(true);
+
+    // Toggle carrier KHO_CN → TRUCK: refetch quotes cùng serviceId 1T.
+    // Ref kẹt-true (bug cũ) sẽ "tiêu" guard ở bước đổi xe phía dưới.
+    fireEvent.click(screen.getByTestId("carrier-group-KHO_CN"));
+    await flush();
+    quotesMock.mockReturnValue(
+      unwrapResult({ quotes: [QUOTE_1T, QUOTE_2T], meta: { mock: false } }),
+    );
+    fireEvent.click(screen.getByTestId("carrier-group-TRUCK"));
+    await flushDebounce();
+    expect(addonInput("LOADINGS").checked).toBe(true); // prefill lại bình thường
+
+    // Đổi xe 1T → 2T: guard PHẢI còn hoạt động → addon reset
+    fireEvent.click(screen.getByTestId("quote-2T").querySelector("input")!);
+    await flush();
+    expect(addonInput("LOADINGS").checked).toBe(false);
+    expect(addonInput("INSURANCE").checked).toBe(false);
+  });
+
   it("SF-16 T6: rebook submit — KHÔNG createBatch; confirmPlanning batchCode hiện có (chỉ entries) + createBooking", async () => {
     quotesMock.mockReturnValue(unwrapResult({ quotes: SIX_QUOTES, meta: { mock: false } }));
     confirmPlanningMock.mockReturnValue(
