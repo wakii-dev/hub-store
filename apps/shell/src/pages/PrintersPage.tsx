@@ -134,7 +134,7 @@ export default function PrintersPage() {
     modalOpen
       ? [
           { key: "F4", handler: () => void submit(), description: t("printers.form.submit") },
-          { key: "F8", handler: () => setModalOpen(false), description: t("common.cancel") },
+          { key: "F8", handler: () => setModalOpen(false), description: t("printers.form.cancel") },
         ]
       : [{ key: "F6", handler: openAdd, description: t("printers.add") }],
   );
@@ -225,7 +225,7 @@ export default function PrintersPage() {
         onCancel={() => setModalOpen(false)}
         confirmLoading={saving}
         okText={t("printers.form.submit")}
-        cancelText={t("common.cancel")}
+        cancelText={t("printers.form.cancel")}
         data-testid="printers-add-modal"
       >
         <Form form={form} layout="vertical">

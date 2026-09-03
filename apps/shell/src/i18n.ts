@@ -116,6 +116,7 @@ export const shellResources: I18nResources = {
       "printers.form.mac": "Địa chỉ MAC",
       "printers.form.type": "Loại",
       "printers.form.submit": "Lưu",
+      "printers.form.cancel": "Hủy",
       // SF-14 — màn đối soát COD (direction B): namespace riêng `settlement`.
       "settlement.title": "Đối soát COD",
       "settlement.subtitle": "Sức khỏe thu hộ theo kỳ · chỉ Manager / Admin",
@@ -359,6 +360,7 @@ export const shellResources: I18nResources = {
       "printers.form.mac": "MAC address",
       "printers.form.type": "Type",
       "printers.form.submit": "Save",
+      "printers.form.cancel": "Cancel",
       // SF-14 — COD settlement screen (direction B): dedicated `settlement` ns.
       "settlement.title": "COD settlement",
       "settlement.subtitle": "Collection health by period · Manager / Admin only",
