@@ -147,6 +147,12 @@ export interface CreateBatchingModalProps {
   rebookEntries?: PlanningMapEntry[];
 }
 
+/** Kết quả createBatch cần giữ lại khi confirm/booking fail (retry reuse). */
+interface BatchResult {
+  batchCode?: string;
+  items?: Array<{ stopOrder: number; orderCode: string }>;
+}
+
 export function CreateBatchingModal({
   open,
   orders,
@@ -168,6 +174,9 @@ export function CreateBatchingModal({
   // refetch khi rows đổi (recalc distance → km mới → báo giá mới).
   const [quotes, setQuotes] = useState<DeliveryQuoteDto[] | null>(null);
   const [metaMock, setMetaMock] = useState(false);
+  // P1 review (T3-T5): seq-guard — response của fetch CŨ về sau response mới
+  // không được ghi đè quotes (debounce + rows đổi liên tiếp).
+  const quotesSeqRef = useRef(0);
   const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
   // SF-16 §2.3 — addons (Task 4): mã addon đã tick theo quote đang chọn.
   const [selectedAddonCodes, setSelectedAddonCodes] = useState<string[]>([]);
@@ -175,6 +184,9 @@ export function CreateBatchingModal({
   const [feeLimitWarning, setFeeLimitWarning] = useState(false);
   const [bookingResults, setBookingResults] = useState<DeliveryBookingDto[] | null>(null);
   const [nvcSubmitting, setNvcSubmitting] = useState(false);
+  // P1 review (T3-T5): createBatch OK mà confirm/booking 422 → giữ phiếu đã
+  // tạo để retry DÙNG LẠI (không createBatch lần 2 → không trùng phiếu).
+  const [pendingBatch, setPendingBatch] = useState<BatchResult | null>(null);
   const [shipperId, setShipperId] = useState<string | undefined>(undefined);
   const [deliveryTime, setDeliveryTime] = useState<TimeRange | null>(null);
   // SF-6 §2.3 stepper — NON-BLOCKING (Deviation D1): content không bao giờ ẩn,
@@ -213,6 +225,7 @@ export function CreateBatchingModal({
       setFeeLimitWarning(false);
       setBookingResults(null);
       setNvcSubmitting(false);
+      setPendingBatch(null); // P1: modal mở lại → không reuse phiếu cũ
       setShipperId(undefined);
       setDeliveryTime(null);
       setActiveSection(1);
@@ -268,15 +281,18 @@ export function CreateBatchingModal({
 
   useEffect(() => {
     if (carrierGroup !== "TRUCK" || rows.length === 0) return;
+    const seq = ++quotesSeqRef.current; // P1: đánh dấu đợt fetch hiện hành
     // Debounce 300ms — gộp burst (thêm nhiều đơn / recalc): chỉ fetch lần cuối.
     const timer = setTimeout(() => {
       getQuotes({ shopCode, stopOrders: toStopOrders(rows) })
         .unwrap()
         .then((resp) => {
+          if (seq !== quotesSeqRef.current) return; // stale — response fetch cũ
           setQuotes(resp.quotes ?? []);
           setMetaMock(resp.meta?.mock ?? false);
         })
         .catch(() => {
+          if (seq !== quotesSeqRef.current) return;
           setQuotes(null);
           message.error(t("batching.quotes.fetchError"));
         });
@@ -372,11 +388,11 @@ export function CreateBatchingModal({
   // rebook: chỉ cần quote hợp lệ (shipper/TG giao là flow KHO_CN legacy — NVC
   // booking không dùng; plan T6.5 submit KHÔNG tạo phiếu).
   const canSubmit = rebook
-    ? rows.length > 0 && !!selectedServiceId && !submitBlocked
+    ? rows.length > 0 && !!selectedQuote && !submitBlocked
     : rows.length > 0 &&
       !!shipperId &&
       deliveryTime !== null &&
-      (carrierGroup !== "TRUCK" || (!!selectedServiceId && !submitBlocked));
+      (carrierGroup !== "TRUCK" || (!!selectedQuote && !submitBlocked));
 
   const handleCreate = async () => {
     if (!canSubmit) return;
@@ -417,11 +433,16 @@ export function CreateBatchingModal({
     if (selectedQuote === null || deliveryTime === null || !shipperId) return;
     setNvcSubmitting(true);
     try {
-      const batch = await createBatch({
-        orderCodes: rows.map((r) => r.fulfillCode), // theo THỨ TỰ GIAO hiện hành
-        shipperId,
-        deliveryTime,
-      }).unwrap();
+      // P1: pendingBatch có (retry sau 422) → BỎ QUA create, dùng phiếu cũ.
+      let batch: BatchResult | null = pendingBatch;
+      if (batch === null) {
+        batch = await createBatch({
+          orderCodes: rows.map((r) => r.fulfillCode), // theo THỨ TỰ GIAO hiện hành
+          shipperId,
+          deliveryTime,
+        }).unwrap();
+        setPendingBatch(batch);
+      }
       const batchCode = batch?.batchCode ?? "";
       const confirmResp = await confirmPlanning({
         batchCode,
@@ -430,7 +451,7 @@ export function CreateBatchingModal({
           orderCode: it.orderCode,
           vehicleType: selectedQuote.vehicleType,
           serviceId: selectedQuote.serviceId,
-          addons: selectedAddonCodes, // Task 4 — mã addon đã tick
+          addons: selectedAddons.map((a) => a.code), // Task 4 — mã addon (từ DTO của quote đang chọn)
         })),
       }).unwrap();
       const plannings = confirmResp.plannings ?? [];
@@ -484,7 +505,7 @@ export function CreateBatchingModal({
           orderCode: e.orderCode,
           vehicleType: selectedQuote.vehicleType,
           serviceId: selectedQuote.serviceId,
-          addons: selectedAddonCodes,
+          addons: selectedAddons.map((a) => a.code),
         })),
       }).unwrap();
       const plannings = confirmResp.plannings ?? [];
@@ -667,7 +688,13 @@ export function CreateBatchingModal({
       {/* ─── Section 2: carrier & shipper & thời gian giao + sumbar ─── */}
       <div className="batch-form" ref={section2Ref}>
         {/* SF-16 §2.1 — nhóm vận chuyển, chèn TRÊN shipper-select (testid cũ nguyên vẹn) */}
-        <CarrierSection value={carrierGroup} onChange={setCarrierGroup}>
+        <CarrierSection
+          value={carrierGroup}
+          onChange={(g) => {
+            setFeeLimitWarning(false); // P2 review: banner cũ không theo nhóm mới
+            setCarrierGroup(g);
+          }}
+        >
           {carrierGroup === "TRUCK" &&
             (quotesLoading ? (
               <Spin size="small" data-testid="quotes-loading" />

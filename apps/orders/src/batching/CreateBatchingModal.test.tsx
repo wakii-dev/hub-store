@@ -726,6 +726,56 @@ describe("CreateBatchingModal", () => {
     });
   });
 
+  it("P1 review: confirm 422 giữa chừng → submit lại DÙNG LẠI phiếu (create CHỈ 1 lần)", async () => {
+    const errorMock = vi.mocked(message.error);
+    quotesMock.mockReturnValue(unwrapResult({ quotes: [QUOTE_1T], meta: { mock: false } }));
+    createMock.mockReturnValue(
+      unwrapResult({
+        batchCode: "BATCH-R",
+        items: [
+          { batchCode: "BATCH-R", stopOrder: 1, orderCode: "ORD-3001", customerAddress: "Địa chỉ ORD-3001", distance: 3.5, fromDeliveryTime: "", toDeliveryTime: "", orderStatus: 1, orderType: 0, items: [], totalQuantity: 2, codAmount: 15000000 },
+        ],
+      }),
+    );
+    // Lần confirm 1 → 422; lần 2 → OK (NG sửa xong submit lại)
+    confirmPlanningMock
+      .mockReturnValueOnce({
+        unwrap: () =>
+          Promise.reject({ status: 422, data: { statusCode: 422, message: "Validation failed.", details: [] } }),
+      })
+      .mockReturnValueOnce(unwrapResult({ plannings: [], meta: { mock: false } }));
+    bookingMock.mockReturnValue(unwrapResult({ bookings: [], meta: { mock: false } }));
+    timeDeliveryHook = createTimeDelivery([{ from: "2026-09-05T01:00:00.000Z", to: "2026-09-05T05:00:00.000Z" }]);
+
+    renderModal(selection.slice(0, 1));
+    await flush();
+    await selectTruckAndGetQuotes(ALL_STOPS.slice(0, 1));
+    await selectQuote("1T");
+
+    const shipperSelector = document.querySelector<HTMLElement>("[data-testid='batch-shipper-select'] .ant-select-selector")!;
+    fireEvent.mouseDown(shipperSelector);
+    await waitFor(() => document.querySelector(".ant-select-item-option"));
+    const option = document.querySelector<HTMLElement>(".ant-select-item-option")!;
+    fireEvent.mouseDown(option);
+    fireEvent.mouseUp(option);
+    fireEvent.click(option);
+    fireEvent.click(screen.getByTestId("batch-time-hint-0"));
+
+    // Lần 1: create OK → confirm 422 → error, modal giữ state
+    fireEvent.click(screen.getByTestId("batch-submit"));
+    await flush();
+    expect(createMock).toHaveBeenCalledTimes(1);
+    expect(errorMock).toHaveBeenCalled();
+    expect((screen.getByTestId("batch-submit") as HTMLButtonElement).disabled).toBe(false);
+
+    // Lần 2 (retry): KHÔNG create lại — confirm chạy tiếp trên cùng batchCode
+    fireEvent.click(screen.getByTestId("batch-submit"));
+    await flush();
+    expect(createMock).toHaveBeenCalledTimes(1); // P1: không tạo phiếu trùng
+    expect(confirmPlanningMock).toHaveBeenCalledTimes(2);
+    expect(bookingMock).toHaveBeenCalledTimes(1);
+  });
+
   // ─── SF-16 Task 5: fee-limit gates (disable radio / auto-clear / submit block) ───
 
   it("SF-16 T5: quote vượt hạn mức → radio disabled + tag tone error, quote hợp lệ vẫn chọn được", async () => {
