@@ -18,6 +18,15 @@ function openOptions(page: Page) {
   return page.locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option");
 }
 
+/** Hôm nay theo Asia/Ho_Chi_Minh (YYYY-MM-DD) — seed SF-25 TODAY@HH:MM
+ * resolve theo CURRENT_DATE của DB (+07), hardcode ngày bị stale qua ngày. */
+const todayKt = new Intl.DateTimeFormat("en-CA", {
+  timeZone: "Asia/Ho_Chi_Minh",
+  year: "numeric",
+  month: "2-digit",
+  day: "2-digit",
+}).format(new Date());
+
 test.beforeEach(async ({ page }) => {
   await page.goto("/hub-store-order/tech");
   await expect(page.getByTestId("tech-page-title")).toHaveText("Đơn dịch vụ kỹ thuật");
@@ -59,7 +68,7 @@ test("§3 tab Lắp đặt: card SO-0001 NEW có nút 'Gán KTV' (flag BE)", asy
   // SO-0001 NEW chưa gán → BE flag allowAssign → nút 'Gán KTV'
   await expect(page.getByTestId("tech-assign-SO-0001")).toContainText("Gán KTV");
 
-  // SO-0006 DELIVERED đã gán KTV-003 → không có nút assign (không nút không flag)
+  // SO-0006 CONFIRMED đã gán KTV-001 (seed SF-25) → không có nút assign (không nút không flag)
   await expect(page.getByTestId("tech-assign-SO-0006")).toHaveCount(0);
 });
 
@@ -72,9 +81,10 @@ test("§4 tab KTV-CTV: group theo staff + detail modal theo ngày", async ({ pag
   await expect(row).toContainText("Nguyễn Văn An");
 
   // Click row → detail modal: 'Công việc của Nguyễn Văn An' + group ngày
+  // (seed SF-25: KTV-001 có đơn hôm nay — SO-0004 PROCESSING + SO-0006 CONFIRMED)
   await row.click();
   await expect(page.getByText("Công việc của Nguyễn Văn An")).toBeVisible();
-  await expect(page.getByTestId("tech-staff-day-2026-09-02")).toBeVisible();
+  await expect(page.getByTestId(`tech-staff-day-${todayKt}`)).toBeVisible();
   await page.keyboard.press("Escape");
 });
 
