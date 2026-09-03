@@ -198,3 +198,28 @@ export async function completeOrder(
     technicianCode,
   );
 }
+
+/**
+ * Dời lịch (SF-25 T6) — body {technicianCode, expectedTime, note} (BFF
+ * ép technicianCode từ token; expectedTime ISO +07:00 — FE chặn quá khứ,
+ * BE tự validate lại). note optional → undefined → BFF default ''.
+ * Response {order} là đơn SAU mutate: status RESCHEDULED + expectedTime mới
+ * + buttons mới (allowAccept bật lại — dead-end fix spec §4.2).
+ */
+export async function rescheduleOrder(
+  serviceOrderCode: string,
+  technicianCode: string,
+  expectedTime: string,
+  note?: string,
+): Promise<InstallationOrderDto> {
+  const { data } = await getAxiosInstance().post<MutateTechOrderResponse>(
+    `/service-orders/${encodeURIComponent(serviceOrderCode)}/reschedule`,
+    {
+      technicianCode,
+      expectedTime,
+      note,
+    },
+  );
+  if (!data.order) throw new Error('rescheduleOrder: BE trả order null');
+  return data.order;
+}

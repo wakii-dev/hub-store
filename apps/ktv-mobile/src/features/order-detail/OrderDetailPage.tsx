@@ -8,8 +8,9 @@
  * delivery CÓ receiver (name/phone/location) → PhoneLink tel: + MapView
  * deep-link. Graceful degradation theo data có thật, không tự suy.
  *
- * Nút thao tác accept/complete/reschedule là components Task 5/6 — chưa tồn
- * tại lúc T7 chạy, chỉ để mount point (placeholder).
+ * Nút thao tác accept/complete/reschedule là components Task 5/6 — mount tại
+ * ktv-detail-actions (chỉ install); sau mutate state local thay bằng
+ * response.order (pill + timeline + flags refresh).
  */
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
@@ -25,6 +26,9 @@ import {
   type InstallationOrderDto,
 } from '../../api/ktvApi';
 import StatusPill from '../my-orders/StatusPill';
+import AcceptButton from '../actions/AcceptButton';
+import CompleteButton from '../actions/CompleteButton';
+import RescheduleButton from '../actions/RescheduleButton';
 import Timeline, { parseTimeline } from './Timeline';
 import AddressMapCard from './AddressMapCard';
 import PhoneLink from './PhoneLink';
@@ -169,6 +173,12 @@ export default function OrderDetailPage(props: { session: MobileSession }) {
   const receiver = isInstall ? null : order.order.receiver;
   const timelineEntries = isInstall ? parseTimeline(order.order.timeline) : null;
 
+  // Mutate accept/complete/reschedule (T5/T6): thay order install trong state
+  // bằng response.order — pill + timeline + flags refresh từ order mới.
+  const handleInstallUpdated = (updated: InstallationOrderDto) => {
+    setOrder((prev) => (prev && prev.kind === 'install' ? { kind: 'install', order: updated } : prev));
+  };
+
   return (
     <div style={{ padding: 16 }} data-testid="ktv-order-detail">
       <Button
@@ -260,8 +270,27 @@ export default function OrderDetailPage(props: { session: MobileSession }) {
         </SectionCard>
       ) : null}
 
-      {/* T5/T6 action buttons mount here */}
-      <div data-testid="ktv-detail-actions" />
+      {/* T5/T6 action buttons — chỉ install (delivery không có mutate route);
+          từng button tự gate theo flag BE-authoritative (flag false → null). */}
+      {isInstall ? (
+        <div data-testid="ktv-detail-actions" style={{ display: 'flex', gap: 8, marginTop: 4 }}>
+          <AcceptButton
+            order={order.order}
+            technicianCode={props.session.sub}
+            onUpdated={handleInstallUpdated}
+          />
+          <CompleteButton
+            order={order.order}
+            technicianCode={props.session.sub}
+            onUpdated={handleInstallUpdated}
+          />
+          <RescheduleButton
+            order={order.order}
+            technicianCode={props.session.sub}
+            onUpdated={handleInstallUpdated}
+          />
+        </div>
+      ) : null}
     </div>
   );
 }
