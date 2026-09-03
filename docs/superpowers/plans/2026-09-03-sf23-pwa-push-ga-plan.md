@@ -405,7 +405,7 @@ if (typeof window !== 'undefined') window.__gaBuffer = buffer;
 ### Task T8: env-wiring
 **Files:** Modify `.env.example`, `docker-compose.yml` (bff env + web build args), `Dockerfile.web`, `docker/nginx.conf`.
 
-- [ ] **Step 1: .env.example** — block mới cạnh AHAMOVE:
+- [x] **Step 1: .env.example** — block mới cạnh AHAMOVE:
 
 ```
 # SF-23 — PWA push + analytics (dual-mode: điền key → thật, trống → mock/off)
@@ -417,9 +417,9 @@ if (typeof window !== 'undefined') window.__gaBuffer = buffer;
 #ONESIGNAL_REST_API_KEY=    # REST API key — local-only, KHÔNG commit
 ```
 
-- [ ] **Step 2: Dockerfile.web** — fe-build stage: 2 `ARG VITE_ONESIGNAL_APP_ID` + `ARG VITE_GA_MEASUREMENT_ID` + 2 `ENV` cùng tên TRƯỚC `RUN pnpm build` (vite nhúng build-time).
-- [ ] **Step 3: docker-compose.yml** — service web (xác định tên service thật trong compose): `build.args` 2 VITE_ (từ `${VITE_ONESIGNAL_APP_ID:-}`); service bff: environment thêm `ONESIGNAL_APP_ID` + `ONESIGNAL_REST_API_KEY` (pattern env hiện có).
-- [ ] **Step 4: nginx.conf** — ensure MIME webmanifest: trong server block thêm `include /etc/nginx/mime.types;` đã mặc định — thêm types entry nếu thiếu:
+- [x] **Step 2: Dockerfile.web** — fe-build stage: 2 `ARG VITE_ONESIGNAL_APP_ID` + `ARG VITE_GA_MEASUREMENT_ID` + 2 `ENV` cùng tên TRƯỚC `RUN pnpm build` (vite nhúng build-time).
+- [x] **Step 3: docker-compose.yml** — service web (xác định tên service thật trong compose): `build.args` 2 VITE_ (từ `${VITE_ONESIGNAL_APP_ID:-}`); service bff: environment thêm `ONESIGNAL_APP_ID` + `ONESIGNAL_REST_API_KEY` (pattern env hiện có).
+- [x] **Step 4: nginx.conf** — ensure MIME webmanifest: trong server block thêm `include /etc/nginx/mime.types;` đã mặc định — thêm types entry nếu thiếu:
 
 ```nginx
 # SF-23: manifest MIME (một số image nginx thiếu default)
@@ -427,7 +427,7 @@ types { application/manifest+json webmanifest; }
 ```
 
 (đặt trong location / hoặc http context của conf.d — nếu nginx 1.27 mime.types đã có `manifest+json` thì bỏ bước này, kiểm bằng `grep manifest docker/nginx.conf` + kiến thức base image).
-- [ ] **Step 5: Verify** — `docker compose config` parse OK; `pnpm build` FE vẫn PASS với env trống. **Commit** `chore(env): wire VITE_/ONESIGNAL env cho dual-mode (SF-23 T8)`
+- [x] **Step 5: Verify** — `docker compose config` parse OK; `pnpm build` FE vẫn PASS với env trống. **Commit** `chore(env): wire VITE_/ONESIGNAL env cho dual-mode (SF-23 T8)`
 
 ### Task T9: e2e-both-modes
 **Files:** Create `e2e/tests/08-pwa.spec.ts`.
