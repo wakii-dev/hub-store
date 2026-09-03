@@ -80,4 +80,24 @@ public interface PrinterOrBuilder extends
    */
   com.google.protobuf.ByteString
       getTypeBytes();
+
+  /**
+   * <pre>
+   * Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+   * </pre>
+   *
+   * <code>string location = 7;</code>
+   * @return The location.
+   */
+  java.lang.String getLocation();
+  /**
+   * <pre>
+   * Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+   * </pre>
+   *
+   * <code>string location = 7;</code>
+   * @return The bytes for location.
+   */
+  com.google.protobuf.ByteString
+      getLocationBytes();
 }

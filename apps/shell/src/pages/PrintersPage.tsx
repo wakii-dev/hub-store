@@ -30,6 +30,7 @@ interface PrinterFormValues {
   shopCode: string;
   printerId: string;
   name: string;
+  location: string;
   printerIp: string;
   mac: string;
   type: "bill" | "a4";
@@ -80,6 +81,7 @@ export default function PrintersPage() {
       shopCode: record.shopCode,
       printerId: record.printerId,
       name: record.name,
+      location: record.location ?? "",
       printerIp: record.printerIp ?? "",
       mac: record.mac ?? "",
       type: record.type ?? "a4",
@@ -141,6 +143,7 @@ export default function PrintersPage() {
     { title: t("printers.col.shop"), dataIndex: "shopCode", width: 90 },
     { title: t("printers.col.printerId"), dataIndex: "printerId", width: 160 },
     { title: t("printers.col.name"), dataIndex: "name" },
+    { title: t("printers.col.location"), dataIndex: "location" },
     { title: t("printers.col.ip"), dataIndex: "printerIp", width: 140 },
     { title: t("printers.col.mac"), dataIndex: "mac", width: 180 },
     {
@@ -246,6 +249,9 @@ export default function PrintersPage() {
             <Input autoComplete="off" />
           </Form.Item>
           <Space size={16} style={{ display: "flex" }}>
+            <Form.Item name="location" label={t("printers.form.location")}>
+              <Input autoComplete="off" style={{ width: 200 }} />
+            </Form.Item>
             <Form.Item name="printerIp" label={t("printers.form.ip")}>
               <Input autoComplete="off" style={{ width: 180 }} />
             </Form.Item>

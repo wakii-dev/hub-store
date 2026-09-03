@@ -21,6 +21,7 @@ const FIXTURE_ITEMS = [
     shopCode: '30201',
     printerId: 'PRN-30201-01',
     name: 'HP LaserJet M404',
+    location: 'Khu soạn A',
     printerIp: '192.168.30.21',
     mac: 'AA:BB:CC:30:21:01',
     type: 'bill',
@@ -29,6 +30,7 @@ const FIXTURE_ITEMS = [
     shopCode: '30202',
     printerId: 'PRN-30202-01',
     name: 'Canon LBP2900',
+    location: 'Quầy thu ngân',
     printerIp: '192.168.30.22',
     mac: 'AA:BB:CC:30:22:01',
     type: 'a4',
@@ -56,6 +58,7 @@ async function openAddModalAndFill(): Promise<void> {
   fillInput('printers.form.shop', '30203');
   fillInput('printers.form.printerId', 'PRN-NEW');
   fillInput('printers.form.name', 'Canon LBP');
+  fillInput('printers.form.location', 'Khu soạn C');
   fillInput('printers.form.ip', '10.0.0.5');
   fillInput('printers.form.mac', 'AA:BB:CC:00:00:01');
   // antd4 Select — dropdown portal ở body: mở qua .ant-select-selector trong
@@ -85,7 +88,7 @@ describe('PrintersPage', () => {
     );
   });
 
-  it('create flow — POST /fulfillment/printers payload đầy đủ, modal đóng', async () => {
+  it('create flow — POST /fulfillment/printers payload đầy đủ (location — spec D9), modal đóng', async () => {
     await openAddModalAndFill();
     fireEvent.click(screen.getByText('printers.form.submit'));
     await waitFor(() =>
@@ -96,6 +99,7 @@ describe('PrintersPage', () => {
           data: expect.objectContaining({
             shopCode: '30203',
             printerId: 'PRN-NEW',
+            location: 'Khu soạn C',
             type: 'bill',
           }),
         }),
@@ -134,5 +138,7 @@ describe('PrintersPage', () => {
     await waitFor(() => expect(screen.getByTestId('printers-add-modal')).toBeTruthy());
     expect((screen.getByLabelText('printers.form.shop') as HTMLInputElement).disabled).toBe(true);
     expect((screen.getByLabelText('printers.form.printerId') as HTMLInputElement).disabled).toBe(true);
+    // Review-nhóm-2 P1 — location editable ở edit mode (spec D9), prefill từ row.
+    expect((screen.getByLabelText('printers.form.location') as HTMLInputElement).value).toBe('Khu soạn A');
   });
 });

@@ -847,13 +847,22 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
             if (!details.isEmpty()) {
                 throw GrpcErrors.invalidArgument(details);
             }
-            PrinterRepository.Printer created = printers.create(new PrinterRepository.Printer(
-                    proto.getShopCode().trim(), proto.getPrinterId().trim(),
-                    proto.getName(), proto.getPrinterIp(), proto.getMac(),
-                    proto.getType().trim()));
+            // Review-nhóm-2 P1-2: mutation + audit trong 1 transaction (pattern
+            // a5f0d93 confirmCod) — audit INSERT fail → tạo printer bị roll back.
             String actor = ActorInterceptor.currentActor();
-            repo.appendAudit(actor, "printer.created", created.printerId(), json(Map.of(
-                    "shopCode", created.shopCode(), "type", orEmpty(created.type()))));
+            PrinterRepository.Printer created = transactions.execute(tx -> {
+                PrinterRepository.Printer p = printers.create(new PrinterRepository.Printer(
+                        proto.getShopCode().trim(), proto.getPrinterId().trim(),
+                        proto.getName(), proto.getLocation(), proto.getPrinterIp(),
+                        proto.getMac(), proto.getType().trim()));
+                repo.appendAudit(actor, "printer.created", p.printerId(), json(Map.of(
+                        "shopCode", p.shopCode(), "type", orEmpty(p.type()))));
+                return p;
+            });
+            if (created == null) {
+                throw Status.INTERNAL.withDescription("printer create tx returned null.")
+                        .asRuntimeException();
+            }
             responseObserver.onNext(CreatePrinterResponse.newBuilder()
                     .setPrinter(toPrinter(created)).build());
             responseObserver.onCompleted();
@@ -886,15 +895,25 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
             if (!details.isEmpty()) {
                 throw GrpcErrors.invalidArgument(details);
             }
-            PrinterRepository.Printer updated = printers.update(
-                    request.getShopCode().trim(), request.getPrinterId().trim(),
-                    new PrinterRepository.Printer(request.getShopCode().trim(),
-                            request.getPrinterId().trim(),
-                            request.getPrinter().getName(), request.getPrinter().getPrinterIp(),
-                            request.getPrinter().getMac(), request.getPrinter().getType().trim()));
+            // Review-nhóm-2 P1-2: mutation + audit trong 1 transaction (pattern
+            // a5f0d93 confirmBatchCod) — audit INSERT fail → update bị roll back.
             String actor = ActorInterceptor.currentActor();
-            repo.appendAudit(actor, "printer.updated", updated.printerId(), json(Map.of(
-                    "shopCode", updated.shopCode(), "type", orEmpty(updated.type()))));
+            PrinterRepository.Printer updated = transactions.execute(tx -> {
+                PrinterRepository.Printer p = printers.update(
+                        request.getShopCode().trim(), request.getPrinterId().trim(),
+                        new PrinterRepository.Printer(request.getShopCode().trim(),
+                                request.getPrinterId().trim(),
+                                request.getPrinter().getName(), request.getPrinter().getLocation(),
+                                request.getPrinter().getPrinterIp(), request.getPrinter().getMac(),
+                                request.getPrinter().getType().trim()));
+                repo.appendAudit(actor, "printer.updated", p.printerId(), json(Map.of(
+                        "shopCode", p.shopCode(), "type", orEmpty(p.type()))));
+                return p;
+            });
+            if (updated == null) {
+                throw Status.INTERNAL.withDescription("printer update tx returned null.")
+                        .asRuntimeException();
+            }
             responseObserver.onNext(UpdatePrinterResponse.newBuilder()
                     .setPrinter(toPrinter(updated)).build());
             responseObserver.onCompleted();
@@ -933,6 +952,7 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                 .setShopCode(orEmpty(p.shopCode()))
                 .setPrinterId(orEmpty(p.printerId()))
                 .setName(orEmpty(p.name()))
+                .setLocation(orEmpty(p.location()))
                 .setPrinterIp(orEmpty(p.printerIp()))
                 .setMac(orEmpty(p.mac()))
                 .setType(orEmpty(p.type()))

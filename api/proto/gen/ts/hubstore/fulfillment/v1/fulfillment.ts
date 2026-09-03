@@ -695,6 +695,8 @@ export interface Printer {
   printerIp: string;
   mac: string;
   type: string;
+  /** Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...). */
+  location: string;
 }
 
 export interface ListPrintersRequest {
@@ -6173,7 +6175,7 @@ export const GetSettlementDetailResponse: MessageFns<GetSettlementDetailResponse
 };
 
 function createBasePrinter(): Printer {
-  return { shopCode: "", printerId: "", name: "", printerIp: "", mac: "", type: "" };
+  return { shopCode: "", printerId: "", name: "", printerIp: "", mac: "", type: "", location: "" };
 }
 
 export const Printer: MessageFns<Printer> = {
@@ -6195,6 +6197,9 @@ export const Printer: MessageFns<Printer> = {
     }
     if (message.type !== "") {
       writer.uint32(50).string(message.type);
+    }
+    if (message.location !== "") {
+      writer.uint32(58).string(message.location);
     }
     return writer;
   },
@@ -6254,6 +6259,14 @@ export const Printer: MessageFns<Printer> = {
           message.type = reader.string();
           continue;
         }
+        case 7: {
+          if (tag !== 58) {
+            break;
+          }
+
+          message.location = reader.string();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -6271,6 +6284,7 @@ export const Printer: MessageFns<Printer> = {
       printerIp: isSet(object.printerIp) ? globalThis.String(object.printerIp) : "",
       mac: isSet(object.mac) ? globalThis.String(object.mac) : "",
       type: isSet(object.type) ? globalThis.String(object.type) : "",
+      location: isSet(object.location) ? globalThis.String(object.location) : "",
     };
   },
 
@@ -6294,6 +6308,9 @@ export const Printer: MessageFns<Printer> = {
     if (message.type !== "") {
       obj.type = message.type;
     }
+    if (message.location !== "") {
+      obj.location = message.location;
+    }
     return obj;
   },
 
@@ -6308,6 +6325,7 @@ export const Printer: MessageFns<Printer> = {
     message.printerIp = object.printerIp ?? "";
     message.mac = object.mac ?? "";
     message.type = object.type ?? "";
+    message.location = object.location ?? "";
     return message;
   },
 };

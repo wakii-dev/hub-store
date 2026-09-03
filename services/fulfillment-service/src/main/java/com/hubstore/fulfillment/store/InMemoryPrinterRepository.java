@@ -55,7 +55,8 @@ public class InMemoryPrinterRepository implements PrinterRepository {
                 throw new PrinterNotFoundException(shopCode, printerId);
             }
             Printer updated = new Printer(shopCode, printerId,
-                    printer.name(), printer.printerIp(), printer.mac(), printer.type());
+                    printer.name(), printer.location(), printer.printerIp(),
+                    printer.mac(), printer.type());
             // put trên key ĐÃ có giữ nguyên insertion-order (Map contract).
             rows.put(k, updated);
             return updated;

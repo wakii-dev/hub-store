@@ -39,6 +39,7 @@ private static final long serialVersionUID = 0L;
     printerIp_ = "";
     mac_ = "";
     type_ = "";
+    location_ = "";
   }
 
   public static final com.google.protobuf.Descriptors.Descriptor
@@ -288,6 +289,53 @@ private static final long serialVersionUID = 0L;
     }
   }
 
+  public static final int LOCATION_FIELD_NUMBER = 7;
+  @SuppressWarnings("serial")
+  private volatile java.lang.Object location_ = "";
+  /**
+   * <pre>
+   * Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+   * </pre>
+   *
+   * <code>string location = 7;</code>
+   * @return The location.
+   */
+  @java.lang.Override
+  public java.lang.String getLocation() {
+    java.lang.Object ref = location_;
+    if (ref instanceof java.lang.String) {
+      return (java.lang.String) ref;
+    } else {
+      com.google.protobuf.ByteString bs = 
+          (com.google.protobuf.ByteString) ref;
+      java.lang.String s = bs.toStringUtf8();
+      location_ = s;
+      return s;
+    }
+  }
+  /**
+   * <pre>
+   * Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+   * </pre>
+   *
+   * <code>string location = 7;</code>
+   * @return The bytes for location.
+   */
+  @java.lang.Override
+  public com.google.protobuf.ByteString
+      getLocationBytes() {
+    java.lang.Object ref = location_;
+    if (ref instanceof java.lang.String) {
+      com.google.protobuf.ByteString b = 
+          com.google.protobuf.ByteString.copyFromUtf8(
+              (java.lang.String) ref);
+      location_ = b;
+      return b;
+    } else {
+      return (com.google.protobuf.ByteString) ref;
+    }
+  }
+
   private byte memoizedIsInitialized = -1;
   @java.lang.Override
   public final boolean isInitialized() {
@@ -320,6 +368,9 @@ private static final long serialVersionUID = 0L;
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(type_)) {
       com.google.protobuf.GeneratedMessage.writeString(output, 6, type_);
     }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(location_)) {
+      com.google.protobuf.GeneratedMessage.writeString(output, 7, location_);
+    }
     getUnknownFields().writeTo(output);
   }
 
@@ -346,6 +397,9 @@ private static final long serialVersionUID = 0L;
     }
     if (!com.google.protobuf.GeneratedMessage.isStringEmpty(type_)) {
       size += com.google.protobuf.GeneratedMessage.computeStringSize(6, type_);
+    }
+    if (!com.google.protobuf.GeneratedMessage.isStringEmpty(location_)) {
+      size += com.google.protobuf.GeneratedMessage.computeStringSize(7, location_);
     }
     size += getUnknownFields().getSerializedSize();
     memoizedSize = size;
@@ -374,6 +428,8 @@ private static final long serialVersionUID = 0L;
         .equals(other.getMac())) return false;
     if (!getType()
         .equals(other.getType())) return false;
+    if (!getLocation()
+        .equals(other.getLocation())) return false;
     if (!getUnknownFields().equals(other.getUnknownFields())) return false;
     return true;
   }
@@ -397,6 +453,8 @@ private static final long serialVersionUID = 0L;
     hash = (53 * hash) + getMac().hashCode();
     hash = (37 * hash) + TYPE_FIELD_NUMBER;
     hash = (53 * hash) + getType().hashCode();
+    hash = (37 * hash) + LOCATION_FIELD_NUMBER;
+    hash = (53 * hash) + getLocation().hashCode();
     hash = (29 * hash) + getUnknownFields().hashCode();
     memoizedHashCode = hash;
     return hash;
@@ -540,6 +598,7 @@ private static final long serialVersionUID = 0L;
       printerIp_ = "";
       mac_ = "";
       type_ = "";
+      location_ = "";
       return this;
     }
 
@@ -591,6 +650,9 @@ private static final long serialVersionUID = 0L;
       if (((from_bitField0_ & 0x00000020) != 0)) {
         result.type_ = type_;
       }
+      if (((from_bitField0_ & 0x00000040) != 0)) {
+        result.location_ = location_;
+      }
     }
 
     @java.lang.Override
@@ -633,6 +695,11 @@ private static final long serialVersionUID = 0L;
       if (!other.getType().isEmpty()) {
         type_ = other.type_;
         bitField0_ |= 0x00000020;
+        onChanged();
+      }
+      if (!other.getLocation().isEmpty()) {
+        location_ = other.location_;
+        bitField0_ |= 0x00000040;
         onChanged();
       }
       this.mergeUnknownFields(other.getUnknownFields());
@@ -691,6 +758,11 @@ private static final long serialVersionUID = 0L;
               bitField0_ |= 0x00000020;
               break;
             } // case 50
+            case 58: {
+              location_ = input.readStringRequireUtf8();
+              bitField0_ |= 0x00000040;
+              break;
+            } // case 58
             default: {
               if (!super.parseUnknownField(input, extensionRegistry, tag)) {
                 done = true; // was an endgroup tag
@@ -1136,6 +1208,98 @@ private static final long serialVersionUID = 0L;
       checkByteStringIsUtf8(value);
       type_ = value;
       bitField0_ |= 0x00000020;
+      onChanged();
+      return this;
+    }
+
+    private java.lang.Object location_ = "";
+    /**
+     * <pre>
+     * Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+     * </pre>
+     *
+     * <code>string location = 7;</code>
+     * @return The location.
+     */
+    public java.lang.String getLocation() {
+      java.lang.Object ref = location_;
+      if (!(ref instanceof java.lang.String)) {
+        com.google.protobuf.ByteString bs =
+            (com.google.protobuf.ByteString) ref;
+        java.lang.String s = bs.toStringUtf8();
+        location_ = s;
+        return s;
+      } else {
+        return (java.lang.String) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+     * </pre>
+     *
+     * <code>string location = 7;</code>
+     * @return The bytes for location.
+     */
+    public com.google.protobuf.ByteString
+        getLocationBytes() {
+      java.lang.Object ref = location_;
+      if (ref instanceof String) {
+        com.google.protobuf.ByteString b = 
+            com.google.protobuf.ByteString.copyFromUtf8(
+                (java.lang.String) ref);
+        location_ = b;
+        return b;
+      } else {
+        return (com.google.protobuf.ByteString) ref;
+      }
+    }
+    /**
+     * <pre>
+     * Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+     * </pre>
+     *
+     * <code>string location = 7;</code>
+     * @param value The location to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLocation(
+        java.lang.String value) {
+      if (value == null) { throw new NullPointerException(); }
+      location_ = value;
+      bitField0_ |= 0x00000040;
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+     * </pre>
+     *
+     * <code>string location = 7;</code>
+     * @return This builder for chaining.
+     */
+    public Builder clearLocation() {
+      location_ = getDefaultInstance().getLocation();
+      bitField0_ = (bitField0_ & ~0x00000040);
+      onChanged();
+      return this;
+    }
+    /**
+     * <pre>
+     * Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+     * </pre>
+     *
+     * <code>string location = 7;</code>
+     * @param value The bytes for location to set.
+     * @return This builder for chaining.
+     */
+    public Builder setLocationBytes(
+        com.google.protobuf.ByteString value) {
+      if (value == null) { throw new NullPointerException(); }
+      checkByteStringIsUtf8(value);
+      location_ = value;
+      bitField0_ |= 0x00000040;
       onChanged();
       return this;
     }

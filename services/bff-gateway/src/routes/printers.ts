@@ -28,6 +28,7 @@ interface PrinterBody {
   shopCode?: string;
   printerId?: string;
   name?: string;
+  location?: string;
   printerIp?: string;
   mac?: string;
   type?: string;
@@ -38,6 +39,7 @@ function mapPrinter(p: ProtoPrinter): PrinterDto {
     shopCode: p.shopCode,
     printerId: p.printerId,
     name: p.name,
+    location: p.location || undefined,
     printerIp: p.printerIp || undefined,
     mac: p.mac || undefined,
     type: (p.type || undefined) as 'bill' | 'a4' | undefined,
@@ -76,6 +78,7 @@ export function registerPrinterRoutes(app: FastifyInstance, deps: PrinterRouteDe
             shopCode: b.shopCode ?? '',
             printerId: b.printerId ?? '',
             name: b.name ?? '',
+            location: b.location ?? '',
             printerIp: b.printerIp ?? '',
             mac: b.mac ?? '',
             type: b.type ?? '',
@@ -114,6 +117,7 @@ export function registerPrinterRoutes(app: FastifyInstance, deps: PrinterRouteDe
               shopCode: request.params.shopCode,
               printerId: request.params.printerId,
               name: b.name ?? '',
+              location: b.location ?? '',
               printerIp: b.printerIp ?? '',
               mac: b.mac ?? '',
               type: b.type ?? '',

@@ -51,7 +51,8 @@ class PrinterFlowTest {
     private static Printer printer(String shopCode, String printerId, String type) {
         return Printer.newBuilder()
                 .setShopCode(shopCode).setPrinterId(printerId)
-                .setName("Test Printer").setPrinterIp("10.0.0.9")
+                .setName("Test Printer").setLocation("Khu test")
+                .setPrinterIp("10.0.0.9")
                 .setMac("AA:BB:CC:DD:EE:FF").setType(type)
                 .build();
     }
@@ -98,6 +99,8 @@ class PrinterFlowTest {
         assertThat(obs.values.get(0).getPrintersCount()).isEqualTo(1);
         assertThat(obs.values.get(0).getPrinters(0).getPrinterId()).isEqualTo("PRN-1");
         assertThat(obs.values.get(0).getPrinters(0).getType()).isEqualTo("bill");
+        // Review-nhóm-2 P1 — location (spec D9) carry-through create → list.
+        assertThat(obs.values.get(0).getPrinters(0).getLocation()).isEqualTo("Khu test");
     }
 
     // ---------------- create ----------------
@@ -139,7 +142,7 @@ class PrinterFlowTest {
         Printer changes = Printer.newBuilder()
                 .setShopCode("99999")      // BẮT BUỘC bỏ qua — identity immutable (D9)
                 .setPrinterId("PRN-HACK")  // BẮT BUỘC bỏ qua
-                .setName("Renamed").setPrinterIp("10.0.0.10")
+                .setName("Renamed").setLocation("Khu mới").setPrinterIp("10.0.0.10")
                 .setMac("11:22:33:44:55:66").setType("a4")
                 .build();
         UpdatePrinterResponse resp = update("30201", "PRN-1", changes);
@@ -147,6 +150,7 @@ class PrinterFlowTest {
         assertThat(resp.getPrinter().getShopCode()).isEqualTo("30201");
         assertThat(resp.getPrinter().getPrinterId()).isEqualTo("PRN-1");
         assertThat(resp.getPrinter().getName()).isEqualTo("Renamed");
+        assertThat(resp.getPrinter().getLocation()).isEqualTo("Khu mới");
         assertThat(resp.getPrinter().getPrinterIp()).isEqualTo("10.0.0.10");
         assertThat(resp.getPrinter().getMac()).isEqualTo("11:22:33:44:55:66");
         assertThat(resp.getPrinter().getType()).isEqualTo("a4");
@@ -181,10 +185,10 @@ class PrinterFlowTest {
 
     @Test
     void inMemoryRepoDuplicateThrows() {
-        repo.create(new PrinterRepository.Printer("30201", "P1", "n", "ip", "mac", "bill"));
+        repo.create(new PrinterRepository.Printer("30201", "P1", "n", "loc", "ip", "mac", "bill"));
         org.junit.jupiter.api.Assertions.assertThrows(
                 PrinterRepository.DuplicatePrinterException.class,
-                () -> repo.create(new PrinterRepository.Printer("30201", "P1", "n", "ip", "mac", "a4")));
+                () -> repo.create(new PrinterRepository.Printer("30201", "P1", "n", "loc", "ip", "mac", "a4")));
     }
 
     @Test
@@ -192,6 +196,6 @@ class PrinterFlowTest {
         org.junit.jupiter.api.Assertions.assertThrows(
                 PrinterRepository.PrinterNotFoundException.class,
                 () -> repo.update("30201", "P1",
-                        new PrinterRepository.Printer("30201", "P1", "n", "ip", "mac", "a4")));
+                        new PrinterRepository.Printer("30201", "P1", "n", "loc", "ip", "mac", "a4")));
     }
 }

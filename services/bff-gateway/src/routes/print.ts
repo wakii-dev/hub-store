@@ -39,6 +39,9 @@ export function registerPrintRoutes(
             printerId: p.printerId,
             name: p.name,
             shopCode: p.shopCode,
+            // Review-nhóm-2 P1 — location qua lại cho label PrintPage
+            // ("HP LaserJet M404 — Khu soạn A", spec D9).
+            location: p.location || undefined,
             printerIp: p.printerIp || undefined,
             mac: p.mac || undefined,
             type: (p.type || undefined) as 'bill' | 'a4' | undefined,

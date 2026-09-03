@@ -27,6 +27,7 @@ describe('GET /fulfillment/printers', () => {
     const item = body.items[0];
     expect(item.printerId).toBe('PRN-30201-01');
     expect(item.shopCode).toBe('30201');
+    expect(item.location).toBe('Khu soạn A');
     expect(item.printerIp).toBe('192.168.30.21');
     expect(item.mac).toBe('AA:BB:CC:30:21:01');
     expect(item.type).toBe('bill');
@@ -51,15 +52,17 @@ describe('GET /fulfillment/print/printers — đổi nguồn fulfillment (D1), s
 });
 
 describe('POST /fulfillment/printers — Admin only', () => {
-  it('Admin → 200 + DTO', async () => {
+  it('Admin → 200 + DTO (location qua payload — spec D9)', async () => {
     const res = await authedInject(h.app, 'POST', '/fulfillment/printers', {
       shopCode: '30201',
       printerId: 'PRN-NEW',
       name: 'New',
+      location: 'Khu mới',
       type: 'bill',
     }, 'Admin');
     expect(res.statusCode).toBe(200);
     expect((res.body as { printerId: string }).printerId).toBe('PRN-NEW');
+    expect((res.body as { location?: string }).location).toBe('Khu mới');
   });
 
   it('Manager → 403 FORBIDDEN', async () => {
@@ -83,18 +86,20 @@ describe('POST /fulfillment/printers — Admin only', () => {
 
 describe('PUT /fulfillment/printers/:shopCode/:printerId — Admin only, identity từ path', () => {
   it('Admin → 200 + DTO; identity gửi từ path (body printer_identity bị bỏ qua)', async () => {
-    let captured: { shopCode?: string; printerId?: string } | null = null;
+    let captured: { shopCode?: string; printerId?: string; location?: string } | null = null;
     h.fulfillment.override({
       updatePrinter: (call, cb) => {
         captured = {
           shopCode: call.request.shopCode,
           printerId: call.request.printerId,
+          location: call.request.printer.location,
         };
         cb(null, {
           printer: {
             shopCode: call.request.shopCode,
             printerId: call.request.printerId,
             name: 'Renamed',
+            location: call.request.printer.location,
             type: 'a4',
           },
         });
@@ -104,12 +109,15 @@ describe('PUT /fulfillment/printers/:shopCode/:printerId — Admin only, identit
       shopCode: '99999', // body identity phải bị bỏ qua — path là nguồn sự thật (D9)
       printerId: 'HACK',
       name: 'Renamed',
+      location: 'Khu mới',
       type: 'a4',
     }, 'Admin');
     expect(res.statusCode).toBe(200);
     expect(captured!.shopCode).toBe('30201');
     expect(captured!.printerId).toBe('PRN-30201-01');
+    expect(captured!.location).toBe('Khu mới');
     expect((res.body as { name: string }).name).toBe('Renamed');
+    expect((res.body as { location?: string }).location).toBe('Khu mới');
   });
 
   it('WarehouseOps → 403', async () => {

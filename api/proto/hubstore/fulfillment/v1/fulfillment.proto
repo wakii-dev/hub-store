@@ -561,6 +561,8 @@ message Printer {
   string printer_ip = 4;
   string mac = 5;
   string type = 6;
+  // Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+  string location = 7;
 }
 
 message ListPrintersRequest {

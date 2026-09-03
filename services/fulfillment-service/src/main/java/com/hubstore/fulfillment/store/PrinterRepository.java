@@ -7,12 +7,12 @@ import java.util.Optional;
  * Store máy in (SF-21) — pattern ServiceEmployeeRepository: interface thuần,
  * impl do config wiring (PrinterRepositoryConfig). Bảng printers (V8):
  * identity = (shop_code, printer_id) — KHÔNG sửa sau tạo (spec SF-21 D9);
- * update chỉ name/printer_ip/mac/type. KHÔNG có delete trong SF này.
+ * update chỉ name/location/printer_ip/mac/type. KHÔNG có delete trong SF này.
  */
 public interface PrinterRepository {
 
     /** 1 máy in. times bỏ qua — printers không audit-timestamp (D9 minimal). */
-    record Printer(String shopCode, String printerId, String name,
+    record Printer(String shopCode, String printerId, String name, String location,
                    String printerIp, String mac, String type) {
     }
 
@@ -38,6 +38,6 @@ public interface PrinterRepository {
     /** (shop_code, printer_id) phải chưa tồn tại — trùng → DuplicatePrinterException. */
     Printer create(Printer printer);
 
-    /** Chỉ name/printer_ip/mac/type cập nhật; thiếu identity → PrinterNotFoundException. */
+    /** Chỉ name/location/printer_ip/mac/type cập nhật; thiếu identity → PrinterNotFoundException. */
     Printer update(String shopCode, String printerId, Printer printer);
 }
