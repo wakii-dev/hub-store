@@ -21,7 +21,7 @@ import { chromium, type FullConfig } from "@playwright/test";
 const USERS = ["coordinator", "warehouse", "manager", "admin", "warehouse-emp"] as const;
 const PASSWORD = "Password123!"; // dev-only literal — realm JSON import
 const AUTH_DIR = path.join(__dirname, ".auth");
-// Private-port seam (SF-15/SF-14 precedent) — default :3000 giữ behavior cũ.
+// Private-port seam (SF-15 precedent) — default :3000 giữ behavior cũ.
 const SHELL_URL = process.env.E2E_SHELL_URL ?? "http://localhost:3000";
 
 export default async function globalSetup(_config: FullConfig): Promise<void> {

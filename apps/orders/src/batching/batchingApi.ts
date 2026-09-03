@@ -15,6 +15,16 @@ import type {
 } from "@hub-store/shared";
 import type { BatchDto } from "@hub-store/shared";
 
+/** GET /batching/criteria-presets — SF-28 T6 contract {items:[{id,name,description}]}. */
+export interface CriteriaPresetItem {
+  id: string;
+  name: string;
+  description: string;
+}
+export interface CriteriaPresetsResponse {
+  items: CriteriaPresetItem[];
+}
+
 const enhanced = api.injectEndpoints({
   endpoints: (builder) => ({
     // POST /fulfillment/batches/packing-suggest — gợi ý nhóm đơn theo khoảng cách (D1b).
@@ -54,6 +64,24 @@ const enhanced = api.injectEndpoints({
         params: { shopCode },
       }),
     }),
+
+    // GET /batching/criteria-presets — 4 preset tiêu chí (SF-28 T7, design §2.4).
+    getCriteriaPresets: builder.query<CriteriaPresetsResponse, void>({
+      query: () => ({
+        url: "/batching/criteria-presets",
+        method: "GET",
+      }),
+    }),
+
+    // POST /batching/criteria-preset-select — audit fire-and-forget (SF-28 T6):
+    // FE gọi nhưng KHÔNG block UI khi lỗi (không await, không message).
+    selectCriteriaPreset: builder.mutation<{ ok: boolean }, { presetId: string; orderCount?: number }>({
+      query: (body) => ({
+        url: "/batching/criteria-preset-select",
+        method: "POST",
+        data: body,
+      }),
+    }),
   }),
 });
 
@@ -62,4 +90,6 @@ export const {
   useRecalculateDistanceMutation,
   useCreateBatchMutation,
   useGetTimeDeliveryQuery,
+  useGetCriteriaPresetsQuery,
+  useSelectCriteriaPresetMutation,
 } = enhanced;

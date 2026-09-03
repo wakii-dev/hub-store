@@ -7,9 +7,10 @@ import { cleanup, fireEvent, render, screen, waitFor, within } from "@testing-li
 import { afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { I18nextProvider } from "react-i18next";
-import { initI18n } from "@hub-store/shared";
+import { initI18n, savePlanningMap, setRole } from "@hub-store/shared";
 import type { HubStoreOrderFilterItem, RegionsResponse, ShopsResponse } from "@hub-store/shared";
 import { useGetRegionsQuery, useGetShopsQuery, useListOrdersQuery } from "@hub-store/api-client";
+import type { TransferTicketsResponse } from "../api/ordersApi";
 import { ordersResources, registerOrdersResources } from "../i18n";
 import D1Page from "./D1Page";
 
@@ -20,8 +21,50 @@ vi.mock("@hub-store/api-client", async (importOriginal) => {
     useListOrdersQuery: vi.fn(),
     useGetRegionsQuery: vi.fn(),
     useGetShopsQuery: vi.fn(),
+    useGetDeliveryStaffQuery: vi.fn(() => ({ data: undefined })),
   };
 });
+
+// ordersApi mock toàn module (D1Page + DeliveryTimeCell + TransferHubModal cùng import).
+const getTickets = vi.fn((_codes: string) => ({
+  data: undefined as TransferTicketsResponse | undefined,
+}));
+
+vi.mock("../api/ordersApi", () => ({
+  useUpdateDeliveryTimeMutation: () => [vi.fn(), { isLoading: false }],
+  useGetDeliveryTimeSlotsQuery: () => ({ data: undefined, isLoading: false, isError: false }),
+  useAssignShopHubMutation: () => [vi.fn(), { isLoading: false }],
+  useGetAssignHistoryQuery: () => ({ data: undefined, isLoading: false }),
+  useCreateTransferTicketMutation: () => [vi.fn(), { isLoading: false }],
+  useGetTransferTicketsQuery: (codes: string) => getTickets(codes),
+  useSearchShopsQuery: () => ({ data: undefined, isLoading: false }),
+}));
+
+// SF-16 (Task 6) — deliveryBatchApi hooks: nvc batch orders + search booking
+// detail (rebook gate) + các mutation NVC mà CreateBatchingModal dùng (inert —
+// tránh fetch thật khi modal mở trong test).
+const nvcBatchOrdersMock = vi.hoisted(() => vi.fn());
+const nvcSearchBookingMock = vi.hoisted(() => vi.fn());
+
+vi.mock("../batching/deliveryBatchApi", () => ({
+  // Mutation inert (resolve rỗng) — modal rebook/rebook mở trong test có thể
+  // auto-fetch quotes (TRUCK bật sẵn) → không được trả undefined.
+  useGetQuotesMutation: () => [vi.fn(() => ({ unwrap: () => Promise.resolve({ quotes: [], meta: { mock: false } }) })), { isLoading: false }],
+  useConfirmPlanningMutation: () => [vi.fn(), { isLoading: false }],
+  useCreateBookingMutation: () => [vi.fn(), { isLoading: false }],
+  useBatchOrdersQuery: (arg: unknown) => nvcBatchOrdersMock(arg),
+  useSearchBookingDetailQuery: (arg: unknown) => nvcSearchBookingMock(arg),
+}));
+
+vi.mock("../batching/batchingApi", () => ({
+  usePackingSuggestMutation: () => [vi.fn(), { isLoading: false }],
+  useRecalculateDistanceMutation: () => [vi.fn(), { isLoading: false }],
+  useCreateBatchMutation: () => [vi.fn(), { isLoading: false }],
+  useGetTimeDeliveryQuery: () => ({ data: undefined }),
+  // SF-28 T7 — wizard step 1 preset hooks (modal mount fetch khi open)
+  useGetCriteriaPresetsQuery: () => ({ data: undefined, isLoading: false, isError: false, refetch: vi.fn() }),
+  useSelectCriteriaPresetMutation: () => [vi.fn(), { isLoading: false }],
+}));
 
 const mocked = {
   useListOrdersQuery: vi.mocked(useListOrdersQuery),
@@ -53,7 +96,7 @@ function makeRow(overrides: Partial<HubStoreOrderFilterItem>): HubStoreOrderFilt
 
 const rows: HubStoreOrderFilterItem[] = [
   makeRow({ fulfillCode: "ORD-3001", batchStatus: 0 }),
-  makeRow({ fulfillCode: "ORD-3002", batchStatus: 1, codAmount: 20000000 }),
+  makeRow({ fulfillCode: "ORD-3002", batchStatus: 1, codAmount: 20000000, isDebtSplittingOrder: true }),
   makeRow({ fulfillCode: "ORD-3009", shopAssignment: shop30202, batchCode: "BATCH-0001" }),
 ];
 
@@ -99,6 +142,10 @@ beforeAll(() => {
 beforeEach(() => {
   window.history.replaceState(null, "", "/hub-store-order/order");
   mockApi();
+  getTickets.mockReturnValue({ data: undefined });
+  localStorage.clear();
+  nvcBatchOrdersMock.mockReset().mockReturnValue({ data: undefined });
+  nvcSearchBookingMock.mockReset().mockReturnValue({ data: undefined });
 });
 
 afterEach(() => {
@@ -168,16 +215,116 @@ describe("D1Page", () => {
   });
 
   it("edit delivery-time CHỈ hiện trên đơn batchStatus=0", { timeout: 20000 }, () => {
+    // SF-28 role gate: DeliveryTimeCell ẩn nút sửa khi không phải Coordinator/Manager/Admin
+    setRole("Coordinator");
     renderD1();
     expect(screen.getByTestId("edit-delivery-ORD-3001")).toBeTruthy(); // batchStatus 0
     expect(screen.getByTestId("edit-delivery-ORD-3009")).toBeTruthy(); // batchStatus 0
     expect(screen.queryByTestId("edit-delivery-ORD-3002")).toBeNull(); // batchStatus 1 → read-only
+    setRole(null);
   });
 
   it("batchCode link navigate cross-remote /hub-store-order/batch", { timeout: 20000 }, () => {
     renderD1();
     fireEvent.click(screen.getByTestId("batch-link-BATCH-0001"));
     expect(screen.getByTestId("batch-page-probe")).toBeTruthy();
+  });
+
+  it("SF-28 role-hide: 'YC chuyển kho' chỉ Coordinator/Manager/Admin thấy", { timeout: 20000 }, () => {
+    renderD1();
+    clickRowCheckbox(0);
+    expect(screen.queryByTestId("bulk-transfer-ticket")).toBeNull(); // role null
+    cleanup();
+    setRole("WarehouseOps");
+    renderD1();
+    clickRowCheckbox(0);
+    expect(screen.queryByTestId("bulk-transfer-ticket")).toBeNull();
+    cleanup();
+    setRole("Coordinator");
+    renderD1();
+    clickRowCheckbox(0);
+    expect((screen.getByTestId("bulk-transfer-ticket") as HTMLButtonElement).disabled).toBe(false);
+    setRole(null);
+  });
+
+  it("SF-28: 'YC chuyển kho' enable đúng 1 đơn không tách nợ; đơn tách nợ → disabled", { timeout: 20000 }, () => {
+    setRole("Coordinator");
+    renderD1();
+    clickRowCheckbox(1); // ORD-3002 — isDebtSplittingOrder
+    expect((screen.getByTestId("bulk-transfer-ticket") as HTMLButtonElement).disabled).toBe(true);
+    cleanup();
+    renderD1();
+    clickRowCheckbox(0); // ORD-3001 — thường
+    expect((screen.getByTestId("bulk-transfer-ticket") as HTMLButtonElement).disabled).toBe(false);
+    setRole(null);
+  });
+
+  it("SF-28 badge: order có ticket → transfer-badge-${code} màu theo trạng thái mới nhất", { timeout: 20000 }, () => {
+    getTickets.mockReturnValue({
+      data: {
+        items: [
+          {
+            ticketCode: "TT-0002",
+            orderFulfillCode: "ORD-3001",
+            fromHub: "FPT Shop Cầu Giấy (30201)",
+            toHub: "Kho CN Hà Đông (30205)",
+            reason: "Sai khu vực",
+            status: "APPROVED",
+            createdBy: "op1",
+            createdAt: "2026-09-03T02:00:00Z",
+            confirmedBy: "mg1",
+            confirmedAt: "2026-09-03T03:00:00Z",
+          },
+          {
+            ticketCode: "TT-0001",
+            orderFulfillCode: "ORD-3001",
+            fromHub: "",
+            toHub: "Kho CN Hà Đông (30205)",
+            reason: "Sai khu vực",
+            status: "PENDING",
+            createdBy: "op1",
+            createdAt: "2026-09-02T02:00:00Z",
+            confirmedBy: "",
+            confirmedAt: "",
+          },
+        ],
+      },
+    });
+    setRole("Coordinator");
+    renderD1();
+    const badge = screen.getByTestId("transfer-badge-ORD-3001");
+    expect(badge.textContent).toContain("Đã duyệt"); // ticket mới nhất (DESC) thắng
+    setRole(null);
+  });
+
+  it("SF-28 T3: click badge transfer-badge → mở history modal với ticket của đơn", { timeout: 20000 }, () => {
+    getTickets.mockReturnValue({
+      data: {
+        items: [
+          {
+            ticketCode: "TT-0002",
+            orderFulfillCode: "ORD-3001",
+            fromHub: "FPT Shop Cầu Giấy (30201)",
+            toHub: "Kho CN Hà Đông (30205)",
+            reason: "Sai khu vực",
+            status: "APPROVED",
+            createdBy: "op1",
+            createdAt: "2026-09-03T02:00:00Z",
+            confirmedBy: "mg1",
+            confirmedAt: "2026-09-03T03:00:00Z",
+          },
+        ],
+      },
+    });
+    setRole("Coordinator");
+    renderD1();
+    fireEvent.click(screen.getByTestId("transfer-badge-ORD-3001"));
+    const modal = screen.getByTestId("transfer-ticket-history-modal");
+    expect(modal.textContent).toContain("TT-0002");
+    expect(modal.textContent).toContain("Đã duyệt");
+    // design §2.2: avatar + tên người duyệt (bỏ prefix "Người duyệt:")
+    expect(modal.textContent).toContain("mg1");
+    setRole(null);
   });
 
   it("useUrlState round-trip: filter → URL → remount giữ nguyên", { timeout: 20000 }, () => {
@@ -188,5 +335,63 @@ describe("D1Page", () => {
     unmount();
     renderD1();
     expect((screen.getByPlaceholderText("Số đơn hàng") as HTMLInputElement).value).toBe("ORD-1");
+  });
+
+  // ─── SF-16 Task 6: entry-point replan/rebook (URL params từ D2 navigate) ───
+
+  it("nvcMode=replan → mở modal 'Tạo lại phiếu giao', LỌC đơn FAILED, xóa params", { timeout: 20000 }, async () => {
+    nvcBatchOrdersMock.mockReturnValue({
+      data: [
+        makeRow({ fulfillCode: "ORD-3001", batchStatus: 1 }),
+        makeRow({ fulfillCode: "ORD-FAIL", batchStatus: 1, failReason: "KHACH_VANG" }),
+      ],
+    });
+    window.history.replaceState(
+      null,
+      "",
+      "/hub-store-order/order?nvcMode=replan&nvcBatchCode=BATCH-0001",
+    );
+    renderD1();
+
+    expect(await screen.findByText("Tạo lại phiếu giao")).toBeTruthy();
+    // Params đã xóa (replaceState) — refresh không mở lại
+    expect(window.location.search).toBe("");
+    // Đơn FAILED bị loại khỏi rows
+    expect(screen.getByTestId("batch-row-ORD-3001")).toBeTruthy();
+    expect(screen.queryByTestId("batch-row-ORD-FAIL")).toBeNull();
+  });
+
+  it("nvcMode=rebook + planning map + booking null → mở modal 'Book lại vận đơn' với rows của planning cần rebook", { timeout: 20000 }, async () => {
+    savePlanningMap("BATCH-0001", [
+      { planningId: "11", orderCode: "ORD-3001", stopOrder: 1, serviceId: "1T", vehicleType: "1T", addons: [] },
+    ]);
+    nvcBatchOrdersMock.mockReturnValue({
+      data: [makeRow({ fulfillCode: "ORD-3001", batchStatus: 1 })],
+    });
+    nvcSearchBookingMock.mockReturnValue({
+      data: { bookings: [{ planningId: "11", booking: null, timeline: [] }], meta: { mock: false } },
+    });
+    window.history.replaceState(
+      null,
+      "",
+      "/hub-store-order/order?nvcMode=rebook&nvcBatchCode=BATCH-0001",
+    );
+    renderD1();
+
+    expect(await screen.findByText("Book lại vận đơn")).toBeTruthy();
+    expect(window.location.search).toBe("");
+    expect(screen.getByTestId("batch-row-ORD-3001")).toBeTruthy();
+  });
+
+  it("nvcMode=rebook KHÔNG có planning map → không mở modal (chỉ info)", { timeout: 20000 }, async () => {
+    window.history.replaceState(
+      null,
+      "",
+      "/hub-store-order/order?nvcMode=rebook&nvcBatchCode=BATCH-XXXX",
+    );
+    renderD1();
+    await new Promise((r) => setTimeout(r, 50));
+    expect(screen.queryByText("Book lại vận đơn")).toBeNull();
+    expect(window.location.search).toBe(""); // params vẫn được dọn
   });
 });

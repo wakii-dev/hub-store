@@ -12,11 +12,25 @@ import { defineConfig } from "@playwright/test";
  * Spec 02 override per-test (`test.use({ storageState })`) theo role.
  */
 /**
- * E2E_SHELL_URL — private-port seam (SF-15/SF-14 precedent): override khi chạy
- * stack private (vd http://localhost:3100) mà không tranh :3000 với sibling SF
- * đang chạy e2e trên stack riêng. Default giữ nguyên behavior cũ.
+ * E2E_SHELL_URL — private-port seam (SF-15 precedent): override khi chạy stack
+ * private (vd http://localhost:3100) mà không đụng stack mặc định :3000.
+ * Default giữ nguyên behavior cũ.
  */
 const SHELL_URL = process.env.E2E_SHELL_URL ?? "http://localhost:3000";
+
+/**
+ * E2E_PROXY — private-stack seam: route browser requests qua HTTP proxy
+ * (vd http://127.0.0.1:8280 map localhost:8080 → BFF private). Specs hardcode
+ * :8080 vẫn chạy đúng mà không sửa code cũ. Default: không proxy (behavior cũ).
+ * E2E_PG_SEAM — PATH-prepend shim `docker` (redirect `docker compose exec -T
+ * postgres psql` → private pg container) cho specs + seed-db.sh.
+ */
+const PROXY_URL = process.env.E2E_PROXY;
+if (process.env.E2E_PG_SEAM === "1") {
+  // Mutate PATH của chính runner process — execSync trong specs (psql helper,
+  // seed-db.sh) + webServer con đều inherit shim.
+  process.env.PATH = `/tmp/story/sf-14/shim:${process.env.PATH ?? ""}`;
+}
 
 export default defineConfig({
   testDir: "./tests",
@@ -34,6 +48,7 @@ export default defineConfig({
     trace: "retain-on-failure",
     screenshot: "only-on-failure",
     video: "retain-on-failure",
+    ...(PROXY_URL ? { proxy: { server: PROXY_URL } } : {}),
   },
   webServer: {
     command: "bash ../scripts/boot-all.sh",

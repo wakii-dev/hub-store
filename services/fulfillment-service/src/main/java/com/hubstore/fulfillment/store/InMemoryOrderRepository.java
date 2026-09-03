@@ -275,6 +275,17 @@ public class InMemoryOrderRepository implements OrderRepository {
         return next;
     }
 
+    /**
+     * Đơn FAILED (fail_reason != null)? — SF-14 (FI-259): predicate cho
+     * CodRepositoryConfig wire vào InMemoryCodConfirmationRepository, mirror
+     * JOIN orders.fail_reason IS NULL (D7) phía Postgres. Accessor only —
+     * KHÔNG tạo dependency ngược sang CodConfirmationRepository.
+     */
+    public synchronized boolean isFailed(String fulfillCode) {
+        return orders.stream()
+                .anyMatch(o -> o.fulfillCode().equals(fulfillCode) && o.failReason() != null);
+    }
+
     @Override
     public synchronized boolean hasRetry(String fulfillCode) {
         return orders.stream().anyMatch(o -> fulfillCode.equals(o.oldFulfillCode()));

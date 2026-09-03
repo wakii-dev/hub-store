@@ -57,6 +57,7 @@ type MutationCall struct {
 	FulfillCodes []string
 	Target       fulfillmentv1.BatchStatus
 	Reason       string
+	BatchCode    string
 	Role         string
 }
 
@@ -185,6 +186,7 @@ func (s *Server) MutateOrderStatus(ctx context.Context, req *fulfillmentv1.Mutat
 		FulfillCodes: append([]string(nil), req.GetFulfillCodes()...),
 		Target:       req.GetTargetBatchStatus(),
 		Reason:       req.GetReason(),
+		BatchCode:    req.GetBatchCode(),
 		Role:         incomingRole(ctx),
 	})
 	return resp, nil

@@ -8,6 +8,17 @@
 set -euo pipefail
 cd "$(dirname "$0")"
 
+# Host-run cần password DB — source root .env (pattern run.sh batching-service;
+# compose container có env riêng nên không cần, boot-all host-run thì có).
+ROOT="$(cd ../.. && pwd)"
+if [[ -f "$ROOT/.env" ]]; then set -a; . "$ROOT/.env"; set +a; fi
+: "${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD trong root .env (xem .env.example)}"
+export FULFILLMENT_DB_HOST="${FULFILLMENT_DB_HOST:-localhost}"
+export FULFILLMENT_DB_PORT="${FULFILLMENT_DB_PORT:-5432}"
+export FULFILLMENT_DB_NAME="${FULFILLMENT_DB_NAME:-fulfillment}"
+export FULFILLMENT_DB_USER="${FULFILLMENT_DB_USER:-${POSTGRES_USER:-hubstore}}"
+export FULFILLMENT_DB_PASSWORD="${FULFILLMENT_DB_PASSWORD:-$POSTGRES_PASSWORD}"
+
 # SF-2 (FI-245): chờ Postgres sẵn sàng (TCP) TRƯỚC khi boot — Flyway/Hikari
 # fail-loud nếu DB chưa lên, đợi ở đây cho trải nghiệm compose-up mượt hơn.
 # Ưu tiên pg_isready nếu có trong PATH; fallback bash /dev/tcp (macOS/Linux).

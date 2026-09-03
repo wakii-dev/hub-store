@@ -5,6 +5,7 @@ import com.hubstore.fulfillment.store.D2cFilterResult;
 import com.hubstore.fulfillment.store.D2cOrderFilter;
 import com.hubstore.fulfillment.store.D2cOrderRecord;
 import com.hubstore.fulfillment.store.D2cOrderRepository;
+import com.hubstore.fulfillment.store.InMemoryCodConfirmationRepository;
 import com.hubstore.fulfillment.store.InMemoryOrderRepository;
 import com.hubstore.fulfillment.v1.D2cOrder;
 import com.hubstore.fulfillment.v1.FilterD2cOrdersRequest;
@@ -49,9 +50,13 @@ class D2cFilterAndNoteTest {
     @BeforeEach
     void setUp() {
         repo = new InMemoryD2cRepo(D2cFixture.rows("D2C-"));
+        InMemoryOrderRepository orders =
+                new InMemoryOrderRepository("../../api/seed/canonical-seed.json");
         service = new FulfillmentServiceImpl(
-                new InMemoryOrderRepository("../../api/seed/canonical-seed.json"),
-                new RecordingEventPublisher(), repo);
+                orders,
+                new RecordingEventPublisher(), repo,
+                new InMemoryCodConfirmationRepository(orders::isFailed),
+                TestTx.noop());
     }
 
     // ---------------- repo filter semantics ----------------

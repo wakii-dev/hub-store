@@ -3,35 +3,75 @@
  *
  * Rule §9 (rule 3 spec §3.6): CHỈ đơn batchStatus=0 (Chưa soạn) được sửa —
  * Java cũng server-side reject. batchStatus≠0 → render read-only.
- * Edit qua Modal nhỏ chứa RangePicker → PUT /fulfillment/{code}/delivery-time
- * (mutation invalidates Fulfillment LIST → bảng refetch).
  *
- * ⚠ Convert picker strings → ISO-8601 khi save (Java parse OffsetDateTime —
- * xem utils/datetime). Giá trị hiện tại của đơn là ISO từ wire.
+ * SF-28 (spec Q4): slot picker thay RangePicker thô —
+ *   DatePicker (disabledDate = ngày < hôm nay, TZ Asia/Ho_Chi_Minh)
+ *   → GET /fulfillment/time-slots?date= (query chỉ chạy khi chọn ngày)
+ *   → Radio chips (testid `delivery-slot-${index}`, disabled nếu slot đã qua
+ *     khi date = hôm nay — belt-and-braces, BFF đã lọc)
+ *   → PUT /fulfillment/{code}/delivery-time với from/to ISO offset +07:00
+ *     TƯỜNG MINH (`YYYY-MM-DDTHH:mm:00+07:00` — BFF guard Date.parse +
+ *     Java parse OffsetDateTime).
+ *
+ * SF-28 role gate: nút sửa chỉ render cho Coordinator/Manager/Admin
+ * (khớp requireRole BFF trên PUT delivery-time — usePermissions role store).
  */
 import { useState } from "react";
-import { Button, DatePicker, Modal, Space, message } from "antd";
+import { Button, DatePicker, Modal, Radio, Space, message } from "antd";
 import moment from "moment";
 import { useTranslation } from "react-i18next";
-import { formatPeriodOfTime, type HubStoreOrderFilterItem } from "@hub-store/shared";
-import { useUpdateDeliveryTimeMutation } from "../api/ordersApi";
-import { DATETIME_FORMAT, toIsoDatetime } from "../utils/datetime";
+import {
+  formatPeriodOfTime,
+  usePermissions,
+  type HubStoreOrderFilterItem,
+  type Role,
+} from "@hub-store/shared";
+import { useGetDeliveryTimeSlotsQuery, useUpdateDeliveryTimeMutation } from "../api/ordersApi";
 
 const BATCH_STATUS_NOT_PREPARED = 0;
+/** Khớp requireRole('Coordinator','Manager','Admin') BFF-side (routes/fulfillment.ts). */
+const DELIVERY_EDIT_ROLES: readonly Role[] = ["Coordinator", "Manager", "Admin"];
+const VN_OFFSET_MINUTES = 420;
+
+function vnNow(): moment.Moment {
+  return moment().utcOffset(VN_OFFSET_MINUTES);
+}
+
+/** '10:00' → 600 — mirror BFF slotEndMinutes. */
+function slotEndMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(":").map(Number);
+  return h * 60 + m;
+}
+
+/** Slot đã qua: date = hôm nay (VN) và giờ kết thúc ≤ bây giờ (VN). */
+export function isSlotPast(date: string, slotTo: string, now: moment.Moment = vnNow()): boolean {
+  return date === now.format("YYYY-MM-DD") && slotEndMinutes(slotTo) <= now.hour() * 60 + now.minute();
+}
 
 export function DeliveryTimeCell({ order }: { order: HubStoreOrderFilterItem }) {
   const { t } = useTranslation("orders");
+  const { role } = usePermissions();
   const [open, setOpen] = useState(false);
-  const [pickerValue, setPickerValue] = useState<{ from: string; to: string } | null>(null);
+  const [date, setDate] = useState<string | null>(null);
+  const [slotIdx, setSlotIdx] = useState<number | null>(null);
   const [update, { isLoading }] = useUpdateDeliveryTimeMutation();
+  const {
+    data: slotsData,
+    isError: slotsError,
+    isLoading: slotsLoading,
+  } = useGetDeliveryTimeSlotsQuery(date ?? "", { skip: !date });
 
-  const editable = order.batchStatus === BATCH_STATUS_NOT_PREPARED;
+  const editable =
+    order.batchStatus === BATCH_STATUS_NOT_PREPARED && role !== null && DELIVERY_EDIT_ROLES.includes(role);
+
+  const slots = slotsData?.slots ?? [];
 
   const handleSave = async () => {
-    if (!pickerValue) return;
-    const from = toIsoDatetime(pickerValue.from);
-    const to = toIsoDatetime(pickerValue.to);
-    if (!from || !to) return;
+    if (!date || slotIdx === null) return;
+    const slot = slots[slotIdx];
+    if (!slot) return;
+    const from = `${date}T${slot.from}:00+07:00`;
+    const to = `${date}T${slot.to}:00+07:00`;
     try {
       await update({ code: order.fulfillCode, deliveryTime: { from, to } }).unwrap();
       message.success(t("edit.success"));
@@ -54,10 +94,8 @@ export function DeliveryTimeCell({ order }: { order: HubStoreOrderFilterItem }) 
           title={t("edit.deliveryTime.tooltip")}
           data-testid={`edit-delivery-${order.fulfillCode}`}
           onClick={() => {
-            setPickerValue({
-              from: moment(order.deliveryTime.from).format(DATETIME_FORMAT),
-              to: moment(order.deliveryTime.to).format(DATETIME_FORMAT),
-            });
+            setDate(null);
+            setSlotIdx(null);
             setOpen(true);
           }}
         >
@@ -72,23 +110,50 @@ export function DeliveryTimeCell({ order }: { order: HubStoreOrderFilterItem }) 
         okText={t("edit.save")}
         cancelText={t("edit.cancel")}
         confirmLoading={isLoading}
-        okButtonProps={{ disabled: !pickerValue }}
+        okButtonProps={{ disabled: !date || slotIdx === null }}
         destroyOnClose
       >
-        <DatePicker.RangePicker
-          style={{ width: "100%" }}
-          showTime={{ format: "HH:mm" }}
-          format={DATETIME_FORMAT}
-          value={
-            pickerValue
-              ? [moment(pickerValue.from, DATETIME_FORMAT), moment(pickerValue.to, DATETIME_FORMAT)]
-              : null
-          }
-          onChange={(_, dateStrings) => {
-            const [from, to] = dateStrings;
-            setPickerValue(from && to ? { from, to } : null);
-          }}
-        />
+        <Space direction="vertical" style={{ width: "100%" }} size={12}>
+          <div>
+            <div style={{ marginBottom: 4 }}>{t("edit.deliveryTime.selectDate")}</div>
+            <DatePicker
+              style={{ width: "100%" }}
+              format="YYYY-MM-DD"
+              disabledDate={(current) => current.isBefore(vnNow().startOf("day"), "day")}
+              value={date ? moment(date, "YYYY-MM-DD") : null}
+              onChange={(_, dateString) => {
+                setDate((dateString as string) || null);
+                setSlotIdx(null);
+              }}
+            />
+          </div>
+          {date && (
+            <div>
+              <div style={{ marginBottom: 4 }}>{t("edit.deliveryTime.selectSlot")}</div>
+              {slotsError ? (
+                <span>{t("edit.deliveryTime.slotsError")}</span>
+              ) : slotsLoading ? null : slots.length === 0 ? (
+                <span>{t("edit.deliveryTime.noSlots")}</span>
+              ) : (
+                <Radio.Group
+                  value={slotIdx ?? undefined}
+                  onChange={(e) => setSlotIdx(e.target.value as number)}
+                >
+                  {slots.map((s, i) => (
+                    <Radio.Button
+                      key={s.id}
+                      value={i}
+                      disabled={isSlotPast(date, s.to)}
+                      data-testid={`delivery-slot-${i}`}
+                    >
+                      {s.from} - {s.to}
+                    </Radio.Button>
+                  ))}
+                </Radio.Group>
+              )}
+            </div>
+          )}
+        </Space>
       </Modal>
     </Space>
   );
