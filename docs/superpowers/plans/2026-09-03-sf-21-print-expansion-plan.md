@@ -202,7 +202,7 @@ body { font-size: var(--app-font-size); }
 **Steps:**
 - [x] Đọc `hotkeyRegistry` (Task 6) → render bảng (phím | mô tả | context màn). Ô search filter theo text. KHÔNG đổi DOM/testid header hiện có — chỉ THÊM node mới.
 - [x] Test: render modal qua click nút; search filter; `pnpm -F shell test` → PASS.
-- [ ] Commit `feat(sf-21): hotkey helper modal`.
+- [x] Commit `feat(sf-21): hotkey helper modal`.
 
 ### Task 11: fullscreen-version-check
 
