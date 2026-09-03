@@ -159,8 +159,10 @@ Tier 1: T1, T2, T6, T8. Tier 2: T3, T4, T7, T9. Tier 3: T5, T10. Cuối: T11. **
 **Files:**
 - Modify: README.md (mục "Restore" dưới Backup)
 
-- [ ] **Step 9.1:** Doc restore từng DB RIÊNG (cùng cluster): stop apps (docker compose stop fulfillment batching bff) → `docker exec -i <c> psql -U <user> -c "DROP DATABASE fulfillment WITH (FORCE); CREATE DATABASE fulfillment;"` (chú thích: FORCE chỉ PG13+; KHÔNG đụng batching) → `gunzip -c backups/fulfillment-<ts>.sql.gz | docker exec -i <c> psql -U <user> -d fulfillment` → lặp cho batching → start apps (migrate-on-boot idempotent + seed-verify tự kiểm) → verify `curl :8080/health` + D1 thấy ORD-3001.
-- [ ] **Step 9.2:** Verify: chạy theo doc 1 lần cục bộ (restore vào lại chính nó) — thành công mới tick. Commit: `docs(restore): SF-12 restore runbook 2-DB cùng cluster (FI-257)`.
+- [x] **Step 9.1:** Doc restore từng DB RIÊNG (cùng cluster): stop apps (docker compose stop fulfillment batching bff) → `docker exec -i <c> psql -U <user> -c "DROP DATABASE fulfillment WITH (FORCE); CREATE DATABASE fulfillment;"` (chú thích: FORCE chỉ PG13+; KHÔNG đụng batching) → `gunzip -c backups/fulfillment-<ts>.sql.gz | docker exec -i <c> psql -U <user> -d fulfillment` → lặp cho batching → start apps (migrate-on-boot idempotent + seed-verify tự kiểm) → verify `curl :8080/health` + D1 thấy ORD-3001.
+  - Done: README "### Restore (SF-12)" dưới mục Backup tự động — dùng đúng tên compose service thật `fulfillment-service batching-service bff` (plan draft ghi `fulfillment batching` — `docker compose stop` báo "no such service"); biến khớp backup-db.sh; note seed-verify thấy orders > 0 → skip seed (SeedVerifyBootCheck.java:40) là đúng hành vi; note dump không chứa keycloak volume + variant restore 1 DB.
+- [x] **Step 9.2:** Verify: chạy theo doc 1 lần cục bộ (restore vào lại chính nó) — thành công mới tick. Commit: `docs(restore): SF-12 restore runbook 2-DB cùng cluster (FI-257)`.
+  - Verified trên hub-store-postgres-1 (PG16, apps không chạy — bỏ qua stop/start): drop/create + gunzip|psql restore từng DB từ backup T8 → 0 ERROR/FATAL cả 2 log; `\dt` thấy bảng (fulfillment: activity_log/cod_confirmations/..., batching: batches/batch_items/...); orders=27 dòng, `WHERE fulfill_code='ORD-3001'` → 1 dòng.
 
 ### Task 10: reconciliation job — PREPARING orphans
 

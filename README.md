@@ -326,6 +326,52 @@ WantedBy=timers.target
 
 Lưu ý systemd user timer cần `loginctl enable-linger <user>` để chạy khi không đăng nhập; thư mục `backups/` đã gitignore (dump chứa dữ liệu — KHÔNG commit).
 
+### Restore (SF-12 — restore từng DB RIÊNG, cùng cluster)
+
+Restore từng DB một — drop/create đúng DB đang restore, DB kia không bị đụng tới. Biến khớp `scripts/backup-db.sh`:
+
+```bash
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-hub-store-postgres-1}"
+POSTGRES_USER="${POSTGRES_USER:-hubstore}"
+```
+
+```bash
+# 1. Stop apps (KHÔNG stop postgres — container DB phải chạy để restore vào được)
+docker compose stop fulfillment-service batching-service bff
+
+# 2. Drop + create CHỈ DB fulfillment
+#    WITH (FORCE) ngắt các kết nối còn sót trước khi drop — cần PG13+
+#    (cluster này chạy postgres:16, OK). DB batching KHÔNG bị ảnh hưởng.
+docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" \
+  -c 'DROP DATABASE fulfillment WITH (FORCE);' \
+  -c 'CREATE DATABASE fulfillment;'
+
+# 3. Restore fulfillment từ bản backup (thay <ts> bằng timestamp file thật)
+gunzip -c backups/fulfillment-<ts>.sql.gz | \
+  docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d fulfillment
+
+# 4. Lặp y hệt cho batching — drop/create đúng DB batching, fulfillment giữ nguyên
+docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" \
+  -c 'DROP DATABASE batching WITH (FORCE);' \
+  -c 'CREATE DATABASE batching;'
+gunzip -c backups/batching-<ts>.sql.gz | \
+  docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d batching
+
+# 5. Start apps lại
+docker compose start fulfillment-service batching-service bff
+#    - migrate-on-boot idempotent: schema trong dump đã có Flyway/golang-migrate
+#      history table → các migration chạy lại là no-op.
+#    - seed-verify boot check (fulfillment) thấy orders > 0 → skip seed — ĐÚNG
+#      hành vi: DB sau restore không rỗng, service KHÔNG tự seed đè dữ liệu.
+
+# 6. Verify
+curl -s localhost:8080/health          # BFF /health: status ok, db fulfillment+batching ok
+docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d fulfillment \
+  -c "SELECT fulfill_code FROM orders WHERE fulfill_code = 'ORD-3001';"   # thấy 1 dòng
+```
+
+Dump KHÔNG chứa volume `keycloak-data` (users/realm) — restore DB không khôi phục Keycloak; volume đó persist riêng trong compose. Chỉ restore 1 DB (vd chỉ fulfillment)? Bỏ qua bước 4.
+
 ## Tạo / đổi user Keycloak (SF-5 deploy guide)
 
 Realm import chỉ chạy khi volume `keycloak-data` rỗng/mới. Đổi realm JSON hoặc thêm user mẫu:
