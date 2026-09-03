@@ -183,15 +183,15 @@ CREATE SEQUENCE IF NOT EXISTS transfer_ticket_code_seq START 1;
 **Files:**
 - Create: `e2e/tests/07-order-ops.spec.ts`
 
-- [ ] **Step 1: Spec** — dùng storageState pattern e2e/auth.setup.ts (coordinator + warehouse):
+- [x] **Step 1: Spec** — dùng storageState pattern e2e/auth.setup.ts (coordinator + warehouse):
   1. Coordinator: chọn 1 đơn → mở transfer hub modal → suggest → confirm → badge `transfer-badge-*` hiện → mở history → row PENDING với lý do
   2. Chặn tách nợ: đơn tách nợ → modal disable (nếu seed có đơn tách nợ — soát seed; không → skip + note)
   3. Delivery time: chọn ngày mai + slot → row update; DatePicker ngày quá khứ disabled
   4. Wizard: mở tạo phiếu → step 1 preset radio → chọn → DnD step như cũ
   5. Role 403: warehouse storageState → PUT note + PUT delivery-time + POST transfer-tickets → 403; FE ẩn nút
   6. Note: PUT note happy path
-- [ ] **Step 2: Chạy E2E=1** — spec mới xanh + specs cũ 01/02/04 vẫn xanh (regression DeliveryTimeCell + role gates).
-- [ ] **Step 3: Commit** `test(e2e): 07-order-ops — transfer/delivery/preset/roles`
+- [x] **Step 2: Chạy E2E=1** — spec mới xanh + specs cũ 01/02/04 vẫn xanh (regression DeliveryTimeCell + role gates).
+- [x] **Step 3: Commit** `test(e2e): 07-order-ops — transfer/delivery/preset/roles`
 
 ---
 
