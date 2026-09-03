@@ -151,7 +151,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
   // OIDC_JWKS_URL = base riêng cho fetch JWKS/admin TRONG network của BFF
   // (compose: http://keycloak:8081 — localhost sai trong container). Unset →
   // dùng issuer base (dev host-run).
-  const internalBase = stripSlash(env.OIDC_JWKS_URL ?? issuerBase);
+  //
+  // SF-12 live-verify (E2E sau T7): contract "FULL cho cả 3" (ci.yml) cho phép
+  // OIDC_JWKS_URL là URL certs đầy đủ (…/protocol/openid-connect/certs — cùng
+  // 1 env mà Go/Java interceptor đọc). withRealm() chỉ idempotent với realm
+  // URL — certs URL KHÔNG: /realms/hubstore bị append vào CUỐI → jwksUrl +
+  // admin* URL rác → mọi Bearer DENY (UI trắng sau login, D1 trống). Strip
+  // suffix certs trước khi derive.
+  const JWKS_CERTS_SUFFIX = /\/protocol\/openid-connect\/certs\/?$/;
+  const internalBase = stripSlash(env.OIDC_JWKS_URL ?? issuerBase).replace(JWKS_CERTS_SUFFIX, '');
+  // internalBase giờ là realm URL HOẶC host base — admin* URL cần host-only
+  // origin (realm URL + /admin là path rác — gotcha ci.yml "adminBaseUrl
+  // derive sai khi FULL").
+  const internalOrigin = new URL(internalBase).origin;
   const grpcAddr = (portEnv: string | undefined, defaultPort: string): string => {
     const raw = portEnv ?? defaultPort;
     return raw.includes(':') ? raw : `localhost:${raw}`;
@@ -164,11 +176,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       jwksUrl: `${withRealm(internalBase)}/protocol/openid-connect/certs`,
       // Keycloak 26 admin API nằm dưới /admin — /realms/hubstore/users (không
       // /admin) trả 404 (mock test không bắt được — đã verify Keycloak thật).
-      adminBaseUrl: `${stripSlash(internalBase)}/admin${KC_REALM_PATH}`,
-      adminTokenUrl: `${stripSlash(internalBase)}/realms/master/protocol/openid-connect/token`,
+      adminBaseUrl: `${internalOrigin}/admin${KC_REALM_PATH}`,
+      adminTokenUrl: `${internalOrigin}/realms/master/protocol/openid-connect/token`,
       adminUsername: env.KEYCLOAK_ADMIN ?? 'admin',
       adminPassword: env.KEYCLOAK_ADMIN_PASSWORD ?? 'admin',
-      kcAdminTokenUrl: `${stripSlash(internalBase)}${KC_REALM_PATH}/protocol/openid-connect/token`,
+      kcAdminTokenUrl: `${internalOrigin}${KC_REALM_PATH}/protocol/openid-connect/token`,
       kcAdminClientId: env.KC_ADMIN_CLIENT_ID ?? 'hubstore-admin',
       kcAdminClientSecret: env.KC_ADMIN_CLIENT_SECRET ?? '',
     },
