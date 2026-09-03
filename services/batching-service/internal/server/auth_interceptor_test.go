@@ -14,6 +14,7 @@ import (
 	"math/big"
 	"net/http"
 	"net/http/httptest"
+	"sync/atomic"
 	"testing"
 	"time"
 
@@ -42,6 +43,15 @@ func init() {
 // jwksFixture — JWKS JSON từ testKey, serve qua httptest.
 func jwksFixture(t *testing.T) *httptest.Server {
 	t.Helper()
+	srv, _ := jwksFixtureCounting(t)
+	return srv
+}
+
+// jwksFixtureCounting — như jwksFixture, cộng counter số lần GET (cho test
+// refetch-on-unknown-kid / negative-cache).
+func jwksFixtureCounting(t *testing.T) (*httptest.Server, *int64) {
+	t.Helper()
+	var gets int64
 	b64 := func(b []byte) string { return base64.RawURLEncoding.EncodeToString(b) }
 	doc, err := json.Marshal(map[string]interface{}{
 		"keys": []map[string]string{{
@@ -54,11 +64,12 @@ func jwksFixture(t *testing.T) *httptest.Server {
 		t.Fatalf("jwks marshal: %v", err)
 	}
 	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&gets, 1)
 		w.Header().Set("Content-Type", "application/json")
 		_, _ = w.Write(doc)
 	}))
 	t.Cleanup(srv.Close)
-	return srv
+	return srv, &gets
 }
 
 func mintToken(t *testing.T, claims jwt.MapClaims) string {
@@ -156,6 +167,19 @@ func TestAuthBearerExpired_Denied(t *testing.T) {
 	}
 }
 
+// Review P1 (FI-257): JWT hợp lệ NHƯNG thiếu exp claim phải DENY
+// (jwt.WithExpirationRequired) — không chỉ token exp hết hạn.
+func TestAuthBearerNoExpClaim_Denied(t *testing.T) {
+	srv := jwksFixture(t)
+	authEnv(t, srv)
+	claims := validClaims()
+	delete(claims, "exp")
+	_, _, err := callAuth(t, bearerCtx(mintToken(t, claims)), "/hubstore.batching.v1.BatchingService/CreateBatch")
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("thiếu exp claim → %v, want PermissionDenied", err)
+	}
+}
+
 func TestAuthBearerWrongIssuer_Denied(t *testing.T) {
 	srv := jwksFixture(t)
 	authEnv(t, srv)
@@ -205,6 +229,70 @@ func TestAuthInternalTokenWrong_Denied(t *testing.T) {
 	_, _, err := callAuth(t, ctx, "/hubstore.batching.v1.BatchingService/CreateBatch")
 	if status.Code(err) != codes.PermissionDenied {
 		t.Fatalf("wrong internal token → %v, want PermissionDenied", err)
+	}
+}
+
+// Review P1 (FI-257): env INTERNAL_SERVICE_TOKEN rỗng → internal-token path
+// KHÔNG được allow (constant-time compare có guard len > 0).
+func TestAuthInternalTokenEmptyEnvConfig_Denied(t *testing.T) {
+	srv := jwksFixture(t)
+	authEnv(t, srv)
+	t.Setenv("INTERNAL_SERVICE_TOKEN", "")
+	_, _, err := callAuth(t, metadata.NewIncomingContext(context.Background(),
+		metadata.Pairs("x-internal-token", "whatever-attacker-sends")),
+		"/hubstore.batching.v1.BatchingService/CreateBatch")
+	if status.Code(err) != codes.PermissionDenied {
+		t.Fatalf("env rỗng + token bất kỳ → %v, want PermissionDenied", err)
+	}
+}
+
+// Review P1 (FI-257): kid lạ khi cache ĐÃ có keys (TTL còn tươi) vẫn phải
+// trigger JWKS refetch (key rotation không bị TTL branch chặn).
+func TestJWKSCache_RefetchOnUnknownKid_AfterCachePopulated(t *testing.T) {
+	srv, gets := jwksFixtureCounting(t)
+	c := newJWKSCache(srv.URL)
+
+	if _, err := c.lookup(testKID); err != nil {
+		t.Fatalf("known kid lần đầu: %v", err)
+	}
+	if n := atomic.LoadInt64(gets); n != 1 {
+		t.Fatalf("GET count sau lần đầu = %d, want 1", n)
+	}
+	time.Sleep(jwksRefetchCooldown + 100*time.Millisecond) // ra khỏi cooldown
+	if _, err := c.lookup("rotated-kid"); err == nil {
+		t.Fatal("kid lạ phải deny")
+	}
+	if n := atomic.LoadInt64(gets); n != 2 {
+		t.Fatalf("kid lạ phải trigger refetch dù cache còn tươi: GET count = %d, want 2", n)
+	}
+	// Kid lạ thứ hai NGAY SAU đó → cooldown chặn, KHÔNG GET thêm.
+	if _, err := c.lookup("another-kid"); err == nil {
+		t.Fatal("kid lạ trong cooldown phải deny")
+	}
+	if n := atomic.LoadInt64(gets); n != 2 {
+		t.Fatalf("cooldown phải chặn refetch: GET count = %d, want 2", n)
+	}
+}
+
+// Review P1 (FI-257): JWKS fetch FAIL → negative-cache (cooldown) — request
+// sau NGAY LẬP TỨC không spam Keycloak thêm.
+func TestJWKSCache_FetchFail_NegativeCache_NoSpam(t *testing.T) {
+	var gets int64
+	srv := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		atomic.AddInt64(&gets, 1)
+		http.Error(w, "boom", http.StatusInternalServerError)
+	}))
+	t.Cleanup(srv.Close)
+	c := newJWKSCache(srv.URL)
+
+	if _, err := c.lookup(testKID); err == nil {
+		t.Fatal("JWKS 500 → lookup phải fail")
+	}
+	if _, err := c.lookup(testKID); err == nil {
+		t.Fatal("lookup thứ hai (ngay sau fail) cũng phải fail")
+	}
+	if n := atomic.LoadInt64(&gets); n != 1 {
+		t.Fatalf("fetch fail phải negative-cache: GET count = %d, want 1", n)
 	}
 }
 

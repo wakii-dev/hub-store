@@ -11,8 +11,10 @@
 // Allowlist (pass-through, không auth): /grpc.health.v1.Health/ +
 // /grpc.reflection.v1.ServerReflection/ (cả v1alpha) — grpcurl + readiness.
 //
-// JWKS: fetch qua net/http từ OIDC_JWKS_URL, cache 5 phút, refetch-on-unknown-kid
-// (cooldown 1s chống hammer khi bị flood kid lạ). golang-jwt/jwt/v4 (go 1.19 pin).
+// JWKS: fetch qua net/http từ OIDC_JWKS_URL (NGOÀI mutex — không serialize mọi
+// request khi JWKS chậm), cache 5 phút, refetch-on-unknown-kid KỂ CẢ khi TTL còn
+// tươi (Keycloak có thể vừa rotate), cooldown 1s (kể cả sau fetch FAIL — negative
+// cache chống spam). golang-jwt/jwt/v4 (go 1.19 pin).
 //
 // AUTH_DISABLED=1: CHỈ cho unit-test harness — bypass + WARN loud mỗi 60s.
 // Compose KHÔNG được định nghĩa biến này.
@@ -21,6 +23,7 @@ package server
 import (
 	"context"
 	"crypto/rsa"
+	"crypto/subtle"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
@@ -49,7 +52,7 @@ const (
 	// defIssuer = GIÁ TRỊ claim `iss` trong JWT (full realm URL) — KHÔNG phải
 	// issuer base như BFF env (BFF tự append /realms/hubstore). Live-verify:
 	// Keycloak phát token iss=http://localhost:8081/realms/hubstore.
-	defIssuer = "http://localhost:8081/realms/hubstore"
+	defIssuer      = "http://localhost:8081/realms/hubstore"
 	envInternalTok = "INTERNAL_SERVICE_TOKEN"
 	envAuthOff     = "AUTH_DISABLED"
 
@@ -105,30 +108,43 @@ func newJWKSCache(url string) *jwksCache {
 
 func (c *jwksCache) lookup(kid string) (*rsa.PublicKey, error) {
 	c.mu.Lock()
-	defer c.mu.Unlock()
-	if key, ok := c.keys[kid]; ok {
-		return key, nil
+	if key, ok := c.keys[kid]; ok && time.Since(c.fetchedAt) < jwksCacheTTL {
+		c.mu.Unlock()
+		return key, nil // cache hit + TTL tươi
 	}
-	// Unknown kid → refetch 1 lần (cooldown chống hammer), sau đó fail.
+	// Cache miss (kid lạ — KỂ CẢ khi TTL còn tươi, Keycloak có thể vừa rotate key)
+	// hoặc TTL hết (refresh định kỳ) → refetch 1 lần, cooldown chống hammer.
 	if !c.lastFetch.IsZero() && time.Since(c.lastFetch) < jwksRefetchCooldown {
+		c.mu.Unlock()
+		if key, ok := c.keys[kid]; ok {
+			return key, nil // refresh định kỳ bị cooldown → dùng key cũ
+		}
 		return nil, fmt.Errorf("unknown kid %q", kid)
 	}
-	if time.Since(c.fetchedAt) < jwksCacheTTL && !c.fetchedAt.IsZero() {
-		// Cache còn tươi mà vẫn thiếu kid → refetch nữa cũng vô ích.
-		return nil, fmt.Errorf("unknown kid %q", kid)
-	}
-	if err := c.fetchLocked(); err != nil {
+	c.lastFetch = time.Now() // negative-cache: đặt TRƯỚC fetch → fetch FAIL cũng cooldown
+	c.mu.Unlock()
+
+	if err := c.fetch(); err != nil {
+		c.mu.Lock()
+		key, ok := c.keys[kid] // refresh định kỳ fail mà có key cũ → dùng tạm
+		c.mu.Unlock()
+		if ok {
+			return key, nil
+		}
 		return nil, fmt.Errorf("jwks fetch: %w", err)
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	if key, ok := c.keys[kid]; ok {
 		return key, nil
 	}
 	return nil, fmt.Errorf("unknown kid %q (sau refetch)", kid)
 }
 
-// fetchLocked — GET JWKS, parse {keys:[{kid,kty,n,e,alg}]} → rsa.PublicKey map.
-// Caller giữ lock.
-func (c *jwksCache) fetchLocked() error {
+// fetch — GET JWKS NGOÀI mutex (không serialize mọi request khi JWKS chậm/down),
+// parse {keys:[{kid,kty,n,e,alg}]} → rsa.PublicKey map. Chỉ giữ lock để ghi kết
+// quả. Fail không ghi keys — cooldown (lastFetch đã set trong lookup) chặn spam.
+func (c *jwksCache) fetch() error {
 	resp, err := c.client.Get(c.url)
 	if err != nil {
 		return err
@@ -168,9 +184,10 @@ func (c *jwksCache) fetchLocked() error {
 		}
 		keys[k.KID] = &rsa.PublicKey{N: new(big.Int).SetBytes(n), E: e}
 	}
+	c.mu.Lock()
+	defer c.mu.Unlock()
 	c.keys = keys
-	now := time.Now()
-	c.fetchedAt, c.lastFetch = now, now
+	c.fetchedAt = time.Now()
 	return nil
 }
 
@@ -241,9 +258,13 @@ func AuthUnaryInterceptor(ctx context.Context, req interface{}, info *grpc.Unary
 	}
 
 	// 2) Internal service token — máy-máy (Go→Java ngược chiều là outbound;
-	// inbound ở đây: reconciler/controller-style callers).
-	if tok := firstMD(md, "x-internal-token"); tok != "" && tok == os.Getenv(envInternalTok) {
-		return handler(ctx, req) // tin x-user-role/x-user-name metadata
+	// inbound ở đây: reconciler/controller-style callers). So sánh constant-time
+	// (chống timing attack); env rỗng → không bao giờ allow.
+	if tok := firstMD(md, "x-internal-token"); tok != "" {
+		if envTok := os.Getenv(envInternalTok); envTok != "" &&
+			subtle.ConstantTimeCompare([]byte(tok), []byte(envTok)) == 1 {
+			return handler(ctx, req) // tin x-user-role/x-user-name metadata
+		}
 	}
 
 	// 3) Fail-closed.
@@ -260,7 +281,8 @@ func firstMD(md metadata.MD, key string) string {
 	return ""
 }
 
-// verifyBearer — RS256 + exp (parser v4 tự validate exp trên MapClaims) + iss.
+// verifyBearer — RS256 + exp BẮT BUỘC (v4 parser chỉ validate exp KHI CÓ claim;
+// thiếu exp phải tự check — token không exp sẽ qua validator) + iss.
 // Trả role đã derive từ realm_access.roles (claim wins). Không role hợp lệ → deny.
 func verifyBearer(raw string) (string, error) {
 	issuer := envOr(envIssuer, defIssuer)
@@ -278,6 +300,9 @@ func verifyBearer(raw string) (string, error) {
 	claims, ok := tok.Claims.(jwt.MapClaims)
 	if !ok || !tok.Valid {
 		return "", fmt.Errorf("token invalid")
+	}
+	if _, hasExp := claims["exp"]; !hasExp {
+		return "", fmt.Errorf("token thiếu exp claim")
 	}
 	if iss, _ := claims["iss"].(string); iss != issuer {
 		return "", fmt.Errorf("iss %q != expected %q", iss, issuer)

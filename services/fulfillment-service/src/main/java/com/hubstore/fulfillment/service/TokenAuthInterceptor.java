@@ -1,6 +1,8 @@
 package com.hubstore.fulfillment.service;
 
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
+import java.security.MessageDigest;
 import java.util.List;
 import java.util.Map;
 import java.util.Set;
@@ -143,7 +145,9 @@ public class TokenAuthInterceptor implements ServerInterceptor {
 
         String internal = headers.get(INTERNAL_TOKEN_METADATA);
         if (internal != null && !internal.isBlank() && !this.internalToken.isBlank()
-                && this.internalToken.equals(internal)) {
+                && MessageDigest.isEqual( // constant-time — chống timing attack
+                        this.internalToken.getBytes(StandardCharsets.UTF_8),
+                        internal.getBytes(StandardCharsets.UTF_8))) {
             return next.startCall(call, headers); // tin x-user-role / x-user-name metadata
         }
 
