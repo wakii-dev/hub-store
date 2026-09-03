@@ -362,6 +362,27 @@ describe('fallback polling state machine (Task 5)', () => {
     expect(invalidateTags).toHaveBeenCalledWith(TAGS);
   });
 
+  it('honors the window.__REALTIME_POLL_INTERVAL_MS__ e2e override (Task 6 seam)', () => {
+    vi.useFakeTimers();
+    const global = globalThis as { __REALTIME_POLL_INTERVAL_MS__?: number };
+    global.__REALTIME_POLL_INTERVAL_MS__ = 1_000;
+    try {
+      const { options, invalidateTags } = baseOptions();
+      const stream = createRealtimeStream(options);
+      enterPolling(stream);
+      // override interval — 1s ticks, NOT the 30s default
+      vi.advanceTimersByTime(1_000);
+      expect(invalidateTags).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1_000);
+      expect(invalidateTags).toHaveBeenCalledTimes(2);
+      // …and less than one default period has elapsed
+      vi.advanceTimersByTime(POLL_INTERVAL_MS - 2_000);
+      expect(invalidateTags).toHaveBeenCalledTimes(POLL_INTERVAL_MS / 1_000);
+    } finally {
+      delete global.__REALTIME_POLL_INTERVAL_MS__;
+    }
+  });
+
   it('SSE retry opens again → polling cleared, counter reset, back to connected', () => {
     vi.useFakeTimers();
     const { options, invalidateTags } = baseOptions();

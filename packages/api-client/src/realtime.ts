@@ -39,6 +39,20 @@ export const MAX_SSE_FAILURES = 2;
 /** Delay between manual reconnects after a fatal connect failure (fresh token). */
 export const RECONNECT_DELAY_MS = 3_000;
 
+/**
+ * E2E seam (SF-10 Task 6): the 30s fallback poll is too slow for CI, and an
+ * `options.pollIntervalMs` field would not be injectable into a built remote
+ * bundle. Playwright injects `window.__REALTIME_POLL_INTERVAL_MS__` via
+ * `addInitScript` BEFORE app load; the polling interval is resolved when
+ * polling mode is entered. Apps never set the global — the exported constant
+ * stays the default.
+ */
+function resolvePollIntervalMs(): number {
+  const override = (globalThis as { __REALTIME_POLL_INTERVAL_MS__?: unknown })
+    .__REALTIME_POLL_INTERVAL_MS__;
+  return typeof override === 'number' && override > 0 ? override : POLL_INTERVAL_MS;
+}
+
 /** Synthetic BFF event — the BFF's Kafka consumer died; stream is degraded. */
 const DEGRADED_EVENT_TYPE = 'stream.degraded';
 
@@ -171,7 +185,7 @@ export function createRealtimeStream(options: CreateRealtimeStreamOptions): Real
     closeSource(); // stop native reconnect churn — one fresh attempt per retry tick
     pollingTimer = setInterval(() => {
       dispatch?.(api.util.invalidateTags([...invalidationTags]));
-    }, POLL_INTERVAL_MS);
+    }, resolvePollIntervalMs());
     retryTimer = setInterval(() => {
       closeSource();
       openConnection();
