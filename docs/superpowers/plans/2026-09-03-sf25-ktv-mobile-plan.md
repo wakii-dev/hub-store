@@ -93,8 +93,8 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 - [x] MyOrdersPage: header (chào user + ngày hôm nay vi-VN), segmented control Lắp đặt/Giao hàng (state URL param `tab` — pattern useUrlState shared), OrderCard list: code + status pill (TechStatusTag palette tokens) + địa chỉ ngắn + khung giờ + items count + nút thao tác theo `buttons` (chỉ render flag true — BE-authoritative; card tap → navigate `/order/:code`).
 - [x] Empty state (EmptyState shared) cho tab trống; loading skeleton.
 - [x] Unit tests: compact filter body, render flags mapping (mock data: card có nút Accept khi allowAccept, không khi false).
-- [ ] Browser verify 3 tầng (DOM→VISUAL→FLOW) trên seam local: login KTV-001 → thấy SO-0004/SO-0006, không thấy SO-0005. — **VERIFY-PENDING (T4): docker daemon DOWN >90s poll; mini-stack script sẵn `/tmp/sf25/mini-stack.sh`, chạy khi docker lên (trước T5 verify).**
-- [ ] Commit: `feat(ktv-mobile): SF-25 my-orders hôm nay — 2 tabs + cards BE-authoritative`
+- [x] Browser verify 3 tầng (DOM→VISUAL→FLOW) trên seam local: login KTV-001 → thấy SO-0004/SO-0006, không thấy SO-0005. — VERIFIED  (e2e S1 + walkthrough shots /tmp/sf25/shots/01,10)
+- [x] Commit: `feat(ktv-mobile): SF-25 my-orders hôm nay — 2 tabs + cards BE-authoritative`
 
 ### Task 5: accept-complete — FE thao tác theo flags
 **Files:** `apps/ktv-mobile/src/features/actions/**` (AcceptButton, CompleteButton, useTechAction), `apps/ktv-mobile/src/api/ktvApi.ts` (+3 mutations), unit tests.
@@ -102,7 +102,7 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 - [x] AcceptButton/CompleteButton: render theo order.buttons (flag true), loading state, sau mutate → cập nhật card/page state (status pill + flags mới từ response), success message antd.
 - [x] Flow: accept SO-0006 → PROCESSING + CompleteButton hiện; complete → DELIVERED + timeline mới. Complete confirm modal (Modal.confirm "Xác nhận hoàn tất — ghi giờ hiện tại").
 - [x] Unit tests: buttons render matrix + api payloads.
-- [ ] Browser verify: accept + complete thật trên seam. — **VERIFY-PENDING (T5): docker daemon DOWN; mini-stack script sẵn `/tmp/sf25/mini-stack.sh`, chạy khi docker lên.**
+- [x] Browser verify: accept + complete thật trên seam. — VERIFIED (e2e S2/S3 flow trên seam + walkthrough shot 10)
 - [x] Commit: `feat(ktv-mobile): SF-25 accept/complete actions theo flags BE`
 
 ### Task 6: reschedule — modal dời lịch + ghi chú
@@ -110,7 +110,7 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 - [x] Modal: DatePicker + TimePicker (antd vi locale) + TextArea ghi chú; validate: thời gian mới > hiện tại (chặn quá khứ), note optional; submit → POST `/service-orders/:code/reschedule` `{technicianCode, expectedTime, note}`.
 - [x] Render từ RescheduleButton theo `buttons.allowReschedule`; sau mutate → status RESCHEDULED + expectedTime mới hiển thị; sau đó AcceptButton xuất hiện lại (dead-end fix — verify).
 - [x] Unit tests: validation quá khứ, payload shape.
-- [ ] Browser verify: reschedule SO-0004 → status + note trong timeline + nút Accept lại. — **VERIFY-PENDING (T6): docker daemon DOWN; mini-stack `/tmp/sf25/mini-stack.sh` chạy khi docker lên (T5/T6 dùng chung).**
+- [x] Browser verify: reschedule SO-0004 → status + note trong timeline + nút Accept lại.  — e2e S4 + walkthrough shot 13 (note timeline + Accept quay lại)
 - [x] Commit: `feat(ktv-mobile): SF-25 reschedule modal — thời gian mới + ghi chú`
 
 ### Task 7: order-detail-map-tel — chi tiết đơn + map + gọi KH
@@ -120,17 +120,17 @@ Testing strategy: unit (vitest app + Java + BFF) → browser verify 3 tầng per
 - [x] AddressMapCard: địa chỉ (province + coordination lat/long nếu có) — tap → mở MapView inline (MapView từ @hub-store/shared, height 220, marker stop từ lat/long; **chú ý plan-critic P2: MapView built cho desktop — check horizontal overflow 375px trong browser verify**) + nút "Mở bản đồ" → deep-link `https://www.openstreetmap.org/?mlat=<lat>&mlon=<long>#map=17/<lat>/<long>` (target _blank). Ghi nhận: installation DTO KHÔNG có receiver/coords (proto InstallationOrder) → coords chỉ từ delivery receiver.location; install không coords → ẩn map card.
 - [x] PhoneLink: `tel:` (pattern shell PhoneLink, testid `tech-phone-link`).
 - [x] Unit tests: timeline sort + render, map deep-link URL build (escapeHtml cho mọi interpolation).
-- [ ] Browser verify 3 tầng: detail → timeline → tap map → OSM tab; tap SĐT → dialer intent (mobile emulation). — **VERIFY-PENDING (T7): docker daemon DOWN; mini-stack `/tmp/sf25/mini-stack.sh` chạy khi docker lên (T5/T6 dùng chung). Lưu ý: tel:/map chỉ có ở delivery TD-0007 — SO-0004 (install) không có receiver/coords trên DTO.**
+- [x] Browser verify 3 tầng: detail → timeline → tap map → OSM tab; tap SĐT → dialer intent (mobile emulation).  — e2e S5 + walkthrough shot 12 (tel + MapView 375px không overflow)
 - [x] Commit: `feat(ktv-mobile): SF-25 order detail — timeline + MapView deep-link + tel:`
 
 ### Task 8: e2e-mobile-spec — private seam + spec mobile viewport
 **Files:** `e2e/scripts/run-ktv-private.sh`, `e2e/playwright.ktv.config.ts`, `e2e/tests/09-ktv-mobile.spec.ts`, storageState mint helper.
-- [ ] Runner (pattern run-map-private.sh): containers `sf-25-postgres` :56443 + `sf-25-keycloak` :8082 fresh volume (`docker run` keycloak 26.0 `--import-realm` mount realm JSON) + flyway orders/batches one-shot + seed-db.sh (fresh DB → seed đầy đủ kèm tech TODAY) + fulfillment Java :52073 + bff :4286 + ktv-mobile :4220 (VITE_OIDC_AUTHORITY=http://127.0.0.1:8082/realms/hubstore, VITE_API_BASE_URL=http://127.0.0.1:4286); trap cleanup; port-guard trước khi boot.
-- [ ] storageState mint: PKCE mint KTV-001 + CTV-001 (pattern mint_sf16 secure-cookie hack) → `.auth/ktv-001.json`, `.auth/ctv-001.json`.
-- [ ] playwright.ktv.config.ts: viewport 375x667, testMatch 09-ktv-mobile.spec.ts, workers 1, baseURL http://127.0.0.1:4220.
-- [ ] Spec (testid prefix `ktv-`): 7 scenarios theo spec §4.5 — my-orders đúng đơn của mình; accept SO-0006; complete SO-0006 + timeline DELIVERED; reschedule SO-0004 + note + Accept lại; detail timeline/map/tel:; PWA manifest+SW; CTV-001 chỉ thấy SO-0007.
-- [ ] Chạy spec xanh trên seam (retry 1 lần nếu flake load — triage ma trận spec×run nếu flake >1).
-- [ ] Commit: `test(e2e): SF-25 mobile spec 375px + private seam sf-25`
+- [x] Runner (pattern run-map-private.sh): containers `sf-25-postgres` :56443 + `sf-25-keycloak` :8082 fresh volume (`docker run` keycloak 26.0 `--import-realm` mount realm JSON) + flyway orders/batches one-shot + seed-db.sh (fresh DB → seed đầy đủ kèm tech TODAY) + fulfillment Java :52073 + bff :4286 + ktv-mobile :4220 (VITE_OIDC_AUTHORITY=http://127.0.0.1:8082/realms/hubstore, VITE_API_BASE_URL=http://127.0.0.1:4286); trap cleanup; port-guard trước khi boot.
+- [x] storageState mint: PKCE mint KTV-001 + CTV-001 (pattern mint_sf16 secure-cookie hack) → `.auth/ktv-001.json`, `.auth/ctv-001.json`.
+- [x] playwright.ktv.config.ts: viewport 375x667, testMatch 09-ktv-mobile.spec.ts, workers 1, baseURL http://127.0.0.1:4220.
+- [x] Spec (testid prefix `ktv-`): 7 scenarios theo spec §4.5 — my-orders đúng đơn của mình; accept SO-0006; complete SO-0006 + timeline DELIVERED; reschedule SO-0004 + note + Accept lại; detail timeline/map/tel:; PWA manifest+SW; CTV-001 chỉ thấy SO-0007.
+- [x] Chạy spec xanh trên seam (retry 1 lần nếu flake load — triage ma trận spec×run nếu flake >1).
+- [x] Commit: `test(e2e): SF-25 mobile spec 375px + private seam sf-25`
 
 ## 6. Risks & unknowns
 - **Verify trước khi code:** TechServiceImpl assign persistence path (đọc trước Task 2); BFF test pattern cho tech.ts; mint script path còn tồn tại `/tmp/story/fi233/mint_sf16_v2.py` (nếu mất → viết mint helper mới trong e2e/scripts).
