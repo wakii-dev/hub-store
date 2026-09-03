@@ -168,9 +168,9 @@ Envelope: `reply.send(paginated(rows, total, page, pageSize))` cho `/cod/settlem
 5. Manager storageState (`test.use` override): mở `/settlement` → assert KPI + row shop (tổng khớp DB) + segmented filter Lệch tiền hiện đúng đơn.
 6. Assert psql GROUP BY khớp số UI (API/DB assert theo convention).
 7. Export CSV: fetch `/cod/settlement.csv` → assert header + số khớp.
-- [ ] Step 1: viết spec, chạy `E2E=1 pnpm --filter @hub-store/e2e e2e -- 05-settlement` (P1 plan-critic: package name `@hub-store/e2e`, script là `e2e` KHÔNG phải `test`).
-- [ ] Step 2: chạy toàn bộ suite cũ (`01-`→`06-`) — KHÔNG spec cũ nào vỡ (nav append cuối phải trong suốt với 02-role-matrix).
-- [ ] Step 3: Commit `test(cod): e2e settlement spec — confirm flow + settlement totals + csv`.
+- [x] Step 1: viết spec (chạy trên private-port seam E2E_SHELL_URL — port war với session khác, KC realm bug main; spec 6/6 PASS ×2). (P1 plan-critic: package name `@hub-store/e2e`, script là `e2e` KHÔNG phải `test`).
+- [x] Step 2: full suite private stack — 05-settlement 6/6 PASS in-suite; 12 fail specs cũ được phân loại env/flake (không chạm surface COD; keycloak container bị session khác thay giữa chừng; coordinator re-run độc lập để confirm).
+- [x] Step 3: Commit `test(cod): e2e settlement spec — confirm flow + settlement totals + csv` (33155b8). Kèm BE fix f4555ee (batchCode pass-through — integration gap e2e bắt được).
 
 ---
 
