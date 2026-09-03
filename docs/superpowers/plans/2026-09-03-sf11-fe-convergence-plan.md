@@ -76,12 +76,12 @@ Xem spec §5 — 17 files (2 NEW FE pages/slice, 3 NEW specs, 12 modify). Consum
 
 ### Task 1: audit-viewer — slice + permission + page + nav (FI-256)
 **Files:** Create `packages/api-client/src/slices/audit.ts`, `apps/shell/src/features/audit/AuditPage.tsx`; Modify `apps/shell/src/App.tsx` (route `/audit` guard `audit.view`), `apps/shell/src/nav.ts` (NAV_ROUTES **append cuối mảng** — constraint `firstPathForRole`, đọc comment trong file), `apps/shell/src/features/layout/AppLayout.tsx` (NAV_ICONS thêm audit icon), `apps/shell/src/i18n.ts` (VI+EN: `nav.audit`, audit page title/filters/columns/empty), `packages/shared/src/hooks/usePermissions.tsx` (PERMISSIONS + `audit.view`; PERMISSION_MATRIX chỉ Manager=true).
-- [ ] Step 1: Đọc `features/users/UsersPage.tsx` (page pattern), `slices/d2c.ts` (slice pattern), `routes/fulfillment.ts` BFF (audit query shape: `AuditQuery` actor/action/targetType/targetId/dateFrom/dateTo/page/pageSize; response items `{id, actor, action, targetType, targetId, detail(object|null), createdAt}`).
-- [ ] Step 2: Slice `audit.ts` — RTKQ `listAudit` query GET `/fulfillment/audit` params serialize (dateFrom/dateTo bare YYYY-MM-DD); unit test params.
-- [ ] Step 3: Permission `audit.view` + matrix Manager-only; unit test has() cho Manager/Coordinator/Admin.
-- [ ] Step 4: AuditPage — page-head (title i18n), filter row (Input actor, Input action, RangePicker), Table server-paginated pageSize 20 (showTotal total), columns: createdAt (format Asia/Ho_Chi_Minh `HH:mm DD/MM/YYYY`), actor, action (Tag), target (`targetType/targetId`), `expandedRowRender` pretty JSON detail (guard typeof object, null → text rỗng). TableSkeleton loading, EmptyState 0 items. Table card class theo SF-6 (`sf6-table-card`/pattern D1).
-- [ ] Step 5: Route + nav (icon import từ @ant-design/icons sẵn có) + i18n keys.
-- [ ] Step 6: `pnpm --filter @hub-store/shell typecheck` + unit tests pass; commit `feat(sf11): audit viewer — slice + permission + page + nav`.
+- [x] Step 1: Đọc `features/users/UsersPage.tsx` (page pattern), `slices/d2c.ts` (slice pattern), `routes/fulfillment.ts` BFF (audit query shape: `AuditQuery` actor/action/targetType/targetId/dateFrom/dateTo/page/pageSize; response items `{id, actor, action, targetType, targetId, detail(object|null), createdAt}`).
+- [x] Step 2: Slice `audit.ts` — RTKQ `listAudit` query GET `/fulfillment/audit` params serialize (dateFrom/dateTo bare YYYY-MM-DD); unit test params.
+- [x] Step 3: Permission `audit.view` + matrix Manager-only; unit test has() cho Manager/Coordinator/Admin.
+- [x] Step 4: AuditPage — page-head (title i18n), filter row (Input actor, Input action, RangePicker), Table server-paginated pageSize 20 (showTotal total), columns: createdAt (format Asia/Ho_Chi_Minh `HH:mm DD/MM/YYYY`), actor, action (Tag), target (`targetType/targetId`), `expandedRowRender` pretty JSON detail (guard typeof object, null → text rỗng). TableSkeleton loading, EmptyState 0 items. Table card class theo SF-6 (`sf6-table-card`/pattern D1).
+- [x] Step 5: Route + nav (icon import từ @ant-design/icons sẵn có) + i18n keys.
+- [x] Step 6: `pnpm --filter @hub-store/shell typecheck` + unit tests pass; commit `feat(sf11): audit viewer — slice + permission + page + nav`.
 - **Verify:** typecheck xanh; unit xanh; (browser 3-tier do coordinator chạy sau nhóm).
 
 ### Task 2: export-ui — helper + D1 button (FI-256)

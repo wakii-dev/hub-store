@@ -20,6 +20,7 @@ import LoginPage from "./features/login/LoginPage";
 import ForgotPasswordPage from "./features/login/ForgotPasswordPage";
 import TechServicePage from "./features/tech/TechServicePage";
 import UsersPage from "./features/users/UsersPage";
+import AuditPage from "./features/audit/AuditPage";
 import AreaListPage from "./pages/area-staff/AreaListPage";
 import AreaFormPage from "./pages/area-staff/AreaFormPage";
 import RemoteBoundary from "./RemoteBoundary";
@@ -248,6 +249,15 @@ export default function App() {
                   element={
                     <RequirePermission permission="users.manage">
                       <UsersPage currentUsername={session.sub} />
+                    </RequirePermission>
+                  }
+                />
+                {/* SF-11 — Audit viewer (Manager-only, shell-local page). */}
+                <Route
+                  path="/audit"
+                  element={
+                    <RequirePermission permission="audit.view">
+                      <AuditPage />
                     </RequirePermission>
                   }
                 />

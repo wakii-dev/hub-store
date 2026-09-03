@@ -23,6 +23,9 @@ export const NAV_ROUTES: NavRoute[] = [
   // SF-18 — đặt CUỐI mảng: firstPathForRole lấy entry ĐẦU TIÊN role được phép,
   // d2c cuối để không đổi landing path của Coordinator/Manager/WarehouseOps.
   { path: '/hub-store-order/d2c', labelKey: 'nav.d2c', permission: 'd2c.view' },
+  // SF-11 — audit viewer Manager-only; append CUỐI (constraint firstPathForRole —
+  // chỉ Manager có audit.view nên không đổi landing path của role nào).
+  { path: '/audit', labelKey: 'nav.audit', permission: 'audit.view' },
 ];
 
 // Fallback theo permission (KHÔNG hard-code index — mảng có thể thêm entry đầu).
