@@ -36,6 +36,8 @@ export const fulfillmentResources: I18nResources = {
       "action.print": "In",
       "action.replan": "Tạo lại phiếu",
       "action.rebook": "Book lại vận đơn",
+      "action.cancelDelivery": "Hủy vận đơn",
+      "action.cancelDeliveryBatch": "Hủy vận đơn (cả phiếu)",
 
       "batch.status": "Trạng thái phiếu",
 
@@ -45,6 +47,19 @@ export const fulfillmentResources: I18nResources = {
       "cancel.ok": "Xác nhận hủy",
       "cancel.success": "Đã hủy phiếu {{code}}",
       "cancel.failed": "Hủy phiếu thất bại",
+
+      "cancelDelivery.title": "Hủy vận đơn {{code}}",
+      "cancelDelivery.batchTitle": "Hủy vận đơn cả phiếu {{code}}",
+      "cancelDelivery.reasonLabel": "Lý do hủy",
+      "cancelDelivery.ok": "Xác nhận hủy",
+      "cancelDelivery.autoNote": "Hủy vận đơn bởi {{user}} — {{scope}}",
+      "cancelDelivery.success": "Đã hủy vận đơn {{code}}",
+      "cancelDelivery.failed": "Hủy vận đơn thất bại",
+      "cancelDelivery.resultsTitle": "Kết quả hủy vận đơn — {{code}}",
+      "cancelDelivery.resultsCancelledCount": "Đã hủy {{count}}/{{total}} vận đơn",
+      "cancelDelivery.planningId": "Planning ID",
+      "cancelDelivery.status": "Trạng thái",
+      "cancelDelivery.close": "Đóng",
 
       "complete.title": "Hoàn tất soạn hàng",
       "complete.content": "Hoàn tất phiếu {{code}}? Đơn hàng sẽ chuyển sang Đã soạn.",
@@ -138,6 +153,8 @@ export const fulfillmentResources: I18nResources = {
       "action.print": "Print",
       "action.replan": "Re-create batch",
       "action.rebook": "Re-book shipment",
+      "action.cancelDelivery": "Cancel shipment",
+      "action.cancelDeliveryBatch": "Cancel shipments (whole batch)",
 
       "batch.status": "Batch status",
 
@@ -147,6 +164,19 @@ export const fulfillmentResources: I18nResources = {
       "cancel.ok": "Confirm cancel",
       "cancel.success": "Batch {{code}} cancelled",
       "cancel.failed": "Failed to cancel batch",
+
+      "cancelDelivery.title": "Cancel shipment {{code}}",
+      "cancelDelivery.batchTitle": "Cancel shipments of batch {{code}}",
+      "cancelDelivery.reasonLabel": "Cancellation reason",
+      "cancelDelivery.ok": "Confirm cancel",
+      "cancelDelivery.autoNote": "Shipment cancelled by {{user}} — {{scope}}",
+      "cancelDelivery.success": "Shipment {{code}} cancelled",
+      "cancelDelivery.failed": "Failed to cancel shipment",
+      "cancelDelivery.resultsTitle": "Cancel shipments result — {{code}}",
+      "cancelDelivery.resultsCancelledCount": "Cancelled {{count}}/{{total}} shipments",
+      "cancelDelivery.planningId": "Planning ID",
+      "cancelDelivery.status": "Status",
+      "cancelDelivery.close": "Close",
 
       "complete.title": "Complete picking",
       "complete.content": "Complete batch {{code}}? Orders will move to Prepared.",

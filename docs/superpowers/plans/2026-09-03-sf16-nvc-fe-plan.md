@@ -200,12 +200,12 @@ export const savePlanningMap = (batchCode: string, entries: PlanningMapEntry[]) 
 - Modify: `BatchListPage.tsx` (expand row + batch actions), i18n
 
 **Steps:**
-- [ ] 7.1 Expand row (`order-expand-{code}` — thêm item, không đổi item cũ): nếu planning map có entry cho orderCode → nút "Hủy vận đơn" testid `cancel-delivery-{orderCode}` → modal reason (pattern cancel-batch reason modal hiện có) với **textarea prefill auto-note**: `Hủy vận đơn bởi <username> — <batchCode>/<orderCode>` (editable) → `cancelDeliveryOrder {planningId, reason}` → refetch + `notification.success` + update map không cần (planning CANCELLED vẫn in-map).
-- [ ] 7.2 Batch action "Hủy vận đơn (cả phiếu)" testid `cancel-delivery-batch-{code}`: hiện khi batch ACTIVE + map có entries. Confirm reason modal → `cancelBatch {batchCode, reason}` → kết quả `Modal`/`Alert` per-planning (`results[]`: planningId → status CANCELLED/DRAFT) + `cancelledCount`.
-- [ ] 7.3 422 (BE-authoritative — VD booking COMPLETED không hủy được) → notification error `details[].message`.
-- [ ] 7.4 i18n vi/en. KHÔNG đụng nút Cancel legacy (label phân biệt: "Hủy phiếu" cũ vs "Hủy vận đơn" mới).
-- [ ] 7.5 Test: nút hiện theo map; cancel gọi đúng payload; partial results render.
-- [ ] 7.6 test + tsc → commit `feat(sf16): hủy vận đơn per-đơn/batch + auto-note + partial results`.
+- [x] 7.1 Expand row (`order-expand-{code}` — thêm item, không đổi item cũ): nếu planning map có entry cho orderCode → nút "Hủy vận đơn" testid `cancel-delivery-{orderCode}` → modal reason (pattern cancel-batch reason modal hiện có) với **textarea prefill auto-note**: `Hủy vận đơn bởi <username> — <batchCode>/<orderCode>` (editable) → `cancelDeliveryOrder {planningId, reason}` → refetch + `notification.success` + update map không cần (planning CANCELLED vẫn in-map).
+- [x] 7.2 Batch action "Hủy vận đơn (cả phiếu)" testid `cancel-delivery-batch-{code}`: hiện khi batch ACTIVE + map có entries. Confirm reason modal → `cancelBatch {batchCode, reason}` → kết quả `Modal`/`Alert` per-planning (`results[]`: planningId → status CANCELLED/DRAFT) + `cancelledCount`.
+- [x] 7.3 422 (BE-authoritative — VD booking COMPLETED không hủy được) → notification error `details[].message`.
+- [x] 7.4 i18n vi/en. KHÔNG đụng nút Cancel legacy (label phân biệt: "Hủy phiếu" cũ vs "Hủy vận đơn" mới).
+- [x] 7.5 Test: nút hiện theo map; cancel gọi đúng payload; partial results render.
+- [x] 7.6 test + tsc → commit `feat(sf16): hủy vận đơn per-đơn/batch + auto-note + partial results`.
 
 ### Task 8: tracking-modal — timeline 2 cột + link + status tags
 

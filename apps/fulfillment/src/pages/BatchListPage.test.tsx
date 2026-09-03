@@ -86,6 +86,9 @@ const completeMutate = vi.hoisted(() => vi.fn());
 const batchOrdersMock = vi.hoisted(() => vi.fn());
 const redeliverMutate = vi.hoisted(() => vi.fn());
 const navigateMock = vi.hoisted(() => vi.fn());
+// SF-16 Task 7 — delivery-batch cancel mutations.
+const cancelOrderMutate = vi.hoisted(() => vi.fn());
+const cancelDeliveryBatchMutate = vi.hoisted(() => vi.fn());
 
 vi.mock("../api/batchesApi", () => ({
   useFilterBatchesQuery: (arg: unknown) => filterMock(arg),
@@ -98,6 +101,13 @@ vi.mock("../api/batchesApi", () => ({
   useGetBatchOrdersQuery: (arg: unknown) => batchOrdersMock(arg),
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   useRedeliverOrderMutation: () => [redeliverMutate, { isLoading: false }] as any,
+}));
+
+vi.mock("../api/deliveryBatchApi", () => ({
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useCancelDeliveryOrderMutation: () => [cancelOrderMutate, { isLoading: false }] as any,
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  useCancelDeliveryBatchMutation: () => [cancelDeliveryBatchMutate, { isLoading: false }] as any,
 }));
 
 vi.mock("react-router-dom", async (importOriginal) => ({
@@ -140,9 +150,23 @@ beforeEach(() => {
   batchOrdersMock.mockReset();
   redeliverMutate.mockReset();
   navigateMock.mockReset();
+  cancelOrderMutate.mockReset();
+  cancelDeliveryBatchMutate.mockReset();
   cancelMutate.mockReturnValue({ unwrap: () => Promise.resolve(null) });
   completeMutate.mockReturnValue({ unwrap: () => Promise.resolve(null) });
   redeliverMutate.mockReturnValue({ unwrap: () => Promise.resolve({ fulfillCode: "ORD-9001" }) });
+  cancelOrderMutate.mockReturnValue({
+    unwrap: () =>
+      Promise.resolve({ planningId: "101", status: "CANCELLED", meta: { mock: false } }),
+  });
+  cancelDeliveryBatchMutate.mockReturnValue({
+    unwrap: () =>
+      Promise.resolve({
+        results: [{ planningId: "101", status: "CANCELLED" }],
+        cancelledCount: 1,
+        meta: { mock: false },
+      }),
+  });
   // Mặc định hydration chưa có dữ liệu (chưa expand / BFF lỗi) — UI vẫn render.
   batchOrdersMock.mockReturnValue({ data: undefined });
   window.history.replaceState(null, "", "/");
@@ -371,5 +395,104 @@ describe("BatchListPage (D2)", () => {
     mockListResult([COMPLETED_BATCH]);
     renderPage();
     expect(screen.queryByTestId("batch-rebook-BATCH-0002")).toBeNull();
+  });
+
+  // ─── SF-16 Task 7: hủy vận đơn per-đơn + cả phiếu (auto-note + partial results) ───
+
+  const mapEntry = (planningId: string, orderCode: string) => ({
+    planningId,
+    orderCode,
+    stopOrder: 1,
+    serviceId: "1T",
+    vehicleType: "1T",
+    addons: [],
+  });
+
+  it("SF-16 T7: hủy vận đơn per-đơn + batch — ẨN khi không có planning map entry", () => {
+    mockListResult([ACTIVE_BATCH]);
+    renderPage();
+
+    // Batch-level: ACTIVE không map → ẩn.
+    expect(screen.queryByTestId("cancel-delivery-batch-BATCH-0001")).toBeNull();
+    // Per-đơn: expand không map entry → ẩn (mark-fail/redeliver cũ không đổi).
+    fireEvent.click(document.querySelector(".ant-table-row-expand-icon")!);
+    expect(screen.queryByTestId("cancel-delivery-RSA-700107")).toBeNull();
+    expect(screen.getByTestId("mark-fail-button-RSA-700107")).toBeTruthy();
+  });
+
+  it("SF-16 T7: hủy vận đơn per-đơn — hiện theo map + modal prefill auto-note + payload đúng", async () => {
+    // Username oidc persist trong localStorage (shell đăng nhập cùng origin).
+    localStorage.setItem(
+      "oidc.user:test:client",
+      JSON.stringify({ profile: { preferred_username: "coordinator" } }),
+    );
+    savePlanningMap("BATCH-0001", [mapEntry("101", "RSA-700107")]);
+    mockListResult([ACTIVE_BATCH]);
+    renderPage();
+
+    fireEvent.click(document.querySelector(".ant-table-row-expand-icon")!);
+    fireEvent.click(screen.getByTestId("cancel-delivery-RSA-700107"));
+
+    // Modal mở + textarea prefill auto-note (editable — nhưng payload dùng giá trị hiện có).
+    const modal = await screen.findByText("Hủy vận đơn RSA-700107");
+    expect(modal).toBeTruthy();
+    const textarea = document.querySelector(".ant-modal textarea") as HTMLTextAreaElement;
+    expect(textarea.value).toContain("Hủy vận đơn bởi coordinator");
+    expect(textarea.value).toContain("BATCH-0001/RSA-700107");
+
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận hủy" }));
+    await waitFor(() =>
+      expect(cancelOrderMutate).toHaveBeenCalledWith({
+        planningId: "101",
+        reason: expect.stringContaining("BATCH-0001/RSA-700107"),
+      }),
+    );
+  });
+
+  it("SF-16 T7: hủy vận đơn cả phiếu — confirm + payload + partial results render từng dòng", async () => {
+    localStorage.setItem(
+      "oidc.user:test:client",
+      JSON.stringify({ profile: { preferred_username: "coordinator" } }),
+    );
+    savePlanningMap("BATCH-0001", [mapEntry("101", "RSA-700107"), mapEntry("102", "RSA-700108")]);
+    // Partial failure: 1 CANCELLED, 1 planning chưa book → DRAFT.
+    cancelDeliveryBatchMutate.mockReturnValue({
+      unwrap: () =>
+        Promise.resolve({
+          results: [
+            { planningId: "101", status: "CANCELLED" },
+            { planningId: "102", status: "DRAFT" },
+          ],
+          cancelledCount: 1,
+          meta: { mock: false },
+        }),
+    });
+    mockListResult([ACTIVE_BATCH]);
+    renderPage();
+
+    // Gate: ACTIVE + map có entries → nút hiện.
+    fireEvent.click(screen.getByTestId("cancel-delivery-batch-BATCH-0001"));
+
+    const title = await screen.findByText("Hủy vận đơn cả phiếu BATCH-0001");
+    expect(title).toBeTruthy();
+    const textarea = document.querySelector(".ant-modal textarea") as HTMLTextAreaElement;
+    expect(textarea.value).toContain("Hủy vận đơn bởi coordinator");
+    expect(textarea.value).toContain("BATCH-0001");
+
+    fireEvent.click(screen.getByRole("button", { name: "Xác nhận hủy" }));
+    await waitFor(() =>
+      expect(cancelDeliveryBatchMutate).toHaveBeenCalledWith({
+        batchCode: "BATCH-0001",
+        reason: expect.stringContaining("BATCH-0001"),
+      }),
+    );
+
+    // Results modal — per-planning từng dòng + cancelledCount (partial KHÔNG fail im lặng).
+    const resultsTable = await screen.findByTestId("cancel-delivery-results");
+    expect(resultsTable.textContent).toContain("101");
+    expect(resultsTable.textContent).toContain("CANCELLED");
+    expect(resultsTable.textContent).toContain("102");
+    expect(resultsTable.textContent).toContain("DRAFT");
+    expect(await screen.findByText("Đã hủy 1/2 vận đơn")).toBeTruthy();
   });
 });
