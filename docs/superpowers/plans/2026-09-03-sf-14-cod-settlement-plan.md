@@ -19,8 +19,9 @@
 **Files:**
 - Create: `services/fulfillment-service/src/main/resources/db/migration/V3__cod_settlement.sql`
 - Create: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/store/CodConfirmationRepository.java`
-- Create: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/store/PostgresCodConfirmationRepository.java`
+- Create: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/store/PostgresCodConfirmationRepository.java` — **plain class KHÔNG stereotype** (`@Repository` CẤM — precedent PostgresOrderRepository.java:25-26 "bean wiring do config lo")
 - Create: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/store/InMemoryCodConfirmationRepository.java` (+ record `CodConfirmation` trong cùng package hoặc `store/CodConfirmationRecord.java`)
+- Create/Modify: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/config/` — **CodRepositoryConfig** (hoặc extend OrderRepositoryConfig): 2 bean `@ConditionalOnProperty(name="fulfillment.store", havingValue="postgres"/"inmemory")` trả Postgres/InMemory impl — **P0 (plan-critic): không có config selection này thì app/tests mode inmemory không boot được**
 - Test: `services/fulfillment-service/src/test/java/...` (unit test InMemory + integration test DB, skip-when-no-DB như SF-2)
 
 **Model (record):**
@@ -47,7 +48,7 @@ public interface CodConfirmationRepository {
 - [ ] Step 1: V3 migration — đúng schema spec §4 (có shop_name snapshot + 3 indexes + header comment "V3 slot reserved bởi V5 header"). KHÔNG `IF NOT EXISTS`.
 - [ ] Step 2: Viết unit test InMemory TRƯỚC (TDD): insertPendingIfAbsent idempotent; confirmBatch chỉ touch PENDING; confirmOne với collectedAmount=null → collected=expected, =0L → collected=0; deletePendingByFulfillCodes không xóa CONFIRMED.
 - [ ] Step 3: Implement InMemory (thread-safe theo pattern InMemoryOrderRepository — synchronized collections).
-- [ ] Step 4: Implement Postgres (`@Repository`, `jdbc.update/query` như PostgresOrderRepository:556-574; Instant ↔ `OffsetDateTime` qua helper `instant()`/`ts()` có sẵn trong PostgresOrderRepository — copy pattern, không import chéo private). `findPendingByBatch`/`confirmBatch` JOIN orders `o.fail_reason IS NULL` (D7).
+- [ ] Step 4: Implement Postgres (plain class, ctor inject JdbcClient/JdbcTemplate như PostgresOrderRepository; `jdbc.update/query` pattern :556-574; Instant ↔ `OffsetDateTime` qua helper `instant()`/`ts()` — copy pattern, không import chéo private). `findPendingByBatch`/`confirmBatch` JOIN orders `o.fail_reason IS NULL` (D7). + CodRepositoryConfig với @ConditionalOnProperty (xem Files).
 - [ ] Step 5: Integration test với test DB (pattern SF-2 `skip-when-no-DB`): migrate V3 chạy qua Flyway test harness hiện có.
 - [ ] Step 6: `cd services/fulfillment-service && ./mvnw -q test` (hoặc mvn wrapper hiện có) → PASS. Commit `feat(cod): V3 cod_confirmations table + CodConfirmationRepository (PG+InMemory)`.
 
@@ -55,7 +56,7 @@ public interface CodConfirmationRepository {
 
 **Files:**
 - Modify: `api/proto/hubstore/fulfillment/v1/fulfillment.proto` (append-only: enum + messages + 4 rpc vào `service FulfillmentService`)
-- Regen: `api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment.ts` + `api/proto/gen/java/com/hubstore/fulfillment/v1/{Fulfillment,FulfillmentServiceGrpc}.java`
+- Regen: `api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment.ts` + `api/proto/gen/java/com/hubstore/fulfillment/v1/{Fulfillment,FulfillmentServiceGrpc}.java`. **Go gen (`api/proto/gen/go/...`) KHÔNG regen — quyết định có chủ đích: proto additive-only, Go consumer (batching-service MutateOrderStatus caller) không gọi RPC mới, wire-compat giữ nguyên; ghi note vào commit message.**
 - Modify: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/service/FulfillmentServiceImpl.java`
 - Modify: `services/fulfillment-service/src/main/java/com/hubstore/fulfillment/store/InMemoryOrderRepository.java` (nếu mutateBatchStatus cần expose updated records — check signature đã trả `List<OrderSeed>` rồi, có thể KHÔNG cần)
 - Test: unit + integration test confirm flow
@@ -89,7 +90,8 @@ Service: `rpc ConfirmCod(ConfirmCodRequest)...; rpc ConfirmBatchCod(...); rpc Ge
 
 **Service wiring (FulfillmentServiceImpl):**
 - Constructor inject thêm `CodConfirmationRepository codRepo` (UPDATE FulfillmentServiceImpl ctor — NOTE: đây là điểm semantic-conflict hay gặp khi merge; giữ signature cũ + param mới ở CUỐI).
-- **Eager PENDING (D1):** trong `mutateOrderStatus`, sau `repo.mutateBatchStatus` thành công với target==2: trong `@Transactional` method mới `completeWithCod(List<OrderSeed> updated)` — với mỗi order `codAmount > 0` → `codRepo.insertPendingIfAbsent(new CodConfirmation(fulfillCode, batchCode, shopCode, shopName, codAmount, null, null, null, now(), 0))`. Với target==0 (revert): `codRepo.deletePendingByFulfillCodes(codes)` (D8).
+- **Eager PENDING (D1) — cơ chế atomicity (P0 plan-critic): KHÔNG dùng `@Transactional` trên method service (self-invocation qua `this.` bypass proxy; codebase 0 precedent service-layer @Transactional). Dùng `TransactionTemplate`** inject vào FulfillmentServiceImpl (PlatformTransactionManager đã có qua Spring Boot auto-config): `transactionTemplate.executeWithoutResult(tx -> { repo.mutateBatchStatus(...); codRepo.insertPendingIfAbsent(...); })` — 1 transaction thật span 2 repos, matching repo-level tx style. Với target==0 (revert): `codRepo.deletePendingByFulfillCodes(codes)` (D8 — cũng trong transaction nếu có codes update).
+- **Ctor ripple (P2):** thêm param `CodConfirmationRepository` vào ctor FulfillmentServiceImpl sẽ vỡ compile mọi test construct thủ công — sửa hết test ctor call sites trong cùng commit.
 - `confirmCod`: per item — tìm confirmation; confirm; `appendAudit(username, "cod.confirmed", fulfillCode, {expected, collected})`; trả result per-code (không tồn tại → success=false message rõ).
 - `confirmBatchCod`: `codRepo.findPendingByBatch` → confirm tất → audit từng đơn (hoặc 1 audit per batch — chọn per-batch 1 entry với danh sách codes để tránh spam).
 - `getCodPending`: count/sum PENDING theo batch (JOIN fail_reason IS NULL).
@@ -115,7 +117,7 @@ export const COD_CONFIRM_ROLES = ['Coordinator', 'WarehouseOps', 'Manager', 'Adm
 export const COD_SETTLEMENT_ROLES = ['Manager', 'Admin'] as const;
 function requireRoles(request, reply, roles): boolean { /* pattern requireD2cRole d2c.ts:77-85 */ }
 ```
-Period: query `from`/`to` date-only `YYYY-MM-DD` → `Instant` wrap full-day +07:00 (`from` 00:00+07:00 inclusive, `to` ngày+1 00:00 exclusive — pattern d2c.ts:264-265).
+Period: query `from`/`to` date-only `YYYY-MM-DD` → `Instant` wrap full-day +07:00 (`from` 00:00+07:00 inclusive, `to` ngày+1 00:00 exclusive — equivalent d2c.ts:264-265 nhưng chọn exclusive-bound làm convention của mình).
 Envelope: `reply.send(paginated(rows, total, page, pageSize))` cho `/cod/settlement` (page/pageSize chuẩn SF-7), detail tương tự.
 - [ ] Step 1: shared DTOs + enums (wire-code mirror rules: `enums.ts` comment "0 = PENDING").
 - [ ] Step 2: Java aggregate + detail impl + unit test (InMemory: 3 shops, đếm pending/mismatch đúng).
@@ -128,7 +130,8 @@ Envelope: `reply.send(paginated(rows, total, page, pageSize))` cho `/cod/settlem
 - Modify: `packages/shared/src/hooks/usePermissions.tsx` (PERMISSION_MATRIX: thêm `'settlement.view'` cho Manager + Admin; Permission union)
 - Modify: `apps/shell/src/nav.ts` (append CUỐI `{ path: '/settlement', labelKey: 'nav.settlement', permission: 'settlement.view' }` + i18n keys namespace shell)
 - Create: `apps/shell/src/pages/settlement/SettlementPage.tsx` (+ components con nếu cần: KpiCards, ShopTable, ConfirmModal)
-- Create: `apps/shell/src/api/settlementApi.ts` (RTKQ — pattern `apps/shell/src/api/areaStaffApi.ts`)
+- Create: `apps/shell/src/api/settlementApi.ts` (**axios fetch wrapper — pattern `apps/shell/src/api/areaStaffApi.ts`; shell KHÔNG dùng RTKQ** — P1 plan-critic: RTKQ chỉ ở apps/fulfillment với per-page Provider)
+- Modify: `apps/fulfillment/src/api/batchesApi.ts` HOẶC mới `codApi.ts` + đăng ký trong `apps/fulfillment/src/store.ts` (RTKQ cho D2 badge `/cod/pending` + confirm mutation — RTKQ lives here, store setup cần inject reducer)
 - Modify: `apps/fulfillment/src/pages/BatchListPage.tsx` (badge "COD chờ thu (n)" + nút xác nhận thu cho batch COMPLETED — fetch `/cod/pending`, modal → POST confirm-batch; KHÔNG đổi testid/DOM hiện có)
 - **Đọc TRƯỚC khi code UI:** `docs/superpowers/designs/sf-14-direction.md` + fidelity target `direction-b.html` (KPI cards + progress + segmented filter + drill-down order cards + modal prefill expected / collected optional).
 
@@ -136,9 +139,11 @@ Envelope: `reply.send(paginated(rows, total, page, pageSize))` cho `/cod/settlem
 - [ ] Step 2: RTKQ api slice (getSettlement, getSettlementDetail, confirmCod, confirmBatch, export URL).
 - [ ] Step 3: SettlementPage theo direction B (KPI 4 cards, segmented filter, expandable table, ConfirmModal, empty-state + skeleton SF-6).
 - [ ] Step 4: D2 BatchListPage badge + bulk confirm modal (chỉ batch COMPLETED; polling nhẹ hoặc refetch on focus).
-- [ ] Step 5: `pnpm typecheck` (turbo) + `pnpm test` FE unit hiện tại không vỡ; nếu có vitest cho pages thì thêm smoke test render. Commit `feat(cod): settlement screen (direction B) + D2 COD badge + bulk confirm`.
+- [ ] Step 5: `pnpm typecheck` (turbo) + FE unit tests PASS. **Nav smoke thủ công từng role (Coordinator/WarehouseOps/Manager/Admin): nav item chỉ hiện Manager+Admin, landing path KHÔNG đổi** (bắt sớm ripple 02-role-matrix — không đợi Task 6). Commit `feat(cod): settlement screen (direction B) + D2 COD badge + bulk confirm`.
 
 ### Task 5: settlement-export — CSV endpoint + FE button
+
+> **Serialization (P1 plan-critic): task này CHẠY SAU Task 4** — cả T4 lẫn T5 sửa `SettlementPage.tsx`, chạy song song = merge conflict. BFF endpoint (Step 1) parallel-safe nhưng gộp 1 commit sau khi T4 xong.
 
 **Files:**
 - Modify: `services/bff-gateway/src/routes/cod.ts` (GET `/cod/settlement.csv`)
@@ -162,7 +167,7 @@ Envelope: `reply.send(paginated(rows, total, page, pageSize))` cho `/cod/settlem
 5. Manager storageState (`test.use` override): mở `/settlement` → assert KPI + row shop (tổng khớp DB) + segmented filter Lệch tiền hiện đúng đơn.
 6. Assert psql GROUP BY khớp số UI (API/DB assert theo convention).
 7. Export CSV: fetch `/cod/settlement.csv` → assert header + số khớp.
-- [ ] Step 1: viết spec, chạy `E2E=1 pnpm --filter e2e test -- 05-settlement` (lệnh chính xác soi `e2e/package.json`).
+- [ ] Step 1: viết spec, chạy `E2E=1 pnpm --filter @hub-store/e2e e2e -- 05-settlement` (P1 plan-critic: package name `@hub-store/e2e`, script là `e2e` KHÔNG phải `test`).
 - [ ] Step 2: chạy toàn bộ suite cũ (`01-`→`06-`) — KHÔNG spec cũ nào vỡ (nav append cuối phải trong suốt với 02-role-matrix).
 - [ ] Step 3: Commit `test(cod): e2e settlement spec — confirm flow + settlement totals + csv`.
 
