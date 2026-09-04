@@ -1,0 +1,69 @@
+# Dev workflow — feedback nhanh cho nhánh dev (không docker build, không e2e).
+# Ci nặng (docker + e2e) chạy ở ci.yml trên main; dev.yml chỉ unit gate.
+name: dev
+
+on:
+  push:
+    branches: [dev, develop]
+  pull_request:
+    branches: [dev, develop]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: dev-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: dev unit (node + go + java)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Typecheck (tsc --noEmit)
+        run: >
+          pnpm --filter @hub-store/bff-gateway --filter @hub-store/ktv-mobile
+          --filter @hub-store/orders --filter @hub-store/shell
+          --filter @hub-store/api-client --filter @hub-store/shared
+          exec tsc --noEmit
+
+      - name: Node unit tests
+        run: >
+          pnpm --filter @hub-store/bff-gateway --filter @hub-store/fulfillment
+          --filter @hub-store/ktv-mobile --filter @hub-store/orders
+          --filter @hub-store/shell --filter @hub-store/api-client
+          --filter @hub-store/shared -r test
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/batching-service/go.mod
+
+      - name: Go vet + test (batching-service)
+        working-directory: services/batching-service
+        run: |
+          go vet ./...
+          go test ./...
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+          cache-dependency-path: services/fulfillment-service/pom.xml
+
+      - name: Java tests (fulfillment-service)
+        working-directory: services/fulfillment-service
+        run: mvn -B test
