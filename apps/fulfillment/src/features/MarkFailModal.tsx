@@ -69,7 +69,7 @@ export function MarkFailModal({ open, orderCode, onClose }: MarkFailModalProps) 
         loading: isLoading,
         // antd4 ButtonProps không khai báo data-* — cast rộng giữ runtime
         // (Playwright bắt fail-submit qua okButton của Modal confirm).
-        ...({ "data-testid": "fail-submit" } as Record<string, string>),
+        ...({ "data-testid": "fail-submit" } as { "data-testid": string }),
       }}
       onOk={() => void handleOk()}
       onCancel={onClose}

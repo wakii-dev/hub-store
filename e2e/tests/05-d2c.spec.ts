@@ -106,8 +106,8 @@ test.describe("WarehouseEmployee — D2C / Dropship", () => {
     // 40 ngày (2026-06-01 → 2026-07-11) → client guard chặn, KHÔNG download
     // (SF-3: click + gõ thay fill() — rc-picker 2.x readOnly=!typing, xem test (b))
     let downloaded: string | null = null;
-    // SF-8 convergence: handler chỉ cancel trong phase 40-ngày-gate — page.on
-    // không gỡ được, để nguyên thì nó cancel nhầm download THẬT ở phase 2
+    // SF-8 convergence: handler chỉ cancel trong phase 40-ngày-gate — để
+    // registered vô hạn thì nó cancel nhầm download THẬT ở phase 2
     // (race path() vs cancel() → "download.path: canceled" khi máy load cao).
     let gatePhase = true;
     page.on("download", (d) => {
