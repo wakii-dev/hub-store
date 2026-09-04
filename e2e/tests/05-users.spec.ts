@@ -33,7 +33,15 @@ async function bffGet(page: Page, path: string): Promise<Response> {
 
 /** Login thật qua KC hosted UI với username/password bất kỳ (helper riêng —
  * realLogin của 02-spec describe-scoped + hardcode password manager —
- * SF-12: import E2E_PASSWORD từ lib/credentials). */
+ * SF-12: import E2E_PASSWORD từ lib/credentials).
+ * SF-7 QA: logout-button → signoutRedirect là NAVIGATION async (end_session
+ * → post_logout redirect về origin root). goto("/") ngay sau click abort
+ * navigation giữa chừng → KC SSO cookie không được clear → login tiếp bị
+ * silent-SSO (không bao giờ thấy form). Chờ logout HOÀN TẤT trước. */
+async function waitLoggedOut(page: Page): Promise<void> {
+  await page.waitForURL("http://localhost:4300/");
+}
+
 async function realLogin(page: Page, username: string, password: string): Promise<void> {
   await page.goto("/");
   await page.getByTestId("login-submit").click();
@@ -73,6 +81,7 @@ test.describe("Manager — Users management", () => {
 
     // Logout manager → login user mới (flow thật KC)
     await page.getByTestId("logout-button").click();
+    await waitLoggedOut(page);
     await realLogin(page, username, password);
     await expect(page.getByTestId("app-sidebar")).toBeVisible();
     // WarehouseOps: KHÔNG thấy nav-users, KHÔNG rơi 403 màn batch (landing đúng quyền)
@@ -81,7 +90,11 @@ test.describe("Manager — Users management", () => {
 
     // Quay lại manager: set password + disable
     await page.getByTestId("logout-button").click();
+    await waitLoggedOut(page);
     await realLogin(page, "manager", E2E_PASSWORD);
+    // SF-7 QA: realLogin không chờ post-login — goto("/") ngay sẽ đua với
+    // callback processing (OIDC code exchange) → mất session, rơi về login.
+    await page.waitForURL("**/hub-store-order/**");
     await page.goto("/users");
     await page.getByTestId(`user-set-password-${username}`).click();
     const pwModal = page.locator(".ant-modal:visible", { hasText: /Đặt lại mật khẩu|Reset password/i });
@@ -90,13 +103,20 @@ test.describe("Manager — Users management", () => {
 
     await page.getByTestId(`user-toggle-${username}`).click();
     await page.locator(".ant-popconfirm .ant-btn-primary").click();
-    await expect(page.getByTestId(`user-row-${username}`).locator(".ant-tag")).toContainText(/Đã khóa|Disabled/i);
+    // SF-7 QA: row có 2 .ant-tag (status sf6-status-tag + role tag từ SF-6)
+    // → locator chung rơi strict-mode violation; nhắm đúng status tag.
+    await expect(
+      page.getByTestId(`user-row-${username}`).locator(".ant-tag.sf6-status-tag"),
+    ).toContainText(/Đã khóa|Disabled/i);
 
     // Disable → login FAIL (message disabled cụ thể — capture từ trang thật;
     // sau realLogin fail KHÔNG waitForURL pattern auth — wait locator trực tiếp)
+    // SF-7 QA: KC 26 theme Patternfly v5 — message nằm trong .pf-v5-c-alert
+    // (selector cũ .alert-error/#kc-content-wrapper là theme KC cũ).
     await page.getByTestId("logout-button").click();
+    await waitLoggedOut(page);
     await realLogin(page, username, newPassword);
-    await expect(page.locator(".alert-error, #kc-content-wrapper")).toContainText(
+    await expect(page.locator(".pf-v5-c-alert")).toContainText(
       /disabled|không hoạt động|vô hiệu/i,
       { ignoreCase: true, timeout: 15_000 },
     );

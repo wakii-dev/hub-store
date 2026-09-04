@@ -29,7 +29,8 @@ export function registerUsersRoutes(
       const byRole = new Map<string, Set<string>>();
       for (const role of KNOWN_ROLES) {
         const roleId = await opts.kcAdmin.findRoleId(role);
-        byRole.set(role, roleId ? await opts.kcAdmin.usernamesWithRole(roleId) : new Set());
+        // usernamesWithRole theo TÊN role — KC 26.0 by-id endpoint trả 404 (kc-admin.ts)
+        byRole.set(role, roleId ? await opts.kcAdmin.usernamesWithRole(role) : new Set());
       }
       const items: UserListItem[] = users.map((u) => ({
         id: u.id,
