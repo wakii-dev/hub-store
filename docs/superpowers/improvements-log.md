@@ -84,7 +84,7 @@
 - **orca linear read-back comments trả 0 despite comment tồn tại** (FI-280/FI-281 đều vậy, post ok:true có URL) — không tin read-back để dedupe; dùng transcript/URL trả về từ lệnh post. Flag: orca CLI bug chưa fix.
 - **.env clobber class mở rộng**: root `.env` KHÔNG được chứa BẤT KỲ var nào seam runners override (đã chốt FULFILLMENT_DB_*/OIDC_*/GRPC_*); runner scripts nên export sau `source .env` thay vì prefix-env để tự phòng.
 
-## 2026-09-04 — FI-280 SF-7 (FI-287)
+## 2026-09-04 — FI-280 SF-7 (FI-287) — RESOLVED qua ritual 2026-09-04 (memory fi287-sf7-sweep-patterns.md; fixes: 4fff06e/785dc56/bffd0c2)
 - **Test-state pollution class "list pagination"**: spec tạo user test (disable-only, KC persist) → FE list phân trang client-side 10/trang → user seeded rớt khỏi trang 1 sau vài lần chạy → assert timeout "flake" giả. Fix: DELETE /users/:userId (manager-only) + beforeAll dọn prefix riêng của test. Rule: mọi spec tạo row test PHẢI tự dọn (delete > disable) hoặc sort-safe username.
 - **kafka-ui `/messages?limit=N` trả từ ĐẦU partition**: topic lớn dần theo số run → event mới ở tail không bao giờ vào cửa sổ quét → assertion "kafka có event" fail deterministic khi topic vượt limit. Đừng hardcode limit nhỏ "vì topic còn nhỏ" — topic e2e chỉ lớn dần.
 - **Partial-TRUNCATE + reseed = ghost-state generator**: dashboard beforeAll truncate `batches, batch_items` thiếu 3 bảng runtime SF-15 (`shipment_plannings/bookings/shipment_tracking_events`) + seed setval seq về max seed → batch_code mint lại dính planning BOOKED cũ → confirmPlanning no-op trả trạng thái cũ TỨC THÌ. Rule: TRUNCATE lists phải derive từ reset-db.sh (single source), không copy tay.
