@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import { expect, test, type Page } from "@playwright/test";
 
 /**
@@ -62,14 +63,28 @@ test("§2 filter trạng thái → URL đổi + reload giữ filter", async ({ p
 });
 
 test("§3 tab Lắp đặt: card SO-0001 NEW có nút 'Gán KTV' (flag BE)", async ({ page }) => {
+  // State-prep (SF-4 FI-284): §5 assign mutate SO-0001 → rerun thiếu nút.
+  // Reset về NEW-chưa-gán (pattern psql 05-settlement; E2E_PG_SHIM trỏ
+  // container postgres của stack đang chạy).
+  execSync(
+    `docker compose exec -T postgres psql -U hubstore -d fulfillment -At -v ON_ERROR_STOP=1 -c ${JSON.stringify(
+      "UPDATE installation_orders SET technician_code = NULL, status = 'NEW' WHERE service_order_code = 'SO-0001';",
+    )}`,
+    { stdio: "pipe" },
+  );
+
   await page.getByRole("tab", { name: "Lắp đặt" }).click();
   await expect(page).toHaveURL(/tab=installation/);
 
   // SO-0001 NEW chưa gán → BE flag allowAssign → nút 'Gán KTV'
   await expect(page.getByTestId("tech-assign-SO-0001")).toContainText("Gán KTV");
 
-  // SO-0006 CONFIRMED đã gán KTV-001 (seed SF-25) → không có nút assign (không nút không flag)
-  await expect(page.getByTestId("tech-assign-SO-0006")).toHaveCount(0);
+  // SO-0006 CONFIRMED đã gán KTV-001 (seed SF-25) → KHÔNG có 'Gán KTV'
+  // (allowAssign=false); có nút 'Gán lại KTV' (allowReassign — SF-25 §4.2
+  // matrix, cùng testid tech-assign-*). Assertion cũ toHaveCount(0) viết
+  // trước SF-25 reassign → stale (SF-4 FI-284 root-cause [P1][TECH]).
+  await expect(page.getByTestId("tech-assign-SO-0006")).not.toContainText("Gán KTV");
+  await expect(page.getByTestId("tech-assign-SO-0006")).toContainText("Gán lại KTV");
 });
 
 test("§4 tab KTV-CTV: group theo staff + detail modal theo ngày", async ({ page }) => {
