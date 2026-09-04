@@ -103,3 +103,6 @@
 - **Access token 5 phút < serial e2e sweep**: KC accessTokenLifespan mặc định realm import cũ; sweep serial > 5 phút chết token giữa chừng (auth-dir stale class). Nâng 3600 runtime trước sweep dài; sf11 auth-dir copy phải refresh TỪ .auth mới mint, không dùng bản cũ.
 - **Playwright APIRequestContext.post phải bọc `{data: ...}`**: truyền object trực tiếp = empty body → 500/422 âm thầm (cleanup no-op dẫn tới 422 "rule 1 violated" khó truy).
 - **Merge-ngược chiều khi target đã tiến**: `git merge story/...` trên branch SF là merge target VÀO mình (đảo chiều). Branch target không được check-out ở worktree nào → checkout target + merge --no-ff tại đó là đường an toàn nhất; ancestor-guard (`merge-base --is-ancestor`) BẮT BUỘC trước update-ref.
+
+## 2026-09-05 — FI-280 SF-8 (FI-288) — OPEN
+- **FE build không typecheck**: mọi app FE `build` = `vite build` thuần (KHÔNG `tsc -b`) → lỗi type production-code trượt qua build (FI-288 lộ 2 lỗi fulfillment). Suggested: thêm `tsc --noEmit &&` vào build script từng app FE hoặc turbo task `typecheck` riêng + wire vào CI gate.
