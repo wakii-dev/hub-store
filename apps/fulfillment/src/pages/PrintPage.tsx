@@ -1,6 +1,6 @@
 import { Component, type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Provider } from 'react-redux';
-import { Alert, Badge, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Tooltip, Typography, message } from 'antd';
+import { Alert, Badge, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Tooltip, Typography, message, type SelectProps } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
@@ -311,7 +311,9 @@ function PrintPageInner() {
             // SF-21: registry DB-backed có `type` — nhóm máy in Bill vs A4
             // (optional chaining: field có thể vắng — fallback 'a4', flat list
             // khi KHÔNG printer nào có type — pin E2E cũ vẫn xanh).
-            printers.some((p) => p.type)
+            // SF-8: cast SelectProps['options'] — union group[]|flat[] đúng
+            // runtime antd nhưng TS không narrow qua ternary (SF-8 typecheck).
+            (printers.some((p) => p.type)
               ? (['bill', 'a4'] as const)
                   .map((type) => ({
                     label: type === 'bill' ? 'Bill' : 'A4',
@@ -326,7 +328,7 @@ function PrintPageInner() {
               : printers.map((p) => ({
                   value: p.printerId,
                   label: p.location ? `${p.name} — ${p.location}` : p.name,
-                }))
+                }))) as SelectProps['options']
           }
         />
         {withCancelTooltip(
