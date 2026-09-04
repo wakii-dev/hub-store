@@ -1,3 +1,4 @@
+import fs from "node:fs";
 import { expect, test } from "@playwright/test";
 
 /**
@@ -38,10 +39,16 @@ test.describe("WarehouseEmployee — D2C / Dropship", () => {
       .click();
     await page.keyboard.press("Escape");
 
-    // TimeRange khung giờ đẩy — 2 input placeholder "Khung giờ đẩy"
+    // TimeRange khung giờ đẩy — 2 input placeholder "Khung giờ đẩy".
+    // SF-3 (FI-283): rc-picker 2.x đặt readOnly=!typing trên input — fill()
+    // từ chối input readonly. Tương tác như user thật: click → gõ → Enter
+    // (keydown đầu mở khóa typing state → input nhận chữ).
     const slot = page.getByPlaceholder("Khung giờ đẩy");
-    await slot.nth(0).fill("08:00");
-    await slot.nth(1).fill("09:00");
+    await slot.nth(0).click();
+    await slot.nth(0).pressSequentially("08:00");
+    await slot.nth(0).press("Enter");
+    await slot.nth(1).click();
+    await slot.nth(1).pressSequentially("09:00");
     await slot.nth(1).press("Enter");
 
     await page.getByRole("button", { name: "Tìm kiếm" }).click();
@@ -97,31 +104,44 @@ test.describe("WarehouseEmployee — D2C / Dropship", () => {
     await expect(page.getByTestId("d2c-export")).toBeVisible();
 
     // 40 ngày (2026-06-01 → 2026-07-11) → client guard chặn, KHÔNG download
+    // (SF-3: click + gõ thay fill() — rc-picker 2.x readOnly=!typing, xem test (b))
     let downloaded: string | null = null;
     page.on("download", (d) => {
       downloaded = d.suggestedFilename();
       void d.cancel();
     });
-    await page.getByPlaceholder("Từ ngày").fill("2026-06-01");
-    await page.getByPlaceholder("Đến ngày").fill("2026-07-11");
-    await page.getByPlaceholder("Đến ngày").press("Enter");
+    const fromDate = page.getByPlaceholder("Từ ngày");
+    const toDate = page.getByPlaceholder("Đến ngày");
+    await fromDate.click();
+    await fromDate.pressSequentially("2026-06-01");
+    await fromDate.press("Enter");
+    await toDate.click();
+    await toDate.pressSequentially("2026-07-11");
+    await toDate.press("Enter");
     await expect(page.getByTestId("d2c-export-button")).toBeEnabled();
     await page.getByTestId("d2c-export-button").click();
     await expect(page.getByText("Khoảng thời gian export tối đa 31 ngày")).toBeVisible();
     expect(downloaded).toBeNull();
 
-    // 31 ngày (2026-07-01 → 2026-08-01) → download event + CSV BOM + header
+    // 31 ngày (2026-07-01 → 2026-08-01) → download event + CSV BOM + header.
+    // Reload trước — gõ đè lên range đã có giá trị không đáng tin (rc-picker
+    // không replace text cũ khi panel mở lần 2); user reload/fetch form mới.
+    await page.reload();
+    await expect(page.getByTestId("d2c-export")).toBeVisible();
+    const fromDate2 = page.getByPlaceholder("Từ ngày");
+    const toDate2 = page.getByPlaceholder("Đến ngày");
     const downloadPromise = page.waitForEvent("download");
-    await page.getByPlaceholder("Từ ngày").fill("2026-07-01");
-    await page.getByPlaceholder("Đến ngày").fill("2026-08-01");
-    await page.getByPlaceholder("Đến ngày").press("Enter");
+    await fromDate2.click();
+    await fromDate2.pressSequentially("2026-07-01");
+    await fromDate2.press("Enter");
+    await toDate2.click();
+    await toDate2.pressSequentially("2026-08-01");
+    await toDate2.press("Enter");
     await page.getByTestId("d2c-export-button").click();
     const download = await downloadPromise;
     expect(download.suggestedFilename()).toBe("D2C_Order_2026-07-01_2026-08-01.csv");
-    const stream = await download.createStream();
-    const chunks: Buffer[] = [];
-    for await (const chunk of stream) chunks.push(chunk as Buffer);
-    const buffer = Buffer.concat(chunks);
+    // SF-3: bản Playwright của repo không có Download.createStream() — đọc qua path()
+    const buffer = fs.readFileSync(await download.path());
     expect([buffer[0], buffer[1], buffer[2]]).toEqual([0xef, 0xbb, 0xbf]); // BOM EF BB BF
     const text = buffer.toString("utf8");
     expect(text.startsWith("\uFEFFMã đơn,Mã nội bộ,Mã vận đơn,Hãng vận chuyển")).toBe(true);
