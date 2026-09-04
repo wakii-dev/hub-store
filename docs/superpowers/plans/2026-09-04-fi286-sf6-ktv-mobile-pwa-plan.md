@@ -108,8 +108,8 @@ cd e2e && pnpm exec playwright test -c playwright.ktv.config.ts 09-ktv-mobile --
 
 ### Task 7: Review + Rule 0 final + merge + gate + Done
 
-- [ ] **Step 1: code-reviewer độc lập** trên `git diff story/qa-hub-store-regression..HEAD` (fix commits + 14xx spec + docs). CHANGES-REQUESTED → fix trước merge.
+- [x] **Step 1: code-reviewer độc lập** trên `git diff story/qa-hub-store-regression..HEAD` (fix commits + 14xx spec + docs). CHANGES-REQUESTED → fix trước merge.
 - [x] **Step 2: Rule 0 final**: walkthrough trọn login→navigate→action→logout trên bản fix, hard-reload, screenshot before/after.
-- [ ] **Step 3: Merge no-ff** vào `story/qa-hub-store-regression` (conflict improvements-log giữ CẢ HAI) + audit comment merge-hash lên FI-286.
-- [ ] **Step 4: Gate:** `~/.claude/bin/story-verify sf-6` sạch.
-- [ ] **Step 5: FI-286 → Done** (SAU gate). Audit Phase 5 comment.
+- [x] **Step 3: Merge no-ff** vào `story/qa-hub-store-regression` (conflict improvements-log giữ CẢ HAI) + audit comment merge-hash lên FI-286.
+- [x] **Step 4: Gate:** `~/.claude/bin/story-verify sf-6` sạch.
+- [x] **Step 5: FI-286 → Done** (SAU gate). Audit Phase 5 comment.
