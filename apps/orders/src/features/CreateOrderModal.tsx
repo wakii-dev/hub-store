@@ -112,7 +112,16 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
         <Form.Item
           name="customerPhone"
           label={t("intake.createOrder.customerPhone")}
-          rules={[{ required: true }]}
+          rules={[
+            { required: true },
+            // SF-3 (FI-283): mirror rule backend IntakeValidator.PHONE — trước
+            // đây FE chỉ check required, phone sai formatsubmit rồi báo lỗi
+            // server với message sai ngữ cảnh ("Import có 1 dòng lỗi").
+            {
+              pattern: /^(\+84|0)\d{9}$/,
+              message: t("intake.createOrder.customerPhoneInvalid"),
+            },
+          ]}
         >
           <Input data-testid="create-order-customer-phone" />
         </Form.Item>
