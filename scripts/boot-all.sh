@@ -101,16 +101,16 @@ GRPC_MAIN=(GRPC_FULFILLMENT=50051 GRPC_BATCHING=50052 GRPC_PRINT=50053)
 
 echo "[boot-all] boot fulfillment-service (Java :50051)..."
 (cd "$ROOT/services/fulfillment-service" && \
-  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" "${GRPC_MAIN[@]}" exec ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
+  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" exec env "${GRPC_MAIN[@]}" ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
 JAVA_PID=$!
 
 wait_port java 50051 || exit 1
 
 echo "[boot-all] boot batching-service (Go :50052)..."
-(cd "$ROOT/services/batching-service" && "${GRPC_MAIN[@]}" exec ./run.sh) >"$LOG_DIR/e2e-go.log" 2>&1 &
+(cd "$ROOT/services/batching-service" && exec env "${GRPC_MAIN[@]}" ./run.sh) >"$LOG_DIR/e2e-go.log" 2>&1 &
 
 echo "[boot-all] boot print-service (Python :50053)..."
-(cd "$ROOT/services/print-service" && "${GRPC_MAIN[@]}" exec ./run.sh) >"$LOG_DIR/e2e-python.log" 2>&1 &
+(cd "$ROOT/services/print-service" && exec env "${GRPC_MAIN[@]}" ./run.sh) >"$LOG_DIR/e2e-python.log" 2>&1 &
 
 wait_port go 50052 || exit 1
 wait_port python 50053 || exit 1
