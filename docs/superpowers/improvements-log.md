@@ -79,7 +79,7 @@
 - **`orca orchestration task-update` dùng `--id`** không phải `--task` (error validFlagsreveals). Note vào watchdog memory.
 - **SW register sau MF bootstrap**: MF dev bootstrap execute main.tsx SAU `load` → `window.addEventListener('load')` treo vĩnh viễn. Pattern: `document.readyState === 'complete' ? register() : addEventListener(...)`.
 
-## 2026-09-04 — FI-280 SF-1 (FI-281)
+## 2026-09-04 — FI-280 SF-1 (FI-281) — RESOLVED qua ritual 2026-09-04 (memory fi280-sf1-baseline-patterns.md; B2 fix trực tiếp ~/.claude/bin/story-verify)
 - **story-verify B2 substring-match bug (ĐÃ FIX trong ~/.claude/bin/story-verify)**: pattern `*sf1*` khớp nhầm `fi245-sf13-order-intake-plan.md` cho SF `sf-1` (sf13 ⊃ sf1) → B2 FAIL ảo với plan của SF khác. Fix: dash-boundary match (`sf1-`/`sf1_` + non-digit). Suggested by gate run FI-281 04/09.
 - **orca linear read-back comments trả 0 despite comment tồn tại** (FI-280/FI-281 đều vậy, post ok:true có URL) — không tin read-back để dedupe; dùng transcript/URL trả về từ lệnh post. Flag: orca CLI bug chưa fix.
 - **.env clobber class mở rộng**: root `.env` KHÔNG được chứa BẤT KỲ var nào seam runners override (đã chốt FULFILLMENT_DB_*/OIDC_*/GRPC_*); runner scripts nên export sau `source .env` thay vì prefix-env để tự phòng.
