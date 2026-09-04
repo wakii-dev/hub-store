@@ -90,7 +90,7 @@
 - **Assertion 401/redirect phải strict theo URL + heading**: 404 render BÊN TRONG AppLayout (nav vẫn hiện) → mọi assertion "nav visible" là false positive cho auth-flow. Pattern: `waitForURL(landing-regex)` + heading content.
 - **Keycloak hosted form trong orca browser**: fill+click lần đầu sau navigation hay không ăn (form chưa hydrated) — cần submit lần 2; SSO session cookie cũng chết nhanh trong orca browser (playwright context thì sống) — SSO-alive flows verify bằng playwright, không bằng orca browser.
 
-## 2026-09-04 — FI-280 SF-7 (FI-287)
+## 2026-09-04 — FI-280 SF-7 (FI-287) — RESOLVED qua ritual 2026-09-04 (memory fi287-sf7-sweep-patterns.md; fixes: 4fff06e/785dc56/bffd0c2)
 - **Test-state pollution class "list pagination"**: spec tạo user test (disable-only, KC persist) → FE list phân trang client-side 10/trang → user seeded rớt khỏi trang 1 sau vài lần chạy → assert timeout "flake" giả. Fix: DELETE /users/:userId (manager-only) + beforeAll dọn prefix riêng của test. Rule: mọi spec tạo row test PHẢI tự dọn (delete > disable) hoặc sort-safe username.
 - **kafka-ui `/messages?limit=N` trả từ ĐẦU partition**: topic lớn dần theo số run → event mới ở tail không bao giờ vào cửa sổ quét → assertion "kafka có event" fail deterministic khi topic vượt limit. Đừng hardcode limit nhỏ "vì topic còn nhỏ" — topic e2e chỉ lớn dần.
 - **Partial-TRUNCATE + reseed = ghost-state generator**: dashboard beforeAll truncate `batches, batch_items` thiếu 3 bảng runtime SF-15 (`shipment_plannings/bookings/shipment_tracking_events`) + seed setval seq về max seed → batch_code mint lại dính planning BOOKED cũ → confirmPlanning no-op trả trạng thái cũ TỨC THÌ. Rule: TRUNCATE lists phải derive từ reset-db.sh (single source), không copy tay.
