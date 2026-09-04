@@ -50,9 +50,9 @@
 
 ### Task 6: 05-tech-service walkthrough + fix [P1][TECH]
 
-- [ ] **Step 6.1:** Walkthrough /hub-store-order/tech: delivery tab + tel: links, filter dStatus, installation tab, staff tab + detail modal
-- [ ] **Step 6.2:** Root-cause baseline bug: SO-0001 NEW không có nút Gán KTV (tech-assign-SO-0001 missing)
-- [ ] **Step 6.3:** Fix trong domain; re-run 05-tech-service PASS (§5 assign flow: modal → suggest → confirm → toast)
+- [x] **Step 6.1:** Walkthrough /hub-store-order/tech: delivery tab + tel: links, filter dStatus, installation tab, staff tab + detail modal
+- [x] **Step 6.2:** Root-cause baseline bug: SO-0001 NEW không có nút Gán KTV (tech-assign-SO-0001 missing)
+- [x] **Step 6.3:** Fix trong domain; re-run 05-tech-service PASS (§5 assign flow: modal → suggest → confirm → toast)
 
 ### Task 7: 06-exception + cancel/edge cases walkthrough + fix [P1][EXCEPTION]
 
