@@ -173,6 +173,21 @@ test.describe.serial("13xx — SF-5 batching/realtime/kafka/map regression", () 
         `${c} phải rời danh sách Chưa soạn sau create-batch`,
       ).toBe(false);
     }
+
+    // FI-285 bug #1 regression: target=1 phải persist batchCode từ request
+    // (trước đây Java drop → đơn "Đang soạn" mất link phiếu, D1 không hiện batch-link)
+    const preparing = await api.post("/fulfillment/filter", { batchStatus: [1], page: 1, pageSize: 50 });
+    const preparingBody = (await preparing.json()) as {
+      items: Array<{ fulfillCode: string; batchCode?: string }>;
+    };
+    for (const c of codes) {
+      const row = preparingBody.items.find((o) => o.fulfillCode === c);
+      expect(row, `${c} phải ở batchStatus=1 (Đang soạn) sau create-batch`).toBeTruthy();
+      expect(
+        row?.batchCode,
+        `${c} phải có batch_code persist (FI-285 bug #1 — D1 batch-link)`,
+      ).toBeTruthy();
+    }
   });
 
   test("1304 realtime SSE: page A gán shop → page B row đổi KHÔNG reload", async ({ page, request }) => {
@@ -207,10 +222,20 @@ test.describe.serial("13xx — SF-5 batching/realtime/kafka/map regression", () 
     expect(code, "cần 1 đơn batchStatus=0 + shop khác").toBeTruthy();
 
     const pageB = await page.context().newPage();
-    await page.goto(`${APP}/hub-store-order/order`);
-    await expect(page.getByText("Danh sách đơn hàng kho chi nhánh")).toBeVisible();
-    await pageB.goto(`${APP}/hub-store-order/order`);
-    await expect(pageB.getByText("Danh sách đơn hàng kho chi nhánh")).toBeVisible();
+    // Lọc "Chưa soạn" cả 2 page — list mặc định nhiều trạng thái/pagination
+    // nên row mục tiêu có thể không nằm ở trang 1 (pattern 07-realtime SF-10).
+    for (const p of [page, pageB]) {
+      await p.goto(`${APP}/hub-store-order/order`);
+      await expect(p.getByText("Danh sách đơn hàng kho chi nhánh")).toBeVisible();
+      await p.locator(".ant-select").filter({ hasText: "Trạng thái soạn hàng" }).click();
+      await p
+        .locator(".ant-select-dropdown:not(.ant-select-dropdown-hidden) .ant-select-item-option")
+        .filter({ hasText: "Chưa soạn" })
+        .first()
+        .click();
+      await p.keyboard.press("Escape");
+      await p.getByRole("button", { name: "Tìm kiếm" }).click();
+    }
 
     const rowB = pageB.locator(`tr[data-row-key="${code}"]`);
     await expect(rowB).toBeVisible();
@@ -253,5 +278,27 @@ test.describe.serial("13xx — SF-5 batching/realtime/kafka/map regression", () 
     await expect(page.getByTestId("warehouse-marker")).toBeVisible();
     await page.locator('[data-stop-order="1"]').click();
     await expect(page.getByTestId("route-stop-popup-ORD-E2E-A")).toBeVisible();
+  });
+
+  test("1306 tech map: tab Bản đồ header đếm = số pins (FI-285 bug #2)", async ({ page }) => {
+    // Regression bug #2: MapTab không truyền onTotal → header "0 đơn" dù pins render.
+    await page.goto(`${APP}/hub-store-order/tech`);
+    await expect(page.getByText("Đơn dịch vụ kỹ thuật")).toBeVisible();
+    await page.getByRole("tab", { name: "Bản đồ" }).click();
+    const mapView = page.getByTestId("tech-map-view");
+    await expect(mapView).toBeVisible();
+    // Header phải đếm > 0 và khớp số pin render (cùng nguồn fetch).
+    await expect
+      .poll(async () => {
+        const header = await page.evaluate(() => {
+          const m = document.body.innerText.match(/(\d+) đơn · đồng bộ/);
+          return m ? Number(m[1]) : -1;
+        });
+        const pins = await page.evaluate(
+          () => document.querySelectorAll('[data-testid^="tech-map-pin-"]').length,
+        );
+        return { header, pins, ok: pins > 0 && header === pins };
+      })
+      .toStrictEqual({ header: expect.any(Number), pins: expect.any(Number), ok: true });
   });
 });
