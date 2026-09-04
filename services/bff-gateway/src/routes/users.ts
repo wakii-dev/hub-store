@@ -130,4 +130,26 @@ export function registerUsersRoutes(
       throw err;
     }
   });
+
+  app.delete('/users/:userId', async (request, reply) => {
+    if (!isManager(request)) return sendForbidden(reply);
+    const { userId } = request.params as { userId: string };
+    try {
+      const target = await opts.kcAdmin.getUserById(userId);
+      if (!target) {
+        return void reply.code(404).send(errorEnvelope(404, 'User not found.', { code: 'NOT_FOUND' }));
+      }
+      const actor = requireUser(request);
+      if (target.username === actor.sub) {
+        return void reply.code(422).send(
+          errorEnvelope(422, 'Không thể tự xóa tài khoản của chính mình.', { code: 'SELF_DELETE_DENIED' }),
+        );
+      }
+      await opts.kcAdmin.deleteUser(userId);
+      return void reply.code(200).send({ ok: true });
+    } catch (err) {
+      if (err instanceof KcAdminError) return sendKcAdminError(reply, err);
+      throw err;
+    }
+  });
 }

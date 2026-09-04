@@ -461,4 +461,19 @@ export class KcAdminClient {
       throw new KcAdminError(503, `Keycloak set enabled failed (${res.status}).`, 'upstream');
     }
   }
+
+  /**
+   * Xóa vĩnh viễn user (SF-7 QA FI-287): disable chỉ ẩn user khỏi login —
+   * row vẫn nằm trong list và list FE phân trang client-side 10/trang →
+   * user test tích tụ đẩy user seeded rớt khỏi trang 1. Idempotent: 404
+   * (đã xóa) coi như thành công.
+   */
+  async deleteUser(userId: string): Promise<void> {
+    const token = await this.getToken();
+    const res = await this.kcFetch(`/users/${encodeURIComponent(userId)}`, { method: 'DELETE' }, token);
+    if (res.status === 404) return;
+    if (!res.ok) {
+      throw new KcAdminError(503, `Keycloak delete user failed (${res.status}).`, 'upstream');
+    }
+  }
 }
