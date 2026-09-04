@@ -21,8 +21,13 @@ public interface OrderRepository {
     /** Hydration (rule 1 §3.6) — trả truth theo đúng thứ tự codes yêu cầu, bỏ code lạ. */
     List<SeedModels.OrderSeed> findByCodes(List<String> fulfillCodes);
 
-    /** MutateOrderStatus (Go gọi): target 0/1/2; target=0 clear batchCode (revert §9). */
-    List<SeedModels.OrderSeed> mutateBatchStatus(List<String> fulfillCodes, int targetBatchStatus);
+    /**
+     * MutateOrderStatus (Go gọi): target 0/1/2; target=0 clear batchCode (revert §9).
+     * batchCode: mã phiếu từ request (Go pass-through create/complete-picking) —
+     * target≠0 mà batchCode non-empty thì persist (FI-285: trước đây target=1
+     * bỏ qua → đơn Đang soạn không có batch_code, D1 mất link phiếu).
+     */
+    List<SeedModels.OrderSeed> mutateBatchStatus(List<String> fulfillCodes, int targetBatchStatus, String batchCode);
 
     /** Rule 2 đã validate ở service — repo chỉ mutate + append history entry. */
     SeedModels.OrderSeed assignShopHub(String fulfillCode, SeedModels.ShopAssignmentSeed targetShop,

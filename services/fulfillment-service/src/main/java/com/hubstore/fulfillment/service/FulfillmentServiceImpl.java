@@ -228,9 +228,14 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
             // target=0: revert → xóa PENDING rows (CONFIRMED giữ — D8).
             // target=1: không đụng COD — mutate thẳng (repo tự tx bên Postgres).
             List<SeedModels.OrderSeed> updated;
+            // FI-285: batchCode từ request (Go pass-through create/complete-picking) —
+            // persist vào orders.batch_code cho target≠0 (trước đây chỉ nhánh COD
+            // target=2 dùng, đơn Đang soạn mất link phiếu trên D1).
+            String reqBatchCode = request.hasBatchCode() && !request.getBatchCode().isEmpty()
+                    ? request.getBatchCode() : null;
             if (target == 2 || target == 0) {
                 updated = transactions.execute(tx -> {
-                    List<SeedModels.OrderSeed> res = repo.mutateBatchStatus(codes, target);
+                    List<SeedModels.OrderSeed> res = repo.mutateBatchStatus(codes, target, reqBatchCode);
                     if (target == 2) {
                         Instant completedAt = Instant.now();
                         for (SeedModels.OrderSeed o : res) {
@@ -254,7 +259,7 @@ public class FulfillmentServiceImpl extends FulfillmentServiceGrpc.FulfillmentSe
                     return res;
                 });
             } else {
-                updated = repo.mutateBatchStatus(codes, target);
+                updated = repo.mutateBatchStatus(codes, target, reqBatchCode);
             }
             if (updated == null) {
                 updated = List.of();

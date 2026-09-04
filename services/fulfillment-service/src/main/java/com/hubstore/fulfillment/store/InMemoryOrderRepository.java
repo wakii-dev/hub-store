@@ -108,7 +108,7 @@ public class InMemoryOrderRepository implements OrderRepository {
     // ---------------- mutations ----------------
 
     @Override
-    public synchronized List<SeedModels.OrderSeed> mutateBatchStatus(List<String> fulfillCodes, int targetBatchStatus) {
+    public synchronized List<SeedModels.OrderSeed> mutateBatchStatus(List<String> fulfillCodes, int targetBatchStatus, String batchCode) {
         List<SeedModels.OrderSeed> updated = new ArrayList<>();
         for (String code : fulfillCodes) {
             Optional<SeedModels.OrderSeed> found = findByFulfillCode(code);
@@ -116,8 +116,10 @@ public class InMemoryOrderRepository implements OrderRepository {
                 continue;
             }
             // target=0 (cancel-revert §9): đơn rời phiếu → clear batchCode.
-            String batchCode = targetBatchStatus == 0 ? null : found.get().batchCode();
-            SeedModels.OrderSeed next = found.get().withBatchStatus(targetBatchStatus, batchCode);
+            // target≠0: batchCode từ request (non-empty — FI-285) hoặc giữ hiện có.
+            String resolvedBatchCode = targetBatchStatus == 0 ? null
+                    : (batchCode != null && !batchCode.isEmpty() ? batchCode : found.get().batchCode());
+            SeedModels.OrderSeed next = found.get().withBatchStatus(targetBatchStatus, resolvedBatchCode);
             replace(next);
             updated.add(next);
         }

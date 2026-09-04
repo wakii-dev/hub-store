@@ -169,10 +169,11 @@ public class PostgresOrderRepository implements OrderRepository {
     // ---------------- mutations ----------------
 
     /** 1 transaction (@Transactional): từng code dual-match FOR UPDATE; lạ skip;
-     *  target=0 → clear batchCode (revert §9), target khác → giữ batchCode. */
+     *  target=0 → clear batchCode (revert §9), target khác → batchCode từ request
+     *  (non-empty — FI-285) hoặc giữ batchCode hiện có. */
     @Override
     @Transactional
-    public List<SeedModels.OrderSeed> mutateBatchStatus(List<String> fulfillCodes, int targetBatchStatus) {
+    public List<SeedModels.OrderSeed> mutateBatchStatus(List<String> fulfillCodes, int targetBatchStatus, String batchCode) {
         List<SeedModels.OrderSeed> updated = new ArrayList<>();
         for (String code : fulfillCodes) {
             Optional<OrderRow> found = findRowDualForUpdate(code);
@@ -180,10 +181,11 @@ public class PostgresOrderRepository implements OrderRepository {
                 continue;
             }
             OrderRow row = found.get();
-            String batchCode = targetBatchStatus == 0 ? null : row.order().batchCode();
+            String resolvedBatchCode = targetBatchStatus == 0 ? null
+                    : (batchCode != null && !batchCode.isEmpty() ? batchCode : row.order().batchCode());
             jdbc.update("UPDATE orders SET batch_status = ?, batch_code = ? WHERE id = ?",
-                    targetBatchStatus, batchCode, row.id());
-            updated.add(row.order().withBatchStatus(targetBatchStatus, batchCode));
+                    targetBatchStatus, resolvedBatchCode, row.id());
+            updated.add(row.order().withBatchStatus(targetBatchStatus, resolvedBatchCode));
         }
         return updated;
     }
