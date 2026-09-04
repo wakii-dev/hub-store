@@ -77,4 +77,4 @@
 - [x] **Step 10.1:** Phase 5 verify ACCEPTANCE từng dòng (context pack) + code-reviewer độc lập trên diff
 - [x] **Step 10.2:** Merge no-ff vào story/qa-hub-store-regression (conflict improvements-log giữ CẢ HAI) + audit comment merge-hash lên FI-284
 - [x] **Step 10.3:** GATE CỨNG: `~/.claude/bin/story-verify <sf>` sạch
-- [ ] **Step 10.4:** Set FI-284 Done (SAU merge)
+- [x] **Step 10.4:** Set FI-284 Done (SAU merge)
