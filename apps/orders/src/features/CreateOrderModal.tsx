@@ -91,8 +91,11 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
       footer={null}
       width={640}
       destroyOnClose
-      data-testid="create-order-modal"
     >
+      {/* testid trên div content (pattern TransferHubModal) — đặt trên <Modal>
+          thì antd4 spread lên .ant-modal-root (height 0 → Playwright xem là
+          hidden, baseline FI-281 test 30 đỏ). */}
+      <div data-testid="create-order-modal">
       <Form
         form={form}
         layout="vertical"
@@ -225,6 +228,7 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
           </Button>
         </Space>
       </Form>
+      </div>
     </Modal>
   );
 }
