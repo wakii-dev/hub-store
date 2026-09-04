@@ -232,7 +232,7 @@ export default function TechServicePage() {
         </>
       )}
 
-      {tab === 'map' && <MapTab />}
+      {tab === 'map' && <MapTab onTotal={setTotal} />}
     </div>
   );
 }
