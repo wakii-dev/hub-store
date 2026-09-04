@@ -19,7 +19,11 @@ ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LOG=/tmp/story/sf-25
 mkdir -p "$LOG"
 PG_HOST_PORT=56443
-PORTS=(4220 4286 52073 52074 56443 8082)
+PORTS=(4220 4286 52073 52074 52075 52076 56443 8082)
+# SF-12 health side-ports (Java fulfillment.health-port default :8083, Go
+# HEALTH_PORT default :8082) — seam FI-270 viết trước side-port nên không
+# override → Java crash BindException :8083 (main-stack Java), Go health đụng
+# keycloak seam :8082. Override vào block riêng 52075/52076 (baseline FI-281).
 
 # --- 0) docker daemon guard (daemon down từng xảy ra — chờ tối đa 120s) ---
 for i in $(seq 1 24); do
@@ -57,7 +61,7 @@ wait_port() {
 # gốc không truy được con của run.sh/vite; pattern memory fi245-sf7).
 cleanup() {
   echo "[sf-25] cleanup — kill listener block sf-25"
-  for p in 4220 4286 52073 52074; do
+  for p in 4220 4286 52073 52074 52075 52076; do
     lsof -ti tcp:"$p" 2>/dev/null | xargs kill -9 2>/dev/null || true
   done
 }
@@ -139,10 +143,17 @@ PGHOST=localhost PGPORT=$PG_HOST_PORT PGUSER="$PGU" PGPASSWORD="$POSTGRES_PASSWO
 tail -2 "$LOG/seed.log"
 
 # --- 5) BE: fulfillment java :52073 + batching go :52074 (relaxed binding) ---
+# Java TokenAuthInterceptor (SF-12 s2s passthrough) KHÔNG derive realm từ base
+# (khác BFF withRealm) → cần FULL issuer + certs URL; bare base → iss mismatch
+# → 403 "Invalid or expired bearer token" mọi service-orders call (baseline
+# FI-281 04/09).
 cd "$ROOT"
-GRPC_SERVER_PORT=52073 ./services/fulfillment-service/run.sh >"$LOG/java.log" 2>&1 &
+GRPC_SERVER_PORT=52073 FULFILLMENT_HEALTH_PORT=52075 \
+  OIDC_ISSUER=http://127.0.0.1:8082/realms/hubstore \
+  OIDC_JWKS_URL=http://127.0.0.1:8082/realms/hubstore/protocol/openid-connect/certs \
+  ./services/fulfillment-service/run.sh >"$LOG/java.log" 2>&1 &
 wait_port java 52073 || exit 1
-BATCHING_PORT=52074 FULFILLMENT_ADDR=localhost:52073 ./services/batching-service/run.sh >"$LOG/go.log" 2>&1 &
+BATCHING_PORT=52074 FULFILLMENT_ADDR=localhost:52073 HEALTH_PORT=52076 ./services/batching-service/run.sh >"$LOG/go.log" 2>&1 &
 wait_port go 52074 || exit 1
 
 # --- 6) BFF :4286 (OIDC_ISSUER + OIDC_JWKS_URL override — root .env trỏ shared
