@@ -16,23 +16,23 @@
 
 **Files:** Create `scripts/run-sf4-private.sh` (nếu chưa có seam runner tái dụng được) hoặc dùng runner có sẵn trong /tmp/story.
 
-- [ ] **Step 1.1:** Tìm seam runner pattern (run-nvc-private.sh tại /tmp/story/fi233/ hoặc trong repo scripts/) — đọc để hiểu E2E_SHELL_URL/E2E_BFF_URL/E2E_PROXY/E2E_PG_SEAM + port layout
-- [ ] **Step 1.2:** Boot full stack port riêng (KHÔNG share Kafka/Keycloak với stack khác đang chạy) — check ports trống trước
-- [ ] **Step 1.3:** Verify boot: 7/7 services health + login UI được (Rule 0 tầng 1: DOM, tầng 2: screenshot)
-- [ ] **Step 1.4:** Tự lập state: seed canonical + đủ orders shop 30201 unbatched cho 06-exception
+- [x] **Step 1.1:** Tìm seam runner pattern (run-nvc-private.sh tại /tmp/story/fi233/ hoặc trong repo scripts/) — đọc để hiểu E2E_SHELL_URL/E2E_BFF_URL/E2E_PROXY/E2E_PG_SEAM + port layout
+- [x] **Step 1.2:** Boot full stack port riêng (KHÔNG share Kafka/Keycloak với stack khác đang chạy) — check ports trống trước
+- [x] **Step 1.3:** Verify boot: 7/7 services health + login UI được (Rule 0 tầng 1: DOM, tầng 2: screenshot)
+- [x] **Step 1.4:** Tự lập state: seed canonical + đủ orders shop 30201 unbatched cho 06-exception
 
 ### Task 2: Lifecycle walkthrough (prep→assign staff→driver→deliver)
 
 **Files:** không sửa code trừ khi phát hiện bug.
 
-- [ ] **Step 2.1:** Browser flow: chọn đơn → tạo batch (prep) → hoàn tất soạn → assign staff/driver → deliver. Screenshot mỗi bước (VISUAL), snapshot DOM (DOM), đi trọn flow (FLOW)
-- [ ] **Step 2.2:** Verify trạng thái đơn chuyển đúng sau mỗi mutation (UI badge + API check)
-- [ ] **Step 2.3:** Bug tìm thấy → log template + fix ngay nếu P0–P2
+- [x] **Step 2.1:** Browser flow: chọn đơn → tạo batch (prep) → hoàn tất soạn → assign staff/driver → deliver. Screenshot mỗi bước (VISUAL), snapshot DOM (DOM), đi trọn flow (FLOW)
+- [x] **Step 2.2:** Verify trạng thái đơn chuyển đúng sau mỗi mutation (UI badge + API check)
+- [x] **Step 2.3:** Bug tìm thấy → log template + fix ngay nếu P0–P2
 
 ### Task 3: Audit-trail check + 08-audit-viewer walkthrough
 
-- [ ] **Step 3.1:** Sau mỗi mutation UI ở Task 2 → check audit entry ghi đúng actor/action (GET /fulfillment/audit hoặc /audit UI), đợi poll ~15s (fire-and-forget)
-- [ ] **Step 3.2:** Walkthrough /audit viewer: filter actor/action, range picker, forbidden checks (coordinator/admin không thấy nav-audit)
+- [x] **Step 3.1:** Sau mỗi mutation UI ở Task 2 → check audit entry ghi đúng actor/action (GET /fulfillment/audit hoặc /audit UI), đợi poll ~15s (fire-and-forget)
+- [x] **Step 3.2:** Walkthrough /audit viewer: filter actor/action, range picker, forbidden checks (coordinator/admin không thấy nav-audit)
 - [ ] **Step 3.3:** Bug → log + fix P0–P2
 
 ### Task 4: 05-area walkthrough + fix [P1][AREA]
