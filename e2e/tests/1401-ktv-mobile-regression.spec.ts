@@ -31,7 +31,7 @@ function psql(db: string, sql: string): string {
   // tự literal mà psql -c đọc là syntax error (S0 seed fail lần chạy đầu).
   const oneLine = sql.replace(/\s+/g, " ").trim();
   return execSync(
-    `docker compose exec -T postgres psql -U hubstore -d ${db} -At -v ON_ERROR_STOP=1 -c ${JSON.stringify(oneLine)}`,
+    `docker compose exec -T postgres psql -U hubstore -d "${db}" -At -v ON_ERROR_STOP=1 -c ${JSON.stringify(oneLine)}`,
     { stdio: "pipe", encoding: "utf-8" },
   );
 }
@@ -90,6 +90,7 @@ test.describe.serial("SF-6 ktv-mobile regression — KTV-001", () => {
     // trigger khi server THẬT SỰ unreachable → kill listener :4220 trong test,
     // spawn lại vite sau (detached, env kế thừa) để S2/S4/S5 chạy tiếp.
     execSync("/usr/sbin/lsof -ti tcp:4220 | xargs kill -9", { stdio: "pipe" });
+    let offlineNavPassed = false;
     try {
       await page.context().setOffline(true);
       // '/sw-uncached-nav' không trong PRECACHE → network-first miss → offline.html
@@ -97,10 +98,12 @@ test.describe.serial("SF-6 ktv-mobile regression — KTV-001", () => {
       await expect(page.locator("body")).toContainText(/mất kết nối|ngoại tuyến|offline/i, {
         ignoreCase: true,
       });
+      offlineNavPassed = true;
     } finally {
       await page.context().setOffline(false);
       // spawn lại vite dev :4220 (env VITE_* từ runner/run-1401.sh) — detached
-      // để sống sau khi worker test thoát; poll chờ port lên.
+      // để sống sau khi worker test thoát; poll chờ port lên. Lỗi restore chỉ
+      // ném khi body test PASS — KHÔNG mask assertion failure gốc (P2 review).
       const appDir = resolve(__dirname, "../../apps/ktv-mobile");
       const child = spawn("pnpm", ["exec", "vite", "--port", "4220", "--strictPort"], {
         cwd: appDir,
@@ -109,11 +112,20 @@ test.describe.serial("SF-6 ktv-mobile regression — KTV-001", () => {
         env: process.env,
       });
       child.unref();
-      const up = execSync(
-        `for i in $(seq 1 60); do /usr/bin/nc -z localhost 4220 >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1`,
-        { shell: "/bin/bash", stdio: "pipe" },
-      );
-      expect(up).toBeDefined();
+      let restored = false;
+      try {
+        execSync(
+          `for i in $(seq 1 60); do /usr/bin/nc -z localhost 4220 >/dev/null 2>&1 && exit 0; sleep 1; done; exit 1`,
+          { shell: "/bin/bash", stdio: "pipe" },
+        );
+        restored = true;
+      } catch {
+        restored = false;
+      }
+      if (offlineNavPassed && !restored) {
+        // body test PASS — lỗi restore phải nổi rõ thay vì để S2/S4/S5 fail ảo
+        throw new Error("S1 restore: vite :4220 không lên lại sau 60s — seam hỏng cho các test sau");
+      }
     }
   });
 

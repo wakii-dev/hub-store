@@ -1,11 +1,11 @@
 #!/usr/bin/env bash
-# SF-25 (FI-270) — private-port seam runner cho spec 09 (ktv-mobile), pattern
-# SF-24 run-map-private.sh + mini-stack T4b. KHÔNG đụng shared ports
+# SF-6 (FI-286) — private-port seam runner cho spec 09 + 1401 (ktv-mobile),
+# pattern SF-24 run-map-private.sh + mini-stack T4b. KHÔNG đụng shared ports
 # 3000-3002/8080/5005x, không đụng block sf-24 (4210-4212/4285/56442/8081),
 # không stop container/process của SF khác.
 #
-# Port map: ktv-mobile :4220 · BFF :4286 · Java :52073 · Go :52074 ·
-# postgres :56443 (container sf6-postgres) · keycloak :8082 (container
+# Port map: ktv-mobile :4220 · BFF :4286 · Java :52081 · Go :52082 ·
+# postgres :56453 (container sf6-postgres) · keycloak :8082 (container
 # sf6-keycloak, FRESH named volume sf6-kc-data — realm mới có
 # InsideTechnician/OutsideTechnician + hubstore-mobile; volume cũ import no-op).
 #
@@ -13,7 +13,7 @@
 # e2e/scripts/mint_ktv_auth.py (PKCE secure-cookie hack) vào e2e/.auth/
 # (gitignored). Spec dùng E2E_KTV_STORAGE / E2E_CTV_STORAGE để override.
 #
-# Usage: bash e2e/scripts/run-ktv-private.sh   # boot + mint + block (Ctrl-C dừng FE/BFF/BE + containers GIỮ để re-run)
+# Usage: bash e2e/scripts/run-sf6-ktv-private.sh   # boot + mint + block (Ctrl-C dừng FE/BFF/BE + containers GIỮ để re-run)
 set -uo pipefail
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 LOG=/tmp/story/fi280-sf6/ktv
@@ -189,8 +189,9 @@ python3 "$ROOT/e2e/scripts/mint_ktv_auth.py" KTV-001 "$ROOT/e2e/.auth/ktv-001.js
 python3 "$ROOT/e2e/scripts/mint_ktv_auth.py" CTV-001 "$ROOT/e2e/.auth/ctv-001.json" || {
   echo "[sf6] FAIL mint CTV-001" >&2; exit 1; }
 
-echo "[sf6] seam ready — pg:56443 keycloak:8082 java:52073 go:52074 bff:4286 app:4220"
+echo "[sf6] seam ready — pg:56453 keycloak:8082 java:52081 go:52082 bff:4286 app:4220"
 echo "[sf6] login thủ công: http://127.0.0.1:4220 — KTV-001 / Password123! (hoặc CTV-001)"
 echo "[sf6] seed kỳ vọng: Lắp đặt KTV-001 = SO-0004 PROCESSING + SO-0006 CONFIRMED; Giao hàng = TD-0007; CTV-001 = SO-0007"
 echo "[sf6] run e2e:    pnpm --dir e2e exec playwright test -c playwright.ktv.config.ts"
+echo "[sf6] run 1401:   E2E_PG_SEAM=1 E2E_TEST_MATCH=1401-ktv-mobile-regression.spec.ts pnpm --dir e2e exec playwright test -c playwright.ktv.config.ts --reporter=line"
 wait

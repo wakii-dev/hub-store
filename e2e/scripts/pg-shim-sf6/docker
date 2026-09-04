@@ -1,0 +1,28 @@
+#!/bin/bash
+# DOCKER SHIM (SF-6 FI-286 — pg seam isolation cho spec 1401) — intercepts
+# `docker compose exec -T postgres psql ...` và redirect sang private pg
+# container sf6-postgres (:56453, seam run-sf6-ktv-private.sh). Mọi lệnh
+# docker khác pass-through. Được playwright.ktv.config.ts PATH-prepend khi
+# E2E_PG_SEAM=1 (guard destructive state-prep — KHÔNG đụng postgres compose chính).
+REAL=""
+for d in /usr/local/bin/docker /opt/homebrew/bin/docker; do [ -x "$d" ] && REAL="$d" && break; done
+[ -z "$REAL" ] && REAL="$(command -v docker)"
+if [ "$1" = "compose" ] && [ "$2" = "exec" ]; then
+  svc=""
+  for a in "${@:3}"; do
+    case "$a" in
+      -*) ;;
+      *) [ -z "$svc" ] && svc="$a" ;;
+    esac
+  done
+  if [ "$svc" = "postgres" ]; then
+    newargs=()
+    state=0
+    for a in "${@:3}"; do
+      [ "$state" = "1" ] && newargs+=("$a")
+      [ "$a" = "postgres" ] && state=1
+    done
+    exec "$REAL" exec -i sf6-postgres "${newargs[@]}"
+  fi
+fi
+exec "$REAL" "$@"
