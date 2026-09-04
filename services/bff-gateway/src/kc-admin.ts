@@ -150,7 +150,7 @@ export class KcAdminClient {
         // Client đã có nhưng grant vẫn 401 → secret lệch; chỉ gán role rồi để
         // retry expose lỗi thật (không tự đổi secret — fail-loud).
         console.warn('[kc-admin] self-heal: client exists but grant 401 — assigning role only.');
-        await this.assignManageUsers(master);
+        await this.assignRealmManagementRoles(master);
         return;
       }
     }
@@ -177,16 +177,30 @@ export class KcAdminClient {
       throw new KcAdminError(503, `Self-heal client create failed (${created.status}).`, 'upstream');
     }
     console.warn('[kc-admin] self-heal: created client hubstore-admin (realm import was skipped).');
-    await this.assignManageUsers(master);
+    await this.assignRealmManagementRoles(master);
   }
 
-  /** Gán client role realm-management:manage-users cho service-account user. */
+  /** Gán client roles realm-management cần thiết cho service-account user. */
   private async selfHealAssignRoleOnly(): Promise<void> {
     const master = await this.masterAdminToken();
-    await this.assignManageUsers(master);
+    await this.assignRealmManagementRoles(master);
   }
 
-  private async assignManageUsers(master: string): Promise<void> {
+  /**
+   * Gán các client roles realm-management mà users API cần (SF-7 QA FI-287):
+   * manage-users (CRUD) + query-users/view-users/view-realm (list + role-members
+   * lookup). Trước đây chỉ gán manage-users → GET /roles/{id}/users trả 404
+   * ("Could not find role" — KC ngụy trang thiếu query-users) → /users 503 →
+   * trang users không bao giờ render được list.
+   */
+  private static readonly REQUIRED_RM_ROLES = [
+    'manage-users',
+    'query-users',
+    'view-users',
+    'view-realm',
+  ];
+
+  private async assignRealmManagementRoles(master: string): Promise<void> {
     const rmRes = await this.kcFetch('/clients?clientId=realm-management', { method: 'GET' }, master);
     if (!rmRes.ok) {
       throw new KcAdminError(503, `Self-heal realm-management lookup failed (${rmRes.status}).`, 'upstream');
@@ -218,30 +232,36 @@ export class KcAdminClient {
       throw new KcAdminError(503, `Self-heal roles lookup failed (${roleRes.status}).`, 'upstream');
     }
     const roles = (await roleRes.json()) as KcRole[];
-    const role = roles.find((r) => r.name === 'manage-users');
-    if (!role) {
-      throw new KcAdminError(503, 'Self-heal: manage-users role missing.', 'upstream');
+    const wanted = roles.filter((r) => KcAdminClient.REQUIRED_RM_ROLES.includes(r.name));
+    if (wanted.length === 0) {
+      throw new KcAdminError(503, 'Self-heal: required realm-management roles missing.', 'upstream');
     }
     const assign = await this.kcFetch(
       `/users/${encodeURIComponent(saId)}/role-mappings/clients/${encodeURIComponent(rmId)}`,
       {
         method: 'POST',
         headers: { 'content-type': 'application/json' },
-        body: JSON.stringify([role]),
+        body: JSON.stringify(wanted),
       },
       master,
     );
     if (!assign.ok) {
       throw new KcAdminError(503, `Self-heal role assign failed (${assign.status}).`, 'upstream');
     }
-    console.warn('[kc-admin] self-heal: assigned realm-management:manage-users.');
+    console.warn(`[kc-admin] self-heal: assigned realm-management: ${wanted.map((r) => r.name).join(', ')}.`);
   }
 
   // --- Ops dùng bởi routes/users.ts ---
 
   async listUsers(): Promise<ManagedUser[]> {
-    const token = await this.getToken();
-    const res = await this.kcFetch('/users?max=500', { method: 'GET' }, token);
+    let res = await this.listUsersFetch();
+    if (res.status === 403) {
+      // Fresh import: client grant OK nhưng SA thiếu realm-management roles →
+      // self-heal + fresh token (roles mới chỉ vào token lúc mint) rồi retry 1 lần.
+      await this.selfHealAssignRoleOnly();
+      this.token = null;
+      res = await this.listUsersFetch();
+    }
     if (!res.ok) {
       throw new KcAdminError(503, `Keycloak list users failed (${res.status}).`, 'upstream');
     }
@@ -252,6 +272,11 @@ export class KcAdminClient {
           typeof u.id === 'string' && typeof u.username === 'string',
       )
       .map((u) => ({ id: u.id, username: u.username, enabled: u.enabled === true }));
+  }
+
+  private async listUsersFetch(): Promise<Response> {
+    const token = await this.getToken();
+    return this.kcFetch('/users?max=500', { method: 'GET' }, token);
   }
 
   async getUserById(id: string): Promise<ManagedUser | null> {
@@ -277,19 +302,34 @@ export class KcAdminClient {
     return typeof role.id === 'string' ? role.id : null;
   }
 
-  async usernamesWithRole(roleId: string): Promise<Set<string>> {
-    const token = await this.getToken();
-    const res = await this.kcFetch(
-      `/roles/${encodeURIComponent(roleId)}/users?max=500`,
-      { method: 'GET' },
-      token,
-    );
+  /**
+   * Role-members lookup theo TÊN role (SF-7 QA FI-287): KC 26.0 trả 404
+   * "Could not find role" cho GET /roles/{role-id}/users (by-id bị chết) —
+   * by-name hoạt động. Trước đây dùng id → /users 503 → trang users không
+   * bao giờ render list. Self-heal gán đủ realm-management roles nếu thiếu.
+   */
+  async usernamesWithRole(roleName: string): Promise<Set<string>> {
+    let res = await this.roleUsersFetch(roleName);
+    if (res.status === 403 || res.status === 404) {
+      await this.selfHealAssignRoleOnly();
+      this.token = null; // force fresh token — roles mới chỉ vào token lúc mint
+      res = await this.roleUsersFetch(roleName);
+    }
     if (!res.ok) {
       throw new KcAdminError(503, `Keycloak role-users failed (${res.status}).`, 'upstream');
     }
     const users = (await res.json()) as KcUser[];
     return new Set(
       users.filter((u) => typeof u.username === 'string').map((u) => u.username as string),
+    );
+  }
+
+  private async roleUsersFetch(roleName: string): Promise<Response> {
+    const token = await this.getToken();
+    return this.kcFetch(
+      `/roles/${encodeURIComponent(roleName)}/users?max=500`,
+      { method: 'GET' },
+      token,
     );
   }
 
@@ -314,6 +354,13 @@ export class KcAdminClient {
    * Idempotent với partial-create: lần tạo trước đứt giữa chừng (user có rồi
    * nhưng role chưa gán) → KC 409 → set-password user tồn tại + trả id cũ để
    * route gán role và trả 201 (tránh username kẹt vĩnh viễn 409→422).
+   *
+   * SF-7 QA FI-287: KC 26 có built-in required action VerifyProfile — user
+   * thiếu firstName/lastName/email bị chặn ở trang "Update Account
+   * Information" khi login đầu tiên → user mới tạo KHÔNG ĐĂNG NHẬP ĐƯỢC
+   * (seeded users trong realm JSON đều có đủ 3 fields nên không thấy).
+   * Set placeholder profile theo convention realm để user mới login được
+   * ngay (manager cập nhật sau qua KC account console nếu cần).
    */
   async createUser(username: string, password: string): Promise<string> {
     const token = await this.getToken();
@@ -325,6 +372,10 @@ export class KcAdminClient {
         body: JSON.stringify({
           username,
           enabled: true,
+          firstName: username,
+          lastName: 'HubStore',
+          email: `${username}@users.hubstore.dev`,
+          emailVerified: true,
           credentials: [{ type: 'password', value: password, temporary: false }],
         }),
       },
@@ -408,6 +459,21 @@ export class KcAdminClient {
     }
     if (!res.ok) {
       throw new KcAdminError(503, `Keycloak set enabled failed (${res.status}).`, 'upstream');
+    }
+  }
+
+  /**
+   * Xóa vĩnh viễn user (SF-7 QA FI-287): disable chỉ ẩn user khỏi login —
+   * row vẫn nằm trong list và list FE phân trang client-side 10/trang →
+   * user test tích tụ đẩy user seeded rớt khỏi trang 1. Idempotent: 404
+   * (đã xóa) coi như thành công.
+   */
+  async deleteUser(userId: string): Promise<void> {
+    const token = await this.getToken();
+    const res = await this.kcFetch(`/users/${encodeURIComponent(userId)}`, { method: 'DELETE' }, token);
+    if (res.status === 404) return;
+    if (!res.ok) {
+      throw new KcAdminError(503, `Keycloak delete user failed (${res.status}).`, 'upstream');
     }
   }
 }

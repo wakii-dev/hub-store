@@ -59,7 +59,14 @@ test.beforeAll(() => {
     "fulfillment",
     "TRUNCATE orders, shop_assignment_history, regions, delivery_staff RESTART IDENTITY CASCADE",
   );
-  psql("batching", "TRUNCATE batches, batch_items RESTART IDENTITY");
+  // SF-7 QA FI-287: TRUNCATE thiếu shipment_plannings/bookings/tracking_events
+  // (SF-15) → planning BOOKED của batch code cũ sống sót qua reseed (seq setval
+  // về max seed) → lần NVC sau mint lại cùng batch_code → confirm trúng ghost
+  // BOOKED tức thì. Dọn đủ bảng planning/booking/event của batching.
+  psql(
+    "batching",
+    "TRUNCATE batches, batch_items, shipment_plannings, bookings, shipment_tracking_events RESTART IDENTITY",
+  );
   execSync("bash scripts/seed-db.sh", { cwd: ROOT, stdio: "pipe" });
   // Verify reseed trước khi assert số liệu.
   const count = psql("fulfillment", "SELECT count(*) FROM orders");

@@ -1,3 +1,4 @@
+import { execSync } from "node:child_process";
 import path from "node:path";
 import { expect, test, type APIRequestContext, type Page } from "@playwright/test";
 
@@ -121,8 +122,42 @@ async function getAudit(page: Page, request: APIRequestContext, code: string): P
 }
 
 test("chuẩn bị: tick 2 đơn Chưa soạn 30201 → tạo phiếu → hoàn tất soạn", async ({ page }) => {
+  // Fail-fast: state-prep DELETE/UPDATE phá-data — chỉ hợp lệ trên private pg
+  // seam (E2E_PG_SHIM redirect sf4-postgres). Chạy mặc định (không seam) sẽ
+  // đụng postgres compose chính → chặn ngay (code-reviewer FI-284 P1).
+  if (process.env.E2E_PG_SEAM !== "1") {
+    throw new Error(
+      "06-exception state-prep phá-data — chạy với E2E_PG_SEAM=1 (private pg seam), không đụng postgres chính",
+    );
+  }
+  // State-prep (SF-4 FI-284, pattern psql 05-tech): DB persist giữa các run →
+  // các run trước có thể đã batch HẾT đơn 30201 Chưa soạn, hoặc seed
+  // CURRENT_DATE stale qua ngày (delivery hôm qua → filter mặc định hôm nay
+  // trả 0 hàng). Reset 2 đơn 30201 (mã động — ORDER BY LIMIT, không hardcode)
+  // về Chưa soạn + delivery hôm nay. E2E_PG_SHIM redirect về sf4-postgres.
+  execSync(
+    `docker compose exec -T postgres psql -U hubstore -d fulfillment -At -v ON_ERROR_STOP=1 -c ${JSON.stringify(
+      `UPDATE orders SET batch_status = 0, batch_code = NULL, fail_reason = NULL, fail_note = NULL, failed_at = NULL, old_fulfill_code = NULL, order_status = 0, delivery_time_from = date_trunc('day', now()) + interval '8 hours', delivery_time_to = date_trunc('day', now()) + interval '18 hours' WHERE id IN (SELECT id FROM orders WHERE shop_code = '30201' ORDER BY fulfill_code LIMIT 2); DELETE FROM orders WHERE old_fulfill_code IS NOT NULL AND created_time >= date_trunc('day', now());`,
+    )}`,
+    { stdio: "pipe" },
+  );
+  // Dọn batch e2e tạo HÔM NAY (mọi status) trong batching DB — nếu không,
+  // openBatchOfOrder search theo mã đơn trả cả batch stale (hoàn tất/active
+  // từ run trước) → chọn nhầm batch không có nút "Hoàn tất soạn". Batch seed
+  // (created_at < hôm nay) giữ nguyên. Prep test TIMEOUT kill worker → module
+  // state (failCode…) mất ở tests sau → mọi lỗi prep phải được fix tận gốc.
+  execSync(
+    `docker compose exec -T postgres psql -U hubstore -d batching -At -v ON_ERROR_STOP=1 -c ${JSON.stringify(
+      `DELETE FROM batch_items WHERE batch_code IN (SELECT batch_code FROM batches WHERE created_at >= date_trunc('day', now())); DELETE FROM batches WHERE created_at >= date_trunc('day', now());`,
+    )}`,
+    { stdio: "pipe" },
+  );
+
   await page.goto("/hub-store-order/order");
-  await page.getByTestId("fulfill-code-ORD-3001").waitFor();
+  // Chờ bảng render (KHÔNG hardcode ORD-3001 — spec trước có thể đã batch
+  // ORD-3001 → bs=2, dưới filter "Chưa soạn" không còn hàng đó. SF-4 FI-284
+  // root-cause [P1][EXCEPTION] baseline 0/4: wait hardcoded chết ở đây).
+  await page.locator('[data-testid^="fulfill-code-"]').first().waitFor();
 
   // Filter kho 30201 (pattern spec 01) + Chưa soạn → các đơn chưa dùng batch
   await page.locator(".ant-select").filter({ hasText: "Kho CN xuất hàng" }).click();
@@ -131,7 +166,8 @@ test("chuẩn bị: tick 2 đơn Chưa soạn 30201 → tạo phiếu → hoàn 
   await openOptions(page).filter({ hasText: "Chưa soạn" }).first().click();
   await page.keyboard.press("Escape");
   await page.getByRole("button", { name: "Tìm kiếm" }).click();
-  await page.getByTestId("fulfill-code-ORD-3001").waitFor();
+  // Filter áp dụng → chờ BẤT KỲ hàng đơn nào (đơn được chọn động bên dưới).
+  await page.locator('[data-testid^="fulfill-code-"]').first().waitFor();
 
   // 2 hàng đầu trang = 2 đơn Chưa soạn chưa dùng (mã đọc động — DB persist)
   const keys = (await page

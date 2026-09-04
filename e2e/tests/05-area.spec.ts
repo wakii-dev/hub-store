@@ -44,9 +44,21 @@ test.describe("Admin — tạo + quản lý khu vực hoạt động NV", () => 
     await expect(page.getByTestId("area-verify-result")).toContainText("[MOCK]");
     await expect(page.getByTestId("area-verify-result")).toContainText("Tài khoản hợp lệ");
 
-    // MỘT TreeSelect (treeCheckStrictly) — check 2 node TỈNH = phụ trách toàn tỉnh
+    // MỘT TreeSelect (treeCheckStrictly) — check 2 node TỈNH ĐẦU TIÊN (đọc
+    // ĐỘNG từ tree — SF-4 FI-284: hardcode "T. Thừa Thiên Huế"/"Quảng Nam"
+    // stale vs canonical-seed 3 tỉnh Đà Nẵng/Hà Nội/TP.HCM; dropdown mở
+    // COLLAPSED nên mọi node hiển thị = tỉnh).
     await page.getByTestId("area-form-regions").click();
-    for (const province of ["T. Thừa Thiên Huế", "Quảng Nam"]) {
+    const treeNodes = page.locator(".ant-select-tree-treenode");
+    await expect(treeNodes.nth(1)).toBeVisible();
+    const provinces = (await treeNodes.evaluateAll((ns) =>
+      ns
+        .map((n) => (n.querySelector(".ant-select-tree-title")?.textContent ?? "").trim())
+        .filter((t) => t !== "")
+        .slice(0, 2),
+    )) as string[];
+    expect(provinces, "tree phải có ≥2 tỉnh").toHaveLength(2);
+    for (const province of provinces) {
       await page
         .locator(".ant-select-tree-treenode", { hasText: province })
         .locator(".ant-select-tree-checkbox")
@@ -63,8 +75,9 @@ test.describe("Admin — tạo + quản lý khu vực hoạt động NV", () => 
     await page.getByTestId(`area-expand-${CODE}`).click();
     const wards = page.getByTestId(`area-wards-${CODE}`);
     await expect(wards).toBeVisible();
-    await expect(wards).toContainText("T. Thừa Thiên Huế");
-    await expect(wards).toContainText("Quảng Nam");
+    for (const province of provinces) {
+      await expect(wards).toContainText(province);
+    }
 
     // Toggle off → row vẫn thấy (dim opacity 0.45) + tag "Ngừng hoạt động"
     await page.getByTestId(`area-active-toggle-${CODE}`).click();
@@ -105,6 +118,9 @@ test.describe("Coordinator — view-only (không nút tạo + API 403)", () => {
     });
     expect(res.status()).toBe(403);
     const body = await res.json();
-    expect(body.code).toBe("FORBIDDEN");
+    // SF-4 (FI-284): BFF error-envelope convention là PERMISSION_DENIED cho
+    // role-gate 403 (services/bff-gateway/src/plugins/auth.ts + README §codes);
+    // assertion cũ "FORBIDDEN" là sai envelope (không tồn tại trong BFF src).
+    expect(body.code).toBe("PERMISSION_DENIED");
   });
 });
