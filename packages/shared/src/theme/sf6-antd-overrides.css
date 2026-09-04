@@ -276,6 +276,26 @@ body {
   [data-testid="header-user"] {
     display: none;
   }
+  /* SF-6 :375 (BUG-1 FI-286) — cụm tiện ích phụ (font slider/fullscreen/
+     hotkey/version) ẩn mobile; logout icon-only; title ellipsis — header
+     phải fit :375 (không còn body overflow 604px). */
+  .sf21-header-extra {
+    display: none;
+  }
+  .sf11-header-title {
+    max-width: 112px;
+  }
+  .sf11-header-title strong,
+  .sf11-header-title span {
+    max-width: 112px;
+  }
+  [data-testid="logout-button"] .anticon + span {
+    display: none;
+  }
+  [data-testid="logout-button"] {
+    padding-left: 8px !important;
+    padding-right: 8px !important;
+  }
 
   /* Sidebar rail → off-canvas (element VẪN trong DOM) */
   [data-testid="app-sidebar"] {
