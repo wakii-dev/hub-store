@@ -64,8 +64,8 @@
 
 ### Task 8: Regression specs 12xx (tự lập state)
 
-- [ ] **Step 8.1:** Viết `e2e/tests/12xx-sf4-regression.spec.ts` (range 12xx) phủ các bug đã fix — tự lập state, KHÔNG import/sửa sf11-helpers.ts
-- [ ] **Step 8.2:** Chạy PASS trên stack private-port
+- [x] **Step 8.1:** Viết `e2e/tests/12xx-sf4-regression.spec.ts` (range 12xx) phủ các bug đã fix — tự lập state, KHÔNG import/sửa sf11-helpers.ts
+- [x] **Step 8.2:** Chạy PASS trên stack private-port
 
 ### Task 9: verify-no-regression
 
