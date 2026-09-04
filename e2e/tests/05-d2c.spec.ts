@@ -106,7 +106,12 @@ test.describe("WarehouseEmployee — D2C / Dropship", () => {
     // 40 ngày (2026-06-01 → 2026-07-11) → client guard chặn, KHÔNG download
     // (SF-3: click + gõ thay fill() — rc-picker 2.x readOnly=!typing, xem test (b))
     let downloaded: string | null = null;
+    // SF-8 convergence: handler chỉ cancel trong phase 40-ngày-gate — để
+    // registered vô hạn thì nó cancel nhầm download THẬT ở phase 2
+    // (race path() vs cancel() → "download.path: canceled" khi máy load cao).
+    let gatePhase = true;
     page.on("download", (d) => {
+      if (!gatePhase) return;
       downloaded = d.suggestedFilename();
       void d.cancel();
     });
@@ -127,6 +132,7 @@ test.describe("WarehouseEmployee — D2C / Dropship", () => {
     // Reload trước — gõ đè lên range đã có giá trị không đáng tin (rc-picker
     // không replace text cũ khi panel mở lần 2); user reload/fetch form mới.
     await page.reload();
+    gatePhase = false; // phase 2 — download thật, KHÔNG cancel
     await expect(page.getByTestId("d2c-export")).toBeVisible();
     const fromDate2 = page.getByPlaceholder("Từ ngày");
     const toDate2 = page.getByPlaceholder("Đến ngày");
