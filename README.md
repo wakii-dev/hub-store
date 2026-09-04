@@ -61,9 +61,8 @@ E2E=1 bash ../scripts/boot-all.sh            # boot thủ công với reset DB +
 ### Postgres infra + seed (FI-245 SF-1)
 
 ```bash
-# LƯU Ý: .env đang git-tracked — chỉ APPEND 2 dòng sau vào .env local
-# (POSTGRES_PASSWORD=..., KEYCLOAK_ADMIN_PASSWORD=...) và KHÔNG BAO GIỜ commit.
-# Tham khảo .env.example cho var contract đầy đủ.
+# LƯU Ý (SF-12): .env KHÔNG còn git-tracked — fresh clone: cp .env.example .env
+# rồi điền POSTGRES_PASSWORD (+ INTERNAL_SERVICE_TOKEN, JWT_DEV_SECRET — mục "Fresh clone setup").
 docker compose up -d postgres   # 2 DB tự tạo qua docker/postgres/initdb/
 bash scripts/wait-db.sh         # chờ healthy (run.sh SF-2/SF-3 + boot-all SF-5 dùng chung)
 bash scripts/seed-db.sh         # nạp canonical-seed.json cả 2 DB — emptiness-gate, KHÔNG upsert
@@ -71,7 +70,7 @@ bash scripts/reset-db.sh        # E2E reset: TRUNCATE cả 2 DB + xóa keycloak 
 ```
 
 - **Emptiness-gate**: DB có data → seed bỏ qua. Seed file (`api/seed/canonical-seed.json`) đổi sau này → reset thủ công bằng `reset-db.sh`.
-- **Credentials local-only**: `POSTGRES_PASSWORD` / `KEYCLOAK_ADMIN_PASSWORD` tự điền trong `.env` local — file `.env` đang git-tracked nên phải append cục bộ, KHÔNG commit (compose fail-loud nếu thiếu POSTGRES_PASSWORD).
+- **Credentials local-only**: `POSTGRES_PASSWORD` / `KEYCLOAK_ADMIN_PASSWORD` điền trong `.env` local — file `.env` đã gitignore từ SF-12, KHÔNG commit (compose fail-loud nếu thiếu POSTGRES_PASSWORD).
 - Bảng + sequence `batches_code_seq` do migration tạo (SF-2 Flyway `services/fulfillment-service/src/main/resources/db/migration`, SF-3 golang-migrate `services/batching-service/migrations`) — column contract ghi ở header `scripts/seed-db.sh`.
 
 ## Commands
@@ -117,6 +116,100 @@ cd e2e && pnpm exec playwright test
 - Go ≥ 1.21 (batching-service; go.mod pin 1.19)
 - Python ≥ 3.11 (print-service)
 - protoc/buf — KHÔNG cần khi chạy: stubs đã generate sẵn trong `api/proto/gen/` (chỉ cần khi đổi `api/proto/*.proto`)
+
+## Fresh clone setup (SF-12)
+
+Repo KHÔNG track `.env` (gitignore từ SF-12 — secret local-only). Trước khi chạy lần đầu:
+
+```bash
+cp .env.example .env
+# mở .env và điền các biến bắt buộc dưới đây (giá trị dev local — KHÔNG commit)
+```
+
+| Bắt buộc           | Ý nghĩa                                                              |
+| ------------------ | -------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD` | compose fail-loud nếu thiếu (`:?` pattern ở mọi service dùng DB)     |
+| `INTERNAL_SERVICE_TOKEN` | s2s Go→Java + reconciler + webhooks machine-call (SF-12)         |
+| `JWT_DEV_SECRET` / `VITE_JWT_DEV_SECRET` | dev JWT secret BFF/FE — dùng cùng 1 giá trị |
+
+Các biến còn lại có default hợp lý (xem `.env.example`). Sau khi điền xong: `docker compose up --build`.
+
+## Dev credentials (SF-12 — rotated, KHÔNG dùng prod)
+
+Realm dev import từ `docker/keycloak/hubstore-realm.json` — password dev đã rotate (không còn `Password123!`).
+**Giá trị này DEV-ONLY, không bao giờ dùng cho staging/prod.**
+
+| User | Password | Ghi chú |
+| ----------------- | ----------------------- | --------------------------------------------- |
+| `coordinator` | `gY0pM9SO7QEmqil_lWHQ` | e2e (auth.setup storageState) |
+| `warehouse` | `gY0pM9SO7QEmqil_lWHQ` | e2e |
+| `manager` | `gY0pM9SO7QEmqil_lWHQ` | e2e (users/dashboard specs login thật) |
+| `admin` | `gY0pM9SO7QEmqil_lWHQ` | e2e |
+| `warehouse-emp` | `gY0pM9SO7QEmqil_lWHQ` | e2e (SF-18 D2C) |
+| `KTV-001` | `gY0pM9SO7QEmqil_lWHQ` | ktv-mobile mint script (`E2E_PASSWORD` env) |
+| `CTV-001` | `GSzIMCBcUNtcbKwnTn_o` | không qua e2e password chung |
+
+E2e đọc password từ `e2e/lib/credentials.ts` (env `E2E_PASSWORD` override) — KHÔNG hardcode lại literal trong spec.
+
+| Secret | Giá trị dev hiện tại | Nơi khai báo |
+| ------------------------------ | ------------------------------------ | ------------------------------------------- |
+| Keycloak admin client secret | `ac865e01df73169f63e8b07002bc85b7` | realm JSON client `hubstore-admin` + compose `KC_ADMIN_CLIENT_SECRET` + `.env.example` |
+
+## Secrets & rotation runbook (SF-12)
+
+Mỗi secret phải đổi ĐỒNG BỘ ở mọi nơi nó xuất hiện — đổi thiếu 1 nơi là service lệch token/secret khi boot.
+
+| Secret | Nơi phải đổi đồng bộ |
+| ------------------------- | ------------------------------------------------------------------------ |
+| Admin client secret (`hubstore-admin`) | `docker/keycloak/hubstore-realm.json` (`clients[].secret`) + `docker-compose.yml` (`KC_ADMIN_CLIENT_SECRET` default) + `.env.example` + `.env` local |
+| Realm user password (7 users) | `docker/keycloak/hubstore-realm.json` (`credentials[].value`) + `e2e/lib/credentials.ts` + 2 mint script `e2e/scripts/mint_*.py` + bảng trên |
+| `KEYCLOAK_ADMIN_PASSWORD` | compose default + `.env` local |
+| `JWT_DEV_SECRET` / `VITE_JWT_DEV_SECRET` | `.env` local (không default trong git — placeholder rỗng) |
+| `INTERNAL_SERVICE_TOKEN` | `.env` local; compose chỉ đọc `${INTERNAL_SERVICE_TOKEN:-}` (không default) |
+| `POSTGRES_PASSWORD` | `.env` local (compose `:?` fail-loud — không có default) |
+
+Quy trình rotate (dev realm):
+
+1. Sinh giá trị mới: `openssl rand -hex 16` (hoặc `-base64 15` cho password).
+2. Sửa realm JSON (secret + credentials — KC tự hash khi import).
+3. Sửa compose default + `.env.example` + `e2e/lib/credentials.ts` + mint scripts CÙNG 1 commit (lockstep).
+4. Reset volume keycloak để re-import: `bash scripts/reset-db.sh` (hoặc `docker compose down -v` riêng keycloak-data) → `docker compose up -d keycloak`.
+5. Verify login: `E2E_PASSWORD=<mới> python3 e2e/scripts/mint_sf11.py coordinator /tmp/auth.json` → token OK.
+6. Prod-style: KHÔNG dùng literal — secret nằm secret manager/env, realm import chỉ cho dev.
+
+> Git history vẫn chứa secrets dev CŨ (trước SF-12 untrack) — KHÔNG reuse giá trị đó; rotate mọi secret khi deploy ra môi trường thật (không rewrite history — dev repo, quyết định security-audit SF-12).
+
+> Java logs: logback (Spring default) — JSON encoder là follow-up nếu cần (SF-12 chỉ chuyển Go auth/health path + BFF kafka path sang JSON).
+
+## CI (GitHub Actions) — SF-12
+
+`.github/workflows/ci.yml` chạy 3 job trên mỗi PR/push main:
+
+| Job | Nội dung |
+| --- | --- |
+| `unit` | tsc --noEmit (6 package, exclude `@hub-store/fulfillment` — debt cũ), Node unit tests, `go vet + test` (self-skip khi không DB), `mvn test` (*IT skip-if-no-DB) |
+| `docker-build` | build 5 Dockerfile (no push) |
+| `e2e` (needs unit) | Playwright với `E2E=1` — GH service `postgres:16.4` + Keycloak boot bằng step `docker run ... start-dev --import-realm` (GH services không support command override) → `scripts/ci-e2e-boot.sh` (tạo 2 DB + migrate + seed) → webServer `boot-all.sh` host-run app services → `playwright test` |
+
+**E2E password trong CI:** secret `E2E_PASSWORD` (nếu đã set trên repo) được `ci-e2e-boot.sh` dùng rotate password 6 user e2e sau realm import — CI không phụ thuộc password dev trong realm JSON. Không có secret → dùng default realm JSON (khớp `e2e/lib/credentials.ts`).
+
+**Seam cục bộ (mô phỏng phần infra của job e2e):**
+
+```bash
+bash scripts/ci-e2e-boot.sh
+# → tự boot container postgres-ci :55441 + keycloak-ci :18081 (PORT RIÊNG —
+#   không đụng stack compose main 5432/8081; override E2E_CI_PG_PORT /
+#   E2E_CI_KC_PORT), create 2 DB, flyway + golang-migrate, seed, kcadm grant
+#   manage-users, echo READY.
+```
+
+Chạy 1 spec e2e kiểu CI (webServer boot-all như thường):
+
+```bash
+E2E=1 pnpm --filter @hub-store/e2e exec playwright test tests/03-audit.spec.ts
+```
+
+> **Lưu ý (SF-12 Task 7):** job `e2e` cần 1 lần tinh chỉnh khi chạy thật lần đầu trên GH runner — local chỉ verify được phần infra seam (ci-e2e-boot) + spec seam; các bước host-run app services trên runner (python3-venv, OS deps playwright, timing boot) có thể cần chỉnh env nhỏ trong workflow. Spec subset mặc định = `tests/03-audit.spec.ts` (đọc-là-chính, không mutate); widen bằng env `E2E_CI_SPECS` (rỗng = full suite).
 
 ## K8s / minikube deploy — requirements + preflight
 
@@ -167,7 +260,7 @@ curl -s -X POST http://127.0.0.1:18080/keycloak/realms/hub-store/protocol/openid
 ## OIDC auth (Keycloak) — SF-4
 
 - Bật Keycloak + realm import tự động: `docker compose up -d keycloak` (realm JSON: `docker/keycloak/hubstore-realm.json`; `--import-realm` skip nếu realm đã tồn tại — đổi realm/user phải `docker compose down -v` reset volume keycloak-data).
-- Users mẫu (dev-only, password literal trong realm JSON): `coordinator` / `warehouse` / `manager` — password `Password123!`.
+- Users mẫu (dev-only, password đã rotate SF-12 — bảng ở mục "Dev credentials" trên).
 - Shell login PKCE (public client `hubstore-web`) — env `VITE_OIDC_*` trong `.env`; silent renew qua refresh token; logout → Keycloak end-session.
 - BFF verify JWKS RS256 (`OIDC_ISSUER`/`OIDC_AUDIENCE`/`OIDC_JWKS_URL`), role từ claim `realm_access.roles` → gRPC metadata `x-user-role`.
 
@@ -187,7 +280,99 @@ docker compose exec -T postgres psql -U hubstore -d batching < backup-batching-Y
 docker compose up orders-migrate batches-migrate
 ```
 
-Lưu ý: backup KHÔNG chứa volume keycloak-data (users/passwords nằm trong realm JSON dev — re-import khi up lại). Production thật: backup theo lịch (pg_dump cron) + đừng dùng `--import-realm`/dev password literals.
+Lưu ý: backup KHÔNG chứa volume keycloak-data (users/passwords nằm trong realm JSON dev — re-import khi up lại). Production thật: đừng dùng `--import-realm`/dev password literals.
+
+### Backup tự động (SF-12 — `scripts/backup-db.sh`)
+
+```bash
+# Dump cả 2 DB (fulfillment + batching) → gzip → backups/<db>-<ts>.sql.gz
+# Fail-loud nếu 1 DB lỗi; giữ BACKUP_KEEP bản/DB (default 7) — xóa bản cũ tự động.
+bash scripts/backup-db.sh
+
+# Env override (không bắt buộc): POSTGRES_CONTAINER, POSTGRES_USER, BACKUP_KEEP, BACKUP_DIR
+BACKUP_KEEP=14 bash scripts/backup-db.sh
+```
+
+**Crontab** (backup lúc 02:00 hằng ngày — `crontab -e`):
+
+```cron
+0 2 * * * cd /path/to/hub-store && BACKUP_KEEP=7 bash scripts/backup-db.sh >> backups/backup.log 2>&1
+```
+
+**Systemd user timer** (máy Linux — `~/.config/systemd/user/`, rồi `systemctl --user enable --now backup-db.timer`):
+
+```ini
+# ~/.config/systemd/user/backup-db.service
+[Unit]
+Description=hub-store pg_dump backup (fulfillment + batching)
+
+[Service]
+Type=oneshot
+WorkingDirectory=%h/path/to/hub-store
+Environment=BACKUP_KEEP=7
+ExecStart=%h/path/to/hub-store/scripts/backup-db.sh
+```
+
+```ini
+# ~/.config/systemd/user/backup-db.timer
+[Unit]
+Description=Nightly hub-store backup 02:00
+
+[Timer]
+OnCalendar=*-*-* 02:00:00
+Persistent=true
+
+[Install]
+WantedBy=timers.target
+```
+
+Lưu ý systemd user timer cần `loginctl enable-linger <user>` để chạy khi không đăng nhập; thư mục `backups/` đã gitignore (dump chứa dữ liệu — KHÔNG commit).
+
+### Restore (SF-12 — restore từng DB RIÊNG, cùng cluster)
+
+Restore từng DB một — drop/create đúng DB đang restore, DB kia không bị đụng tới. Biến khớp `scripts/backup-db.sh`:
+
+```bash
+POSTGRES_CONTAINER="${POSTGRES_CONTAINER:-hub-store-postgres-1}"
+POSTGRES_USER="${POSTGRES_USER:-hubstore}"
+```
+
+```bash
+# 1. Stop apps (KHÔNG stop postgres — container DB phải chạy để restore vào được)
+docker compose stop fulfillment-service batching-service bff
+
+# 2. Drop + create CHỈ DB fulfillment
+#    WITH (FORCE) ngắt các kết nối còn sót trước khi drop — cần PG13+
+#    (cluster này chạy postgres:16, OK). DB batching KHÔNG bị ảnh hưởng.
+docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" \
+  -c 'DROP DATABASE fulfillment WITH (FORCE);' \
+  -c 'CREATE DATABASE fulfillment;'
+
+# 3. Restore fulfillment từ bản backup (thay <ts> bằng timestamp file thật)
+gunzip -c backups/fulfillment-<ts>.sql.gz | \
+  docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d fulfillment
+
+# 4. Lặp y hệt cho batching — drop/create đúng DB batching, fulfillment giữ nguyên
+docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" \
+  -c 'DROP DATABASE batching WITH (FORCE);' \
+  -c 'CREATE DATABASE batching;'
+gunzip -c backups/batching-<ts>.sql.gz | \
+  docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d batching
+
+# 5. Start apps lại
+docker compose start fulfillment-service batching-service bff
+#    - migrate-on-boot idempotent: schema trong dump đã có Flyway/golang-migrate
+#      history table → các migration chạy lại là no-op.
+#    - seed-verify boot check (fulfillment) thấy orders > 0 → skip seed — ĐÚNG
+#      hành vi: DB sau restore không rỗng, service KHÔNG tự seed đè dữ liệu.
+
+# 6. Verify
+curl -s localhost:8080/health          # BFF /health: status ok, db fulfillment+batching ok
+docker exec -i "$POSTGRES_CONTAINER" psql -U "$POSTGRES_USER" -d fulfillment \
+  -c "SELECT fulfill_code FROM orders WHERE fulfill_code = 'ORD-3001';"   # thấy 1 dòng
+```
+
+Dump KHÔNG chứa volume `keycloak-data` (users/realm) — restore DB không khôi phục Keycloak; volume đó persist riêng trong compose. Chỉ restore 1 DB (vd chỉ fulfillment)? Bỏ qua bước 4.
 
 ## Tạo / đổi user Keycloak (SF-5 deploy guide)
 

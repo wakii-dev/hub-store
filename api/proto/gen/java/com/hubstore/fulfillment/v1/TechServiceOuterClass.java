@@ -105,6 +105,26 @@ public final class TechServiceOuterClass {
   static final 
     com.google.protobuf.GeneratedMessage.FieldAccessorTable
       internal_static_hubstore_fulfillment_v1_SuggestTechniciansResponse_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_AcceptOrderRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_AcceptOrderRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_CompleteOrderRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_CompleteOrderRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_RescheduleOrderRequest_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_RescheduleOrderRequest_fieldAccessorTable;
+  static final com.google.protobuf.Descriptors.Descriptor
+    internal_static_hubstore_fulfillment_v1_MutateTechOrderResponse_descriptor;
+  static final 
+    com.google.protobuf.GeneratedMessage.FieldAccessorTable
+      internal_static_hubstore_fulfillment_v1_MutateTechOrderResponse_fieldAccessorTable;
 
   public static com.google.protobuf.Descriptors.FileDescriptor
       getDescriptor() {
@@ -121,89 +141,107 @@ public final class TechServiceOuterClass {
       "\030\003 \001(\005\022\023\n\013category_l1\030\004 \001(\t\022\023\n\013category_" +
       "l2\030\005 \001(\t\"[\n\007Contact\022\014\n\004name\030\001 \001(\t\022\r\n\005pho" +
       "ne\030\002 \001(\t\0223\n\010location\030\003 \001(\0132!.hubstore.fu" +
-      "lfillment.v1.GeoPoint\"\201\001\n\013TechButtons\022\024\n" +
+      "lfillment.v1.GeoPoint\"\231\001\n\013TechButtons\022\024\n" +
       "\014allow_cancel\030\001 \001(\010\022\024\n\014allow_assign\030\002 \001(" +
       "\010\022\026\n\016allow_reassign\030\003 \001(\010\022\024\n\014allow_accep" +
-      "t\030\004 \001(\010\022\030\n\020allow_reschedule\030\005 \001(\010\"\327\003\n\rDe" +
-      "liveryOrder\022\014\n\004code\030\001 \001(\t\0227\n\006status\030\002 \001(" +
-      "\0162\'.hubstore.fulfillment.v1.DeliveryStat" +
-      "us\022\023\n\013driver_name\030\003 \001(\t\022\024\n\014driver_phone\030" +
-      "\004 \001(\t\0222\n\010receiver\030\005 \001(\0132 .hubstore.fulfi" +
-      "llment.v1.Contact\0220\n\006sender\030\006 \001(\0132 .hubs" +
-      "tore.fulfillment.v1.Contact\022\013\n\003fee\030\007 \001(\001" +
-      "\022\013\n\003tip\030\010 \001(\001\0220\n\005items\030\t \003(\0132!.hubstore." +
-      "fulfillment.v1.TechItem\022\023\n\013region_code\030\n" +
-      " \001(\t\022\020\n\010province\030\013 \001(\t\022\031\n\021coordination_j" +
-      "son\030\014 \001(\t\022\025\n\rdelivery_date\030\r \001(\t\022\022\n\ncrea" +
-      "ted_at\030\016 \001(\t\0225\n\007buttons\030\017 \001(\0132$.hubstore" +
-      ".fulfillment.v1.TechButtons\"\231\003\n\021Installa" +
-      "tionOrder\022\032\n\022service_order_code\030\001 \001(\t\022\033\n" +
-      "\023delivery_order_code\030\002 \001(\t\022\027\n\017technician" +
-      "_code\030\003 \001(\t\0227\n\006status\030\004 \001(\0162\'.hubstore.f" +
-      "ulfillment.v1.DeliveryStatus\022\025\n\rexpected" +
-      "_time\030\005 \001(\t\022\025\n\rtimeline_json\030\006 \001(\t\022\023\n\013se" +
-      "rvice_fee\030\007 \001(\001\022\022\n\nfee_adjust\030\010 \001(\001\0220\n\005i" +
-      "tems\030\t \003(\0132!.hubstore.fulfillment.v1.Tec" +
-      "hItem\022\023\n\013region_code\030\n \001(\t\022\020\n\010province\030\013" +
-      " \001(\t\022\022\n\ncreated_at\030\014 \001(\t\0225\n\007buttons\030\r \001(" +
-      "\0132$.hubstore.fulfillment.v1.TechButtons\"" +
-      "K\n\nTechnician\022\014\n\004code\030\001 \001(\t\022\014\n\004name\030\002 \001(" +
-      "\t\022\014\n\004type\030\003 \001(\t\022\023\n\013region_code\030\004 \001(\t\"\203\002\n" +
-      "\033FilterDeliveryOrdersRequest\0229\n\010statuses" +
-      "\030\001 \003(\0162\'.hubstore.fulfillment.v1.Deliver" +
-      "yStatus\022\023\n\013driver_name\030\002 \001(\t\022\023\n\013category" +
-      "_l1\030\003 \003(\t\022\023\n\013category_l2\030\004 \003(\t\022\023\n\013region" +
-      "_code\030\005 \001(\t\022\020\n\010province\030\006 \001(\t\022\021\n\tdate_fr" +
-      "om\030\007 \001(\t\022\017\n\007date_to\030\010 \001(\t\022\014\n\004page\030\t \001(\005\022" +
-      "\021\n\tpage_size\030\n \001(\005\"\205\001\n\034FilterDeliveryOrd" +
-      "ersResponse\0225\n\005items\030\001 \003(\0132&.hubstore.fu" +
-      "lfillment.v1.DeliveryOrder\022\r\n\005total\030\002 \001(" +
-      "\003\022\014\n\004page\030\003 \001(\005\022\021\n\tpage_size\030\004 \001(\005\"\213\002\n\037F" +
-      "ilterInstallationOrdersRequest\0229\n\010status" +
-      "es\030\001 \003(\0162\'.hubstore.fulfillment.v1.Deliv" +
-      "eryStatus\022\027\n\017technician_code\030\002 \001(\t\022\023\n\013ca" +
-      "tegory_l1\030\003 \003(\t\022\023\n\013category_l2\030\004 \003(\t\022\023\n\013" +
-      "region_code\030\005 \001(\t\022\020\n\010province\030\006 \001(\t\022\021\n\td" +
-      "ate_from\030\007 \001(\t\022\017\n\007date_to\030\010 \001(\t\022\014\n\004page\030" +
-      "\t \001(\005\022\021\n\tpage_size\030\n \001(\005\"\215\001\n FilterInsta" +
-      "llationOrdersResponse\0229\n\005items\030\001 \003(\0132*.h" +
-      "ubstore.fulfillment.v1.InstallationOrder" +
-      "\022\r\n\005total\030\002 \001(\003\022\014\n\004page\030\003 \001(\005\022\021\n\tpage_si" +
-      "ze\030\004 \001(\005\"N\n\027AssignTechnicianRequest\022\032\n\022s" +
-      "ervice_order_code\030\001 \001(\t\022\027\n\017technician_co" +
-      "de\030\002 \001(\t\"U\n\030AssignTechnicianResponse\0229\n\005" +
-      "order\030\001 \001(\0132*.hubstore.fulfillment.v1.In" +
-      "stallationOrder\"0\n\031SuggestTechniciansReq" +
-      "uest\022\023\n\013region_code\030\001 \001(\t\"U\n\023SuggestedTe" +
-      "chnician\022\014\n\004code\030\001 \001(\t\022\014\n\004name\030\002 \001(\t\022\014\n\004" +
-      "type\030\003 \001(\t\022\024\n\014active_count\030\004 \001(\005\"Y\n\032Sugg" +
-      "estTechniciansResponse\022;\n\005items\030\001 \003(\0132,." +
-      "hubstore.fulfillment.v1.SuggestedTechnic" +
-      "ian*\277\002\n\016DeliveryStatus\022\027\n\023DELIVERY_STATU" +
-      "S_NEW\020\000\022\035\n\031DELIVERY_STATUS_CONFIRMED\020\001\022\036" +
-      "\n\032DELIVERY_STATUS_PROCESSING\020\002\022\034\n\030DELIVE" +
-      "RY_STATUS_SHIPPING\020\003\022\035\n\031DELIVERY_STATUS_" +
-      "DELIVERED\020\004\022\032\n\026DELIVERY_STATUS_FAILED\020\005\022" +
-      "\036\n\032DELIVERY_STATUS_REDELIVERY\020\006\022\037\n\033DELIV" +
-      "ERY_STATUS_RESCHEDULED\020\007\022\035\n\031DELIVERY_STA" +
-      "TUS_CANCELLED\020\010\022\034\n\030DELIVERY_STATUS_RETUR" +
-      "NED\020\t2\235\004\n\013TechService\022\203\001\n\024FilterDelivery" +
-      "Orders\0224.hubstore.fulfillment.v1.FilterD" +
-      "eliveryOrdersRequest\0325.hubstore.fulfillm" +
-      "ent.v1.FilterDeliveryOrdersResponse\022\217\001\n\030" +
-      "FilterInstallationOrders\0228.hubstore.fulf" +
-      "illment.v1.FilterInstallationOrdersReque" +
-      "st\0329.hubstore.fulfillment.v1.FilterInsta" +
-      "llationOrdersResponse\022w\n\020AssignTechnicia" +
-      "n\0220.hubstore.fulfillment.v1.AssignTechni" +
-      "cianRequest\0321.hubstore.fulfillment.v1.As" +
-      "signTechnicianResponse\022}\n\022SuggestTechnic" +
-      "ians\0222.hubstore.fulfillment.v1.SuggestTe" +
-      "chniciansRequest\0323.hubstore.fulfillment." +
-      "v1.SuggestTechniciansResponseBV\n\033com.hub" +
-      "store.fulfillment.v1P\001Z5hubstore/gen/go/" +
-      "hubstore/fulfillment/v1;fulfillmentv1b\006p" +
-      "roto3"
+      "t\030\004 \001(\010\022\030\n\020allow_reschedule\030\005 \001(\010\022\026\n\016all" +
+      "ow_complete\030\006 \001(\010\"\327\003\n\rDeliveryOrder\022\014\n\004c" +
+      "ode\030\001 \001(\t\0227\n\006status\030\002 \001(\0162\'.hubstore.ful" +
+      "fillment.v1.DeliveryStatus\022\023\n\013driver_nam" +
+      "e\030\003 \001(\t\022\024\n\014driver_phone\030\004 \001(\t\0222\n\010receive" +
+      "r\030\005 \001(\0132 .hubstore.fulfillment.v1.Contac" +
+      "t\0220\n\006sender\030\006 \001(\0132 .hubstore.fulfillment" +
+      ".v1.Contact\022\013\n\003fee\030\007 \001(\001\022\013\n\003tip\030\010 \001(\001\0220\n" +
+      "\005items\030\t \003(\0132!.hubstore.fulfillment.v1.T" +
+      "echItem\022\023\n\013region_code\030\n \001(\t\022\020\n\010province" +
+      "\030\013 \001(\t\022\031\n\021coordination_json\030\014 \001(\t\022\025\n\rdel" +
+      "ivery_date\030\r \001(\t\022\022\n\ncreated_at\030\016 \001(\t\0225\n\007" +
+      "buttons\030\017 \001(\0132$.hubstore.fulfillment.v1." +
+      "TechButtons\"\231\003\n\021InstallationOrder\022\032\n\022ser" +
+      "vice_order_code\030\001 \001(\t\022\033\n\023delivery_order_" +
+      "code\030\002 \001(\t\022\027\n\017technician_code\030\003 \001(\t\0227\n\006s" +
+      "tatus\030\004 \001(\0162\'.hubstore.fulfillment.v1.De" +
+      "liveryStatus\022\025\n\rexpected_time\030\005 \001(\t\022\025\n\rt" +
+      "imeline_json\030\006 \001(\t\022\023\n\013service_fee\030\007 \001(\001\022" +
+      "\022\n\nfee_adjust\030\010 \001(\001\0220\n\005items\030\t \003(\0132!.hub" +
+      "store.fulfillment.v1.TechItem\022\023\n\013region_" +
+      "code\030\n \001(\t\022\020\n\010province\030\013 \001(\t\022\022\n\ncreated_" +
+      "at\030\014 \001(\t\0225\n\007buttons\030\r \001(\0132$.hubstore.ful" +
+      "fillment.v1.TechButtons\"K\n\nTechnician\022\014\n" +
+      "\004code\030\001 \001(\t\022\014\n\004name\030\002 \001(\t\022\014\n\004type\030\003 \001(\t\022" +
+      "\023\n\013region_code\030\004 \001(\t\"\203\002\n\033FilterDeliveryO" +
+      "rdersRequest\0229\n\010statuses\030\001 \003(\0162\'.hubstor" +
+      "e.fulfillment.v1.DeliveryStatus\022\023\n\013drive" +
+      "r_name\030\002 \001(\t\022\023\n\013category_l1\030\003 \003(\t\022\023\n\013cat" +
+      "egory_l2\030\004 \003(\t\022\023\n\013region_code\030\005 \001(\t\022\020\n\010p" +
+      "rovince\030\006 \001(\t\022\021\n\tdate_from\030\007 \001(\t\022\017\n\007date" +
+      "_to\030\010 \001(\t\022\014\n\004page\030\t \001(\005\022\021\n\tpage_size\030\n \001" +
+      "(\005\"\205\001\n\034FilterDeliveryOrdersResponse\0225\n\005i" +
+      "tems\030\001 \003(\0132&.hubstore.fulfillment.v1.Del" +
+      "iveryOrder\022\r\n\005total\030\002 \001(\003\022\014\n\004page\030\003 \001(\005\022" +
+      "\021\n\tpage_size\030\004 \001(\005\"\213\002\n\037FilterInstallatio" +
+      "nOrdersRequest\0229\n\010statuses\030\001 \003(\0162\'.hubst" +
+      "ore.fulfillment.v1.DeliveryStatus\022\027\n\017tec" +
+      "hnician_code\030\002 \001(\t\022\023\n\013category_l1\030\003 \003(\t\022" +
+      "\023\n\013category_l2\030\004 \003(\t\022\023\n\013region_code\030\005 \001(" +
+      "\t\022\020\n\010province\030\006 \001(\t\022\021\n\tdate_from\030\007 \001(\t\022\017" +
+      "\n\007date_to\030\010 \001(\t\022\014\n\004page\030\t \001(\005\022\021\n\tpage_si" +
+      "ze\030\n \001(\005\"\215\001\n FilterInstallationOrdersRes" +
+      "ponse\0229\n\005items\030\001 \003(\0132*.hubstore.fulfillm" +
+      "ent.v1.InstallationOrder\022\r\n\005total\030\002 \001(\003\022" +
+      "\014\n\004page\030\003 \001(\005\022\021\n\tpage_size\030\004 \001(\005\"N\n\027Assi" +
+      "gnTechnicianRequest\022\032\n\022service_order_cod" +
+      "e\030\001 \001(\t\022\027\n\017technician_code\030\002 \001(\t\"U\n\030Assi" +
+      "gnTechnicianResponse\0229\n\005order\030\001 \001(\0132*.hu" +
+      "bstore.fulfillment.v1.InstallationOrder\"" +
+      "0\n\031SuggestTechniciansRequest\022\023\n\013region_c" +
+      "ode\030\001 \001(\t\"U\n\023SuggestedTechnician\022\014\n\004code" +
+      "\030\001 \001(\t\022\014\n\004name\030\002 \001(\t\022\014\n\004type\030\003 \001(\t\022\024\n\014ac" +
+      "tive_count\030\004 \001(\005\"Y\n\032SuggestTechniciansRe" +
+      "sponse\022;\n\005items\030\001 \003(\0132,.hubstore.fulfill" +
+      "ment.v1.SuggestedTechnician\"I\n\022AcceptOrd" +
+      "erRequest\022\032\n\022service_order_code\030\001 \001(\t\022\027\n" +
+      "\017technician_code\030\002 \001(\t\"K\n\024CompleteOrderR" +
+      "equest\022\032\n\022service_order_code\030\001 \001(\t\022\027\n\017te" +
+      "chnician_code\030\002 \001(\t\"v\n\026RescheduleOrderRe" +
+      "quest\022\032\n\022service_order_code\030\001 \001(\t\022\031\n\021new" +
+      "_expected_time\030\002 \001(\t\022\014\n\004note\030\003 \001(\t\022\027\n\017te" +
+      "chnician_code\030\004 \001(\t\"T\n\027MutateTechOrderRe" +
+      "sponse\0229\n\005order\030\001 \001(\0132*.hubstore.fulfill" +
+      "ment.v1.InstallationOrder*\277\002\n\016DeliverySt" +
+      "atus\022\027\n\023DELIVERY_STATUS_NEW\020\000\022\035\n\031DELIVER" +
+      "Y_STATUS_CONFIRMED\020\001\022\036\n\032DELIVERY_STATUS_" +
+      "PROCESSING\020\002\022\034\n\030DELIVERY_STATUS_SHIPPING" +
+      "\020\003\022\035\n\031DELIVERY_STATUS_DELIVERED\020\004\022\032\n\026DEL" +
+      "IVERY_STATUS_FAILED\020\005\022\036\n\032DELIVERY_STATUS" +
+      "_REDELIVERY\020\006\022\037\n\033DELIVERY_STATUS_RESCHED" +
+      "ULED\020\007\022\035\n\031DELIVERY_STATUS_CANCELLED\020\010\022\034\n" +
+      "\030DELIVERY_STATUS_RETURNED\020\t2\363\006\n\013TechServ" +
+      "ice\022\203\001\n\024FilterDeliveryOrders\0224.hubstore." +
+      "fulfillment.v1.FilterDeliveryOrdersReque" +
+      "st\0325.hubstore.fulfillment.v1.FilterDeliv" +
+      "eryOrdersResponse\022\217\001\n\030FilterInstallation" +
+      "Orders\0228.hubstore.fulfillment.v1.FilterI" +
+      "nstallationOrdersRequest\0329.hubstore.fulf" +
+      "illment.v1.FilterInstallationOrdersRespo" +
+      "nse\022w\n\020AssignTechnician\0220.hubstore.fulfi" +
+      "llment.v1.AssignTechnicianRequest\0321.hubs" +
+      "tore.fulfillment.v1.AssignTechnicianResp" +
+      "onse\022}\n\022SuggestTechnicians\0222.hubstore.fu" +
+      "lfillment.v1.SuggestTechniciansRequest\0323" +
+      ".hubstore.fulfillment.v1.SuggestTechnici" +
+      "ansResponse\022l\n\013AcceptOrder\022+.hubstore.fu" +
+      "lfillment.v1.AcceptOrderRequest\0320.hubsto" +
+      "re.fulfillment.v1.MutateTechOrderRespons" +
+      "e\022p\n\rCompleteOrder\022-.hubstore.fulfillmen" +
+      "t.v1.CompleteOrderRequest\0320.hubstore.ful" +
+      "fillment.v1.MutateTechOrderResponse\022t\n\017R" +
+      "escheduleOrder\022/.hubstore.fulfillment.v1" +
+      ".RescheduleOrderRequest\0320.hubstore.fulfi" +
+      "llment.v1.MutateTechOrderResponseBV\n\033com" +
+      ".hubstore.fulfillment.v1P\001Z5hubstore/gen" +
+      "/go/hubstore/fulfillment/v1;fulfillmentv" +
+      "1b\006proto3"
     };
     descriptor = com.google.protobuf.Descriptors.FileDescriptor
       .internalBuildGeneratedFileFrom(descriptorData,
@@ -232,7 +270,7 @@ public final class TechServiceOuterClass {
     internal_static_hubstore_fulfillment_v1_TechButtons_fieldAccessorTable = new
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_hubstore_fulfillment_v1_TechButtons_descriptor,
-        new java.lang.String[] { "AllowCancel", "AllowAssign", "AllowReassign", "AllowAccept", "AllowReschedule", });
+        new java.lang.String[] { "AllowCancel", "AllowAssign", "AllowReassign", "AllowAccept", "AllowReschedule", "AllowComplete", });
     internal_static_hubstore_fulfillment_v1_DeliveryOrder_descriptor =
       getDescriptor().getMessageTypes().get(4);
     internal_static_hubstore_fulfillment_v1_DeliveryOrder_fieldAccessorTable = new
@@ -305,6 +343,30 @@ public final class TechServiceOuterClass {
       com.google.protobuf.GeneratedMessage.FieldAccessorTable(
         internal_static_hubstore_fulfillment_v1_SuggestTechniciansResponse_descriptor,
         new java.lang.String[] { "Items", });
+    internal_static_hubstore_fulfillment_v1_AcceptOrderRequest_descriptor =
+      getDescriptor().getMessageTypes().get(16);
+    internal_static_hubstore_fulfillment_v1_AcceptOrderRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_AcceptOrderRequest_descriptor,
+        new java.lang.String[] { "ServiceOrderCode", "TechnicianCode", });
+    internal_static_hubstore_fulfillment_v1_CompleteOrderRequest_descriptor =
+      getDescriptor().getMessageTypes().get(17);
+    internal_static_hubstore_fulfillment_v1_CompleteOrderRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_CompleteOrderRequest_descriptor,
+        new java.lang.String[] { "ServiceOrderCode", "TechnicianCode", });
+    internal_static_hubstore_fulfillment_v1_RescheduleOrderRequest_descriptor =
+      getDescriptor().getMessageTypes().get(18);
+    internal_static_hubstore_fulfillment_v1_RescheduleOrderRequest_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_RescheduleOrderRequest_descriptor,
+        new java.lang.String[] { "ServiceOrderCode", "NewExpectedTime", "Note", "TechnicianCode", });
+    internal_static_hubstore_fulfillment_v1_MutateTechOrderResponse_descriptor =
+      getDescriptor().getMessageTypes().get(19);
+    internal_static_hubstore_fulfillment_v1_MutateTechOrderResponse_fieldAccessorTable = new
+      com.google.protobuf.GeneratedMessage.FieldAccessorTable(
+        internal_static_hubstore_fulfillment_v1_MutateTechOrderResponse_descriptor,
+        new java.lang.String[] { "Order", });
     descriptor.resolveAllFeaturesImmutable();
   }
 

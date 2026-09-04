@@ -11,6 +11,7 @@ package fulfillment
 import (
 	"context"
 	"fmt"
+	"os"
 	"time"
 
 	fulfillmentv1 "hubstore/gen/go/hubstore/fulfillment/v1"
@@ -43,7 +44,9 @@ type Client interface {
 	// GetOrdersByCodes — hydration: truth về kho + batchStatus của từng đơn.
 	GetOrdersByCodes(ctx context.Context, codes []string) ([]*fulfillmentv1.HubStoreOrderFilterItem, error)
 	// MutateOrderStatus — đổi batchStatus của các đơn (one-way mutation).
-	MutateOrderStatus(ctx context.Context, codes []string, target fulfillmentv1.BatchStatus, reason string) error
+	// batchCode: mã phiếu soạn truyền qua để Java eager-insert cod_confirmations
+	// đúng batch (SF-14: không pass → Java insert batch_code rỗng, COD filter hụt).
+	MutateOrderStatus(ctx context.Context, codes []string, target fulfillmentv1.BatchStatus, reason, batchCode string) error
 	// Close releases the underlying gRPC connection.
 	Close() error
 }
@@ -74,9 +77,22 @@ func NewGRPCClient(ctx context.Context, addr string) (*GRPCClient, error) {
 	return &GRPCClient{conn: conn, stub: fulfillmentv1.NewFulfillmentServiceClient(conn)}, nil
 }
 
+// ctx — outbound metadata cho call Go→Java (SF-12 s2s auth, spec §3.1):
+//   - luồng BFF đi qua (ctx có user token) → forward authorization Bearer;
+//   - ngược lại (reconciler / luồng máy-máy) → x-internal-token từ env.
+//
+// Role vẫn forward để Java ghi actor/audit.
 func (c *GRPCClient) ctx(ctx context.Context) context.Context {
+	if md, ok := metadata.FromIncomingContext(ctx); ok {
+		if vals := md.Get("authorization"); len(vals) > 0 && vals[0] != "" {
+			return metadata.AppendToOutgoingContext(ctx, "authorization", vals[0])
+		}
+	}
+	if tok := os.Getenv("INTERNAL_SERVICE_TOKEN"); tok != "" {
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-internal-token", tok)
+	}
 	if role := RoleFromContext(ctx); role != "" {
-		return metadata.AppendToOutgoingContext(ctx, "x-user-role", role)
+		ctx = metadata.AppendToOutgoingContext(ctx, "x-user-role", role)
 	}
 	return ctx
 }
@@ -93,7 +109,7 @@ func (c *GRPCClient) GetOrdersByCodes(ctx context.Context, codes []string) ([]*f
 }
 
 // MutateOrderStatus implements Client.
-func (c *GRPCClient) MutateOrderStatus(ctx context.Context, codes []string, target fulfillmentv1.BatchStatus, reason string) error {
+func (c *GRPCClient) MutateOrderStatus(ctx context.Context, codes []string, target fulfillmentv1.BatchStatus, reason, batchCode string) error {
 	req := &fulfillmentv1.MutateOrderStatusRequest{
 		FulfillCodes:      codes,
 		TargetBatchStatus: target,
@@ -101,6 +117,10 @@ func (c *GRPCClient) MutateOrderStatus(ctx context.Context, codes []string, targ
 	if reason != "" {
 		r := reason
 		req.Reason = &r
+	}
+	if batchCode != "" {
+		b := batchCode
+		req.BatchCode = &b
 	}
 	resp, err := c.stub.MutateOrderStatus(c.ctx(ctx), req)
 	if err != nil {

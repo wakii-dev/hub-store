@@ -21,15 +21,17 @@ import type {
   OrderDetail,
   DashboardStats,
   TimeRange,
+  ErrorEnvelope,
 } from '@hub-store/shared';
 import type { HubStoreOrderFilterItem as ProtoOrderItem } from '../../../../api/proto/gen/ts/hubstore/fulfillment/v1/fulfillment';
 import type { FulfillmentApi, BatchingApi } from '../clients/index.js';
 import { SERVICE_NAMES } from '../config.js';
-import { requireUser } from '../plugins/auth.js';
+import { requireRole, requireUser } from '../plugins/auth.js';
 import { paginated } from '../lib/envelope.js';
 import { sendGrpcError, grpcError } from '../lib/grpc-error.js';
 import { logActivity, getAuditPool, buildAuditWhere, normalizeAuditPage, type AuditQuery } from '../lib/audit.js';
 import { csvRow, EXPORT_COLUMNS } from '../lib/csv.js';
+import { emitLocalEvent } from '../lib/realtime-publish.js';
 import {
   mapOrderItem,
   mapOrderDetail,
@@ -68,6 +70,30 @@ function splitIntList(s?: string): number[] {
     .filter((n) => Number.isInteger(n));
 }
 
+/** Slot TG giao 2h (SF-28 — static, TZ Asia/Ho_Chi_Minh = UTC+7). */
+const DELIVERY_SLOTS = [
+  { from: '08:00', to: '10:00' },
+  { from: '10:00', to: '12:00' },
+  { from: '14:00', to: '16:00' },
+  { from: '16:00', to: '18:00' },
+] as const;
+
+/** Ngày hôm nay theo lịch VN (UTC+7) — YYYY-MM-DD. */
+function vnToday(now = new Date()): string {
+  return new Date(now.getTime() + 7 * 60 * 60 * 1000).toISOString().slice(0, 10);
+}
+
+/** Phút hiện tại trong ngày VN (0..1439) — lọc slot đã qua của hôm nay. */
+function vnMinutesNow(now = new Date()): number {
+  return (now.getUTCHours() * 60 + now.getUTCMinutes() + 420) % 1440;
+}
+
+/** '10:00' → 600. */
+function slotEndMinutes(hhmm: string): number {
+  const [h, m] = hhmm.split(':').map(Number);
+  return h * 60 + m;
+}
+
 /** yyyyMMdd-HHmmss theo UTC (BFF chạy UTC — pattern audit date pin). */
 function exportTimestamp(d: Date): string {
   const p = (n: number) => String(n).padStart(2, '0');
@@ -81,7 +107,7 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
 
   // D1 list — filter + pagination + excludeFulfillCodes (pin v1).
   app.post<{ Body: FilterOrdersRequest }>('/fulfillment/filter', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     const b = request.body;
     try {
       const resp = await f.filterOrders(
@@ -98,7 +124,7 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
           page: b.page,
           pageSize: b.pageSize,
         },
-        role,
+        caller,
       );
       return await reply.send(
         paginated(resp.items.map(mapOrderItem), Number(resp.total), resp.page, resp.pageSize),
@@ -114,8 +140,8 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.get<{ Querystring: AuditQuery }>(
     '/fulfillment/audit',
     async (request, reply) => {
-      const { role } = requireUser(request);
-      if (role !== 'Manager') {
+      const caller = requireUser(request);
+      if (caller.role !== 'Manager') {
         return sendGrpcError(
           reply,
           grpcError(GrpcStatus.PERMISSION_DENIED, 'Manager only.'),
@@ -173,7 +199,7 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
    * send, không bao giờ trả CSV đứt giữa chừng.
    */
   app.get<{ Querystring: ExportOrdersQuery }>('/fulfillment/orders/export.csv', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     const q = request.query;
     const createdTime: TimeRange | undefined = q.createdAt
       ? { from: `${q.createdAt}T00:00:00.000Z`, to: `${q.createdAt}T23:59:59.999Z` }
@@ -198,7 +224,7 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
             page,
             pageSize: PAGE_SIZE,
           },
-          role,
+          caller,
         );
         if (page === 1) {
           maxPages = Math.max(Math.ceil(Number(resp.total) / PAGE_SIZE), 1);
@@ -240,12 +266,12 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.get<{ Params: { fulfillCode: string } }>(
     '/fulfillment/:fulfillCode',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       const { fulfillCode } = request.params;
       try {
         const [detail, history] = await Promise.all([
-          f.getOrderDetail({ fulfillCode }, role),
-          f.getAssignHistory({ fulfillCode }, role),
+          f.getOrderDetail({ fulfillCode }, caller),
+          f.getAssignHistory({ fulfillCode }, caller),
         ]);
         if (!detail.order) {
           return sendGrpcError(
@@ -270,15 +296,15 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   // READ-ONLY, chỉ GỌI) + ListDeliveryStaff (id→name). pageSize 100: dataset
   // dashboard nhỏ, phiếu > 100 ngoài scope SF-9 (ghi nhận, không paginate-loop).
   app.get('/fulfillment/dashboard-stats', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     try {
       const [stats, batches, staff] = await Promise.all([
-        f.getDashboardStats({}, role),
+        f.getDashboardStats({}, caller),
         deps.batching.filterBatches(
           { search: '', statuses: [], createdTime: undefined, page: 1, pageSize: 100 },
-          role,
+          caller,
         ),
-        f.listDeliveryStaff({}, role),
+        f.listDeliveryStaff({}, caller),
       ]);
       const countByBatch = new Map((stats.ordersPerBatch ?? []).map((b) => [b.batchCode, b.count]));
       let delivering = 0;
@@ -331,11 +357,11 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.post<{ Params: { code: string }; Body: AssignShopHubRequest }>(
     '/fulfillment/:code/assign-shop-hub',
     async (request, reply) => {
-      const { role, sub } = requireUser(request);
+      const { sub, ...caller } = requireUser(request);
       try {
         const resp = await f.assignShopHub(
           { fulfillCode: request.params.code, targetShopCode: request.body.toShopCode },
-          role,
+          caller,
         );
         // SF-7 audit — fire-and-forget SAU gRPC thành công, fail-open.
         logActivity({
@@ -344,6 +370,12 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
           targetType: 'order',
           targetId: request.params.code,
           detail: { toShopCode: request.body.toShopCode },
+        });
+        // SF-10 — dual-source local emit (KAFKA_ENABLED=false): mirror publish
+        // 'order.assigned' phía Java (FulfillmentServiceImpl.assignShopHub).
+        emitLocalEvent('order.assigned', {
+          fulfillCode: request.params.code,
+          targetShop: { code: request.body.toShopCode },
         });
         return await reply.send(resp.order ? mapOrderItem(resp.order) : null);
       } catch (err) {
@@ -355,9 +387,9 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   // LỊCH SỬ CHUYỂN KHO — READ SEMANTICS (spec §3.8): tên POST theo production
   // nhưng KHÔNG mutate. BFF chỉ proxy GetAssignHistory.
   app.post<{ Params: { code: string } }>('/fulfillment/:code/history', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     try {
-      const resp = await f.getAssignHistory({ fulfillCode: request.params.code }, role);
+      const resp = await f.getAssignHistory({ fulfillCode: request.params.code }, caller);
       const body: AssignHistoryResponse = (resp.entries ?? []).map(mapHistoryEntry);
       return await reply.send(body);
     } catch (err) {
@@ -366,14 +398,17 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   });
 
   // PUT note — backend đủ 18/18, KHÔNG có FE screen (spec §3.8).
+  // SF-28: role gate Coordinator/Manager/Admin (mutation — chỉ Coordinator+).
   app.put<{ Params: { code: string }; Body: UpdateNoteRequest }>(
     '/fulfillment/:code/note',
     async (request, reply) => {
-      const { role, sub } = requireUser(request);
+      const user = requireRole(request, reply, 'Coordinator', 'Manager', 'Admin');
+      if (user === null) return reply;
+      const { sub, ...caller } = user;
       try {
         const resp = await f.updateNote(
           { fulfillCode: request.params.code, note: request.body.note },
-          role,
+          caller,
         );
         logActivity({
           actor: sub,
@@ -390,14 +425,36 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   );
 
   // Edit TG giao — rule 3 §3.6 (chỉ khi batchStatus=0, Java reject).
+  // SF-28: role gate + guard quá khứ TRƯỚC proxy (spec Q4 — mutation side;
+  // FE gửi from/to ISO offset +07:00 tường minh từ slot picker).
   app.put<{ Params: { code: string }; Body: UpdateDeliveryTimeRequest }>(
     '/fulfillment/:code/delivery-time',
     async (request, reply) => {
-      const { role, sub } = requireUser(request);
+      const user = requireRole(request, reply, 'Coordinator', 'Manager', 'Admin');
+      if (user === null) return reply;
+      const { sub, ...caller } = user;
+      const fromRaw = request.body.deliveryTime?.from ?? '';
+      const fromMs = Date.parse(fromRaw);
+      if (fromRaw === '' || Number.isNaN(fromMs)) {
+        const body: ErrorEnvelope = {
+          statusCode: 422,
+          message: 'deliveryTime.from phải là ISO datetime (offset +07:00).',
+          code: 'VALIDATION_ERROR',
+        };
+        return await reply.code(422).send(body);
+      }
+      if (fromMs < Date.parse(`${vnToday()}T00:00:00+07:00`)) {
+        const body: ErrorEnvelope = {
+          statusCode: 422,
+          message: 'Không thể đặt thời gian giao trong quá khứ.',
+          code: 'PAST_DATE_NOT_ALLOWED',
+        };
+        return await reply.code(422).send(body);
+      }
       try {
         const resp = await f.updateDeliveryTime(
           { fulfillCode: request.params.code, deliveryTime: request.body.deliveryTime },
-          role,
+          caller,
         );
         logActivity({
           actor: sub,
@@ -413,15 +470,57 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
     },
   );
 
+  // Slots TG giao (SF-28) — BFF synthesize từ DELIVERY_SLOTS, KHÔNG gọi upstream.
+  // date < hôm nay VN → 422; hôm nay → lọc slot đã qua; hôm nay+8 trở đi → 422.
+  // FE T5 map from/to → PUT delivery-time ISO +07:00 (spec Q4). Static route
+  // beats parametric /:fulfillCode (find-my-way — pattern /fulfillment/audit).
+  app.get<{ Querystring: { date?: string } }>('/fulfillment/time-slots', async (request, reply) => {
+    if (requireRole(request, reply, 'Coordinator', 'Manager', 'Admin') === null) return reply;
+    const date = request.query.date ?? '';
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(date)) {
+      const body: ErrorEnvelope = {
+        statusCode: 422,
+        message: 'date phải có định dạng YYYY-MM-DD.',
+        code: 'VALIDATION_ERROR',
+      };
+      return await reply.code(422).send(body);
+    }
+    const today = vnToday();
+    if (date < today) {
+      const body: ErrorEnvelope = {
+        statusCode: 422,
+        message: 'Không thể xem slot của ngày trong quá khứ.',
+        code: 'PAST_DATE_NOT_ALLOWED',
+      };
+      return await reply.code(422).send(body);
+    }
+    if (date > vnToday(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000))) {
+      const body: ErrorEnvelope = {
+        statusCode: 422,
+        message: 'Chỉ chọn được slot trong vòng 7 ngày tới.',
+        code: 'DATE_OUT_OF_RANGE',
+      };
+      return await reply.code(422).send(body);
+    }
+    const slots = DELIVERY_SLOTS.filter(
+      (s) => date !== today || slotEndMinutes(s.to) > vnMinutesNow(),
+    ).map((s) => ({
+      id: `${s.from.slice(0, 2)}-${s.to.slice(0, 2)}`,
+      from: s.from,
+      to: s.to,
+    }));
+    return await reply.send({ date, slots });
+  });
+
   // D4 hint TG giao — trả mảng slot (TimeDeliveryResponse.timeSlots).
   app.get<{ Querystring: { shopCode?: string } }>(
     '/order-promising/time-delivery',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await f.getTimeDelivery(
           { shopCode: request.query.shopCode ?? '', customerAddress: '' },
-          role,
+          caller,
         );
         const body: TimeDeliveryResponse = {
           timeSlots: resp.suggestedTime ? [{ from: resp.suggestedTime.from, to: resp.suggestedTime.to }] : [],
@@ -435,9 +534,9 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
 
   // GET /master-data/regions — D6 hierarchical (extension endpoints đã duyệt).
   app.get('/master-data/regions', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     try {
-      const resp = await f.listRegions({}, role);
+      const resp = await f.listRegions({}, caller);
       const body: RegionsResponse = { items: (resp.regions ?? []).map(mapRegion) };
       return await reply.send(body);
     } catch (err) {
@@ -448,12 +547,12 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.get<{ Querystring: { shopCode?: string } }>(
     '/master-data/delivery-staff',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const shopCode = request.query.shopCode;
         const resp = await f.listDeliveryStaff(
           shopCode ? { shopCode } : {},
-          role,
+          caller,
         );
         const body: DeliveryStaffResponse = { items: (resp.items ?? []).map(mapDeliveryStaff) };
         return await reply.send(body);
@@ -463,11 +562,20 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
     },
   );
 
-  app.get('/master-data/shops', async (request, reply) => {
-    const { role } = requireUser(request);
+  // SF-28: ?q= — in-memory filter code OR name case-insensitive (sau
+  // listDistinctShops — không proto change).
+  app.get<{ Querystring: { q?: string } }>('/master-data/shops', async (request, reply) => {
+    const caller = requireUser(request);
     try {
-      const resp = await f.listDistinctShops({}, role);
-      const body: ShopsResponse = { items: (resp.items ?? []).map(mapShop) };
+      const resp = await f.listDistinctShops({}, caller);
+      let items = (resp.items ?? []).map(mapShop);
+      const q = request.query.q?.trim().toLowerCase();
+      if (q) {
+        items = items.filter(
+          (s) => s.shopCode.toLowerCase().includes(q) || s.shopName.toLowerCase().includes(q),
+        );
+      }
+      const body: ShopsResponse = { items };
       return await reply.send(body);
     } catch (err) {
       return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
@@ -478,17 +586,24 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   // batching-service (Go owns batch transitions, spec §3.3) dù path nằm dưới
   // /fulfillment (REQUIREMENTS §5 giữ nguyên path).
   app.put<{ Body: { batchCode: string } }>('/fulfillment/complete-picking', async (request, reply) => {
-    const { role, sub } = requireUser(request);
+    const { sub, ...caller } = requireUser(request);
     try {
       const resp = await deps.batching.completePicking(
         { batchCode: request.body.batchCode },
-        role,
+        caller,
       );
       logActivity({
         actor: sub,
         action: 'batch.complete',
         targetType: 'batch',
         targetId: request.body.batchCode,
+      });
+      // SF-10 — dual-source local emit: mirror publish 'batch.transitioned'
+      // (from/to) phía Go (batching_server.go CompletePicking hook).
+      emitLocalEvent('batch.transitioned', {
+        batchCode: request.body.batchCode,
+        from: 'active',
+        to: 'completed',
       });
       return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
     } catch (err) {

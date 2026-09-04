@@ -7,8 +7,9 @@
  * useNavigate hoạt động dưới BrowserRouter của shell nhờ react-router-dom
  * MF singleton — batchCode link cross-remote navigate /hub-store-order/batch.
  */
-import { useMemo, useState } from "react";
-import { Button, Space, Table, Tooltip, Typography } from "antd";
+import { useEffect, useMemo, useState } from "react";
+import { DownloadOutlined } from "@ant-design/icons";
+import { Button, Space, Table, Tag, Tooltip, Typography, message } from "antd";
 import type { ColumnsType } from "antd/es/table";
 import { useTranslation } from "react-i18next";
 import { useNavigate } from "react-router-dom";
@@ -26,15 +27,23 @@ import {
   FilterBar,
   formatPeriodOfTime,
   useUrlState,
+  useHotkeys,
   DESIGN_TOKENS,
   StatStripSkeleton,
   EmptyState,
+  loadPlanningMap,
   type HubStoreOrderFilterItem,
+  type PlanningMapEntry,
   type RegionsResponse,
+  type Role,
   type ShopsResponse,
+  usePermissions,
 } from "@hub-store/shared";
 import {
+  buildExportParams,
   createAppStore,
+  fetchOrdersExport,
+  isCsvHeaderOnly,
   useGetRegionsQuery,
   useGetShopsQuery,
   useListOrdersQuery,
@@ -42,6 +51,7 @@ import {
   type PaginationEnvelope,
 } from "@hub-store/api-client";
 import { registerOrdersResources } from "../i18n";
+import RealtimeBridge from "../realtime/RealtimeBridge";
 import {
   buildFilterRequest,
   bulkActionsState,
@@ -52,9 +62,14 @@ import { buildRegionOptions } from "../utils/regions";
 import { OrdersExpandContent } from "../features/OrdersExpandContent";
 import { DeliveryTimeCell } from "../features/DeliveryTimeCell";
 import { HubStoreTransferModal } from "../features/HubStoreTransferModal";
+import { TransferHubModal } from "../features/TransferHubModal";
+import { TransferTicketHistoryModal } from "../features/TransferTicketHistoryModal";
+import type { TransferTicket } from "../api/ordersApi";
+import { useGetTransferTicketsQuery } from "../api/ordersApi";
 import { CreateOrderModal } from "../features/CreateOrderModal";
 import { ImportOrdersModal } from "../features/ImportOrdersModal";
 import { CreateBatchingModal } from "../batching/CreateBatchingModal";
+import { useBatchOrdersQuery, useSearchBookingDetailQuery } from "../batching/deliveryBatchApi";
 import { StatStrip } from "./StatStrip";
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
@@ -62,6 +77,75 @@ registerOrdersResources();
 
 /** Store per-remote — module singleton của bundle orders (createAppStore). */
 const ordersStore: AppStore = createAppStore();
+
+/** SF-28: nút/modal "YC chuyển kho" chỉ cho Coordinator/Manager/Admin (khớp requireRole BFF). */
+const TRANSFER_TICKET_ROLES: readonly Role[] = ["Coordinator", "Manager", "Admin"];
+
+/** Tag màu theo trạng thái ticket MỚI NHẤT (tokens sf6 semantic). */
+const TICKET_TAG_META: Record<string, { color: string; bg: string; line: string }> = {
+  PENDING: {
+    color: DESIGN_TOKENS.color.status.warning,
+    bg: DESIGN_TOKENS.color.status.warningBg,
+    line: DESIGN_TOKENS.color.status.warningLine,
+  },
+  APPROVED: {
+    color: DESIGN_TOKENS.color.status.success,
+    bg: DESIGN_TOKENS.color.status.successBg,
+    line: DESIGN_TOKENS.color.status.successLine,
+  },
+  REJECTED: {
+    color: DESIGN_TOKENS.color.status.error,
+    bg: DESIGN_TOKENS.color.status.errorBg,
+    line: DESIGN_TOKENS.color.status.errorLine,
+  },
+};
+
+function TransferTicketBadge({
+  ticket,
+  onOpenHistory,
+}: {
+  ticket: TransferTicket;
+  onOpenHistory: () => void;
+}) {
+  const { t } = useTranslation("orders");
+  const meta = TICKET_TAG_META[ticket.status] ?? TICKET_TAG_META.PENDING;
+  const label =
+    ticket.status === "APPROVED"
+      ? t("transferHub.tagApproved")
+      : ticket.status === "REJECTED"
+        ? t("transferHub.tagRejected")
+        : t("transferHub.tagPending");
+  return (
+    <Tag
+      data-testid={`transfer-badge-${ticket.orderFulfillCode}`}
+      onClick={onOpenHistory}
+      // a11y (P1 review): tag click-được phải keyboard-accessible — Enter/Space
+      // mở history; role="button" + aria-label cho screen reader.
+      tabIndex={0}
+      role="button"
+      aria-label={`${label} — ${ticket.orderFulfillCode}`}
+      onKeyDown={(e) => {
+        if (e.key === "Enter" || e.key === " ") {
+          e.preventDefault();
+          onOpenHistory();
+        }
+      }}
+      style={{
+        borderRadius: DESIGN_TOKENS.radius.pill,
+        marginInlineEnd: 0,
+        fontSize: 12,
+        lineHeight: "18px",
+        padding: "1px 8px",
+        color: meta.color,
+        background: meta.bg,
+        border: `1px solid ${meta.line}`,
+        cursor: "pointer",
+      }}
+    >
+      {label}
+    </Tag>
+  );
+}
 
 function D1Content() {
   const { t, i18n } = useTranslation("orders");
@@ -119,12 +203,124 @@ function D1Content() {
     selectedRows.every((r) => r.shopAssignment.shopCode === selectedRows[0].shopAssignment.shopCode);
   const bulk = bulkActionsState(selectedRows.length, sameShop);
 
+  // SF-28 — role gate nút "YC chuyển kho" + badge ticket trên row.
+  const { role } = usePermissions();
+  const canTransferTicket = role !== null && TRANSFER_TICKET_ROLES.includes(role);
+
+  // Tickets của các đơn trên trang hiện tại (skip khi trang rỗng — BFF 400 nếu
+  // codes trống). API trả ORDER BY created_at DESC → lần đầu gặp = mới nhất.
+  // P1 review: BFF requireRole Coordinator/Manager/Admin → role khác phải skip
+  // query (mỗi load D1 sẽ fire 403 vô ích).
+  const pageCodes = rows.map((r) => r.fulfillCode).join(",");
+  const { data: ticketsData } = useGetTransferTicketsQuery(pageCodes, {
+    skip: pageCodes.length === 0 || !canTransferTicket,
+  });
+  const latestTicketByCode = useMemo(() => {
+    const map = new Map<string, TransferTicket>();
+    for (const ticket of ticketsData?.items ?? []) {
+      if (!map.has(ticket.orderFulfillCode)) map.set(ticket.orderFulfillCode, ticket);
+    }
+    return map;
+  }, [ticketsData]);
+
   // Modals
   const [transferOrder, setTransferOrder] = useState<HubStoreOrderFilterItem | null>(null);
+  const [transferTicketOrder, setTransferTicketOrder] = useState<HubStoreOrderFilterItem | null>(null);
+  // SF-28 T3 — history modal (mở bằng click badge transfer-badge-${code})
+  const [historyOrderCode, setHistoryOrderCode] = useState<string | null>(null);
   const [createBatchOpen, setCreateBatchOpen] = useState(false);
   // SF-13 — tạo đơn tay + nhập đơn file
   const [createOrderOpen, setCreateOrderOpen] = useState(false);
   const [importOrdersOpen, setImportOrdersOpen] = useState(false);
+
+  // SF-21 D5 — F6 mở "Tạo đơn" (helper modal T10 đọc registry theo contextId này)
+  useHotkeys("d1-orders-page", t("page.title"), [
+    {
+      key: "F6",
+      handler: () => setCreateOrderOpen(true),
+      description: t("intake.createOrderButton"),
+    },
+  ]);
+
+  // --- SF-16 (Task 6) — replan/rebook entry-point -----------------------------
+  // D2 (fulfillment) navigate sang đây với ?nvcMode=replan|rebook&nvcBatchCode=
+  // (cross-MF qua URL params — P0 plan-critic: KHÔNG import cross-app).
+  const [nvcRequest, setNvcRequest] = useState<{
+    mode: "replan" | "rebook";
+    batchCode: string;
+    entries: PlanningMapEntry[];
+  } | null>(null);
+  const [nvcModal, setNvcModal] = useState<{
+    mode: "replan" | "rebook";
+    batchCode: string;
+    entries: PlanningMapEntry[];
+    orders: HubStoreOrderFilterItem[];
+  } | null>(null);
+
+  // On mount — đọc params + xóa NGAY (replaceState) để refresh không mở lại.
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const nvcMode = params.get("nvcMode");
+    const nvcBatchCode = params.get("nvcBatchCode");
+    if ((nvcMode !== "replan" && nvcMode !== "rebook") || !nvcBatchCode) return;
+    window.history.replaceState(null, "", window.location.pathname);
+    if (nvcMode === "rebook") {
+      const entries = loadPlanningMap(nvcBatchCode);
+      if (entries.length === 0) {
+        message.info(t("nvc.rebook.noEntries"));
+        return;
+      }
+      setNvcRequest({ mode: "rebook", batchCode: nvcBatchCode, entries });
+    } else {
+      setNvcRequest({ mode: "replan", batchCode: nvcBatchCode, entries: [] });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const { data: nvcBatchOrders } = useBatchOrdersQuery(nvcRequest?.batchCode ?? "", {
+    skip: nvcRequest === null,
+  });
+  const nvcPlanningIds = (nvcRequest?.entries ?? []).map((e) => e.planningId).join(",");
+  const { data: nvcBookingDetails } = useSearchBookingDetailQuery(nvcPlanningIds, {
+    skip: nvcRequest?.mode !== "rebook" || nvcPlanningIds === "",
+  });
+
+  // Khi data đủ → build modal (chạy 1 lần — guard nvcModal tránh loop setState).
+  useEffect(() => {
+    if (nvcRequest === null || nvcModal !== null || !nvcBatchOrders) return;
+    if (nvcRequest.mode === "replan") {
+      // Replan — loại đơn FAILED (failReason do server set, như OrderExpandContent D7).
+      const remaining = nvcBatchOrders.filter((o) => !o.failReason);
+      if (remaining.length === 0) {
+        message.info(t("nvc.replan.noOrders"));
+        setNvcRequest(null);
+        return;
+      }
+      setNvcModal({ ...nvcRequest, orders: remaining });
+    } else {
+      if (!nvcBookingDetails) return;
+      // Rebook — planningIdsToRebook: booking null (đã confirm nhưng bị hủy) hoặc
+      // booking CANCELLED. Planning BOOKED khác KHÔNG đụng (BE idempotent no-op).
+      const bookingByPlanning = new Map(
+        nvcBookingDetails.bookings.map((b) => [b.planningId, b.booking]),
+      );
+      const toRebook = nvcRequest.entries.filter((e) => {
+        const b = bookingByPlanning.get(e.planningId);
+        return b == null || b.status === "CANCELLED";
+      });
+      if (toRebook.length === 0) {
+        message.info(t("nvc.rebook.noEntries"));
+        setNvcRequest(null);
+        return;
+      }
+      const codes = new Set(toRebook.map((e) => e.orderCode));
+      setNvcModal({
+        ...nvcRequest,
+        entries: toRebook,
+        orders: nvcBatchOrders.filter((o) => codes.has(o.fulfillCode)),
+      });
+    }
+  }, [nvcRequest, nvcModal, nvcBatchOrders, nvcBookingDetails, t]);
 
   // Expand (controlled — nút "Chi tiết" toggle cùng hàng với icon expand)
   const [expandedRowKeys, setExpandedRowKeys] = useState<React.Key[]>([]);
@@ -135,6 +331,53 @@ function D1Content() {
 
   const handleReset = () => {
     setFilters({ ...FILTER_URL_DEFAULTS });
+  };
+
+  // --- SF-11 (Task 2) — Export CSV: derive querystring từ filter state (D5) ---
+  const exportDerive = useMemo(() => buildExportParams(filters), [filters]);
+  const [exporting, setExporting] = useState(false);
+
+  const exportTooltip = exportDerive.disabled
+    ? t(
+        exportDerive.reason === "createdRange"
+          ? "export.tooltip.createdRange"
+          : "export.tooltip.unsupportedFields",
+      )
+    : undefined;
+
+  const handleExport = async () => {
+    if (exportDerive.disabled || exporting) return;
+    setExporting(true);
+    try {
+      const result = await fetchOrdersExport(exportDerive.params);
+      if (!result.ok || !result.blob) {
+        message.error(result.message ?? t("export.error"));
+        return;
+      }
+      // Header-only (byte-precise — mọi byte sau newline đầu là whitespace/EOF)
+      // → KHÔNG tải file, chỉ báo rỗng (spec §4.2).
+      if (isCsvHeaderOnly(new Uint8Array(await result.blob.arrayBuffer()))) {
+        message.info(t("export.empty"));
+        return;
+      }
+      const p = (n: number) => String(n).padStart(2, "0");
+      const now = new Date();
+      const fallbackName = `orders-export-${now.getFullYear()}${p(now.getMonth() + 1)}${p(
+        now.getDate(),
+      )}-${p(now.getHours())}${p(now.getMinutes())}${p(now.getSeconds())}.csv`;
+      const url = URL.createObjectURL(result.blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = result.filename ?? fallbackName;
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      URL.revokeObjectURL(url);
+    } catch {
+      message.error(t("export.error"));
+    } finally {
+      setExporting(false);
+    }
   };
 
   const toggleExpand = (code: string) => {
@@ -219,6 +462,25 @@ function D1Content() {
       width: 230,
       render: (_: unknown, record) => <DeliveryTimeCell order={record} />,
     },
+    // P1 review: role không đủ quyền → ẨN hẳn cột "Chuyển kho" (badge chết).
+    ...(canTransferTicket
+      ? [
+          {
+            title: t("columns.transferTicket"),
+            key: "transferTicket",
+            width: 130,
+            render: (_: unknown, record: HubStoreOrderFilterItem) => {
+              const ticket = latestTicketByCode.get(record.fulfillCode);
+              return ticket ? (
+                <TransferTicketBadge
+                  ticket={ticket}
+                  onOpenHistory={() => setHistoryOrderCode(record.fulfillCode)}
+                />
+              ) : null;
+            },
+          },
+        ]
+      : []),
     {
       title: t("columns.actions"),
       key: "actions",
@@ -273,7 +535,23 @@ function D1Content() {
             {t("page.subtitle", { total })}
           </div>
         </div>
-        <Button onClick={() => void refetch()}>{t("action.refresh")}</Button>
+        <Space>
+          <Tooltip title={exportTooltip}>
+            {/* span wrapper — antd4 disabled button không fire mouse event → tooltip không hiện */}
+            <span>
+              <Button
+                icon={<DownloadOutlined />}
+                loading={exporting}
+                disabled={exportDerive.disabled}
+                onClick={() => void handleExport()}
+                data-testid="export-csv-button"
+              >
+                {t("export.button")}
+              </Button>
+            </span>
+          </Tooltip>
+          <Button onClick={() => void refetch()}>{t("action.refresh")}</Button>
+        </Space>
       </div>
 
       {/* Stat-strip — SF-6 §2.2 (page-scoped, Deviation D2) */}
@@ -390,6 +668,23 @@ function D1Content() {
           >
             {t("bulk.transfer")}
           </Button>
+          {canTransferTicket && (
+            <Tooltip
+              title={
+                selectedRows.length === 1 && selectedRows[0].isDebtSplittingOrder
+                  ? t("transferHub.debtTitle")
+                  : undefined
+              }
+            >
+              <Button
+                disabled={!(selectedRows.length === 1 && !selectedRows[0].isDebtSplittingOrder)}
+                onClick={() => setTransferTicketOrder(selectedRows[0] ?? null)}
+                data-testid="bulk-transfer-ticket"
+              >
+                {t("bulk.transferTicket")}
+              </Button>
+            </Tooltip>
+          )}
           <Typography.Text type="secondary">{t("bulk.hint")}</Typography.Text>
         </Space>
       )}
@@ -444,11 +739,34 @@ function D1Content() {
         order={transferOrder}
         onClose={() => setTransferOrder(null)}
       />
+      <TransferHubModal
+        open={transferTicketOrder !== null}
+        order={transferTicketOrder}
+        onClose={() => setTransferTicketOrder(null)}
+      />
+      <TransferTicketHistoryModal
+        open={historyOrderCode !== null}
+        orderCode={historyOrderCode}
+        onClose={() => setHistoryOrderCode(null)}
+      />
       <CreateBatchingModal
         open={createBatchOpen}
         orders={selectedRows}
         onClose={() => setCreateBatchOpen(false)}
       />
+      {/* SF-16 (Task 6) — modal replan/rebook mở từ entry-point URL params */}
+      {nvcModal !== null && (
+        <CreateBatchingModal
+          open
+          mode={nvcModal.mode}
+          orders={nvcModal.orders}
+          batchCode={nvcModal.mode === "rebook" ? nvcModal.batchCode : undefined}
+          rebookEntries={nvcModal.entries.length > 0 ? nvcModal.entries : undefined}
+          // Clear CẢ nvcRequest — nếu chỉ clear nvcModal, effect build modal chạy lại
+          // (deps đổi) và mount lại từ RTKQ cache → modal không thể đóng.
+          onClose={() => { setNvcModal(null); setNvcRequest(null); }}
+        />
+      )}
       <CreateOrderModal open={createOrderOpen} onClose={() => setCreateOrderOpen(false)} />
       <ImportOrdersModal open={importOrdersOpen} onClose={() => setImportOrdersOpen(false)} />
     </div>
@@ -459,6 +777,8 @@ function D1Content() {
 export default function D1Page() {
   return (
     <Provider store={ordersStore}>
+      {/* SF-10: SSE bridge — invalidate Fulfillment LIST khi BFF forward event. */}
+      <RealtimeBridge />
       <D1Content />
     </Provider>
   );

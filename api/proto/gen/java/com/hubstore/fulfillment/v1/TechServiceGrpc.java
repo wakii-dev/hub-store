@@ -139,6 +139,99 @@ public final class TechServiceGrpc {
     return getSuggestTechniciansMethod;
   }
 
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.AcceptOrderRequest,
+      com.hubstore.fulfillment.v1.MutateTechOrderResponse> getAcceptOrderMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "AcceptOrder",
+      requestType = com.hubstore.fulfillment.v1.AcceptOrderRequest.class,
+      responseType = com.hubstore.fulfillment.v1.MutateTechOrderResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.AcceptOrderRequest,
+      com.hubstore.fulfillment.v1.MutateTechOrderResponse> getAcceptOrderMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.AcceptOrderRequest, com.hubstore.fulfillment.v1.MutateTechOrderResponse> getAcceptOrderMethod;
+    if ((getAcceptOrderMethod = TechServiceGrpc.getAcceptOrderMethod) == null) {
+      synchronized (TechServiceGrpc.class) {
+        if ((getAcceptOrderMethod = TechServiceGrpc.getAcceptOrderMethod) == null) {
+          TechServiceGrpc.getAcceptOrderMethod = getAcceptOrderMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.AcceptOrderRequest, com.hubstore.fulfillment.v1.MutateTechOrderResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "AcceptOrder"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.AcceptOrderRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.MutateTechOrderResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new TechServiceMethodDescriptorSupplier("AcceptOrder"))
+              .build();
+        }
+      }
+    }
+    return getAcceptOrderMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.CompleteOrderRequest,
+      com.hubstore.fulfillment.v1.MutateTechOrderResponse> getCompleteOrderMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "CompleteOrder",
+      requestType = com.hubstore.fulfillment.v1.CompleteOrderRequest.class,
+      responseType = com.hubstore.fulfillment.v1.MutateTechOrderResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.CompleteOrderRequest,
+      com.hubstore.fulfillment.v1.MutateTechOrderResponse> getCompleteOrderMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.CompleteOrderRequest, com.hubstore.fulfillment.v1.MutateTechOrderResponse> getCompleteOrderMethod;
+    if ((getCompleteOrderMethod = TechServiceGrpc.getCompleteOrderMethod) == null) {
+      synchronized (TechServiceGrpc.class) {
+        if ((getCompleteOrderMethod = TechServiceGrpc.getCompleteOrderMethod) == null) {
+          TechServiceGrpc.getCompleteOrderMethod = getCompleteOrderMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.CompleteOrderRequest, com.hubstore.fulfillment.v1.MutateTechOrderResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "CompleteOrder"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.CompleteOrderRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.MutateTechOrderResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new TechServiceMethodDescriptorSupplier("CompleteOrder"))
+              .build();
+        }
+      }
+    }
+    return getCompleteOrderMethod;
+  }
+
+  private static volatile io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.RescheduleOrderRequest,
+      com.hubstore.fulfillment.v1.MutateTechOrderResponse> getRescheduleOrderMethod;
+
+  @io.grpc.stub.annotations.RpcMethod(
+      fullMethodName = SERVICE_NAME + '/' + "RescheduleOrder",
+      requestType = com.hubstore.fulfillment.v1.RescheduleOrderRequest.class,
+      responseType = com.hubstore.fulfillment.v1.MutateTechOrderResponse.class,
+      methodType = io.grpc.MethodDescriptor.MethodType.UNARY)
+  public static io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.RescheduleOrderRequest,
+      com.hubstore.fulfillment.v1.MutateTechOrderResponse> getRescheduleOrderMethod() {
+    io.grpc.MethodDescriptor<com.hubstore.fulfillment.v1.RescheduleOrderRequest, com.hubstore.fulfillment.v1.MutateTechOrderResponse> getRescheduleOrderMethod;
+    if ((getRescheduleOrderMethod = TechServiceGrpc.getRescheduleOrderMethod) == null) {
+      synchronized (TechServiceGrpc.class) {
+        if ((getRescheduleOrderMethod = TechServiceGrpc.getRescheduleOrderMethod) == null) {
+          TechServiceGrpc.getRescheduleOrderMethod = getRescheduleOrderMethod =
+              io.grpc.MethodDescriptor.<com.hubstore.fulfillment.v1.RescheduleOrderRequest, com.hubstore.fulfillment.v1.MutateTechOrderResponse>newBuilder()
+              .setType(io.grpc.MethodDescriptor.MethodType.UNARY)
+              .setFullMethodName(generateFullMethodName(SERVICE_NAME, "RescheduleOrder"))
+              .setSampledToLocalTracing(true)
+              .setRequestMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.RescheduleOrderRequest.getDefaultInstance()))
+              .setResponseMarshaller(io.grpc.protobuf.ProtoUtils.marshaller(
+                  com.hubstore.fulfillment.v1.MutateTechOrderResponse.getDefaultInstance()))
+              .setSchemaDescriptor(new TechServiceMethodDescriptorSupplier("RescheduleOrder"))
+              .build();
+        }
+      }
+    }
+    return getRescheduleOrderMethod;
+  }
+
   /**
    * Creates a new async stub that supports all call types for the service
    */
@@ -214,6 +307,30 @@ public final class TechServiceGrpc {
         io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.SuggestTechniciansResponse> responseObserver) {
       io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getSuggestTechniciansMethod(), responseObserver);
     }
+
+    /**
+     * <pre>
+     * SF-25 — accept/complete/reschedule KTV mobile (spec §4.2)
+     * </pre>
+     */
+    default void acceptOrder(com.hubstore.fulfillment.v1.AcceptOrderRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.MutateTechOrderResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getAcceptOrderMethod(), responseObserver);
+    }
+
+    /**
+     */
+    default void completeOrder(com.hubstore.fulfillment.v1.CompleteOrderRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.MutateTechOrderResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getCompleteOrderMethod(), responseObserver);
+    }
+
+    /**
+     */
+    default void rescheduleOrder(com.hubstore.fulfillment.v1.RescheduleOrderRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.MutateTechOrderResponse> responseObserver) {
+      io.grpc.stub.ServerCalls.asyncUnimplementedUnaryCall(getRescheduleOrderMethod(), responseObserver);
+    }
   }
 
   /**
@@ -274,6 +391,33 @@ public final class TechServiceGrpc {
       io.grpc.stub.ClientCalls.asyncUnaryCall(
           getChannel().newCall(getSuggestTechniciansMethod(), getCallOptions()), request, responseObserver);
     }
+
+    /**
+     * <pre>
+     * SF-25 — accept/complete/reschedule KTV mobile (spec §4.2)
+     * </pre>
+     */
+    public void acceptOrder(com.hubstore.fulfillment.v1.AcceptOrderRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.MutateTechOrderResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getAcceptOrderMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     */
+    public void completeOrder(com.hubstore.fulfillment.v1.CompleteOrderRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.MutateTechOrderResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getCompleteOrderMethod(), getCallOptions()), request, responseObserver);
+    }
+
+    /**
+     */
+    public void rescheduleOrder(com.hubstore.fulfillment.v1.RescheduleOrderRequest request,
+        io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.MutateTechOrderResponse> responseObserver) {
+      io.grpc.stub.ClientCalls.asyncUnaryCall(
+          getChannel().newCall(getRescheduleOrderMethod(), getCallOptions()), request, responseObserver);
+    }
   }
 
   /**
@@ -318,6 +462,30 @@ public final class TechServiceGrpc {
     public com.hubstore.fulfillment.v1.SuggestTechniciansResponse suggestTechnicians(com.hubstore.fulfillment.v1.SuggestTechniciansRequest request) {
       return io.grpc.stub.ClientCalls.blockingUnaryCall(
           getChannel(), getSuggestTechniciansMethod(), getCallOptions(), request);
+    }
+
+    /**
+     * <pre>
+     * SF-25 — accept/complete/reschedule KTV mobile (spec §4.2)
+     * </pre>
+     */
+    public com.hubstore.fulfillment.v1.MutateTechOrderResponse acceptOrder(com.hubstore.fulfillment.v1.AcceptOrderRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getAcceptOrderMethod(), getCallOptions(), request);
+    }
+
+    /**
+     */
+    public com.hubstore.fulfillment.v1.MutateTechOrderResponse completeOrder(com.hubstore.fulfillment.v1.CompleteOrderRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getCompleteOrderMethod(), getCallOptions(), request);
+    }
+
+    /**
+     */
+    public com.hubstore.fulfillment.v1.MutateTechOrderResponse rescheduleOrder(com.hubstore.fulfillment.v1.RescheduleOrderRequest request) {
+      return io.grpc.stub.ClientCalls.blockingUnaryCall(
+          getChannel(), getRescheduleOrderMethod(), getCallOptions(), request);
     }
   }
 
@@ -368,12 +536,42 @@ public final class TechServiceGrpc {
       return io.grpc.stub.ClientCalls.futureUnaryCall(
           getChannel().newCall(getSuggestTechniciansMethod(), getCallOptions()), request);
     }
+
+    /**
+     * <pre>
+     * SF-25 — accept/complete/reschedule KTV mobile (spec §4.2)
+     * </pre>
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.MutateTechOrderResponse> acceptOrder(
+        com.hubstore.fulfillment.v1.AcceptOrderRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getAcceptOrderMethod(), getCallOptions()), request);
+    }
+
+    /**
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.MutateTechOrderResponse> completeOrder(
+        com.hubstore.fulfillment.v1.CompleteOrderRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getCompleteOrderMethod(), getCallOptions()), request);
+    }
+
+    /**
+     */
+    public com.google.common.util.concurrent.ListenableFuture<com.hubstore.fulfillment.v1.MutateTechOrderResponse> rescheduleOrder(
+        com.hubstore.fulfillment.v1.RescheduleOrderRequest request) {
+      return io.grpc.stub.ClientCalls.futureUnaryCall(
+          getChannel().newCall(getRescheduleOrderMethod(), getCallOptions()), request);
+    }
   }
 
   private static final int METHODID_FILTER_DELIVERY_ORDERS = 0;
   private static final int METHODID_FILTER_INSTALLATION_ORDERS = 1;
   private static final int METHODID_ASSIGN_TECHNICIAN = 2;
   private static final int METHODID_SUGGEST_TECHNICIANS = 3;
+  private static final int METHODID_ACCEPT_ORDER = 4;
+  private static final int METHODID_COMPLETE_ORDER = 5;
+  private static final int METHODID_RESCHEDULE_ORDER = 6;
 
   private static final class MethodHandlers<Req, Resp> implements
       io.grpc.stub.ServerCalls.UnaryMethod<Req, Resp>,
@@ -407,6 +605,18 @@ public final class TechServiceGrpc {
         case METHODID_SUGGEST_TECHNICIANS:
           serviceImpl.suggestTechnicians((com.hubstore.fulfillment.v1.SuggestTechniciansRequest) request,
               (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.SuggestTechniciansResponse>) responseObserver);
+          break;
+        case METHODID_ACCEPT_ORDER:
+          serviceImpl.acceptOrder((com.hubstore.fulfillment.v1.AcceptOrderRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.MutateTechOrderResponse>) responseObserver);
+          break;
+        case METHODID_COMPLETE_ORDER:
+          serviceImpl.completeOrder((com.hubstore.fulfillment.v1.CompleteOrderRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.MutateTechOrderResponse>) responseObserver);
+          break;
+        case METHODID_RESCHEDULE_ORDER:
+          serviceImpl.rescheduleOrder((com.hubstore.fulfillment.v1.RescheduleOrderRequest) request,
+              (io.grpc.stub.StreamObserver<com.hubstore.fulfillment.v1.MutateTechOrderResponse>) responseObserver);
           break;
         default:
           throw new AssertionError();
@@ -454,6 +664,27 @@ public final class TechServiceGrpc {
               com.hubstore.fulfillment.v1.SuggestTechniciansRequest,
               com.hubstore.fulfillment.v1.SuggestTechniciansResponse>(
                 service, METHODID_SUGGEST_TECHNICIANS)))
+        .addMethod(
+          getAcceptOrderMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.AcceptOrderRequest,
+              com.hubstore.fulfillment.v1.MutateTechOrderResponse>(
+                service, METHODID_ACCEPT_ORDER)))
+        .addMethod(
+          getCompleteOrderMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.CompleteOrderRequest,
+              com.hubstore.fulfillment.v1.MutateTechOrderResponse>(
+                service, METHODID_COMPLETE_ORDER)))
+        .addMethod(
+          getRescheduleOrderMethod(),
+          io.grpc.stub.ServerCalls.asyncUnaryCall(
+            new MethodHandlers<
+              com.hubstore.fulfillment.v1.RescheduleOrderRequest,
+              com.hubstore.fulfillment.v1.MutateTechOrderResponse>(
+                service, METHODID_RESCHEDULE_ORDER)))
         .build();
   }
 
@@ -506,6 +737,9 @@ public final class TechServiceGrpc {
               .addMethod(getFilterInstallationOrdersMethod())
               .addMethod(getAssignTechnicianMethod())
               .addMethod(getSuggestTechniciansMethod())
+              .addMethod(getAcceptOrderMethod())
+              .addMethod(getCompleteOrderMethod())
+              .addMethod(getRescheduleOrderMethod())
               .build();
         }
       }

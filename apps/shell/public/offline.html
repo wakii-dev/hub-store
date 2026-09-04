@@ -1,0 +1,89 @@
+<!doctype html>
+<!-- SF-23 (FI-268) T2 — offline fallback page (spec §4.1).
+     Fully static: zero external fetch (fonts/JS/CSS) — phải render nổi khi mạng chết hẳn. -->
+<html lang="vi">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Mất kết nối — HubStore</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      html,
+      body {
+        height: 100%;
+      }
+      body {
+        font-family:
+          Roboto,
+          -apple-system,
+          BlinkMacSystemFont,
+          'Segoe UI',
+          Helvetica,
+          Arial,
+          sans-serif;
+        background: linear-gradient(160deg, #fff8f2 0%, #fdeee0 55%, #fce3cc 100%);
+        color: #3d2c1e;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        padding: 24px;
+        text-align: center;
+      }
+      .card {
+        max-width: 360px;
+      }
+      .logo-dot {
+        width: 56px;
+        height: 56px;
+        border-radius: 50%;
+        background: #eb6e09;
+        margin: 0 auto 24px;
+        box-shadow: 0 6px 18px rgba(235, 110, 9, 0.35);
+      }
+      h1 {
+        font-size: 24px;
+        font-weight: 600;
+        margin-bottom: 8px;
+        color: #2c1f14;
+      }
+      p {
+        font-size: 15px;
+        line-height: 1.5;
+        margin-bottom: 24px;
+        color: #6b5744;
+      }
+      button {
+        appearance: none;
+        border: 0;
+        border-radius: 8px;
+        background: #eb6e09;
+        color: #fff;
+        font-size: 15px;
+        font-weight: 600;
+        font-family: inherit;
+        padding: 12px 32px;
+        cursor: pointer;
+        box-shadow: 0 4px 12px rgba(235, 110, 9, 0.35);
+        transition: filter 0.15s ease;
+      }
+      button:hover {
+        filter: brightness(1.07);
+      }
+      button:active {
+        filter: brightness(0.94);
+      }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <div class="logo-dot" aria-hidden="true"></div>
+      <h1>Mất kết nối</h1>
+      <p>Vui lòng kiểm tra mạng và thử lại.</p>
+      <button type="button" onclick="location.reload()">Thử lại</button>
+    </main>
+  </body>
+</html>

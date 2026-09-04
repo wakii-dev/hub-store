@@ -10,7 +10,7 @@ import { useMemo } from "react";
 import { Button, Form, Input, InputNumber, Modal, Select, Space, message } from "antd";
 import { useTranslation } from "react-i18next";
 import { useCreateManualOrderMutation, useGetShopsQuery } from "@hub-store/api-client";
-import type { IntakeOrderDto, Product, ShopsResponse } from "@hub-store/shared";
+import { trackEvent, useHotkeys, type IntakeOrderDto, type Product, type ShopsResponse } from "@hub-store/shared"; // SF-23 T7 + SF-21 D5
 
 interface ItemRow {
   productCode: string;
@@ -61,6 +61,7 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
     try {
       await createManualOrder(payload).unwrap();
       message.success(t("intake.createOrder.success"));
+      trackEvent("order_created"); // SF-23 T7
       form.resetFields();
       onClose();
     } catch (err) {
@@ -68,6 +69,19 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
       message.error(data?.message ?? t("intake.createOrder.error"));
     }
   };
+
+  // SF-21 D5 — khi modal mở: F4 submit / F8 cancel
+  // (helper modal T10 đọc registry theo contextId 'order-create-modal').
+  useHotkeys(
+    "order-create-modal",
+    t("intake.createOrder.title"),
+    open
+      ? [
+          { key: "F4", handler: () => form.submit(), description: t("intake.createOrder.submit") },
+          { key: "F8", handler: onClose, description: t("intake.createOrder.cancel") },
+        ]
+      : [],
+  );
 
   return (
     <Modal

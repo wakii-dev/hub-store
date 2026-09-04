@@ -39,11 +39,16 @@ import type {
 import type {
   ConfirmImportOrdersResponse,
   CreateManualOrderResponse,
+  CreateWebhookOrderResponse,
   GetOrderAuditResponse,
   MarkOrderFailedResponse,
   RedeliverOrderResponse,
   ValidateImportOrdersResponse,
 } from '../../../api/proto/gen/ts/hubstore/intake/v1/intake';
+import type {
+  CreateTransferTicketResponse,
+  ListTransferTicketsResponse,
+} from '../../../api/proto/gen/ts/hubstore/transfer/v1/transfer';
 import type {
   CancelDeliveryBatchResponse,
   CancelDeliveryOrderResponse,
@@ -60,6 +65,7 @@ import type {
   FilterDeliveryOrdersResponse,
   FilterInstallationOrdersResponse,
   InstallationOrder as ProtoInstallationOrder,
+  MutateTechOrderResponse,
   SuggestTechniciansResponse,
 } from '../../../api/proto/gen/ts/hubstore/fulfillment/v1/tech_service';
 
@@ -97,6 +103,7 @@ export const fixtureTechDeliveryOrder: ProtoDeliveryOrder = {
     allowReassign: false,
     allowAccept: false,
     allowReschedule: false,
+    allowComplete: false,
   },
 };
 
@@ -128,6 +135,7 @@ export const fixtureTechInstallationOrder: ProtoInstallationOrder = {
     allowReassign: true,
     allowAccept: true,
     allowReschedule: true,
+    allowComplete: false,
   },
 };
 
@@ -147,6 +155,10 @@ export const techResponses = {
   assignTechnician: {
     order: fixtureTechInstallationOrder,
   } as AssignTechnicianResponse,
+  // SF-25 — mutate responses (cùng shape {order}, flags re-computed upstream)
+  acceptOrder: { order: fixtureTechInstallationOrder } as MutateTechOrderResponse,
+  completeOrder: { order: fixtureTechInstallationOrder } as MutateTechOrderResponse,
+  rescheduleOrder: { order: fixtureTechInstallationOrder } as MutateTechOrderResponse,
   suggestTechnicians: {
     items: [
       { code: 'KTV-001', name: 'Lê Kỹ Thuật', type: 'KTV', activeCount: 1 },
@@ -435,6 +447,8 @@ export const intakeResponses = {
   validateImportOrders: { errors: [] } as ValidateImportOrdersResponse,
   confirmImportOrders: { fulfillCodes: ['ORD-4001', 'ORD-4002'] } as ConfirmImportOrdersResponse,
   createManualOrder: { fulfillCode: 'ORD-4001' } as CreateManualOrderResponse,
+  // SF-26 — webhook sàn (FI-27); happy-path default, replay test override.
+  createWebhookOrder: { fulfillCode: 'ORD-WH-0001', replayed: false } as CreateWebhookOrderResponse,
   markOrderFailed: {} as MarkOrderFailedResponse,
   redeliverOrder: { newFulfillCode: 'ORD-9001' } as RedeliverOrderResponse,
   getOrderAudit: {
@@ -461,4 +475,38 @@ export const staffAreaResponses = {
   updateServiceEmployee: { employee: fixtureServiceEmployee },
   setServiceEmployeeActive: { employee: { ...fixtureServiceEmployee, isActive: false } },
   verifyPaymentAccount: { valid: true, source: 'MOCK', message: '[MOCK] Số TK hợp lệ.' },
+};
+
+/** SF-28 transfer — happy-path defaults (per-test override khi cần fail). */
+export const transferResponses = {
+  createTransferTicket: {
+    ticket: {
+      ticketCode: 'TT-0001',
+      orderFulfillCode: 'ORD-3001',
+      fromHub: '',
+      toHub: 'Hub Đà Nẵng',
+      reason: 'Gần kho giao hơn',
+      status: 'PENDING',
+      createdBy: 'tester',
+      createdAt: '2026-09-03T10:00:00+07:00',
+      confirmedBy: '',
+      confirmedAt: '',
+    },
+  } as CreateTransferTicketResponse,
+  listTransferTickets: {
+    tickets: [
+      {
+        ticketCode: 'TT-0001',
+        orderFulfillCode: 'ORD-3001',
+        fromHub: '',
+        toHub: 'Hub Đà Nẵng',
+        reason: 'Gần kho giao hơn',
+        status: 'PENDING',
+        createdBy: 'tester',
+        createdAt: '2026-09-03T10:00:00+07:00',
+        confirmedBy: '',
+        confirmedAt: '',
+      },
+    ],
+  } as ListTransferTicketsResponse,
 };

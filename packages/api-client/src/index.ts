@@ -1,6 +1,7 @@
 export {
   axiosBaseQuery,
   getAxiosInstance,
+  getStoredToken,
   setTokenGetter,
   type AxiosBaseQueryArg,
   type AxiosBaseQueryError,
@@ -17,6 +18,19 @@ export {
   type ListQueryDefinition,
 } from './api';
 export { createAppStore, type AppStore, type AppDispatch, type RootState } from './store';
+export {
+  createRealtimeStream,
+  useRealtimeEvents,
+  type CreateRealtimeStreamOptions,
+  type RealtimeApiSlice,
+  type RealtimeDispatch,
+  type RealtimeEvent,
+  type RealtimeEventSourceCtor,
+  type RealtimeEventSourceLike,
+  type RealtimeStatus,
+  type RealtimeStream,
+  type UseRealtimeEventsOptions,
+} from './realtime';
 
 // Side-effect imports: inject the stub endpoints into the api singleton at
 // package import time. SF-7/SF-9 edit the slice files in place — never
@@ -27,10 +41,22 @@ import './slices/masterData';
 import './slices/users';
 import './slices/intake';
 import './slices/d2c';
+import './slices/audit';
 
 // Re-export the stub hooks for convenience (remotes can deep-import the slice
 // files directly too).
-export { useListOrdersQuery, useGetDashboardStatsQuery } from './slices/fulfillment';
+export {
+  useListOrdersQuery,
+  useGetDashboardStatsQuery,
+  buildExportParams,
+  isCsvHeaderOnly,
+  fetchOrdersExport,
+  type OrdersExportFilterState,
+  type OrdersExportQueryParams,
+  type ExportDeriveResult,
+  type ExportUnsupportedReason,
+  type OrdersExportResult,
+} from './slices/fulfillment';
 export { useListBatchesQuery } from './slices/batches';
 export {
   useListD2cOrdersQuery,
@@ -56,3 +82,9 @@ export {
   useConfirmImportMutation,
   useCreateManualOrderMutation,
 } from './slices/intake';
+export {
+  useListAuditQuery,
+  buildAuditQueryParams,
+  type AuditListItem,
+  type AuditQueryParams,
+} from './slices/audit';

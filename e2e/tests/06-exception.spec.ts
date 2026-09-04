@@ -34,6 +34,9 @@ async function createBatch(page: Page) {
   await page.getByTestId("bulk-create-batch").click();
   const modal = page.locator(".create-batching-modal");
   await expect(modal).toBeVisible();
+  // SF-28 T7 — wizard step 1 (preset) mới thêm → advance sang step cũ trước
+  // khi thao tác shipper/TG giao.
+  await page.getByTestId("batch-continue").click();
   await page.getByTestId("batch-shipper-select").locator(".ant-select-selector").click();
   await page.keyboard.press("ArrowDown");
   await page.keyboard.press("Enter");
@@ -104,7 +107,7 @@ interface AuditEntry {
 
 async function getAudit(page: Page, request: APIRequestContext, code: string): Promise<AuditEntry[]> {
   const call = (token: string) =>
-    request.get(`http://localhost:8080/orders/${code}/audit`, {
+    request.get(`${process.env.E2E_BFF_URL ?? "http://localhost:8080"}/orders/${code}/audit`, {
       headers: { Authorization: `Bearer ${token}` },
     });
   let res = await call(await getAccessToken(page));
@@ -206,7 +209,7 @@ test.describe("warehouse ops (storageState warehouse)", () => {
     // D1 là route Coordinator (warehouse bị 403) → context coordinator riêng
     const ctx = await browser.newContext({
       storageState: path.join(__dirname, "..", ".auth", "coordinator.json"),
-      baseURL: "http://localhost:3000",
+      baseURL: process.env.E2E_SHELL_URL ?? "http://localhost:3000",
     });
     try {
       const cPage = await ctx.newPage();

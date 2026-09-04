@@ -19,29 +19,29 @@ import type {
   VerifyPaymentAccountRequest,
   VerifyPaymentAccountResponse,
 } from '../../../../api/proto/gen/ts/hubstore/staffarea/v1/staffarea';
-import { callUnary, insecureChannel, SERVICE_NAMES } from './grpc.js';
+import { callUnary, insecureChannel, SERVICE_NAMES, type Caller } from './grpc.js';
 
 export interface StaffAreaApi {
   listServiceEmployees(
     req: ListServiceEmployeesRequest,
-    role: string,
+    caller: Caller,
   ): Promise<ListServiceEmployeesResponse>;
-  getServiceEmployee(req: GetServiceEmployeeRequest, role: string): Promise<GetServiceEmployeeResponse>;
+  getServiceEmployee(req: GetServiceEmployeeRequest, caller: Caller): Promise<GetServiceEmployeeResponse>;
   createServiceEmployee(
     req: CreateServiceEmployeeRequest,
-    role: string,
+    caller: Caller,
   ): Promise<CreateServiceEmployeeResponse>;
   updateServiceEmployee(
     req: UpdateServiceEmployeeRequest,
-    role: string,
+    caller: Caller,
   ): Promise<UpdateServiceEmployeeResponse>;
   setServiceEmployeeActive(
     req: SetServiceEmployeeActiveRequest,
-    role: string,
+    caller: Caller,
   ): Promise<SetServiceEmployeeActiveResponse>;
   verifyPaymentAccount(
     req: VerifyPaymentAccountRequest,
-    role: string,
+    caller: Caller,
   ): Promise<VerifyPaymentAccountResponse>;
   close(): void;
 }
@@ -49,13 +49,13 @@ export interface StaffAreaApi {
 export function createStaffAreaClient(addr: string, deadlineMs: number): StaffAreaApi {
   const c = new StaffAreaServiceClient(addr, insecureChannel());
   return {
-    listServiceEmployees: (req, role) => callUnary(c.listServiceEmployees.bind(c), req, role, deadlineMs),
-    getServiceEmployee: (req, role) => callUnary(c.getServiceEmployee.bind(c), req, role, deadlineMs),
-    createServiceEmployee: (req, role) => callUnary(c.createServiceEmployee.bind(c), req, role, deadlineMs),
-    updateServiceEmployee: (req, role) => callUnary(c.updateServiceEmployee.bind(c), req, role, deadlineMs),
-    setServiceEmployeeActive: (req, role) =>
-      callUnary(c.setServiceEmployeeActive.bind(c), req, role, deadlineMs),
-    verifyPaymentAccount: (req, role) => callUnary(c.verifyPaymentAccount.bind(c), req, role, deadlineMs),
+    listServiceEmployees: (req, caller) => callUnary(c.listServiceEmployees.bind(c), req, caller, deadlineMs),
+    getServiceEmployee: (req, caller) => callUnary(c.getServiceEmployee.bind(c), req, caller, deadlineMs),
+    createServiceEmployee: (req, caller) => callUnary(c.createServiceEmployee.bind(c), req, caller, deadlineMs),
+    updateServiceEmployee: (req, caller) => callUnary(c.updateServiceEmployee.bind(c), req, caller, deadlineMs),
+    setServiceEmployeeActive: (req, caller) =>
+      callUnary(c.setServiceEmployeeActive.bind(c), req, caller, deadlineMs),
+    verifyPaymentAccount: (req, caller) => callUnary(c.verifyPaymentAccount.bind(c), req, caller, deadlineMs),
     close: () => c.close(),
   };
 }

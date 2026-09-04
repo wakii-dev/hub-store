@@ -316,8 +316,9 @@ class PostgresTechOrderRepositoryIT {
         var f = installationFilter(null, "KTV-001", null, null, null, null, null, null, 1, 100);
         var p = pg.filterInstallation(f);
         var m = mem.filterInstallation(f);
-        assertThat(p.total()).isEqualTo(m.total()).isEqualTo(1L);
-        assertThat(installationCodes(p)).containsExactly("SO-0004");
+        // Seed SF-25: KTV-001 có SO-0004 (PROCESSING) + SO-0006 (CONFIRMED).
+        assertThat(p.total()).isEqualTo(m.total()).isEqualTo(2L);
+        assertThat(installationCodes(p)).containsExactly("SO-0004", "SO-0006");
 
         var f2 = installationFilter(List.of("REDELIVERY"), null, null, null, null, null, null, null, 1, 100);
         var p2 = pg.filterInstallation(f2);
@@ -335,9 +336,9 @@ class PostgresTechOrderRepositoryIT {
     @Test
     void filterInstallation_dateFilterExcludesNullExpectedTimeParity() {
         // SO-0003 expectedTime NULL → bị loại khi có date filter (cả 2 impl).
-        // Seed expectedTime static 2026-09-02 → filter theo seed date (không LocalDate.now()
-        // — test sẽ vỡ sau ngày seed). Same pattern TechServiceLogicTest.
-        LocalDate d = LocalDate.parse("2026-09-02");
+        // Seed SF-25: expectedTime resolve TODAY@HH:MM → filter LocalDate.now()
+        // (relative date, same pattern TechServiceLogicTest:133).
+        LocalDate d = LocalDate.now();
         var f = installationFilter(null, null, null, null, null, null, d, d, 1, 100);
         var p = pg.filterInstallation(f);
         var m = mem.filterInstallation(f);
@@ -346,8 +347,9 @@ class PostgresTechOrderRepositoryIT {
         assertThat(installationCodes(p)).containsExactlyElementsOf(installationCodes(m));
 
         // KHÔNG date filter → SO-0003 có mặt (parity ngược lại đã cover ở test trên).
-        var fNoDate = installationFilter(null, "KTV-003", null, null, null, null, null, null, 1, 100);
-        assertThat(pg.filterInstallation(fNoDate).total()).isEqualTo(1L); // SO-0006
+        // Seed SF-25: KTV-001 có SO-0004 + SO-0006 (KTV-003 không còn đơn nào).
+        var fNoDate = installationFilter(null, "KTV-001", null, null, null, null, null, null, 1, 100);
+        assertThat(pg.filterInstallation(fNoDate).total()).isEqualTo(2L);
     }
 
     @Test
@@ -368,18 +370,19 @@ class PostgresTechOrderRepositoryIT {
     void suggestByRegionWorkloadAscParity() {
         var p = pg.suggestTechnicians("R1");
         var m = mem.suggestTechnicians("R1");
-        // Seed R1: KTV-001 (SO-0004 PROCESSING active=1), KTV-002 (SO-0005 SHIPPING active=1),
-        // KTV-003 (SO-0006 DELIVERED excluded → 0), KTV-004 (0) — sort activeCount asc, seq asc.
+        // Seed SF-25 R1: KTV-001 (SO-0004 PROCESSING + SO-0006 CONFIRMED → 2 active),
+        // KTV-002 (SO-0005 SHIPPING → 1), KTV-003/KTV-004 (0) — sort activeCount asc,
+        // seq asc tie-break. Same expectation TechServiceLogicTest.suggest_by_region.
         assertThat(p).extracting(s -> s.technician().code())
-                .containsExactly("KTV-003", "KTV-004", "KTV-001", "KTV-002");
+                .containsExactly("KTV-003", "KTV-004", "KTV-002", "KTV-001");
         assertThat(p).extracting(TechModels.SuggestedTechnician::activeCount)
-                .containsExactly(0, 0, 1, 1);
+                .containsExactly(0, 0, 1, 2);
         assertThat(p).usingRecursiveFieldByFieldElementComparator()
                 .containsExactlyElementsOf(m);
 
         var p2 = pg.suggestTechnicians("R2");
         var m2 = mem.suggestTechnicians("R2");
-        // CTV-001 (SO-0007 FAILED vẫn active=1), CTV-002 (SO-0008 REDELIVERY active=1) — seq asc.
+        // CTV-001 (SO-0007 CONFIRMED active=1), CTV-002 (SO-0008 REDELIVERY active=1) — seq asc.
         assertThat(p2).extracting(s -> s.technician().code()).containsExactly("CTV-001", "CTV-002");
         assertThat(p2).usingRecursiveFieldByFieldElementComparator()
                 .containsExactlyElementsOf(m2);
@@ -453,18 +456,19 @@ class PostgresTechOrderRepositoryIT {
 
     @Test
     void assignWrongStatusThrowsIseAndKeepsState() {
-        // SO-0006 DELIVERED — không assignable (cả 2 impl cùng ISE).
-        assertThatThrownBy(() -> pg.assignTechnician("SO-0006", "KTV-001", "it-test", Instant.now()))
+        // SO-0005 SHIPPING — không assignable (cả 2 impl cùng ISE; seed SF-25 SO-0006
+        // là CONFIRMED KTV-001 nên chuyển sang SO-0005, same pattern TechServiceLogicTest).
+        assertThatThrownBy(() -> pg.assignTechnician("SO-0005", "KTV-001", "it-test", Instant.now()))
                 .isInstanceOf(IllegalStateException.class)
-                .hasMessageContaining("DELIVERED");
-        assertThatThrownBy(() -> mem.assignTechnician("SO-0006", "KTV-001", "it-test", Instant.now()))
+                .hasMessageContaining("SHIPPING");
+        assertThatThrownBy(() -> mem.assignTechnician("SO-0005", "KTV-001", "it-test", Instant.now()))
                 .isInstanceOf(IllegalStateException.class);
 
         // DB không đổi.
         assertThat(jdbc.queryForObject(
-                "SELECT technician_code FROM installation_orders WHERE service_order_code = 'SO-0006'",
-                String.class)).isEqualTo("KTV-003");
-        assertThat(pg.assignmentHistory("SO-0006")).isEmpty();
+                "SELECT technician_code FROM installation_orders WHERE service_order_code = 'SO-0005'",
+                String.class)).isEqualTo("KTV-002");
+        assertThat(pg.assignmentHistory("SO-0005")).isEmpty();
 
         // Code lạ → IAE cả 2 impl (khớp in-memory orElseThrow).
         assertThatThrownBy(() -> pg.assignTechnician("SO-KHONG-TON-TAI", "KTV-001", "it-test", Instant.now()))

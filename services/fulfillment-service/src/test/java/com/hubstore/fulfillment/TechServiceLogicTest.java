@@ -1,5 +1,7 @@
 package com.hubstore.fulfillment;
 
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.ObjectMapper;
 import com.hubstore.fulfillment.seed.TechSeedLoader;
 import com.hubstore.fulfillment.seed.TechSeedLoader.TechSeedFile;
 import com.hubstore.fulfillment.store.InMemoryTechOrderRepository;
@@ -11,6 +13,8 @@ import java.nio.file.Path;
 import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
+import java.time.ZoneOffset;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -54,9 +58,9 @@ class TechServiceLogicTest {
                 List.of(), "R1", "TP. Hồ Chí Minh", null);
     }
 
-    /** Expected matrix (spec §5): cancel, assign, reassign, accept, resched. */
+    /** Expected matrix (spec §5 + SF-25 §4.2): cancel, assign, reassign, accept, resched, complete. */
     private record Row(String status, boolean cancel, boolean assign,
-                       boolean reassign, boolean accept, boolean resched) {
+                       boolean reassign, boolean accept, boolean resched, boolean complete) {
     }
 
     // ---------------- 10 test cases (plan Task 3 Step 4) ----------------
@@ -121,11 +125,12 @@ class TechServiceLogicTest {
     void filterInstallation_byTechnician_and_nullExpectedTime_excluded() {
         TechModels.InstallationPage byTech = repo.filterInstallation(installationFilter(
                 List.of(), "KTV-001", List.of(), List.of(), null, null, null, null));
-        assertThat(byTech.total()).isEqualTo(1);
+        // SF-25 seed: KTV-001 có SO-0004 (PROCESSING) + SO-0006 (CONFIRMED).
+        assertThat(byTech.total()).isEqualTo(2);
         assertThat(byTech.items()).extracting(TechModels.InstallationOrder::serviceOrderCode)
-                .containsExactly("SO-0004");
+                .containsExactly("SO-0004", "SO-0006");
         // Date filter trên expectedTime::date — đơn SO-0003 expectedTime NULL bị loại.
-        LocalDate d = LocalDate.parse("2026-09-02");
+        LocalDate d = LocalDate.now(); // seed TODAY@HH:MM → expectedTime = hôm nay
         TechModels.InstallationPage dated = repo.filterInstallation(installationFilter(
                 List.of(), null, List.of(), List.of(), null, null, d, d));
         assertThat(dated.total()).isEqualTo(7);
@@ -134,18 +139,18 @@ class TechServiceLogicTest {
 
     @Test
     void installationButtons_matrix() {
-        // Chưa assign — matrix spec §5.
+        // Chưa assign — matrix spec §5 (SF-25: resched +PROCESSING, complete mới).
         List<Row> unassigned = List.of(
-                new Row("NEW", true, true, false, false, true),
-                new Row("CONFIRMED", true, true, false, false, true),
-                new Row("PROCESSING", true, false, false, false, false),
-                new Row("SHIPPING", false, false, false, false, false),
-                new Row("DELIVERED", false, false, false, false, false),
-                new Row("FAILED", false, false, false, false, false),
-                new Row("REDELIVERY", true, true, false, false, true),
-                new Row("RESCHEDULED", true, true, false, false, true),
-                new Row("CANCELLED", false, false, false, false, false),
-                new Row("RETURNED", false, false, false, false, false));
+                new Row("NEW", true, true, false, false, true, false),
+                new Row("CONFIRMED", true, true, false, false, true, false),
+                new Row("PROCESSING", true, false, false, false, true, false),
+                new Row("SHIPPING", false, false, false, false, false, false),
+                new Row("DELIVERED", false, false, false, false, false, false),
+                new Row("FAILED", false, false, false, false, false, false),
+                new Row("REDELIVERY", true, true, false, false, true, false),
+                new Row("RESCHEDULED", true, true, false, false, true, false),
+                new Row("CANCELLED", false, false, false, false, false, false),
+                new Row("RETURNED", false, false, false, false, false, false));
         for (Row r : unassigned) {
             TechModels.TechButtons b = TechModels.installationButtons(inst(r.status(), null));
             assertThat(b.allowCancel()).as("cancel " + r.status()).isEqualTo(r.cancel());
@@ -153,19 +158,20 @@ class TechServiceLogicTest {
             assertThat(b.allowReassign()).as("reassign " + r.status()).isEqualTo(r.reassign());
             assertThat(b.allowAccept()).as("accept " + r.status()).isEqualTo(r.accept());
             assertThat(b.allowReschedule()).as("resched " + r.status()).isEqualTo(r.resched());
+            assertThat(b.allowComplete()).as("complete " + r.status()).isEqualTo(r.complete());
         }
-        // Đã assign — assign luôn false; reassign/accept theo trạng thái.
+        // Đã assign — assign luôn false; reassign/accept/complete theo trạng thái.
         List<Row> assigned = List.of(
-                new Row("NEW", true, false, false, false, true),
-                new Row("CONFIRMED", true, false, true, true, true),
-                new Row("PROCESSING", true, false, true, false, false),
-                new Row("SHIPPING", false, false, false, false, false),
-                new Row("DELIVERED", false, false, false, false, false),
-                new Row("FAILED", false, false, false, false, false),
-                new Row("REDELIVERY", true, false, true, false, true),
-                new Row("RESCHEDULED", true, false, true, false, true),
-                new Row("CANCELLED", false, false, false, false, false),
-                new Row("RETURNED", false, false, false, false, false));
+                new Row("NEW", true, false, false, false, true, false),
+                new Row("CONFIRMED", true, false, true, true, true, false),
+                new Row("PROCESSING", true, false, true, false, true, true),
+                new Row("SHIPPING", false, false, false, false, false, false),
+                new Row("DELIVERED", false, false, false, false, false, false),
+                new Row("FAILED", false, false, false, false, false, false),
+                new Row("REDELIVERY", true, false, true, false, true, false),
+                new Row("RESCHEDULED", true, false, true, true, true, false),
+                new Row("CANCELLED", false, false, false, false, false, false),
+                new Row("RETURNED", false, false, false, false, false, false));
         for (Row r : assigned) {
             TechModels.TechButtons b = TechModels.installationButtons(inst(r.status(), "KTV-001"));
             assertThat(b.allowCancel()).as("assigned cancel " + r.status()).isEqualTo(r.cancel());
@@ -173,6 +179,7 @@ class TechServiceLogicTest {
             assertThat(b.allowReassign()).as("assigned reassign " + r.status()).isEqualTo(r.reassign());
             assertThat(b.allowAccept()).as("assigned accept " + r.status()).isEqualTo(r.accept());
             assertThat(b.allowReschedule()).as("assigned resched " + r.status()).isEqualTo(r.resched());
+            assertThat(b.allowComplete()).as("assigned complete " + r.status()).isEqualTo(r.complete());
         }
     }
 
@@ -187,6 +194,7 @@ class TechServiceLogicTest {
             assertThat(b.allowAssign()).as("delivery assign " + status).isFalse();
             assertThat(b.allowReassign()).as("delivery reassign " + status).isFalse();
             assertThat(b.allowAccept()).as("delivery accept " + status).isFalse();
+            assertThat(b.allowComplete()).as("delivery complete " + status).isFalse();
             // Cancel/resched: NEW cancel+resched; PROCESSING chỉ cancel; DELIVERED không gì.
             if (status.equals("NEW")) {
                 assertThat(b.allowCancel()).isTrue();
@@ -229,30 +237,130 @@ class TechServiceLogicTest {
 
     @Test
     void assignTechnician_wrong_status_throws() {
-        // SO-0006 status DELIVERED — không assign được.
-        assertThatThrownBy(() -> repo.assignTechnician("SO-0006", "KTV-001", "tester", Instant.now()))
+        // SO-0005 status SHIPPING — không assign được.
+        assertThatThrownBy(() -> repo.assignTechnician("SO-0005", "KTV-001", "tester", Instant.now()))
                 .isInstanceOf(IllegalStateException.class);
         // State không đổi.
-        assertThat(repo.findInstallation("SO-0006").orElseThrow().technicianCode())
-                .isEqualTo("KTV-003");
-        assertThat(repo.assignmentHistory("SO-0006")).isEmpty();
+        assertThat(repo.findInstallation("SO-0005").orElseThrow().technicianCode())
+                .isEqualTo("KTV-002");
+        assertThat(repo.assignmentHistory("SO-0005")).isEmpty();
+    }
+
+    // ---------------- SF-25 mutations (accept/complete/reschedule) ----------------
+
+    @Test
+    void acceptInstallation_confirmed_toProcessing_timelineAppended() {
+        TechModels.InstallationOrder updated = repo.acceptInstallation(
+                "SO-0006", "KTV-001", OffsetDateTime.now(ZoneOffset.of("+07:00")));
+        assertThat(updated.status()).isEqualTo("PROCESSING");
+        // Timeline append schema seed {at,status,note,actor} — note "KTV nhận việc".
+        JsonNode timeline = readTimeline(updated.timelineJson());
+        assertThat(timeline).hasSize(3);
+        assertThat(timeline.get(2).get("status").asText()).isEqualTo("PROCESSING");
+        assertThat(timeline.get(2).get("note").asText()).isEqualTo("KTV nhận việc");
+        assertThat(timeline.get(2).get("actor").asText()).isEqualTo("KTV-001");
+        assertThat(timeline.get(2).get("at").asText()).isNotBlank();
+    }
+
+    @Test
+    void acceptInstallation_wrongStatus_or_notOwner_throws() {
+        // SO-0004 PROCESSING — accept chỉ từ CONFIRMED|RESCHEDULED.
+        assertThatThrownBy(() -> repo.acceptInstallation("SO-0004", "KTV-001",
+                OffsetDateTime.now())).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("PROCESSING");
+        // SO-0006 thuộc KTV-001 — KTV-002 không nhận được.
+        assertThatThrownBy(() -> repo.acceptInstallation("SO-0006", "KTV-002",
+                OffsetDateTime.now())).isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("không thuộc");
+        // State không đổi.
+        assertThat(repo.findInstallation("SO-0006").orElseThrow().status()).isEqualTo("CONFIRMED");
+    }
+
+    @Test
+    void sf25_lowercaseUsername_accept_and_filter_caseInsensitive() {
+        // KC 26 lowercase username khi import → token sub 'ktv-001' vs DB 'KTV-001'
+        // (e2e seam finding) — owner check + filter case-insensitive cả 2 phía.
+        TechModels.InstallationOrder updated = repo.acceptInstallation(
+                "SO-0006", "ktv-001", OffsetDateTime.now(ZoneOffset.of("+07:00")));
+        assertThat(updated.status()).isEqualTo("PROCESSING");
+        assertThat(updated.technicianCode()).isEqualTo("KTV-001"); // DB giữ stored case.
+
+        TechModels.InstallationFilter filter = new TechModels.InstallationFilter(
+                null, "ktv-001", null, null, null, null, null, null, 1, 50);
+        assertThat(repo.filterInstallation(filter).items())
+                .extracting(TechModels.InstallationOrder::serviceOrderCode)
+                .contains("SO-0004");
+    }
+
+    @Test
+    void completeInstallation_processing_toDelivered_timelineAppended() {
+        TechModels.InstallationOrder updated = repo.completeInstallation(
+                "SO-0004", "KTV-001", OffsetDateTime.now(ZoneOffset.of("+07:00")));
+        assertThat(updated.status()).isEqualTo("DELIVERED");
+        JsonNode timeline = readTimeline(updated.timelineJson());
+        assertThat(timeline.get(timeline.size() - 1).get("status").asText()).isEqualTo("DELIVERED");
+        assertThat(timeline.get(timeline.size() - 1).get("note").asText()).isEqualTo("Hoàn tất lắp đặt");
+        assertThat(timeline.get(timeline.size() - 1).get("actor").asText()).isEqualTo("KTV-001");
+        // Complete lần nữa → ISE (DELIVERED terminal).
+        assertThatThrownBy(() -> repo.completeInstallation("SO-0004", "KTV-001",
+                OffsetDateTime.now())).isInstanceOf(IllegalStateException.class);
+    }
+
+    @Test
+    void rescheduleInstallation_processing_allowed_setsExpectedTimeAndNote() {
+        // SF-25 matrix mở rộng: PROCESSING reschedulable.
+        OffsetDateTime newTime = OffsetDateTime.now(ZoneOffset.of("+07:00")).plusHours(3)
+                .truncatedTo(ChronoUnit.MINUTES);
+        TechModels.InstallationOrder updated = repo.rescheduleInstallation(
+                "SO-0004", "KTV-001", newTime, "Khách xin dời chiều", OffsetDateTime.now(ZoneOffset.of("+07:00")));
+        assertThat(updated.status()).isEqualTo("RESCHEDULED");
+        assertThat(updated.expectedTime()).isEqualTo(newTime);
+        JsonNode timeline = readTimeline(updated.timelineJson());
+        JsonNode last = timeline.get(timeline.size() - 1);
+        assertThat(last.get("status").asText()).isEqualTo("RESCHEDULED");
+        assertThat(last.get("note").asText()).isEqualTo("Khách xin dời chiều");
+        assertThat(last.get("actor").asText()).isEqualTo("KTV-001");
+        // Sau reschedule → accept lại được (dead-end fix, spec §4.2).
+        assertThat(TechModels.installationButtons(updated).allowAccept()).isTrue();
+    }
+
+    @Test
+    void rescheduleInstallation_notOwner_or_terminal_throws() {
+        // SO-0001 chưa assign (technicianCode null) — không ai reschedule hộ được.
+        assertThatThrownBy(() -> repo.rescheduleInstallation("SO-0001", "KTV-001",
+                OffsetDateTime.now().plusHours(1), "x", OffsetDateTime.now()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("không thuộc");
+        // SO-0005 SHIPPING không trong allow-set.
+        assertThatThrownBy(() -> repo.rescheduleInstallation("SO-0005", "KTV-002",
+                OffsetDateTime.now().plusHours(1), "x", OffsetDateTime.now()))
+                .isInstanceOf(IllegalStateException.class)
+                .hasMessageContaining("SHIPPING");
     }
 
     @Test
     void suggest_by_region_workload_asc() {
-        // R1: KTV-001 (SO-0004 PROCESSING → 1 active), KTV-002 (SO-0005 SHIPPING → 1),
-        // KTV-003 (SO-0006 DELIVERED → excluded → 0), KTV-004 (không đơn → 0).
+        // R1: KTV-001 (SO-0004 PROCESSING + SO-0006 CONFIRMED → 2 active),
+        // KTV-002 (SO-0005 SHIPPING → 1), KTV-003/KTV-004 (không đơn → 0).
         List<TechModels.SuggestedTechnician> r1 = repo.suggestTechnicians("R1");
         assertThat(r1).extracting(s -> s.technician().code())
-                .containsExactly("KTV-003", "KTV-004", "KTV-001", "KTV-002");
+                .containsExactly("KTV-003", "KTV-004", "KTV-002", "KTV-001");
         assertThat(r1).extracting(TechModels.SuggestedTechnician::activeCount)
-                .containsExactly(0, 0, 1, 1);
-        // R2: CTV-001 (SO-0007 FAILED → 1 active), CTV-002 (SO-0008 REDELIVERY → 1);
+                .containsExactly(0, 0, 1, 2);
+        // R2: CTV-001 (SO-0007 CONFIRMED → 1 active), CTV-002 (SO-0008 REDELIVERY → 1);
         // tie activeCount → giữ list order (seq proxy).
         List<TechModels.SuggestedTechnician> r2 = repo.suggestTechnicians("R2");
         assertThat(r2).extracting(s -> s.technician().code())
                 .containsExactly("CTV-001", "CTV-002");
         assertThat(r2).extracting(TechModels.SuggestedTechnician::activeCount)
                 .containsExactly(1, 1);
+    }
+
+    private static JsonNode readTimeline(String json) {
+        try {
+            return new ObjectMapper().readTree(json);
+        } catch (Exception e) {
+            throw new IllegalStateException(e);
+        }
     }
 }

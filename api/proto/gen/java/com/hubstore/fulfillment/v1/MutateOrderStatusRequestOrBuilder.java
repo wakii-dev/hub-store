@@ -73,4 +73,33 @@ public interface MutateOrderStatusRequestOrBuilder extends
    */
   com.google.protobuf.ByteString
       getReasonBytes();
+
+  /**
+   * <pre>
+   * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+   * </pre>
+   *
+   * <code>optional string batch_code = 4;</code>
+   * @return Whether the batchCode field is set.
+   */
+  boolean hasBatchCode();
+  /**
+   * <pre>
+   * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+   * </pre>
+   *
+   * <code>optional string batch_code = 4;</code>
+   * @return The batchCode.
+   */
+  java.lang.String getBatchCode();
+  /**
+   * <pre>
+   * Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+   * </pre>
+   *
+   * <code>optional string batch_code = 4;</code>
+   * @return The bytes for batchCode.
+   */
+  com.google.protobuf.ByteString
+      getBatchCodeBytes();
 }

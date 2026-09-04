@@ -1,0 +1,497 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SF-14 · Direction B — Summary-cards first · Đối soát COD</title>
+<style>
+/* ═══ Tokens — mirror design-tokens.ts (SF-6 direction B, Modern SaaS Airy) ═══ */
+:root{
+  --primary:#EB6E09; --primary-hover:#F68A2E; --primary-active:#D96408;
+  --primary-bg:#FEF6EE; --primary-border:#FDEADA;
+  --primary-grad:linear-gradient(135deg,#F68A2E 0%,#EB6E09 60%,#D96408 100%);
+  --text-strong:#101828; --text:#1D2939; --text-2:#344054; --text-muted:#667085; --text-faint:#98A2B3;
+  --border:#D0D5DD; --divider:#EAECF0; --divider-soft:#F2F4F7;
+  --bg:#F7F8FA; --white:#FFFFFF; --header-bg:#FBFCFD; --sidebar:#101828;
+  --success:#039855; --success-bg:#ECFDF3; --success-line:#ABEFC6;
+  --error:#D92D20; --error-bg:#FEF3F2; --error-line:#FECDCA;
+  --warning:#B54708; --warning-bg:#FFFAEB; --warning-line:#FEDF89;
+  --info:#1570EF; --info-bg:#EFF8FF; --info-line:#B2DDFF;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 1px 3px rgba(16,24,40,.08),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 6px 16px -4px rgba(16,24,40,.10),0 2px 6px -2px rgba(16,24,40,.06);
+  --shadow-lg:0 20px 48px -12px rgba(16,24,40,.22);
+  --shadow-primary:0 3px 10px rgba(235,110,9,.35);
+  --r-sm:5px; --r-ctl:8px; --r-md:10px; --r-lg:12px; --r-card:16px; --r-pill:999px; --r-modal:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+body{font-family:'Roboto',-apple-system,'Segoe UI',sans-serif;font-size:14px;color:var(--text);background:var(--bg)}
+
+/* ═══ Shell chrome ═══ */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:64px;background:var(--sidebar);display:flex;flex-direction:column;align-items:center;padding:10px 0;z-index:30}
+.sidebar .logo{width:36px;height:36px;border-radius:10px;background:var(--primary-grad);display:flex;align-items:center;justify-content:center;margin-bottom:18px;box-shadow:var(--shadow-primary)}
+.sidebar .nav{display:flex;flex-direction:column;gap:6px;flex:1}
+.nav-item{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#98A2B3;cursor:pointer;transition:all .13s ease;position:relative}
+.nav-item:hover{background:rgba(255,255,255,.08)}
+.nav-item.active{background:var(--primary-grad);color:#fff;box-shadow:var(--shadow-primary)}
+.nav-item.active::after{content:'';position:absolute;right:-12px;top:50%;transform:translateY(-50%);width:3px;height:18px;border-radius:2px;background:var(--primary)}
+.header{position:sticky;top:0;height:60px;background:var(--white);border-bottom:1px solid var(--divider);display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 88px;z-index:20}
+.crumb{font-size:12.5px;color:var(--text-faint)}
+.crumb b{color:var(--text-2);font-weight:600}
+.header .right{display:flex;align-items:center;gap:16px}
+.bell{width:34px;height:34px;border-radius:8px;border:1px solid var(--divider);background:#fff;display:flex;align-items:center;justify-content:center;color:var(--text-muted);box-shadow:var(--shadow-xs);cursor:pointer}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary-grad);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+
+/* ═══ Page ═══ */
+.content{padding:20px 24px 40px 88px;max-width:1280px}
+h1{font-size:21px;font-weight:700;letter-spacing:-.02em;color:var(--text-strong)}
+.page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:18px;gap:16px;flex-wrap:wrap}
+.page-head .sub{font-size:13px;color:var(--text-muted);margin-top:3px}
+.period-chip{display:flex;align-items:center;gap:8px;background:#fff;border:1px solid var(--divider);border-radius:var(--r-ctl);padding:7px 12px;box-shadow:var(--shadow-xs);font-size:13px;color:var(--text-2);cursor:pointer}
+.period-chip:hover{border-color:var(--border);background:var(--divider-soft)}
+.head-actions{display:flex;align-items:center;gap:10px;margin-left:auto}
+
+.card{background:var(--white);border:1px solid var(--divider);border-radius:var(--r-card);box-shadow:var(--shadow-xs)}
+
+/* ═══ KPI cards ═══ */
+.kpis{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:18px}
+.kpi{padding:18px 20px;display:flex;flex-direction:column;gap:10px;transition:all .15s ease}
+.kpi:hover{box-shadow:var(--shadow-md);transform:translateY(-1px)}
+.kpi-top{display:flex;align-items:center;justify-content:space-between}
+.kpi-ico{width:38px;height:38px;border-radius:10px;display:flex;align-items:center;justify-content:center}
+.kpi-label{font-size:11px;font-weight:600;letter-spacing:.04em;text-transform:uppercase;color:var(--text-muted)}
+.kpi-value{font-size:21px;font-weight:700;letter-spacing:-.01em;color:var(--text-strong);font-variant-numeric:tabular-nums}
+.kpi-value.neg{color:var(--error)}
+.kpi-value .vnd{font-size:12.5px;font-weight:500;color:var(--text-faint);margin-left:3px}
+.kpi-foot{display:flex;align-items:flex-end;justify-content:space-between;gap:8px}
+.kpi-note{font-size:12px;color:var(--text-faint);line-height:1.35}
+.kpi-note b{font-weight:600}
+
+/* Progress bar (thu / kỳ vọng) */
+.meter{height:6px;border-radius:3px;background:var(--divider-soft);overflow:hidden;flex:1}
+.meter > i{display:block;height:100%;border-radius:3px;background:var(--primary-grad)}
+.meter.m-red > i{background:var(--error)}
+
+/* ═══ Segmented filter ═══ */
+.toolbar{display:flex;align-items:center;gap:12px;margin-bottom:14px}
+.seg{display:inline-flex;background:var(--divider-soft);border-radius:var(--r-ctl);padding:3px;gap:2px}
+.seg button{border:none;background:transparent;font-family:inherit;font-size:13px;font-weight:500;color:var(--text-muted);padding:5px 14px;border-radius:6px;cursor:pointer;transition:all .15s ease}
+.seg button:hover{color:var(--text-2)}
+.seg button.on{background:#fff;color:var(--text-strong);box-shadow:var(--shadow-sm)}
+.seg button .cnt{font-size:11px;font-weight:600;color:var(--text-faint);margin-left:5px}
+.seg button.on .cnt{color:var(--primary)}
+.toolbar .spacer{flex:1}
+
+/* ═══ Buttons ═══ */
+.btn{height:32px;border-radius:var(--r-ctl);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:0 14px;transition:all .15s ease;font-family:inherit}
+.btn-default{background:#fff;border:1px solid var(--divider);color:var(--text-2);box-shadow:var(--shadow-xs)}
+.btn-default:hover{background:var(--divider-soft);border-color:var(--border)}
+.btn-primary{background:var(--primary-grad);border:none;color:#fff;box-shadow:var(--shadow-primary)}
+.btn-primary:hover{filter:brightness(1.05)}
+.btn-primary:active{transform:translateY(1px)}
+.btn-sm{height:26px;font-size:12px;padding:0 10px;border-radius:6px}
+.link-btn{background:none;border:none;color:var(--primary);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;padding:4px 8px;border-radius:6px}
+.link-btn:hover{color:var(--primary-hover);background:var(--primary-bg)}
+
+/* ═══ Table ═══ */
+.table-card{overflow:hidden;margin-bottom:18px}
+table{width:100%;border-collapse:collapse}
+th{font-size:12.5px;font-weight:600;color:var(--text-muted);text-align:left;background:var(--header-bg);padding:11px 16px;border-bottom:1px solid var(--divider);white-space:nowrap}
+td{padding:13px 16px;border-bottom:1px solid var(--divider);font-size:13.5px;color:var(--text-2);vertical-align:middle}
+tbody tr.data-row{cursor:pointer;transition:background .12s ease}
+tbody tr.data-row:hover td{background:#FAFAFB}
+tbody tr.open td{background:var(--primary-bg)}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.num.neg{color:var(--error);font-weight:600}
+.num.zero{color:var(--text-muted)}
+.shop-cell .code{font-size:12px;color:var(--text-faint);margin-top:2px}
+.chev{width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-faint);transition:transform .15s ease}
+tr.open .chev{transform:rotate(90deg);color:var(--primary)}
+.collect-cell{min-width:170px}
+.collect-line{display:flex;align-items:center;gap:10px}
+.collect-line b{font-size:13.5px;font-weight:600;color:var(--text-strong);font-variant-numeric:tabular-nums;white-space:nowrap}
+
+.tag{display:inline-flex;align-items:center;border-radius:var(--r-pill);padding:3px 11px;font-size:12px;font-weight:500;border:1px solid;line-height:18px;white-space:nowrap}
+.tag::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;margin-right:6px}
+.tag.ok{color:var(--success);background:var(--success-bg);border-color:var(--success-line)}
+.tag.bad{color:var(--error);background:var(--error-bg);border-color:var(--error-line)}
+.tag.warn{color:var(--warning);background:var(--warning-bg);border-color:var(--warning-line)}
+
+/* ═══ Expanded drill-down ═══ */
+tr.detail-row td{padding:0;background:#FCFCFD}
+.detail-inner{padding:8px 16px 16px 56px}
+.detail-title{font-size:12.5px;font-weight:600;color:var(--text-muted);margin:8px 0 8px}
+.lech-list{display:flex;flex-direction:column;gap:8px}
+.lech-item{display:flex;align-items:center;gap:16px;background:#fff;border:1px solid var(--divider);border-radius:var(--r-md);padding:10px 16px}
+.lech-code{font-weight:600;color:var(--text-strong);font-size:13px;width:180px}
+.lech-meta{font-size:12px;color:var(--text-faint);margin-top:2px}
+.lech-amt{margin-left:auto;display:flex;gap:24px;text-align:right}
+.lech-amt .lbl{font-size:11px;color:var(--text-faint)}
+.lech-amt .val{font-size:13.5px;font-weight:600;font-variant-numeric:tabular-nums}
+.lech-amt .val.miss{color:var(--text-faint);font-weight:400}
+.lech-amt .val.short{color:var(--warning)}
+.lech-actions{width:120px;text-align:right}
+.empty-lech{padding:14px;font-size:13px;color:var(--text-faint);display:flex;align-items:center;gap:8px}
+
+/* ═══ Modal ═══ */
+.overlay{position:fixed;inset:0;background:rgba(16,24,40,.55);display:none;align-items:center;justify-content:center;z-index:100}
+.overlay.show{display:flex}
+.modal{width:460px;background:#fff;border-radius:var(--r-modal);box-shadow:var(--shadow-lg);animation:modal-in .15s ease-out}
+@keyframes modal-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.modal-head{padding:20px 24px 0;display:flex;justify-content:space-between}
+.modal-title{font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--text-strong)}
+.modal-x{background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:16px;padding:4px;border-radius:6px}
+.modal-x:hover{background:var(--divider-soft)}
+.modal-body{padding:16px 24px 4px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--text-2);margin-bottom:6px}
+.field .static{font-size:13.5px;padding:8px 0}
+.field input{width:100%;height:36px;border:1px solid var(--border);border-radius:var(--r-ctl);padding:0 12px;font-size:14px;font-family:inherit}
+.field input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 4px rgba(235,110,9,.12)}
+.hint{font-size:12px;color:var(--text-faint);margin-top:6px}
+.modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px 22px}
+</style>
+</head>
+<body>
+
+<aside class="sidebar">
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+  </div>
+  <nav class="nav">
+    <div class="nav-item" title="Trang chủ"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></div>
+    <div class="nav-item" title="Đơn hàng"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></div>
+    <div class="nav-item" title="Chuyến hoàn tất"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></div>
+    <div class="nav-item" title="Dashboard"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v-4"/><path d="M12 15V7"/><path d="M17 15v-7"/></svg></div>
+    <div class="nav-item" title="Khu vực NV"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    <div class="nav-item active" title="Đối soát COD (Manager)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></div>
+  </nav>
+</aside>
+
+<header class="header">
+  <div class="crumb">Hub Store &nbsp;/&nbsp; <b>Đối soát COD</b></div>
+  <div class="right">
+    <div class="bell"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+    <div class="avatar">QL</div>
+  </div>
+</header>
+
+<main class="content">
+  <div class="page-head">
+    <div>
+      <h1>Đối soát COD</h1>
+      <div class="sub">Sức khỏe thu hộ theo kỳ · chỉ Manager / Admin</div>
+    </div>
+    <div class="head-actions">
+      <div class="period-chip" title="Kỳ đối soát">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--primary)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/><line x1="3" y1="10" x2="21" y2="10"/></svg>
+        01/09/2026 → 30/09/2026
+        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </div>
+      <button class="btn btn-primary" onclick="fakeExport(this)">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+        Xuất CSV kỳ này
+      </button>
+    </div>
+  </div>
+
+  <!-- KPI cards — tổng theo kỳ -->
+  <div class="kpis">
+    <div class="card kpi">
+      <div class="kpi-top">
+        <div>
+          <div class="kpi-label">Tổng đơn hoàn tất</div>
+          <div class="kpi-value">554</div>
+        </div>
+        <div class="kpi-ico" style="background:var(--info-bg);color:var(--info)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/><path d="m9 14 2 2 4-4"/></svg>
+        </div>
+      </div>
+      <div class="kpi-foot">
+        <div class="kpi-note">6 cửa hàng<br><b>9 đơn</b> cần xử lý</div>
+        <svg width="96" height="30" viewBox="0 0 96 30">
+          <polyline points="0,24 12,20 24,22 36,14 48,17 60,10 72,12 84,6 96,8" fill="none" stroke="#1570EF" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="card kpi">
+      <div class="kpi-top">
+        <div>
+          <div class="kpi-label">COD kỳ vọng</div>
+          <div class="kpi-value">208.100.000<span class="vnd">₫</span></div>
+        </div>
+        <div class="kpi-ico" style="background:var(--primary-bg);color:var(--primary)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><path d="M12 6v12"/><path d="M15.5 9.5A3.5 3.5 0 0 0 12 8c-1.9 0-3.5.9-3.5 2s1.6 2 3.5 2 3.5.9 3.5 2-1.6 2-3.5 2a3.5 3.5 0 0 1-3.5-1.5"/></svg>
+        </div>
+      </div>
+      <div class="kpi-foot">
+        <div class="kpi-note">Snapshot lúc<br>hoàn tất đơn</div>
+        <svg width="96" height="30" viewBox="0 0 96 30">
+          <polyline points="0,22 12,24 24,18 36,20 48,14 60,16 72,10 84,12 96,6" fill="none" stroke="#EB6E09" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
+    </div>
+
+    <div class="card kpi">
+      <div class="kpi-top">
+        <div>
+          <div class="kpi-label">Đã thu</div>
+          <div class="kpi-value">205.350.000<span class="vnd">₫</span></div>
+        </div>
+        <div class="kpi-ico" style="background:var(--success-bg);color:var(--success)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 7 13.5 15.5 8.5 10.5 2 17"/><path d="M16 7h6v6"/></svg>
+        </div>
+      </div>
+      <div class="kpi-foot">
+        <div class="meter"><i style="width:98.7%"></i></div>
+        <div class="kpi-note" style="white-space:nowrap"><b>98,7%</b> kỳ vọng</div>
+      </div>
+    </div>
+
+    <div class="card kpi">
+      <div class="kpi-top">
+        <div>
+          <div class="kpi-label">Chênh lệch</div>
+          <div class="kpi-value neg">−2.750.000<span class="vnd">₫</span></div>
+        </div>
+        <div class="kpi-ico" style="background:var(--error-bg);color:var(--error)">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86 1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+        </div>
+      </div>
+      <div class="kpi-foot">
+        <div class="kpi-note"><b>5</b> đơn chờ thu · <b>4</b> đơn lệch tiền<br>ở <b>3/6</b> cửa hàng</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Segmented filter + table -->
+  <div class="toolbar">
+    <div class="seg" id="seg">
+      <button class="on" data-f="all" onclick="setFilter(this)">Tất cả<span class="cnt">6</span></button>
+      <button data-f="bad" onclick="setFilter(this)">Thiếu thu<span class="cnt">2</span></button>
+      <button data-f="warn" onclick="setFilter(this)">Lệch tiền<span class="cnt">1</span></button>
+      <button data-f="ok" onclick="setFilter(this)">Đủ<span class="cnt">3</span></button>
+    </div>
+    <span class="spacer"></span>
+    <span style="font-size:12.5px;color:var(--text-faint)">Bấm hàng để xem đơn lệch</span>
+  </div>
+
+  <div class="card table-card">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:44px"></th>
+          <th>Cửa hàng</th>
+          <th class="num">Đơn hoàn tất</th>
+          <th class="num">COD kỳ vọng</th>
+          <th class="collect-cell">Đã thu / kỳ vọng</th>
+          <th class="num">Chênh lệch</th>
+          <th>Trạng thái</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr class="data-row st-bad" onclick="toggleRow(this,'d1')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Cầu Giấy</div><div class="code">SHP-001</div></td>
+          <td class="num">128</td>
+          <td class="num">48.600.000</td>
+          <td class="collect-cell"><div class="collect-line"><span class="meter m-red"><i style="width:97%"></i></span><b>47,15 tr</b></div></td>
+          <td class="num neg">−1.450.000</td>
+          <td><span class="tag bad">Thiếu thu</span></td>
+        </tr>
+        <tr class="detail-row" id="d1" style="display:none">
+          <td colspan="7"><div class="detail-inner">
+            <div class="detail-title">4 đơn lệch · thiếu 1.450.000 ₫</div>
+            <div class="lech-list">
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0901-0034</div><div class="lech-meta">Hoàn tất 02/09 16:42</div></div>
+                <span class="tag bad">Chưa xác nhận thu</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">450.000</div></div><div><div class="lbl">Thực thu</div><div class="val miss">—</div></div><div><div class="lbl">Người thu</div><div class="val miss">—</div></div></div>
+                <div class="lech-actions"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0901-0034',450000)">Xác nhận thu</button></div>
+              </div>
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0901-0075</div><div class="lech-meta">Hoàn tất 03/09 08:30</div></div>
+                <span class="tag bad">Chưa xác nhận thu</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">240.000</div></div><div><div class="lbl">Thực thu</div><div class="val miss">—</div></div><div><div class="lbl">Người thu</div><div class="val miss">—</div></div></div>
+                <div class="lech-actions"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0901-0075',240000)">Xác nhận thu</button></div>
+              </div>
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0901-0102</div><div class="lech-meta">Hoàn tất 03/09 10:15</div></div>
+                <span class="tag bad">Chưa xác nhận thu</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">720.000</div></div><div><div class="lbl">Thực thu</div><div class="val miss">—</div></div><div><div class="lbl">Người thu</div><div class="val miss">—</div></div></div>
+                <div class="lech-actions"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0901-0102',720000)">Xác nhận thu</button></div>
+              </div>
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0902-0051</div><div class="lech-meta">Hoàn tất 03/09 14:05 · thu bởi nguyen.vt</div></div>
+                <span class="tag warn">Lệch số tiền</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">320.000</div></div><div><div class="lbl">Thực thu</div><div class="val short">280.000</div></div><div><div class="lbl">Chênh</div><div class="val short">−40.000</div></div></div>
+                <div class="lech-actions"><button class="link-btn" onclick="openConfirm(event,'FLC-2026-0902-0051',320000,280000)">Xác nhận lại</button></div>
+              </div>
+            </div>
+          </div></td>
+        </tr>
+
+        <tr class="data-row st-ok" onclick="toggleRow(this,'d2')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Hà Đông</div><div class="code">SHP-002</div></td>
+          <td class="num">96</td><td class="num">36.200.000</td>
+          <td class="collect-cell"><div class="collect-line"><span class="meter"><i style="width:100%"></i></span><b>36,20 tr</b></div></td>
+          <td class="num zero">0</td>
+          <td><span class="tag ok">Đủ</span></td>
+        </tr>
+        <tr class="detail-row" id="d2" style="display:none"><td colspan="7"><div class="detail-inner"><div class="empty-lech"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Không có đơn lệch trong kỳ.</div></div></td></tr>
+
+        <tr class="data-row st-warn" onclick="toggleRow(this,'d3')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Long Biên</div><div class="code">SHP-003</div></td>
+          <td class="num">74</td><td class="num">27.850.000</td>
+          <td class="collect-cell"><div class="collect-line"><span class="meter"><i style="width:99.6%"></i></span><b>27,75 tr</b></div></td>
+          <td class="num neg">−100.000</td>
+          <td><span class="tag warn">Lệch tiền</span></td>
+        </tr>
+        <tr class="detail-row" id="d3" style="display:none">
+          <td colspan="7"><div class="detail-inner">
+            <div class="detail-title">2 đơn lệch tiền · thiếu 100.000 ₫</div>
+            <div class="lech-list">
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0902-0088</div><div class="lech-meta">Hoàn tất 01/09 18:20 · thu bởi tran.qa</div></div>
+                <span class="tag warn">Lệch số tiền</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">240.000</div></div><div><div class="lbl">Thực thu</div><div class="val short">200.000</div></div><div><div class="lbl">Chênh</div><div class="val short">−40.000</div></div></div>
+                <div class="lech-actions"><button class="link-btn" onclick="openConfirm(event,'FLC-2026-0902-0088',240000,200000)">Xác nhận lại</button></div>
+              </div>
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0902-0113</div><div class="lech-meta">Hoàn tất 02/09 09:40 · thu bởi le.mh</div></div>
+                <span class="tag warn">Lệch số tiền</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">350.000</div></div><div><div class="lbl">Thực thu</div><div class="val short">290.000</div></div><div><div class="lbl">Chênh</div><div class="val short">−60.000</div></div></div>
+                <div class="lech-actions"><button class="link-btn" onclick="openConfirm(event,'FLC-2026-0902-0113',350000,290000)">Xác nhận lại</button></div>
+              </div>
+            </div>
+          </div></td>
+        </tr>
+
+        <tr class="data-row st-ok" onclick="toggleRow(this,'d4')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Thủ Đức</div><div class="code">SHP-004</div></td>
+          <td class="num">152</td><td class="num">58.400.000</td>
+          <td class="collect-cell"><div class="collect-line"><span class="meter"><i style="width:100%"></i></span><b>58,40 tr</b></div></td>
+          <td class="num zero">0</td>
+          <td><span class="tag ok">Đủ</span></td>
+        </tr>
+        <tr class="detail-row" id="d4" style="display:none"><td colspan="7"><div class="detail-inner"><div class="empty-lech"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Không có đơn lệch trong kỳ.</div></div></td></tr>
+
+        <tr class="data-row st-bad" onclick="toggleRow(this,'d5')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Bình Thạnh</div><div class="code">SHP-005</div></td>
+          <td class="num">63</td><td class="num">21.300.000</td>
+          <td class="collect-cell"><div class="collect-line"><span class="meter m-red"><i style="width:94.4%"></i></span><b>20,10 tr</b></div></td>
+          <td class="num neg">−1.200.000</td>
+          <td><span class="tag bad">Thiếu thu</span></td>
+        </tr>
+        <tr class="detail-row" id="d5" style="display:none">
+          <td colspan="7"><div class="detail-inner">
+            <div class="detail-title">4 đơn lệch · thiếu 1.200.000 ₫</div>
+            <div class="lech-list">
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0903-0007</div><div class="lech-meta">Hoàn tất 02/09 15:30</div></div>
+                <span class="tag bad">Chưa xác nhận thu</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">560.000</div></div><div><div class="lbl">Thực thu</div><div class="val miss">—</div></div><div><div class="lbl">Người thu</div><div class="val miss">—</div></div></div>
+                <div class="lech-actions"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0903-0007',560000)">Xác nhận thu</button></div>
+              </div>
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0903-0012</div><div class="lech-meta">Hoàn tất 03/09 08:55</div></div>
+                <span class="tag bad">Chưa xác nhận thu</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">290.000</div></div><div><div class="lbl">Thực thu</div><div class="val miss">—</div></div><div><div class="lbl">Người thu</div><div class="val miss">—</div></div></div>
+                <div class="lech-actions"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0903-0012',290000)">Xác nhận thu</button></div>
+              </div>
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0903-0019</div><div class="lech-meta">Hoàn tất 03/09 11:22</div></div>
+                <span class="tag bad">Chưa xác nhận thu</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">320.000</div></div><div><div class="lbl">Thực thu</div><div class="val miss">—</div></div><div><div class="lbl">Người thu</div><div class="val miss">—</div></div></div>
+                <div class="lech-actions"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0903-0019',320000)">Xác nhận thu</button></div>
+              </div>
+              <div class="lech-item">
+                <div><div class="lech-code">FLC-2026-0903-0021</div><div class="lech-meta">Hoàn tất 03/09 13:10 · thu bởi pham.dn</div></div>
+                <span class="tag warn">Lệch số tiền</span>
+                <div class="lech-amt"><div><div class="lbl">Kỳ vọng</div><div class="val">190.000</div></div><div><div class="lbl">Thực thu</div><div class="val short">160.000</div></div><div><div class="lbl">Chênh</div><div class="val short">−30.000</div></div></div>
+                <div class="lech-actions"><button class="link-btn" onclick="openConfirm(event,'FLC-2026-0903-0021',190000,160000)">Xác nhận lại</button></div>
+              </div>
+            </div>
+          </div></td>
+        </tr>
+
+        <tr class="data-row st-ok" onclick="toggleRow(this,'d6')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Đà Nẵng</div><div class="code">SHP-006</div></td>
+          <td class="num">41</td><td class="num">15.750.000</td>
+          <td class="collect-cell"><div class="collect-line"><span class="meter"><i style="width:100%"></i></span><b>15,75 tr</b></div></td>
+          <td class="num zero">0</td>
+          <td><span class="tag ok">Đủ</span></td>
+        </tr>
+        <tr class="detail-row" id="d6" style="display:none"><td colspan="7"><div class="detail-inner"><div class="empty-lech"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Không có đơn lệch trong kỳ.</div></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Xác nhận thu COD</div>
+      <button class="modal-x" onclick="closeConfirm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Mã hoàn tất</label>
+        <div class="static" id="m-code" style="font-weight:600">FLC-2026-0901-0034</div>
+      </div>
+      <div class="field">
+        <label>COD kỳ vọng (snapshot lúc hoàn tất)</label>
+        <div class="static" id="m-expected">450.000 ₫</div>
+      </div>
+      <div class="field">
+        <label>Số tiền thực thu</label>
+        <input type="text" id="m-input" value="450.000">
+        <div class="hint">Để trống hoặc nhập 0 để lấy đúng số kỳ vọng. Actor ghi nhận: quanglm (Manager)</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-default" onclick="closeConfirm()">Hủy</button>
+      <button class="btn btn-primary" onclick="doConfirm()">Xác nhận thu</button>
+    </div>
+  </div>
+</div>
+
+<script>
+function toggleRow(tr, id){
+  const d = document.getElementById(id);
+  const open = d.style.display !== 'none';
+  d.style.display = open ? 'none' : '';
+  tr.classList.toggle('open', !open);
+}
+function setFilter(btn){
+  document.querySelectorAll('#seg button').forEach(b => b.classList.remove('on'));
+  btn.classList.add('on');
+  const f = btn.dataset.f;
+  document.querySelectorAll('tr.data-row').forEach(tr => {
+    tr.style.display = (f === 'all' || tr.classList.contains('st-' + f)) ? '' : 'none';
+  });
+}
+function fakeExport(btn){
+  const t = btn.innerHTML;
+  btn.innerHTML = 'Đang xuất…';
+  setTimeout(()=>{ btn.innerHTML = t; alert('Tải settlement_2026-09-01_2026-09-30.csv (demo)'); }, 700);
+}
+function openConfirm(e, code, expected, collected){
+  e.stopPropagation();
+  document.getElementById('m-code').textContent = code;
+  document.getElementById('m-expected').textContent = expected.toLocaleString('vi-VN') + ' ₫';
+  document.getElementById('m-input').value = (collected ?? expected).toLocaleString('vi-VN');
+  document.getElementById('overlay').classList.add('show');
+}
+function closeConfirm(){ document.getElementById('overlay').classList.remove('show'); }
+function doConfirm(){ closeConfirm(); }
+document.getElementById('overlay').addEventListener('click', e => { if(e.target.id === 'overlay') closeConfirm(); });
+</script>
+</body>
+</html>

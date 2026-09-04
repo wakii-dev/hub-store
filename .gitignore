@@ -3,6 +3,8 @@ dist/
 .turbo/
 *.tsbuildinfo
 coverage/
+# SF-12 — secrets local-only, KHÔNG track (mẫu: .env.example → cp → điền local)
+.env
 .env.local
 .env.*.local
 .vite/
@@ -18,7 +20,12 @@ e2e/test-results/
 e2e/playwright-report/
 # SF-4 — storageState do auth.setup tạo mỗi lần chạy (session Keycloak dev)
 e2e/.auth/
+# SF-21 — batchCode state giữa các test E2E (spec 08, sống qua run mới)
+e2e/.sf21-batch-code
 __pycache__/
+
+# SF-12 — pg_dump backups (dữ liệu thật, KHÔNG commit)
+backups/
 
 # Claude Code local settings
 .claude/

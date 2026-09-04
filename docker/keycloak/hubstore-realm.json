@@ -21,6 +21,12 @@
       },
       {
         "name": "WarehouseEmployee"
+      },
+      {
+        "name": "InsideTechnician"
+      },
+      {
+        "name": "OutsideTechnician"
       }
     ]
   },
@@ -79,6 +85,101 @@
       ]
     },
     {
+      "clientId": "hubstore-mobile",
+      "name": "Hub Store KTV Mobile (SF-25)",
+      "enabled": true,
+      "protocol": "openid-connect",
+      "publicClient": true,
+      "standardFlowEnabled": true,
+      "directAccessGrantsEnabled": false,
+      "rootUrl": "http://localhost:3010",
+      "redirectUris": [
+        "http://localhost:3010/*",
+        "http://127.0.0.1:4220/*",
+        "http://localhost:3010/callback",
+        "http://127.0.0.1:4220/callback"
+      ],
+      "webOrigins": [
+        "+"
+      ],
+      "attributes": {
+        "pkce.code.challenge.method": "S256",
+        "post.logout.redirect.uris": "http://localhost:3010/* http://127.0.0.1:4220/*"
+      },
+      "defaultClientScopes": [
+        "profile",
+        "email",
+        "roles",
+        "web-origins"
+      ],
+      "protocolMappers": [
+        {
+          "name": "hubstore-api audience",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-audience-mapper",
+          "consentRequired": false,
+          "config": {
+            "included.client.audience": "hubstore-api",
+            "id.token.claim": "false",
+            "access.token.claim": "true"
+          }
+        },
+        {
+          "name": "preferred_username",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "user.attribute": "username",
+            "claim.name": "preferred_username",
+            "jsonType.label": "String",
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        },
+        {
+          "name": "given name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "firstName",
+            "claim.name": "given_name",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "family name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-usermodel-property-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true",
+            "user.attribute": "lastName",
+            "claim.name": "family_name",
+            "jsonType.label": "String"
+          }
+        },
+        {
+          "name": "full name",
+          "protocol": "openid-connect",
+          "protocolMapper": "oidc-full-name-mapper",
+          "consentRequired": false,
+          "config": {
+            "id.token.claim": "true",
+            "access.token.claim": "true",
+            "userinfo.token.claim": "true"
+          }
+        }
+      ]
+    },
+    {
       "clientId": "hubstore-admin",
       "name": "Hub Store Admin API (SF-8)",
       "enabled": true,
@@ -87,17 +188,10 @@
       "serviceAccountsEnabled": true,
       "standardFlowEnabled": false,
       "directAccessGrantsEnabled": false,
-      "secret": "hubstore-admin-dev-secret"
+      "secret": "ac865e01df73169f63e8b07002bc85b7"
     }
   ],
   "users": [
-    {
-      "username": "service-account-hubstore-admin",
-      "enabled": true,
-      "clientRoles": {
-        "realm-management": ["manage-users"]
-      }
-    },
     {
       "username": "coordinator",
       "enabled": true,
@@ -110,7 +204,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -128,7 +222,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -146,7 +240,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -164,7 +258,7 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
@@ -182,11 +276,47 @@
       "credentials": [
         {
           "type": "password",
-          "value": "Password123!",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
           "temporary": false
         }
       ],
       "email": "warehouse-emp@hubstore.dev"
+    },
+    {
+      "username": "KTV-001",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Nguyễn",
+      "lastName": "Văn An",
+      "realmRoles": [
+        "InsideTechnician"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "gY0pM9SO7QEmqil_lWHQ",
+          "temporary": false
+        }
+      ],
+      "email": "ktv-001@hubstore.dev"
+    },
+    {
+      "username": "CTV-001",
+      "enabled": true,
+      "emailVerified": true,
+      "firstName": "Hoàng",
+      "lastName": "Văn Em",
+      "realmRoles": [
+        "OutsideTechnician"
+      ],
+      "credentials": [
+        {
+          "type": "password",
+          "value": "GSzIMCBcUNtcbKwnTn_o",
+          "temporary": false
+        }
+      ],
+      "email": "ctv-001@hubstore.dev"
     }
   ],
   "clientScopes": [

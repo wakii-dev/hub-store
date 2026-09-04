@@ -2,7 +2,7 @@ import { render, screen, fireEvent, cleanup, waitFor, within } from "@testing-li
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { I18nextProvider } from "react-i18next";
 import { MemoryRouter } from "react-router-dom";
-import { getI18n, initI18n } from "@hub-store/shared";
+import { BATCH_ENTITY_STATUS, getI18n, initI18n, PRINT_TYPES, type PrintType } from "@hub-store/shared";
 import { fulfillmentResources } from "../i18n";
 import PrintPage from "./PrintPage";
 import { printDocument } from "../api/printApi";
@@ -16,9 +16,23 @@ import { printDocument } from "../api/printApi";
 
 const printDocMock = vi.hoisted(() => vi.fn());
 
+// SF-21 T3 — dữ liệu điều khiển được cho batch items + print-error counts.
+const sf21Mocks = vi.hoisted(() => ({
+  batchItems: [] as Array<Record<string, unknown>>,
+  countsItems: [] as Array<{ orderCode: string; count: number }>,
+  // SF-21 T5 — status phiếu điều khiển được; undefined = batch chưa có status
+  // (fail-open: nút in ENABLED — E2E cũ in khi batch chưa mang status).
+  batchStatus: undefined as number | undefined,
+}));
+
 vi.mock("../api/printApi", () => ({
   useGetBatchDetailQuery: () => ({
-    data: { batchCode: "BATCH-0001", shopCode: "30201" },
+    data: {
+      batchCode: "BATCH-0001",
+      shopCode: "30201",
+      status: sf21Mocks.batchStatus,
+      items: sf21Mocks.batchItems,
+    },
     isLoading: false,
   }),
   useGetPrintersQuery: () => ({
@@ -28,6 +42,10 @@ vi.mock("../api/printApi", () => ({
         { printerId: "PTR-30201-02", name: "Máy in phụ", shopCode: "30201" },
       ],
     },
+    isLoading: false,
+  }),
+  useGetPrintErrorCountsQuery: () => ({
+    data: { items: sf21Mocks.countsItems },
     isLoading: false,
   }),
   printDocument: printDocMock,
@@ -99,6 +117,9 @@ beforeEach(() => {
   initI18n({ resources: fulfillmentResources });
   printDocMock.mockReset();
   printDocMock.mockResolvedValue(PDF_BYTES);
+  sf21Mocks.batchItems.length = 0;
+  sf21Mocks.countsItems.length = 0;
+  sf21Mocks.batchStatus = undefined;
 });
 
 afterEach(cleanup);
@@ -131,13 +152,38 @@ describe("PrintPage (D3)", () => {
       printerId: "",
     });
 
-    // Zoom slider → scale thay đổi (50% = 0.5).
+    // Zoom slider → scale thay đổi (SF-21 T4: step 5 → 100 − 5 = 95).
     const slider = document.querySelector(".ant-slider-handle") as HTMLElement;
     fireEvent.keyDown(slider, { key: "ArrowLeft", keyCode: 37 });
     await waitFor(
-      () => expect(screen.getByTestId("pdf-preview").getAttribute("data-scale")).toBe("0.9"),
+      () => expect(screen.getByTestId("pdf-preview").getAttribute("data-scale")).toBe("0.95"),
       { timeout: 5000 },
     );
+  });
+
+  it("SF-21 T4 — zoom step 5: 100→25 qua 15 nhịp, chặn tại min 25 / max 200", async () => {
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy(), { timeout: 5000 });
+    const preview = () => screen.getByTestId("pdf-preview").getAttribute("data-scale");
+    const slider = document.querySelector(".ant-slider-handle") as HTMLElement;
+    const press = (key: string, keyCode: number, times: number) => {
+      for (let i = 0; i < times; i += 1) {
+        fireEvent.keyDown(slider, { key, keyCode });
+      }
+    };
+
+    // 15 × ArrowLeft (step 5): 100 → 25 — các stop 25/50/…/200 đều bội của 5.
+    press("ArrowLeft", 37, 15);
+    await waitFor(() => expect(preview()).toBe("0.25"));
+    // Vượt min → kẹt ở 25.
+    press("ArrowLeft", 37, 3);
+    expect(preview()).toBe("0.25");
+    // 35 × ArrowRight: 25 → 200 (max).
+    press("ArrowRight", 39, 35);
+    await waitFor(() => expect(preview()).toBe("2"));
+    // Vượt max → kẹt ở 200.
+    press("ArrowRight", 39, 2);
+    expect(preview()).toBe("2");
   });
 
   it("tab switching — tab mới trigger load printType tương ứng (cache tab cũ)", async () => {
@@ -254,5 +300,164 @@ describe("PrintPage (D3)", () => {
     await selectPrinter("Máy in phụ");
     // Option thứ 2 không có location — label chỉ tên (value + option = 2 node).
     expect(screen.getAllByText("Máy in phụ").length).toBeGreaterThan(0);
+  });
+});
+
+/**
+ * SF-21 T1 — pin contracts: đúng 5 tab theo PRINT_TYPES + click từng tab
+ * trigger printDocument với đúng printType + printerId '' (preview seam).
+ */
+describe("PrintPage (SF-21 T1 — pin 5 print types)", () => {
+  it("render ĐÚNG 5 tab theo thứ tự PRINT_TYPES", () => {
+    renderPage();
+    const tabs = screen.getAllByRole("tab");
+    expect(tabs).toHaveLength(PRINT_TYPES.length);
+    expect(tabs.map((tab) => tab.textContent)).toEqual(TAB_LABELS);
+  });
+
+  it("click từng tab → printDocument gọi đúng printType + printerId '' (preview seam)", async () => {
+    renderPage();
+    // Mount → tab bill load preview ngay (call 1).
+    await waitFor(() => expect(printDocMock).toHaveBeenCalledTimes(1));
+    expect(printDocMock).toHaveBeenCalledWith({
+      batchCode: "BATCH-0001",
+      printType: "bill",
+      printerId: "",
+    });
+    // Click từng tab còn lại → mỗi printType đúng 1 lần (cache per tab).
+    const expectations: Array<[string, PrintType]> = [
+      ["Vận đơn", "delivery"],
+      ["Bàn giao", "handover_receipt"],
+      ["Bàn giao hàng", "goods_handover"],
+      ["Lắp đặt", "installation_acceptance"],
+    ];
+    for (const [label, printType] of expectations) {
+      fireEvent.click(screen.getByRole("tab", { name: label }));
+      await waitFor(() =>
+        expect(printDocMock).toHaveBeenCalledWith({
+          batchCode: "BATCH-0001",
+          printType,
+          printerId: "",
+        }),
+      );
+    }
+    expect(printDocMock).toHaveBeenCalledTimes(5);
+    const types = printDocMock.mock.calls.map((c) => (c[0] as { printType: string }).printType);
+    expect([...new Set(types)].sort()).toEqual([...PRINT_TYPES].sort());
+  });
+});
+
+/**
+ * SF-21 T3 — print-error badge + sort (spec D2): Badge đếm lỗi per đơn
+ * (chỉ khi count > 0), danh sách đơn sort count DESC trước, tie → code asc.
+ */
+describe("PrintPage (SF-21 T3 — print-error badge + sort)", () => {
+  it("badge count trên đơn có lỗi; đơn nhiều lỗi nhất đứng đầu; tie → code asc", async () => {
+    sf21Mocks.batchItems.push(
+      { orderCode: "RSA-D", customerAddress: "Địa chỉ D", stopOrder: 4 },
+      { orderCode: "RSA-B", customerAddress: "Địa chỉ B", stopOrder: 1 },
+      { orderCode: "RSA-A", customerAddress: "Địa chỉ A", stopOrder: 3 },
+      { orderCode: "RSA-C", customerAddress: "Địa chỉ C", stopOrder: 2 },
+    );
+    sf21Mocks.countsItems.push(
+      { orderCode: "RSA-B", count: 2 },
+      { orderCode: "RSA-C", count: 1 },
+    );
+
+    renderPage();
+    const list = await screen.findByTestId("print-order-list");
+    const rows = within(list).getAllByTestId("print-order-row");
+    // 2 lỗi (RSA-B) → 1 lỗi (RSA-C) → 0 lỗi tie RSA-A < RSA-D (code asc).
+    expect(rows.map((r) => r.getAttribute("data-order-code"))).toEqual([
+      "RSA-B",
+      "RSA-C",
+      "RSA-A",
+      "RSA-D",
+    ]);
+    // Badge chỉ hiện khi count > 0 — RSA-A/RSA-D không có số.
+    expect(within(rows[0]).getByText("2")).toBeTruthy();
+    expect(within(rows[1]).getByText("1")).toBeTruthy();
+    expect(rows[2].textContent).not.toMatch(/\b0\b/);
+    expect(rows[3].textContent).not.toMatch(/\b0\b/);
+  });
+
+  it("counts rỗng → vẫn render danh sách đơn theo code asc, không badge", async () => {
+    sf21Mocks.batchItems.push(
+      { orderCode: "RSA-2", customerAddress: "Địa chỉ 2", stopOrder: 2 },
+      { orderCode: "RSA-1", customerAddress: "Địa chỉ 1", stopOrder: 1 },
+    );
+    renderPage();
+    const list = await screen.findByTestId("print-order-list");
+    const rows = within(list).getAllByTestId("print-order-row");
+    expect(rows.map((r) => r.getAttribute("data-order-code"))).toEqual(["RSA-1", "RSA-2"]);
+    expect(within(list).queryByText(/^1$/)).toBeNull();
+  });
+});
+
+/**
+ * SF-21 T7 — shared EmptyState (spec §2): batch load xong nhưng không còn
+ * đơn hợp lệ nào → EmptyState thay danh sách đơn. Còn đơn + 0 lỗi in là
+ * trạng thái tốt — list hiển thị nguyên trạng (pin T3 ở trên giữ nguyên).
+ */
+describe("PrintPage (SF-21 T7 — empty states)", () => {
+  it("batch load xong, 0 đơn → EmptyState hiển thị, không có print-order-list", async () => {
+    renderPage();
+    await waitFor(() =>
+      expect(screen.getByText("Không còn đơn để in")).toBeTruthy(),
+    );
+    expect(
+      screen.getByText("Phiếu này không còn đơn hợp lệ nào để in."),
+    ).toBeTruthy();
+    expect(screen.queryByTestId("print-order-list")).toBeNull();
+    expect(screen.queryByTestId("print-order-row")).toBeNull();
+  });
+});
+
+/**
+ * SF-21 T5 — print-all gate theo batch status (spec §2): batch CANCELLED →
+ * disable "In" + "In tất cả" kèm Tooltip lý do; status khác (ACTIVE/COMPLETED)
+ * → enabled (re-print OK). Fail-open: batch thiếu status → ENABLED.
+ */
+describe("PrintPage (SF-21 T5 — print-all status gate)", () => {
+  it("batch CANCELLED → cả 2 nút in disabled + Tooltip lý do", async () => {
+    sf21Mocks.batchStatus = BATCH_ENTITY_STATUS.CANCELLED;
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy(), { timeout: 5000 });
+
+    const printBtn = getPrintBtn() as HTMLButtonElement;
+    const printAllBtn = getPrintAllBtn() as HTMLButtonElement;
+    expect(printBtn.disabled).toBe(true);
+    expect(printAllBtn.disabled).toBe(true);
+
+    // Tooltip trên nút disabled — bọc span (antd4 disabled không nhận mouse
+    // event trên chính button), hover span → lý do hiện.
+    fireEvent.mouseEnter(printAllBtn.parentElement as HTMLElement);
+    await waitFor(
+      () => expect(screen.getAllByText("Phiếu đã hủy — không in được").length).toBeGreaterThan(0),
+      { timeout: 5000 },
+    );
+
+    // Click nút disabled → KHÔNG phát call in thêm (chỉ preview bill lúc mount).
+    fireEvent.click(printAllBtn);
+    expect(printDocMock).toHaveBeenCalledTimes(1);
+  });
+
+  it("batch ACTIVE/COMPLETED → nút in ENABLED (re-print OK)", async () => {
+    for (const status of [BATCH_ENTITY_STATUS.ACTIVE, BATCH_ENTITY_STATUS.COMPLETED]) {
+      sf21Mocks.batchStatus = status;
+      renderPage();
+      await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy(), { timeout: 5000 });
+      expect((getPrintBtn() as HTMLButtonElement).disabled).toBe(false);
+      expect((getPrintAllBtn() as HTMLButtonElement).disabled).toBe(false);
+      cleanup();
+    }
+  });
+
+  it("batch thiếu status (mock cũ) → fail-open: nút in ENABLED", async () => {
+    sf21Mocks.batchStatus = undefined;
+    renderPage();
+    await waitFor(() => expect(screen.getByTestId("pdf-preview")).toBeTruthy(), { timeout: 5000 });
+    expect((getPrintBtn() as HTMLButtonElement).disabled).toBe(false);
+    expect((getPrintAllBtn() as HTMLButtonElement).disabled).toBe(false);
   });
 });

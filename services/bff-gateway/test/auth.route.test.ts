@@ -58,6 +58,7 @@ async function startMockKeycloak(): Promise<void> {
 function buildTestApp(opts: { devResetPassword?: boolean } = {}): ReturnType<typeof buildApp> {
   const config: BffConfig = {
     port: 0,
+    onesignal: { appId: '', restApiKey: '' },
     oidc: {
       issuer: TEST_ISSUER,
       audience: TEST_AUDIENCE,
@@ -81,6 +82,9 @@ function buildTestApp(opts: { devResetPassword?: boolean } = {}): ReturnType<typ
     },
     devResetPassword: opts.devResetPassword ?? true,
     kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 — off trong test
+    webhookHmacSecret: '', // SF-26 — test auth/events không chạm webhook
+    webhookMapping: '',
+    internalServiceToken: '',
   };
   return buildApp(config);
 }

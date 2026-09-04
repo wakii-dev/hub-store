@@ -1,0 +1,488 @@
+/**
+ * Realtime SSE hook tests (SF-10 / FI-255 Task 3). Node-env vitest (package
+ * convention — no jsdom/testing-library in this package), so:
+ * - EventSource is faked with a small class (records url/handlers/close).
+ * - The React hook runs against a minimal fake-hooks harness installed via
+ *   vi.mock('react') — enough to exercise mount/effect/unmount + state.
+ */
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import {
+  createRealtimeStream,
+  useRealtimeEvents,
+  MAX_SSE_FAILURES,
+  POLL_INTERVAL_MS,
+  RECONNECT_DELAY_MS,
+  SSE_RETRY_INTERVAL_MS,
+  type CreateRealtimeStreamOptions,
+  type RealtimeEventSourceLike,
+  type RealtimeStatus,
+} from './realtime';
+
+// ---- Fake EventSource ---------------------------------------------------------
+
+class FakeEventSource implements RealtimeEventSourceLike {
+  static instances: FakeEventSource[] = [];
+
+  url: string;
+  readyState = 0; // CONNECTING
+  closed = false;
+  onopen: (() => void) | null = null;
+  onmessage: ((ev: { data?: unknown }) => void) | null = null;
+  onerror: (() => void) | null = null;
+
+  constructor(url: string) {
+    this.url = url;
+    FakeEventSource.instances.push(this);
+  }
+
+  close(): void {
+    this.closed = true;
+    this.readyState = 2; // CLOSED
+  }
+
+  // test drivers
+  open(): void {
+    this.readyState = 1; // OPEN
+    this.onopen?.();
+  }
+  message(event: unknown): void {
+    this.onmessage?.({ data: JSON.stringify(event) });
+  }
+  raw(data: string): void {
+    this.onmessage?.({ data });
+  }
+  fail(): void {
+    this.onerror?.();
+  }
+}
+
+const lastSource = (): FakeEventSource => FakeEventSource.instances.at(-1)!;
+
+// ---- Fake React hooks harness --------------------------------------------------
+// vi.mock('react') installs these; renderHook() runs the real hook body, runs
+// effects after "mount", and unmount() runs cleanups. The hook has a single
+// state slot, a single ref and one []-dep effect, so no dep-comparison needed.
+
+type FakeHooks = {
+  useState: (init: unknown) => [unknown, (v: unknown) => void];
+  useRef: (init: unknown) => { current: unknown };
+  useEffect: (create: () => (() => void) | void, deps?: unknown[]) => void;
+};
+
+const harness = vi.hoisted(() => ({ current: null as FakeHooks | null }));
+
+/** The dispatch `useDispatch` resolves in hook tests (swappable per test). */
+const reduxHarness = vi.hoisted(() => ({
+  dispatch: ((): unknown => undefined) as (action: unknown) => unknown,
+}));
+
+vi.mock('react', () => ({
+  useState: (...args: Parameters<NonNullable<typeof harness.current>['useState']>) =>
+    harness.current!.useState(...args),
+  useRef: (...args: Parameters<NonNullable<typeof harness.current>['useRef']>) =>
+    harness.current!.useRef(...args),
+  useEffect: (...args: Parameters<NonNullable<typeof harness.current>['useEffect']>) =>
+    harness.current!.useEffect(...args),
+}));
+
+vi.mock('react-redux', () => ({
+  useDispatch: () => reduxHarness.dispatch,
+}));
+
+interface HookRuntime {
+  /** Re-runs the hook body (effects stay mounted); returns latest status. */
+  rerender: () => RealtimeStatus;
+  /** Runs effect cleanups (the hook's unmount path). */
+  unmount: () => void;
+}
+
+function renderHook(render: () => RealtimeStatus): { runtime: HookRuntime; status: RealtimeStatus } {
+  const stateSlot: { value: unknown } = { value: undefined };
+  const refSlot: { current: unknown } = { current: undefined };
+  const effects: { create: () => (() => void) | void; hasRun: boolean; cleanup?: () => void }[] = [];
+  let mounted = true;
+
+  harness.current = {
+    useState(init: unknown) {
+      if (stateSlot.value === undefined) stateSlot.value = init;
+      const setState = (v: unknown) => {
+        stateSlot.value = v;
+      };
+      return [stateSlot.value, setState];
+    },
+    useRef(init: unknown) {
+      if (refSlot.current === undefined) refSlot.current = { current: init };
+      return refSlot.current as { current: unknown };
+    },
+    useEffect(create: () => (() => void) | void) {
+      if (!effects[0]) effects[0] = { create, hasRun: false };
+      const def = effects[0];
+      def.create = create;
+      if (!def.hasRun && mounted) {
+        def.hasRun = true;
+        def.cleanup = def.create() ?? undefined;
+      }
+    },
+  };
+
+  const run = (): RealtimeStatus => render();
+  return { status: run(), runtime: { rerender: run, unmount() { mounted = false; for (const d of effects) d.cleanup?.(); } } };
+}
+
+// ---- Shared stubs --------------------------------------------------------------
+
+const TAGS = [{ type: 'Fulfillment', id: 'LIST' }];
+
+function baseOptions(overrides: Partial<CreateRealtimeStreamOptions> = {}) {
+  const invalidateTags = vi.fn((tags: unknown) => ({ type: 'invalidateTags', payload: tags }));
+  const api = { util: { invalidateTags } };
+  const dispatch = vi.fn();
+  const options: CreateRealtimeStreamOptions = {
+    api,
+    invalidationTags: TAGS,
+    EventSourceImpl: FakeEventSource as unknown as new (url: string) => RealtimeEventSourceLike,
+    dispatch,
+    ...overrides,
+  };
+  return { options, api, invalidateTags, dispatch };
+}
+
+beforeEach(() => {
+  FakeEventSource.instances = [];
+  reduxHarness.dispatch = () => undefined;
+  (globalThis as { EventSource?: unknown }).EventSource = FakeEventSource;
+});
+
+afterEach(() => {
+  delete (globalThis as { EventSource?: unknown }).EventSource;
+  harness.current = null;
+});
+
+describe('createRealtimeStream', () => {
+  it('connects to ${API_BASE}/events with the access_token query param', () => {
+    const { options } = baseOptions({ tokenGetter: () => 'tok-123' });
+    createRealtimeStream(options).connect();
+    expect(FakeEventSource.instances).toHaveLength(1);
+    expect(lastSource().url).toBe('http://localhost:8080/events?access_token=tok-123');
+  });
+
+  it('is idempotent — connect() twice keeps a single EventSource', () => {
+    const { options } = baseOptions();
+    const stream = createRealtimeStream(options);
+    stream.connect();
+    stream.connect();
+    expect(FakeEventSource.instances).toHaveLength(1);
+  });
+
+  it('emits connected on open and offline on error, counting failures (Task 5 scaffold)', () => {
+    const statuses: RealtimeStatus[] = [];
+    const { options } = baseOptions({ onStatus: (s) => statuses.push(s) });
+    const stream = createRealtimeStream(options);
+    expect(stream.getStatus()).toBe('offline');
+    stream.connect();
+    lastSource().open();
+    expect(stream.getStatus()).toBe('connected');
+    expect(stream.getConnectFailures()).toBe(0);
+    lastSource().fail();
+    expect(statuses).toEqual(['connected', 'offline']);
+    expect(stream.getStatus()).toBe('offline');
+    expect(stream.getConnectFailures()).toBe(1);
+    // native reconnect success resets the failure counter
+    lastSource().open();
+    expect(stream.getConnectFailures()).toBe(0);
+    expect(stream.getStatus()).toBe('connected');
+  });
+
+  it('dispatches invalidateTags for a matching message', () => {
+    const { options, invalidateTags, dispatch } = baseOptions();
+    createRealtimeStream(options).connect();
+    lastSource().open();
+    lastSource().message({ type: 'order.assigned', payload: { code: 'DH-1' }, ts: '2026-09-03T00:00:00Z' });
+    expect(invalidateTags).toHaveBeenCalledTimes(1);
+    expect(invalidateTags).toHaveBeenCalledWith(TAGS);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+  });
+
+  it('does NOT dispatch for non-matching message types when eventTypes is set', () => {
+    const { options, invalidateTags } = baseOptions({ eventTypes: ['order.assigned', 'batch.created'] });
+    createRealtimeStream(options).connect();
+    lastSource().open();
+    lastSource().message({ type: 'order.cancelled', payload: {}, ts: '2026-09-03T00:00:00Z' });
+    lastSource().message({ type: 'batch.created', payload: {}, ts: '2026-09-03T00:00:00Z' });
+    expect(invalidateTags).toHaveBeenCalledTimes(1);
+  });
+
+  it('forwards all types when no filter is given, and ignores non-JSON frames', () => {
+    const { options, invalidateTags } = baseOptions();
+    createRealtimeStream(options).connect();
+    lastSource().open();
+    lastSource().raw('not-json{{');
+    lastSource().message({ type: 'a', payload: null, ts: 't' });
+    lastSource().message({ type: 'b', payload: null, ts: 't' });
+    expect(invalidateTags).toHaveBeenCalledTimes(2);
+  });
+
+  it('close() closes the EventSource, detaches handlers and goes offline', () => {
+    const { options } = baseOptions();
+    const stream = createRealtimeStream(options);
+    stream.connect();
+    const es = lastSource();
+    es.open();
+    stream.close();
+    expect(es.closed).toBe(true);
+    expect(es.onopen).toBeNull();
+    expect(es.onmessage).toBeNull();
+    expect(es.onerror).toBeNull();
+    expect(stream.getStatus()).toBe('offline');
+  });
+
+  it('counts a failed connect when EventSource is unavailable (node/SSR)', () => {
+    delete (globalThis as { EventSource?: unknown }).EventSource;
+    const { options } = baseOptions({ EventSourceImpl: undefined });
+    const stream = createRealtimeStream(options);
+    stream.connect();
+    expect(FakeEventSource.instances).toHaveLength(0);
+    expect(stream.getConnectFailures()).toBe(1);
+    expect(stream.getStatus()).toBe('offline');
+  });
+});
+
+describe('useRealtimeEvents', () => {
+  function mountHook(overrides: Partial<CreateRealtimeStreamOptions> = {}) {
+    const { options, invalidateTags } = baseOptions(overrides);
+    const { runtime, status } = renderHook(() => useRealtimeEvents(options));
+    return { options, invalidateTags, runtime, initialStatus: status };
+  }
+
+  it('starts offline, transitions to connected on open, and dispatches on matching events', () => {
+    const { invalidateTags, runtime, initialStatus } = mountHook({ eventTypes: ['order.assigned'] });
+    expect(initialStatus).toBe('offline');
+    const es = lastSource();
+    expect(es.url).toBe('http://localhost:8080/events'); // no tokenGetter → no query
+    es.open();
+    es.message({ type: 'order.assigned', payload: {}, ts: 't' });
+    es.message({ type: 'order.cancelled', payload: {}, ts: 't' }); // filtered out
+    expect(runtime.rerender()).toBe('connected');
+    expect(invalidateTags).toHaveBeenCalledTimes(1);
+  });
+
+  it('passes the token from tokenGetter in the EventSource URL', () => {
+    mountHook({ tokenGetter: () => 'abc.def' });
+    expect(lastSource().url).toBe('http://localhost:8080/events?access_token=abc.def');
+  });
+
+  it('resolves the app dispatch via useDispatch when no explicit dispatch is given (review P0)', () => {
+    const appDispatch = vi.fn();
+    reduxHarness.dispatch = appDispatch;
+    const { invalidateTags } = mountHook({ dispatch: undefined });
+    const es = lastSource();
+    es.open();
+    es.message({ type: 'order.assigned', payload: {}, ts: 't' });
+    expect(invalidateTags).toHaveBeenCalledTimes(1);
+    expect(appDispatch).toHaveBeenCalledTimes(1);
+    expect(appDispatch).toHaveBeenCalledWith(invalidateTags.mock.results[0]?.value);
+  });
+
+  it('cleans up on unmount — effect cleanup closes the EventSource', () => {
+    const { runtime } = mountHook();
+    const es = lastSource();
+    es.open();
+    runtime.unmount();
+    expect(es.closed).toBe(true);
+    expect(es.onopen).toBeNull();
+    expect(es.onmessage).toBeNull();
+    expect(es.onerror).toBeNull();
+  });
+
+  it('cleans up polling/retry timers on unmount — no leaked intervals or EventSources', () => {
+    vi.useFakeTimers();
+    try {
+      const { invalidateTags, runtime } = mountHook();
+      const es = lastSource();
+      es.open();
+      es.fail();
+      es.fail();
+      es.fail(); // >MAX_SSE_FAILURES → polling
+      expect(runtime.rerender()).toBe('polling');
+      runtime.unmount();
+      expect(es.closed).toBe(true);
+      const instancesBefore = FakeEventSource.instances.length;
+      // well past both the poll tick and the SSE retry tick
+      vi.advanceTimersByTime(POLL_INTERVAL_MS * 3 + SSE_RETRY_INTERVAL_MS * 3);
+      expect(invalidateTags).not.toHaveBeenCalled();
+      expect(FakeEventSource.instances).toHaveLength(instancesBefore);
+    } finally {
+      vi.clearAllTimers();
+      vi.useRealTimers();
+    }
+  });
+});
+
+describe('fallback polling state machine (Task 5)', () => {
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  /** Drives the stream into polling mode and returns the first (closed) source. */
+  function enterPolling(stream: ReturnType<typeof createRealtimeStream>): FakeEventSource {
+    stream.connect();
+    const es = lastSource();
+    es.open();
+    es.fail();
+    es.fail();
+    expect(stream.getStatus()).toBe('offline'); // at threshold, not past it
+    es.fail();
+    expect(stream.getStatus()).toBe('polling');
+    expect(es.closed).toBe(true); // native reconnect churn stopped
+    return es;
+  }
+
+  it('degrades to polling after more than MAX_SSE_FAILURES consecutive failures', () => {
+    vi.useFakeTimers();
+    const { options } = baseOptions();
+    const stream = createRealtimeStream(options);
+    expect(MAX_SSE_FAILURES).toBe(2);
+    const es = enterPolling(stream);
+    expect(stream.getConnectFailures()).toBe(MAX_SSE_FAILURES + 1);
+    expect(FakeEventSource.instances).toHaveLength(1);
+    void es;
+  });
+
+  it('polling ticks dispatch invalidateTags every POLL_INTERVAL_MS', () => {
+    vi.useFakeTimers();
+    const { options, invalidateTags, dispatch } = baseOptions();
+    const stream = createRealtimeStream(options);
+    enterPolling(stream);
+    vi.advanceTimersByTime(POLL_INTERVAL_MS);
+    expect(invalidateTags).toHaveBeenCalledTimes(1);
+    expect(dispatch).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(POLL_INTERVAL_MS * 2);
+    expect(invalidateTags).toHaveBeenCalledTimes(3);
+    expect(invalidateTags).toHaveBeenCalledWith(TAGS);
+  });
+
+  it('honors the window.__REALTIME_POLL_INTERVAL_MS__ e2e override (Task 6 seam)', () => {
+    vi.useFakeTimers();
+    const global = globalThis as { __REALTIME_POLL_INTERVAL_MS__?: number };
+    global.__REALTIME_POLL_INTERVAL_MS__ = 1_000;
+    try {
+      const { options, invalidateTags } = baseOptions();
+      const stream = createRealtimeStream(options);
+      enterPolling(stream);
+      // override interval — 1s ticks, NOT the 30s default
+      vi.advanceTimersByTime(1_000);
+      expect(invalidateTags).toHaveBeenCalledTimes(1);
+      vi.advanceTimersByTime(1_000);
+      expect(invalidateTags).toHaveBeenCalledTimes(2);
+      // …and less than one default period has elapsed
+      vi.advanceTimersByTime(POLL_INTERVAL_MS - 2_000);
+      expect(invalidateTags).toHaveBeenCalledTimes(POLL_INTERVAL_MS / 1_000);
+    } finally {
+      delete global.__REALTIME_POLL_INTERVAL_MS__;
+    }
+  });
+
+  it('SSE retry opens again → polling cleared, counter reset, back to connected', () => {
+    vi.useFakeTimers();
+    const { options, invalidateTags } = baseOptions();
+    const stream = createRealtimeStream(options);
+    enterPolling(stream);
+    vi.advanceTimersByTime(SSE_RETRY_INTERVAL_MS);
+    // retry created a fresh EventSource (old one stays closed)
+    expect(FakeEventSource.instances).toHaveLength(2);
+    const retried = lastSource();
+    expect(retried.closed).toBe(false);
+    const ticksAtReopen = invalidateTags.mock.calls.length;
+    retried.open();
+    expect(stream.getStatus()).toBe('connected');
+    expect(stream.getConnectFailures()).toBe(0);
+    vi.advanceTimersByTime(POLL_INTERVAL_MS * 3 + SSE_RETRY_INTERVAL_MS * 3);
+    expect(invalidateTags).toHaveBeenCalledTimes(ticksAtReopen); // no more polling ticks
+    expect(FakeEventSource.instances).toHaveLength(2); // no further retries spawned
+  });
+
+  it('degraded event counts as one failure toward polling, without invalidating or forwarding', () => {
+    vi.useFakeTimers();
+    const degraded = { type: 'stream.degraded', payload: null, ts: 't' };
+    const { options, invalidateTags, dispatch } = baseOptions({ eventTypes: ['order.assigned'] });
+    const stream = createRealtimeStream(options);
+    stream.connect();
+    const es = lastSource();
+    es.open();
+    es.message({ ...degraded });
+    expect(stream.getConnectFailures()).toBe(1);
+    expect(stream.getStatus()).toBe('connected'); // below threshold — still live
+    expect(invalidateTags).not.toHaveBeenCalled();
+    expect(dispatch).not.toHaveBeenCalled();
+    es.message({ ...degraded });
+    es.message({ ...degraded });
+    expect(stream.getStatus()).toBe('polling'); // 3 > MAX_SSE_FAILURES
+    expect(invalidateTags).not.toHaveBeenCalled(); // degraded never invalidates
+    // after a successful open the counter is cleared again
+    vi.advanceTimersByTime(SSE_RETRY_INTERVAL_MS);
+    lastSource().open();
+    expect(stream.getConnectFailures()).toBe(0);
+  });
+});
+
+describe('fresh-token reconnect (review P1 — expired access_token)', () => {
+  afterEach(() => {
+    vi.clearAllTimers();
+    vi.useRealTimers();
+  });
+
+  it('fatal connect error closes the source and reconnects with a token re-read from tokenGetter', () => {
+    vi.useFakeTimers();
+    let token = 'tok-1';
+    const { options } = baseOptions({ tokenGetter: () => token });
+    const stream = createRealtimeStream(options);
+    stream.connect();
+    const first = lastSource();
+    expect(first.url).toBe('http://localhost:8080/events?access_token=tok-1');
+    first.fail(); // 401-style: error WITHOUT a prior open — EventSource gives up
+    expect(first.closed).toBe(true); // manual close, native retry would reuse the stale URL
+    token = 'tok-2'; // shell refreshed the token meanwhile
+    vi.advanceTimersByTime(RECONNECT_DELAY_MS);
+    expect(FakeEventSource.instances).toHaveLength(2);
+    expect(lastSource().url).toBe('http://localhost:8080/events?access_token=tok-2');
+    expect(stream.getStatus()).toBe('offline'); // still down until the retry opens
+    lastSource().open();
+    expect(stream.getStatus()).toBe('connected');
+    expect(stream.getConnectFailures()).toBe(0);
+  });
+
+  it('error AFTER a successful open keeps the native-reconnect path (no forced close)', () => {
+    vi.useFakeTimers();
+    const { options } = baseOptions({ tokenGetter: () => 't' });
+    const stream = createRealtimeStream(options);
+    stream.connect();
+    const es = lastSource();
+    es.open();
+    es.fail(); // transient drop — EventSource retries natively with the same source
+    expect(es.closed).toBe(false);
+    expect(FakeEventSource.instances).toHaveLength(1);
+    es.open(); // native reconnect succeeds
+    expect(stream.getStatus()).toBe('connected');
+  });
+
+  it('repeated fatal failures stay bounded — degrade to polling after MAX_SSE_FAILURES', () => {
+    vi.useFakeTimers();
+    const { options } = baseOptions({ tokenGetter: () => 't' });
+    const stream = createRealtimeStream(options);
+    stream.connect();
+    // Each fatal failure → one bounded manual reconnect, then the next failure…
+    for (let i = 0; i < MAX_SSE_FAILURES; i++) {
+      lastSource().fail();
+      vi.advanceTimersByTime(RECONNECT_DELAY_MS);
+    }
+    // es3: failures = MAX+1 → polling mode takes over (no further manual timers)
+    lastSource().fail();
+    expect(stream.getStatus()).toBe('polling');
+    const count = FakeEventSource.instances.length;
+    vi.advanceTimersByTime(RECONNECT_DELAY_MS * 5);
+    // polling's own retry tick (SSE_RETRY_INTERVAL_MS) owns further attempts —
+    // no extra reconnect-timer churn on top of it.
+    expect(FakeEventSource.instances.length).toBeLessThanOrEqual(count + 1);
+  });
+});

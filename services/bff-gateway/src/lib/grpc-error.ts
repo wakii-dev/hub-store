@@ -7,6 +7,7 @@
  *   UNAUTHENTICATED   → 401 (code UNAUTHENTICATED)
  *   PERMISSION_DENIED → 403 (code PERMISSION_DENIED)
  *   NOT_FOUND         → 404 (code NOT_FOUND)
+ *   ALREADY_EXISTS    → 409 (code CONFLICT) — trùng ticket PENDING (SF-28 transfer)
  *   FAILED_PRECONDITION → 409 (code CONFLICT) — sai trạng thái (SF-19 assign)
  *   DEADLINE_EXCEEDED / UNAVAILABLE / UNKNOWN  → 503 code UPSTREAM_UNAVAILABLE
  *     + message kèm tên service (fulfillment-service/batching-service/print-service)
@@ -120,6 +121,16 @@ export function mapGrpcError(
       return {
         statusCode: 404,
         body: errorEnvelope(404, err.details ?? 'Not found.', { code: 'NOT_FOUND' }),
+      };
+    case GrpcStatus.ALREADY_EXISTS:
+      // SF-21 (D9): duplicate (shopCode, printerId) → 409 CONFLICT.
+      // SF-28: trùng ticket PENDING (transfer) → 409 CONFLICT (spec §3 Q6).
+      return {
+        statusCode: 409,
+        body: errorEnvelope(409, err.details ?? 'Already exists.', {
+          code: 'CONFLICT',
+          details: parseDetails(err),
+        }),
       };
     case GrpcStatus.FAILED_PRECONDITION:
       // SF-19 (merge): FAILED_PRECONDITION toàn cục = xung đột trạng thái

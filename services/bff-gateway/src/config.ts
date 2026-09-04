@@ -84,6 +84,34 @@ export interface BffConfig {
   devResetPassword: boolean;
   /** SF-27 — Kafka side-channel consumer. */
   kafka: BffKafkaConfig;
+  /** SF-23 — OneSignal REST push (dual-mode). */
+  onesignal: BffOnesignalConfig;
+  /** SF-26 — HMAC secret cho webhook sàn (rỗng → 503 fail-closed). */
+  webhookHmacSecret: string;
+  /**
+   * SF-26 — raw WEBHOOK_MAPPING env (JSON flat rename map canonical→payload
+   * field). Parse ở lib/webhook-mapping (Task 4) — invalid JSON → warn + default.
+   */
+  webhookMapping: string;
+  /**
+   * SF-12 (FI-257) — machine-call credential cho gRPC call không user JWT
+   * (webhook sàn → CreateWebhookOrder). Rỗng → interceptor sẽ DENY (fail-closed).
+   * Compose wiring env INTERNAL_SERVICE_TOKEN — Task 2 sở hữu.
+   */
+  internalServiceToken: string;
+}
+
+export interface BffOnesignalConfig {
+  /**
+   * REST API key — rỗng → mock mode (sendOneSignalPush trả false ngay,
+   * chỉ notification_log; KHÔNG gọi OneSignal).
+   */
+  restApiKey: string;
+  /**
+   * OneSignal App ID (BFF-side env ONESIGNAL_APP_ID — KHÔNG nhầm
+   * VITE_ONESIGNAL_APP_ID build-time của FE). Thiếu → mock mode.
+   */
+  appId: string;
 }
 
 export interface BffKafkaConfig {
@@ -123,7 +151,19 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
   // OIDC_JWKS_URL = base riêng cho fetch JWKS/admin TRONG network của BFF
   // (compose: http://keycloak:8081 — localhost sai trong container). Unset →
   // dùng issuer base (dev host-run).
-  const internalBase = stripSlash(env.OIDC_JWKS_URL ?? issuerBase);
+  //
+  // SF-12 live-verify (E2E sau T7): contract "FULL cho cả 3" (ci.yml) cho phép
+  // OIDC_JWKS_URL là URL certs đầy đủ (…/protocol/openid-connect/certs — cùng
+  // 1 env mà Go/Java interceptor đọc). withRealm() chỉ idempotent với realm
+  // URL — certs URL KHÔNG: /realms/hubstore bị append vào CUỐI → jwksUrl +
+  // admin* URL rác → mọi Bearer DENY (UI trắng sau login, D1 trống). Strip
+  // suffix certs trước khi derive.
+  const JWKS_CERTS_SUFFIX = /\/protocol\/openid-connect\/certs\/?$/;
+  const internalBase = stripSlash(env.OIDC_JWKS_URL ?? issuerBase).replace(JWKS_CERTS_SUFFIX, '');
+  // internalBase giờ là realm URL HOẶC host base — admin* URL cần host-only
+  // origin (realm URL + /admin là path rác — gotcha ci.yml "adminBaseUrl
+  // derive sai khi FULL").
+  const internalOrigin = new URL(internalBase).origin;
   const grpcAddr = (portEnv: string | undefined, defaultPort: string): string => {
     const raw = portEnv ?? defaultPort;
     return raw.includes(':') ? raw : `localhost:${raw}`;
@@ -136,11 +176,11 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       jwksUrl: `${withRealm(internalBase)}/protocol/openid-connect/certs`,
       // Keycloak 26 admin API nằm dưới /admin — /realms/hubstore/users (không
       // /admin) trả 404 (mock test không bắt được — đã verify Keycloak thật).
-      adminBaseUrl: `${stripSlash(internalBase)}/admin${KC_REALM_PATH}`,
-      adminTokenUrl: `${stripSlash(internalBase)}/realms/master/protocol/openid-connect/token`,
+      adminBaseUrl: `${internalOrigin}/admin${KC_REALM_PATH}`,
+      adminTokenUrl: `${internalOrigin}/realms/master/protocol/openid-connect/token`,
       adminUsername: env.KEYCLOAK_ADMIN ?? 'admin',
       adminPassword: env.KEYCLOAK_ADMIN_PASSWORD ?? 'admin',
-      kcAdminTokenUrl: `${stripSlash(internalBase)}${KC_REALM_PATH}/protocol/openid-connect/token`,
+      kcAdminTokenUrl: `${internalOrigin}${KC_REALM_PATH}/protocol/openid-connect/token`,
       kcAdminClientId: env.KC_ADMIN_CLIENT_ID ?? 'hubstore-admin',
       kcAdminClientSecret: env.KC_ADMIN_CLIENT_SECRET ?? '',
     },
@@ -160,5 +200,13 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): BffConfig {
       enabled: env.KAFKA_ENABLED === 'true', // 'true' duy nhất — thống nhất Go/Java/e2e (review SF-27)
       bootstrapServers: env.KAFKA_BOOTSTRAP_SERVERS ?? 'localhost:9092',
     },
+    onesignal: {
+      restApiKey: env.ONESIGNAL_REST_API_KEY ?? '',
+      appId: env.ONESIGNAL_APP_ID ?? '',
+    },
+    // SF-26 — webhook sàn (FI-271): secret rỗng → verifyHmac 503 fail-closed.
+    webhookHmacSecret: env.WEBHOOK_HMAC_SECRET ?? '',
+    webhookMapping: env.WEBHOOK_MAPPING ?? '',
+    internalServiceToken: env.INTERNAL_SERVICE_TOKEN ?? '',
   };
 }

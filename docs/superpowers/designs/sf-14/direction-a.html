@@ -1,0 +1,461 @@
+<!DOCTYPE html>
+<html lang="vi">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>SF-14 · Direction A — Classic ops table · Đối soát COD</title>
+<style>
+/* ═══ Tokens — mirror design-tokens.ts (SF-6 direction B, Modern SaaS Airy) ═══ */
+:root{
+  --primary:#EB6E09; --primary-hover:#F68A2E; --primary-active:#D96408;
+  --primary-bg:#FEF6EE; --primary-border:#FDEADA;
+  --primary-grad:linear-gradient(135deg,#F68A2E 0%,#EB6E09 60%,#D96408 100%);
+  --text-strong:#101828; --text:#1D2939; --text-2:#344054; --text-muted:#667085; --text-faint:#98A2B3;
+  --border:#D0D5DD; --divider:#EAECF0; --divider-soft:#F2F4F7;
+  --bg:#F7F8FA; --white:#FFFFFF; --header-bg:#FBFCFD; --sidebar:#101828;
+  --success:#039855; --success-bg:#ECFDF3; --success-line:#ABEFC6;
+  --error:#D92D20; --error-bg:#FEF3F2; --error-line:#FECDCA;
+  --warning:#B54708; --warning-bg:#FFFAEB; --warning-line:#FEDF89;
+  --info:#1570EF; --info-bg:#EFF8FF; --info-line:#B2DDFF;
+  --shadow-xs:0 1px 2px rgba(16,24,40,.05);
+  --shadow-sm:0 1px 3px rgba(16,24,40,.08),0 1px 2px rgba(16,24,40,.04);
+  --shadow-md:0 6px 16px -4px rgba(16,24,40,.10),0 2px 6px -2px rgba(16,24,40,.06);
+  --shadow-lg:0 20px 48px -12px rgba(16,24,40,.22);
+  --shadow-primary:0 3px 10px rgba(235,110,9,.35);
+  --r-sm:5px; --r-ctl:8px; --r-md:10px; --r-lg:12px; --r-card:16px; --r-pill:999px; --r-modal:20px;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html,body{height:100%}
+body{font-family:'Roboto',-apple-system,'Segoe UI',sans-serif;font-size:14px;color:var(--text);background:var(--bg)}
+
+/* ═══ Shell chrome: sidebar 64px + header 60px ═══ */
+.sidebar{position:fixed;left:0;top:0;bottom:0;width:64px;background:var(--sidebar);display:flex;flex-direction:column;align-items:center;padding:10px 0;z-index:30}
+.sidebar .logo{width:36px;height:36px;border-radius:10px;background:var(--primary-grad);display:flex;align-items:center;justify-content:center;margin-bottom:18px;box-shadow:var(--shadow-primary)}
+.sidebar .nav{display:flex;flex-direction:column;gap:6px;flex:1}
+.nav-item{width:40px;height:40px;border-radius:10px;display:flex;align-items:center;justify-content:center;color:#98A2B3;cursor:pointer;transition:all .13s ease;position:relative}
+.nav-item:hover{background:rgba(255,255,255,.08)}
+.nav-item.active{background:var(--primary-grad);color:#fff;box-shadow:var(--shadow-primary)}
+.nav-item.active::after{content:'';position:absolute;right:-12px;top:50%;transform:translateY(-50%);width:3px;height:18px;border-radius:2px;background:var(--primary)}
+.header{position:sticky;top:0;height:60px;background:var(--white);border-bottom:1px solid var(--divider);display:flex;align-items:center;justify-content:space-between;padding:0 24px 0 88px;z-index:20}
+.header .crumb{font-size:12.5px;color:var(--text-faint)}
+.header .crumb b{color:var(--text-2);font-weight:600}
+.header .right{display:flex;align-items:center;gap:16px}
+.bell{width:34px;height:34px;border-radius:8px;border:1px solid var(--divider);background:#fff;display:flex;align-items:center;justify-content:center;color:var(--text-muted);box-shadow:var(--shadow-xs);cursor:pointer}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--primary-grad);color:#fff;font-size:13px;font-weight:700;display:flex;align-items:center;justify-content:center}
+
+/* ═══ Page ═══ */
+.content{padding:20px 24px 40px 88px;max-width:1280px}
+h1{font-size:21px;font-weight:700;letter-spacing:-.02em;color:var(--text-strong)}
+.page-head{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+.page-head .sub{font-size:13px;color:var(--text-muted);margin-top:3px}
+
+.card{background:var(--white);border:1px solid var(--divider);border-radius:var(--r-card);box-shadow:var(--shadow-xs)}
+
+/* ═══ Filter bar ═══ */
+.filterbar{display:flex;align-items:center;gap:12px;padding:14px 16px;margin-bottom:16px;flex-wrap:wrap}
+.flabel{font-size:12.5px;font-weight:600;color:var(--text-muted)}
+.control{height:32px;border:1px solid var(--border);border-radius:var(--r-ctl);background:#fff;font-size:13px;color:var(--text);padding:0 10px;box-shadow:var(--shadow-xs);transition:all .15s ease}
+.control:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 4px rgba(235,110,9,.12)}
+.range{display:flex;align-items:center;gap:6px}
+.range .sep{color:var(--text-faint)}
+.select{appearance:none;padding-right:28px;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%23667085' stroke-width='2.5'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 10px center;min-width:150px;cursor:pointer}
+.filterbar .spacer{flex:1}
+
+/* ═══ Buttons ═══ */
+.btn{height:32px;border-radius:var(--r-ctl);font-size:13px;font-weight:500;cursor:pointer;display:inline-flex;align-items:center;gap:7px;padding:0 14px;transition:all .15s ease;font-family:inherit}
+.btn-default{background:#fff;border:1px solid var(--divider);color:var(--text-2);box-shadow:var(--shadow-xs)}
+.btn-default:hover{background:var(--divider-soft);border-color:var(--border)}
+.btn-primary{background:var(--primary-grad);border:none;color:#fff;box-shadow:var(--shadow-primary)}
+.btn-primary:hover{filter:brightness(1.05)}
+.btn-primary:active{transform:translateY(1px)}
+.btn-sm{height:26px;font-size:12px;padding:0 10px;border-radius:6px}
+.link-btn{background:none;border:none;color:var(--primary);font-weight:600;font-size:13px;cursor:pointer;font-family:inherit;padding:4px 8px;border-radius:6px;transition:all .15s ease}
+.link-btn:hover{color:var(--primary-hover);background:var(--primary-bg)}
+
+/* ═══ Summary strip ═══ */
+.summary{display:flex;padding:0;margin-bottom:16px}
+.sum-cell{flex:1;padding:16px 20px;display:flex;flex-direction:column;gap:4px}
+.sum-cell + .sum-cell{border-left:1px solid var(--divider)}
+.sum-label{font-size:12.5px;color:var(--text-muted)}
+.sum-value{font-size:21px;font-weight:700;letter-spacing:-.01em;color:var(--text-strong);font-variant-numeric:tabular-nums}
+.sum-value.neg{color:var(--error)}
+.sum-value .vnd{font-size:12.5px;font-weight:500;color:var(--text-faint);margin-left:3px}
+.sum-note{font-size:12px;color:var(--text-faint)}
+
+/* ═══ Table ═══ */
+.table-card{overflow:hidden}
+table{width:100%;border-collapse:collapse}
+th{font-size:12.5px;font-weight:600;color:var(--text-muted);text-align:left;background:var(--header-bg);padding:11px 16px;border-bottom:1px solid var(--divider);white-space:nowrap}
+td{padding:13px 16px;border-bottom:1px solid var(--divider);font-size:13.5px;color:var(--text-2);vertical-align:middle}
+tbody tr.data-row{cursor:pointer;transition:background .12s ease}
+tbody tr.data-row:hover td{background:#FAFAFB}
+tbody tr.open td{background:var(--primary-bg)}
+.num{text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+.num.neg{color:var(--error);font-weight:600}
+.num.zero{color:var(--text-muted)}
+.shop-cell .code{font-size:12px;color:var(--text-faint);margin-top:2px}
+.chev{width:26px;height:26px;border-radius:6px;display:inline-flex;align-items:center;justify-content:center;color:var(--text-faint);transition:transform .15s ease}
+tr.open .chev{transform:rotate(90deg);color:var(--primary)}
+
+/* Tag pill (StatusTag pattern) */
+.tag{display:inline-flex;align-items:center;border-radius:var(--r-pill);padding:3px 11px;font-size:12px;font-weight:500;border:1px solid;line-height:18px;white-space:nowrap}
+.tag::before{content:'';width:5px;height:5px;border-radius:50%;background:currentColor;margin-right:6px}
+.tag.ok{color:var(--success);background:var(--success-bg);border-color:var(--success-line)}
+.tag.bad{color:var(--error);background:var(--error-bg);border-color:var(--error-line)}
+.tag.warn{color:var(--warning);background:var(--warning-bg);border-color:var(--warning-line)}
+
+/* ═══ Expanded drill-down ═══ */
+tr.detail-row td{padding:0;background:#FCFCFD}
+.detail-inner{padding:8px 16px 16px 56px}
+.detail-title{font-size:12.5px;font-weight:600;color:var(--text-muted);margin:8px 0 8px;display:flex;align-items:center;gap:8px}
+.subtable-wrap{background:#fff;border:1px solid var(--divider);border-radius:var(--r-md);overflow:hidden}
+.subtable th{font-size:12px;padding:9px 14px;background:var(--header-bg)}
+.subtable td{padding:10px 14px;font-size:13px}
+.empty-lech{padding:14px;font-size:13px;color:var(--text-faint);display:flex;align-items:center;gap:8px}
+.status-mini{font-size:12px;font-weight:500}
+.status-mini.pending{color:var(--error)}
+.status-mini.mismatch{color:var(--warning)}
+
+/* ═══ Modal ═══ */
+.overlay{position:fixed;inset:0;background:rgba(16,24,40,.55);display:none;align-items:center;justify-content:center;z-index:100}
+.overlay.show{display:flex}
+.modal{width:460px;background:#fff;border-radius:var(--r-modal);box-shadow:var(--shadow-lg);animation:modal-in .15s ease-out;overflow:hidden}
+@keyframes modal-in{from{opacity:0;transform:translateY(8px) scale(.98)}to{opacity:1;transform:translateY(0) scale(1)}}
+.modal-head{padding:20px 24px 0;display:flex;justify-content:space-between;align-items:flex-start}
+.modal-title{font-size:17px;font-weight:700;letter-spacing:-.01em;color:var(--text-strong)}
+.modal-x{background:none;border:none;color:var(--text-faint);cursor:pointer;font-size:16px;padding:4px;border-radius:6px}
+.modal-x:hover{background:var(--divider-soft)}
+.modal-body{padding:16px 24px 4px}
+.field{margin-bottom:14px}
+.field label{display:block;font-size:12.5px;font-weight:600;color:var(--text-2);margin-bottom:6px}
+.field .static{font-size:13.5px;color:var(--text);padding:8px 0}
+.field input{width:100%;height:36px;border:1px solid var(--border);border-radius:var(--r-ctl);padding:0 12px;font-size:14px;font-family:inherit;color:var(--text)}
+.field input:focus{outline:none;border-color:var(--primary);box-shadow:0 0 0 4px rgba(235,110,9,.12)}
+.hint{font-size:12px;color:var(--text-faint);margin-top:6px}
+.modal-foot{display:flex;justify-content:flex-end;gap:10px;padding:16px 24px 22px}
+.footnote{font-size:12px;color:var(--text-faint);padding:12px 24px 18px;border-top:1px solid var(--divider-soft);margin-top:8px}
+</style>
+</head>
+<body>
+
+<!-- Sidebar — nav entry /settlement APPEND CUỐI (invariant firstPathForRole) -->
+<aside class="sidebar">
+  <div class="logo">
+    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="#fff" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/></svg>
+  </div>
+  <nav class="nav">
+    <div class="nav-item" title="Trang chủ"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><path d="M9 22V12h6v10"/></svg></div>
+    <div class="nav-item" title="Đơn hàng"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 4h2a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V6a2 2 0 0 1 2-2h2"/><rect x="8" y="2" width="8" height="4" rx="1"/></svg></div>
+    <div class="nav-item" title="Chuyến hoàn tất"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 17h4V5H2v12h3"/><path d="M20 17h2v-3.34a4 4 0 0 0-1.17-2.83L19 9h-5"/><circle cx="7.5" cy="17.5" r="2.5"/><circle cx="17.5" cy="17.5" r="2.5"/></svg></div>
+    <div class="nav-item" title="Dashboard"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 15v-4"/><path d="M12 15V7"/><path d="M17 15v-7"/></svg></div>
+    <div class="nav-item" title="Khu vực NV"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg></div>
+    <div class="nav-item active" title="Đối soát COD (Manager)"><svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21.21 15.89A10 10 0 1 1 8 2.83"/><path d="M22 12A10 10 0 0 0 12 2v10z"/></svg></div>
+  </nav>
+</aside>
+
+<header class="header">
+  <div class="crumb">Hub Store &nbsp;/&nbsp; <b>Đối soát COD</b></div>
+  <div class="right">
+    <div class="bell"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/></svg></div>
+    <div class="avatar">QL</div>
+  </div>
+</header>
+
+<main class="content">
+  <div class="page-head">
+    <div>
+      <h1>Đối soát COD</h1>
+      <div class="sub">Đối chiếu COD kỳ vọng với thực thu theo cửa hàng · chỉ Manager / Admin</div>
+    </div>
+  </div>
+
+  <!-- Filter bar: kỳ đối soát -->
+  <div class="card filterbar">
+    <span class="flabel">Kỳ đối soát</span>
+    <div class="range">
+      <input type="text" class="control" value="01/09/2026" style="width:118px">
+      <span class="sep">→</span>
+      <input type="text" class="control" value="30/09/2026" style="width:118px">
+    </div>
+    <select class="control select"><option>Tất cả cửa hàng</option><option>FPT Shop Cầu Giấy</option><option>FPT Shop Hà Đông</option></select>
+    <button class="btn btn-default">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+      Làm mới
+    </button>
+    <span class="spacer"></span>
+    <button class="btn btn-default" onclick="fakeExport(this)">
+      <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+      Xuất CSV
+    </button>
+  </div>
+
+  <!-- Summary strip: 4 số tổng theo kỳ -->
+  <div class="card summary">
+    <div class="sum-cell">
+      <span class="sum-label">Tổng đơn hoàn tất (COD)</span>
+      <span class="sum-value">554</span>
+      <span class="sum-note">6 cửa hàng · kỳ 01/09 – 30/09</span>
+    </div>
+    <div class="sum-cell">
+      <span class="sum-label">COD kỳ vọng</span>
+      <span class="sum-value">208.100.000<span class="vnd">₫</span></span>
+      <span class="sum-note">Snapshot lúc hoàn tất đơn</span>
+    </div>
+    <div class="sum-cell">
+      <span class="sum-label">Đã thu</span>
+      <span class="sum-value">205.350.000<span class="vnd">₫</span></span>
+      <span class="sum-note">Thu ~98,7% kỳ vọng</span>
+    </div>
+    <div class="sum-cell">
+      <span class="sum-label">Chênh lệch</span>
+      <span class="sum-value neg">−2.750.000<span class="vnd">₫</span></span>
+      <span class="sum-note">5 đơn chờ thu · 4 đơn lệch tiền</span>
+    </div>
+  </div>
+
+  <!-- Table per shop -->
+  <div class="card table-card">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:44px"></th>
+          <th>Cửa hàng</th>
+          <th class="num">Đơn hoàn tất</th>
+          <th class="num">COD kỳ vọng</th>
+          <th class="num">Đã thu</th>
+          <th class="num">Chênh lệch</th>
+          <th class="num">Chờ thu</th>
+          <th class="num">Lệch tiền</th>
+          <th>Trạng thái</th>
+        </tr>
+      </thead>
+      <tbody id="tbody">
+        <!-- SHP-001 -->
+        <tr class="data-row" onclick="toggleRow(this, 'd1')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Cầu Giấy</div><div class="code">SHP-001</div></td>
+          <td class="num">128</td>
+          <td class="num">48.600.000</td>
+          <td class="num">47.150.000</td>
+          <td class="num neg">−1.450.000</td>
+          <td class="num">3</td>
+          <td class="num">1</td>
+          <td><span class="tag bad">Thiếu thu</span></td>
+        </tr>
+        <tr class="detail-row" id="d1" style="display:none">
+          <td colspan="9">
+            <div class="detail-inner">
+              <div class="detail-title">
+                Đơn lệch của SHP-001
+                <span class="tag bad">3 chờ thu</span><span class="tag warn">1 lệch tiền</span>
+              </div>
+              <div class="subtable-wrap">
+                <table class="subtable">
+                  <thead><tr><th>Mã hoàn tất</th><th>Trạng thái</th><th class="num">Kỳ vọng</th><th class="num">Thực thu</th><th>Người thu</th><th>Thời điểm hoàn tất</th><th style="width:130px"></th></tr></thead>
+                  <tbody>
+                    <tr>
+                      <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0901-0034</td>
+                      <td><span class="status-mini pending">● Chưa xác nhận thu</span></td>
+                      <td class="num">450.000</td><td class="num zero">—</td><td>—</td><td>02/09 16:42</td>
+                      <td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0901-0034',450000)">Xác nhận thu</button></td>
+                    </tr>
+                    <tr>
+                      <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0901-0075</td>
+                      <td><span class="status-mini pending">● Chưa xác nhận thu</span></td>
+                      <td class="num">240.000</td><td class="num zero">—</td><td>—</td><td>03/09 08:30</td>
+                      <td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0901-0075',240000)">Xác nhận thu</button></td>
+                    </tr>
+                    <tr>
+                      <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0901-0102</td>
+                      <td><span class="status-mini pending">● Chưa xác nhận thu</span></td>
+                      <td class="num">720.000</td><td class="num zero">—</td><td>—</td><td>03/09 10:15</td>
+                      <td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0901-0102',720000)">Xác nhận thu</button></td>
+                    </tr>
+                    <tr>
+                      <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0902-0051</td>
+                      <td><span class="status-mini mismatch">● Lệch số tiền</span></td>
+                      <td class="num">320.000</td><td class="num" style="color:var(--warning);font-weight:600">280.000</td><td>nguyen.vt</td><td>03/09 14:05</td>
+                      <td style="text-align:right"><button class="link-btn" onclick="openConfirm(event,'FLC-2026-0902-0051',320000,280000)">Xác nhận lại</button></td>
+                    </tr>
+                  </tbody>
+                </table>
+              </div>
+            </div>
+          </td>
+        </tr>
+
+        <!-- SHP-002 (đủ) -->
+        <tr class="data-row" onclick="toggleRow(this,'d2')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Hà Đông</div><div class="code">SHP-002</div></td>
+          <td class="num">96</td><td class="num">36.200.000</td><td class="num">36.200.000</td>
+          <td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td>
+          <td><span class="tag ok">Đủ</span></td>
+        </tr>
+        <tr class="detail-row" id="d2" style="display:none"><td colspan="9"><div class="detail-inner"><div class="empty-lech"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Không có đơn lệch trong kỳ — COD đã xác nhận đủ.</div></div></td></tr>
+
+        <!-- SHP-003 -->
+        <tr class="data-row" onclick="toggleRow(this,'d3')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Long Biên</div><div class="code">SHP-003</div></td>
+          <td class="num">74</td><td class="num">27.850.000</td><td class="num">27.750.000</td>
+          <td class="num neg">−100.000</td><td class="num zero">0</td><td class="num">2</td>
+          <td><span class="tag warn">Lệch tiền</span></td>
+        </tr>
+        <tr class="detail-row" id="d3" style="display:none">
+          <td colspan="9"><div class="detail-inner">
+            <div class="detail-title">Đơn lệch của SHP-003 <span class="tag warn">2 lệch tiền</span></div>
+            <div class="subtable-wrap">
+              <table class="subtable">
+                <thead><tr><th>Mã hoàn tất</th><th>Trạng thái</th><th class="num">Kỳ vọng</th><th class="num">Thực thu</th><th>Người thu</th><th>Thời điểm hoàn tất</th><th style="width:130px"></th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0902-0088</td>
+                    <td><span class="status-mini mismatch">● Lệch số tiền</span></td>
+                    <td class="num">240.000</td><td class="num" style="color:var(--warning);font-weight:600">200.000</td><td>tran.qa</td><td>01/09 18:20</td>
+                    <td style="text-align:right"><button class="link-btn" onclick="openConfirm(event,'FLC-2026-0902-0088',240000,200000)">Xác nhận lại</button></td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0902-0113</td>
+                    <td><span class="status-mini mismatch">● Lệch số tiền</span></td>
+                    <td class="num">350.000</td><td class="num" style="color:var(--warning);font-weight:600">290.000</td><td>le.mh</td><td>02/09 09:40</td>
+                    <td style="text-align:right"><button class="link-btn" onclick="openConfirm(event,'FLC-2026-0902-0113',350000,290000)">Xác nhận lại</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div></td>
+        </tr>
+
+        <!-- SHP-004 (đủ) -->
+        <tr class="data-row" onclick="toggleRow(this,'d4')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Thủ Đức</div><div class="code">SHP-004</div></td>
+          <td class="num">152</td><td class="num">58.400.000</td><td class="num">58.400.000</td>
+          <td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td>
+          <td><span class="tag ok">Đủ</span></td>
+        </tr>
+        <tr class="detail-row" id="d4" style="display:none"><td colspan="9"><div class="detail-inner"><div class="empty-lech"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Không có đơn lệch trong kỳ — COD đã xác nhận đủ.</div></div></td></tr>
+
+        <!-- SHP-005 -->
+        <tr class="data-row" onclick="toggleRow(this,'d5')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Bình Thạnh</div><div class="code">SHP-005</div></td>
+          <td class="num">63</td><td class="num">21.300.000</td><td class="num">20.100.000</td>
+          <td class="num neg">−1.200.000</td><td class="num">3</td><td class="num">1</td>
+          <td><span class="tag bad">Thiếu thu</span></td>
+        </tr>
+        <tr class="detail-row" id="d5" style="display:none">
+          <td colspan="9"><div class="detail-inner">
+            <div class="detail-title">Đơn lệch của SHP-005 <span class="tag bad">3 chờ thu</span><span class="tag warn">1 lệch tiền</span></div>
+            <div class="subtable-wrap">
+              <table class="subtable">
+                <thead><tr><th>Mã hoàn tất</th><th>Trạng thái</th><th class="num">Kỳ vọng</th><th class="num">Thực thu</th><th>Người thu</th><th>Thời điểm hoàn tất</th><th style="width:130px"></th></tr></thead>
+                <tbody>
+                  <tr>
+                    <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0903-0007</td>
+                    <td><span class="status-mini pending">● Chưa xác nhận thu</span></td>
+                    <td class="num">560.000</td><td class="num zero">—</td><td>—</td><td>02/09 15:30</td>
+                    <td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0903-0007',560000)">Xác nhận thu</button></td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0903-0012</td>
+                    <td><span class="status-mini pending">● Chưa xác nhận thu</span></td>
+                    <td class="num">290.000</td><td class="num zero">—</td><td>—</td><td>03/09 08:55</td>
+                    <td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0903-0012',290000)">Xác nhận thu</button></td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0903-0019</td>
+                    <td><span class="status-mini pending">● Chưa xác nhận thu</span></td>
+                    <td class="num">320.000</td><td class="num zero">—</td><td>—</td><td>03/09 11:22</td>
+                    <td style="text-align:right"><button class="btn btn-primary btn-sm" onclick="openConfirm(event,'FLC-2026-0903-0019',320000)">Xác nhận thu</button></td>
+                  </tr>
+                  <tr>
+                    <td style="font-weight:500;color:var(--text-strong)">FLC-2026-0903-0021</td>
+                    <td><span class="status-mini mismatch">● Lệch số tiền</span></td>
+                    <td class="num">190.000</td><td class="num" style="color:var(--warning);font-weight:600">160.000</td><td>pham.dn</td><td>03/09 13:10</td>
+                    <td style="text-align:right"><button class="link-btn" onclick="openConfirm(event,'FLC-2026-0903-0021',190000,160000)">Xác nhận lại</button></td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div></td>
+        </tr>
+
+        <!-- SHP-006 (đủ) -->
+        <tr class="data-row" onclick="toggleRow(this,'d6')">
+          <td><span class="chev"><svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg></span></td>
+          <td class="shop-cell"><div style="font-weight:600;color:var(--text-strong)">FPT Shop Đà Nẵng</div><div class="code">SHP-006</div></td>
+          <td class="num">41</td><td class="num">15.750.000</td><td class="num">15.750.000</td>
+          <td class="num zero">0</td><td class="num zero">0</td><td class="num zero">0</td>
+          <td><span class="tag ok">Đủ</span></td>
+        </tr>
+        <tr class="detail-row" id="d6" style="display:none"><td colspan="9"><div class="detail-inner"><div class="empty-lech"><svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M20 6 9 17l-5-5"/></svg>Không có đơn lệch trong kỳ — COD đã xác nhận đủ.</div></div></td></tr>
+      </tbody>
+    </table>
+  </div>
+</main>
+
+<!-- Modal xác nhận thu -->
+<div class="overlay" id="overlay">
+  <div class="modal">
+    <div class="modal-head">
+      <div class="modal-title">Xác nhận thu COD</div>
+      <button class="modal-x" onclick="closeConfirm()">✕</button>
+    </div>
+    <div class="modal-body">
+      <div class="field">
+        <label>Mã hoàn tất</label>
+        <div class="static" id="m-code" style="font-weight:600">FLC-2026-0901-0034</div>
+      </div>
+      <div class="field">
+        <label>COD kỳ vọng (snapshot lúc hoàn tất)</label>
+        <div class="static" id="m-expected">450.000 ₫</div>
+      </div>
+      <div class="field">
+        <label>Số tiền thực thu</label>
+        <input type="text" id="m-input" value="450.000">
+        <div class="hint">Để trống hoặc nhập 0 để lấy đúng số kỳ vọng. Actor ghi nhận: quanglm (Manager)</div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="btn btn-default" onclick="closeConfirm()">Hủy</button>
+      <button class="btn btn-primary" onclick="doConfirm()">Xác nhận thu</button>
+    </div>
+    <div class="footnote">Xác nhận ghi audit log (cod.confirmed). Đơn đã CONFIRMED xác nhận lại = last-write-wins.</div>
+  </div>
+</div>
+
+<script>
+function toggleRow(tr, id){
+  const d = document.getElementById(id);
+  const open = d.style.display !== 'none';
+  d.style.display = open ? 'none' : '';
+  tr.classList.toggle('open', !open);
+}
+function fakeExport(btn){
+  const t = btn.innerHTML;
+  btn.innerHTML = 'Đang xuất…';
+  setTimeout(()=>{ btn.innerHTML = t; alert('Tải settlement_2026-09-01_2026-09-30.csv (demo)'); }, 700);
+}
+let currentRow = null;
+function openConfirm(e, code, expected, collected){
+  e.stopPropagation();
+  document.getElementById('m-code').textContent = code;
+  document.getElementById('m-expected').textContent = expected.toLocaleString('vi-VN') + ' ₫';
+  document.getElementById('m-input').value = (collected ?? expected).toLocaleString('vi-VN');
+  currentRow = e.target.closest('tr');
+  document.getElementById('overlay').classList.add('show');
+}
+function closeConfirm(){ document.getElementById('overlay').classList.remove('show'); }
+function doConfirm(){
+  if(currentRow){
+    const cell = currentRow.querySelector('td:last-child');
+    cell.innerHTML = '<span class="status-mini" style="color:var(--success)">✓ Đã xác nhận</span>';
+  }
+  closeConfirm();
+}
+document.getElementById('overlay').addEventListener('click', e => { if(e.target.id === 'overlay') closeConfirm(); });
+</script>
+</body>
+</html>

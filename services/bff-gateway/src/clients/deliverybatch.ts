@@ -21,27 +21,27 @@ import type {
   SearchBookingDetailRequest,
   SearchBookingDetailResponse,
 } from '../../../../api/proto/gen/ts/hubstore/batching/v1/delivery_batch';
-import { callUnary, insecureChannel } from './grpc.js';
+import { callUnary, insecureChannel, type Caller } from './grpc.js';
 
 export interface DeliveryBatchApi {
-  getQuotes(req: GetQuotesRequest, role: string): Promise<GetQuotesResponse>;
-  confirmPlanning(req: ConfirmPlanningRequest, role: string): Promise<ConfirmPlanningResponse>;
-  createBooking(req: CreateBookingRequest, role: string): Promise<CreateBookingResponse>;
+  getQuotes(req: GetQuotesRequest, caller: Caller): Promise<GetQuotesResponse>;
+  confirmPlanning(req: ConfirmPlanningRequest, caller: Caller): Promise<ConfirmPlanningResponse>;
+  createBooking(req: CreateBookingRequest, caller: Caller): Promise<CreateBookingResponse>;
   cancelDeliveryOrder(
     req: CancelDeliveryOrderRequest,
-    role: string,
+    caller: Caller,
   ): Promise<CancelDeliveryOrderResponse>;
   cancelDeliveryBatch(
     req: CancelDeliveryBatchRequest,
-    role: string,
+    caller: Caller,
   ): Promise<CancelDeliveryBatchResponse>;
   searchBookingDetail(
     req: SearchBookingDetailRequest,
-    role: string,
+    caller: Caller,
   ): Promise<SearchBookingDetailResponse>;
   listAddonServices(
     req: ListAddonServicesRequest,
-    role: string,
+    caller: Caller,
   ): Promise<ListAddonServicesResponse>;
   close(): void;
 }
@@ -49,17 +49,17 @@ export interface DeliveryBatchApi {
 export function createDeliveryBatchClient(addr: string, deadlineMs: number): DeliveryBatchApi {
   const c = new DeliveryBatchServiceClient(addr, insecureChannel());
   return {
-    getQuotes: (req, role) => callUnary(c.getQuotes.bind(c), req, role, deadlineMs),
-    confirmPlanning: (req, role) => callUnary(c.confirmPlanning.bind(c), req, role, deadlineMs),
-    createBooking: (req, role) => callUnary(c.createBooking.bind(c), req, role, deadlineMs),
-    cancelDeliveryOrder: (req, role) =>
-      callUnary(c.cancelDeliveryOrder.bind(c), req, role, deadlineMs),
-    cancelDeliveryBatch: (req, role) =>
-      callUnary(c.cancelDeliveryBatch.bind(c), req, role, deadlineMs),
-    searchBookingDetail: (req, role) =>
-      callUnary(c.searchBookingDetail.bind(c), req, role, deadlineMs),
-    listAddonServices: (req, role) =>
-      callUnary(c.listAddonServices.bind(c), req, role, deadlineMs),
+    getQuotes: (req, caller) => callUnary(c.getQuotes.bind(c), req, caller, deadlineMs),
+    confirmPlanning: (req, caller) => callUnary(c.confirmPlanning.bind(c), req, caller, deadlineMs),
+    createBooking: (req, caller) => callUnary(c.createBooking.bind(c), req, caller, deadlineMs),
+    cancelDeliveryOrder: (req, caller) =>
+      callUnary(c.cancelDeliveryOrder.bind(c), req, caller, deadlineMs),
+    cancelDeliveryBatch: (req, caller) =>
+      callUnary(c.cancelDeliveryBatch.bind(c), req, caller, deadlineMs),
+    searchBookingDetail: (req, caller) =>
+      callUnary(c.searchBookingDetail.bind(c), req, caller, deadlineMs),
+    listAddonServices: (req, caller) =>
+      callUnary(c.listAddonServices.bind(c), req, caller, deadlineMs),
     close: () => c.close(),
   };
 }

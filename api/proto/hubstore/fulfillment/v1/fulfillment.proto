@@ -194,6 +194,26 @@ service FulfillmentService {
   rpc FilterD2cOrders(FilterD2cOrdersRequest) returns (FilterD2cOrdersResponse);
   // SF-18: PUT /d2c-orders/{orderCode}/note — note khóa order_code.
   rpc UpdateD2cOrderNote(UpdateD2cOrderNoteRequest) returns (UpdateD2cOrderNoteResponse);
+  // SF-14: confirm thu COD per-order (mỗi item 1 result — fail không kill batch).
+  rpc ConfirmCod(ConfirmCodRequest) returns (ConfirmCodResponse);
+  // SF-14: confirm thu COD cả phiếu (chỉ PENDING, đơn FAILED loại — D7).
+  rpc ConfirmBatchCod(ConfirmBatchCodRequest) returns (ConfirmBatchCodResponse);
+  // SF-14: badge D2 "COD chờ thu (n)" theo phiếu (D7).
+  rpc GetCodPending(GetCodPendingRequest) returns (GetCodPendingResponse);
+  // SF-14: đối soát theo shop theo kỳ (GROUP BY SQL — D5).
+  rpc GetSettlement(GetSettlementRequest) returns (GetSettlementResponse);
+  // SF-14: drill-down đơn theo shop + kỳ (lệch tiền / chưa thu).
+  rpc GetSettlementDetail(GetSettlementDetailRequest) returns (GetSettlementDetailResponse);
+  // SF-21: danh sách máy in theo kho (DB-backed — V8) cho D3 print.
+  rpc ListPrinters(ListPrintersRequest) returns (ListPrintersResponse);
+  // SF-21: tạo máy in (Admin — BFF gate, spec D9).
+  rpc CreatePrinter(CreatePrinterRequest) returns (CreatePrinterResponse);
+  // SF-21: sửa máy in — (shop_code, printer_id) immutable, chỉ name/ip/mac/type.
+  rpc UpdatePrinter(UpdatePrinterRequest) returns (UpdatePrinterResponse);
+  // SF-21: ghi nhận 1 lỗi in thật (BFF record trên failure path — spec D2).
+  rpc RecordPrintError(RecordPrintErrorRequest) returns (RecordPrintErrorResponse);
+  // SF-21: đếm lỗi in per đơn theo phiếu — badge + sort D3 (V9).
+  rpc GetPrintErrorCounts(GetPrintErrorCountsRequest) returns (GetPrintErrorCountsResponse);
 }
 
 // --- Filter ---
@@ -248,6 +268,8 @@ message MutateOrderStatusRequest {
   BatchStatus target_batch_status = 2;
   // Lý do (vd hủy phiếu) — optional.
   optional string reason = 3;
+  // Mã phiếu soạn — Go batching truyền qua để Java eager-insert cod_confirmations đúng batch.
+  optional string batch_code = 4;
 }
 
 message MutateOrderStatusResult {
@@ -426,4 +448,180 @@ message UpdateD2cOrderNoteRequest {
 }
 message UpdateD2cOrderNoteResponse {
   D2cOrder order = 1;
+}
+
+// --- SF-14 COD settlement (FI-259, additive only) ---
+
+// Trạng thái thu COD (wire codes mirror cod_confirmations.status: 0 = PENDING).
+enum CodCollectionStatus {
+  COD_PENDING = 0;
+  COD_CONFIRMED = 1;
+}
+
+// 1 dòng cod_confirmations — snapshot pattern: expected/shop_name chụp lúc
+// hoàn tất phiếu; completed_at là anchor kỳ đối soát (D1).
+message CodConfirmation {
+  string fulfill_code = 1;
+  string batch_code = 2;
+  string shop_code = 3;
+  string shop_name = 4;
+  // Snapshot cod_amount lúc hoàn tất (VND).
+  int64 expected_amount = 5;
+  // optional presence (D3 — precedent Region.parent_code): absence = PENDING
+  // (chưa thu); presence 0 = thu thật 0 đồng (KHÔNG dùng sentinel).
+  optional int64 collected_amount = 6;
+  string collected_by = 7;
+  google.protobuf.Timestamp collected_at = 8;
+  google.protobuf.Timestamp completed_at = 9;
+  CodCollectionStatus status = 10;
+}
+
+// Per-order confirm — collected_amount absence = lấy expected (D3).
+message ConfirmCodItem {
+  string fulfill_code = 1;
+  optional int64 collected_amount = 2;
+}
+
+message ConfirmCodRequest {
+  repeated ConfirmCodItem items = 1;
+}
+
+message ConfirmCodResult {
+  string fulfill_code = 1;
+  bool success = 2;
+  string message = 3;
+}
+
+message ConfirmCodResponse {
+  repeated ConfirmCodResult results = 1;
+}
+
+message ConfirmBatchCodRequest {
+  string batch_code = 1;
+}
+
+message ConfirmBatchCodResponse {
+  int32 confirmed_count = 1;
+  // Tổng thu được (mỗi đơn collected = expected — bulk confirm).
+  int64 total_amount = 2;
+}
+
+message GetCodPendingRequest {
+  string batch_code = 1;
+}
+
+message GetCodPendingResponse {
+  int32 pending_count = 1;
+  int64 total_amount = 2;
+}
+
+// Kỳ [from, to) trên completed_at — BFF wrap full-day +07:00 (D9).
+message GetSettlementRequest {
+  google.protobuf.Timestamp period_from = 1;
+  google.protobuf.Timestamp period_to = 2;
+  // Điền = lọc 1 shop; trống = tất cả.
+  optional string shop_code = 3;
+}
+
+message SettlementShopRow {
+  string shop_code = 1;
+  string shop_name = 2;
+  int32 total_orders = 3;
+  int64 total_expected = 4;
+  int64 total_collected = 5;
+  int64 diff_amount = 6;
+  int32 pending_count = 7;
+  // CONFIRMED nhưng collected ≠ expected (thu lệch — D3 case 0 đồng).
+  int32 mismatch_count = 8;
+}
+
+message GetSettlementResponse {
+  repeated SettlementShopRow rows = 1;
+}
+
+message GetSettlementDetailRequest {
+  string shop_code = 1;
+  google.protobuf.Timestamp period_from = 2;
+  google.protobuf.Timestamp period_to = 3;
+}
+
+message GetSettlementDetailResponse {
+  repeated CodConfirmation confirmations = 1;
+}
+
+// --- SF-21 printer management (additive only) ---
+
+// Printer — 1 máy in của kho (bảng printers, V8). (shop_code, printer_id) là
+// identity — KHÔNG sửa sau tạo (spec D9). type là STRING ('bill' | 'a4') —
+// tránh enum churn (lint rule như buf.yaml chú thích), validation ở Java.
+message Printer {
+  string shop_code = 1;
+  string printer_id = 2;
+  string name = 3;
+  string printer_ip = 4;
+  string mac = 5;
+  string type = 6;
+  // Review-nhóm-2 P1: spec D9 — location editable (seed "Khu soạn A"...).
+  string location = 7;
+}
+
+message ListPrintersRequest {
+  // shop_code trống = tất cả (BFF luôn truyền shop — defensive như print-service).
+  string shop_code = 1;
+}
+
+message ListPrintersResponse {
+  repeated Printer printers = 1;
+}
+
+message CreatePrinterRequest {
+  Printer printer = 1;
+}
+
+message CreatePrinterResponse {
+  Printer printer = 1;
+}
+
+message UpdatePrinterRequest {
+  string shop_code = 1;
+  string printer_id = 2;
+  // Chỉ name/printer_ip/mac/type có hiệu lực — identity lấy từ 2 field path.
+  Printer printer = 3;
+}
+
+message UpdatePrinterResponse {
+  Printer printer = 1;
+}
+
+// --- SF-21 print errors (additive only, spec D2) ---
+
+// PrintErrorRecord — 1 lỗi in thật. BFF ghi qua rpc này; order_code rỗng
+// khi batch chưa hydrate được (lỗi xảy ra trước khi biết danh sách đơn).
+message PrintErrorRecord {
+  string order_code = 1;
+  string batch_code = 2;
+  string print_type = 3;
+  string printer_id = 4;
+  string error_message = 5;
+}
+
+message RecordPrintErrorRequest {
+  PrintErrorRecord record = 1;
+}
+
+message RecordPrintErrorResponse {
+}
+
+// PrintErrorCount — số lỗi in của 1 đơn trong phiếu (badge D3).
+message PrintErrorCount {
+  string order_code = 1;
+  int64 count = 2;
+}
+
+message GetPrintErrorCountsRequest {
+  string batch_code = 1;
+}
+
+message GetPrintErrorCountsResponse {
+  repeated PrintErrorCount counts = 1;
 }

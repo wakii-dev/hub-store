@@ -23,31 +23,31 @@ import type {
   RecalculateDistanceRequest,
   RecalculateDistanceResponse,
 } from '../../../../api/proto/gen/ts/hubstore/batching/v1/batching';
-import { callUnary, insecureChannel } from './grpc.js';
+import { callUnary, insecureChannel, type Caller } from './grpc.js';
 
 export interface BatchingApi {
-  createBatch(req: CreateBatchRequest, role: string): Promise<CreateBatchResponse>;
-  filterBatches(req: FilterBatchesRequest, role: string): Promise<FilterBatchesResponse>;
-  getBatchDetail(req: GetBatchDetailRequest, role: string): Promise<GetBatchDetailResponse>;
-  cancelBatch(req: CancelBatchRequest, role: string): Promise<CancelBatchResponse>;
-  getBatchCriteria(req: GetBatchCriteriaRequest, role: string): Promise<GetBatchCriteriaResponse>;
-  completePicking(req: CompletePickingRequest, role: string): Promise<CompletePickingResponse>;
-  packingSuggest(req: PackingSuggestRequest, role: string): Promise<PackingSuggestResponse>;
-  recalculateDistance(req: RecalculateDistanceRequest, role: string): Promise<RecalculateDistanceResponse>;
+  createBatch(req: CreateBatchRequest, caller: Caller): Promise<CreateBatchResponse>;
+  filterBatches(req: FilterBatchesRequest, caller: Caller): Promise<FilterBatchesResponse>;
+  getBatchDetail(req: GetBatchDetailRequest, caller: Caller): Promise<GetBatchDetailResponse>;
+  cancelBatch(req: CancelBatchRequest, caller: Caller): Promise<CancelBatchResponse>;
+  getBatchCriteria(req: GetBatchCriteriaRequest, caller: Caller): Promise<GetBatchCriteriaResponse>;
+  completePicking(req: CompletePickingRequest, caller: Caller): Promise<CompletePickingResponse>;
+  packingSuggest(req: PackingSuggestRequest, caller: Caller): Promise<PackingSuggestResponse>;
+  recalculateDistance(req: RecalculateDistanceRequest, caller: Caller): Promise<RecalculateDistanceResponse>;
   close(): void;
 }
 
 export function createBatchingClient(addr: string, deadlineMs: number): BatchingApi {
   const c = new BatchingServiceClient(addr, insecureChannel());
   return {
-    createBatch: (req, role) => callUnary(c.createBatch.bind(c), req, role, deadlineMs),
-    filterBatches: (req, role) => callUnary(c.filterBatches.bind(c), req, role, deadlineMs),
-    getBatchDetail: (req, role) => callUnary(c.getBatchDetail.bind(c), req, role, deadlineMs),
-    cancelBatch: (req, role) => callUnary(c.cancelBatch.bind(c), req, role, deadlineMs),
-    getBatchCriteria: (req, role) => callUnary(c.getBatchCriteria.bind(c), req, role, deadlineMs),
-    completePicking: (req, role) => callUnary(c.completePicking.bind(c), req, role, deadlineMs),
-    packingSuggest: (req, role) => callUnary(c.packingSuggest.bind(c), req, role, deadlineMs),
-    recalculateDistance: (req, role) => callUnary(c.recalculateDistance.bind(c), req, role, deadlineMs),
+    createBatch: (req, caller) => callUnary(c.createBatch.bind(c), req, caller, deadlineMs),
+    filterBatches: (req, caller) => callUnary(c.filterBatches.bind(c), req, caller, deadlineMs),
+    getBatchDetail: (req, caller) => callUnary(c.getBatchDetail.bind(c), req, caller, deadlineMs),
+    cancelBatch: (req, caller) => callUnary(c.cancelBatch.bind(c), req, caller, deadlineMs),
+    getBatchCriteria: (req, caller) => callUnary(c.getBatchCriteria.bind(c), req, caller, deadlineMs),
+    completePicking: (req, caller) => callUnary(c.completePicking.bind(c), req, caller, deadlineMs),
+    packingSuggest: (req, caller) => callUnary(c.packingSuggest.bind(c), req, caller, deadlineMs),
+    recalculateDistance: (req, caller) => callUnary(c.recalculateDistance.bind(c), req, caller, deadlineMs),
     close: () => c.close(),
   };
 }

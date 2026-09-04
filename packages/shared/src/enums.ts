@@ -77,3 +77,15 @@ export const DELIVERY_FAIL_REASON_LABELS: Readonly<
   2: { vi: 'Khách từ chối', en: 'Customer refused' },
   3: { vi: 'Khác', en: 'Other' },
 };
+
+/**
+ * CodCollectionStatus — trạng thái thu COD (SF-14, FI-259).
+ * Wire codes mirror hubstore.fulfillment.v1.CodCollectionStatus: 0 = PENDING
+ * (chưa thu), 1 = CONFIRMED (đã chốt — collected có thể lệch expected).
+ */
+export const COD_COLLECTION_STATUS = {
+  PENDING: 0,
+  CONFIRMED: 1,
+} as const;
+export type CodCollectionStatus =
+  (typeof COD_COLLECTION_STATUS)[keyof typeof COD_COLLECTION_STATUS];

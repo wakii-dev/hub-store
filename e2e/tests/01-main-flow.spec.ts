@@ -33,6 +33,43 @@ async function createBatch(page: Page, opts: { suggest?: boolean; addOrder?: str
   await page.getByTestId("bulk-create-batch").click();
   const modal = page.locator(".create-batching-modal");
   await expect(modal).toBeVisible();
+  // SF-16 fix (regression DnD flaky): chờ animation mở modal (antd zoom +
+  // sf6-modal-in, ~300ms) chạy xong TRƯỚC khi đo boundingBox kéo-thả —
+  // đo giữa animation cho tọa độ scale ~0.2→1 → mouse.down trật handle.
+  await page.waitForFunction(() => {
+    const c = document.querySelector(".create-batching-modal .ant-modal-content");
+    return !!c && c.getAnimations().every((a) => a.playState !== "running");
+  });
+  // Anim xong chưa đủ: reflow muộn (font/async render) vẫn dịch handle ~11px
+  // giữa lúc đo boundingBox và mouse.down → trật handle nhỏ (~15px). Chờ top
+  // của drag handle ổn định qua 4 frame liên tiếp (~65ms không dịch chuyển).
+  await page.evaluate(
+    () =>
+      new Promise<void>((resolve) => {
+        const q = () =>
+          document.querySelector<HTMLElement>(
+            '[data-testid="batch-row-ORD-3001"] [data-testid="batch-drag-handle"]',
+          );
+        let last = q()?.getBoundingClientRect().top ?? Number.NaN;
+        let stable = 0;
+        const tick = () => {
+          const el = q();
+          if (!el) return resolve();
+          const t = el.getBoundingClientRect().top;
+          if (Math.abs(t - last) < 0.5) stable += 1;
+          else stable = 0;
+          last = t;
+          if (stable >= 4) resolve();
+          else requestAnimationFrame(tick);
+        };
+        requestAnimationFrame(tick);
+      }),
+  );
+
+  // SF-28 T7 — wizard step 1 (preset 4 card) thêm vào trước nội dung step cũ
+  // (Deviation D1: step cũ không bị ẩn) → advance sang step DnD trước khi kéo
+  // (layout shift làm coordinate-drag trượt chỗ).
+  await page.getByTestId("batch-continue").click();
 
   if (opts.dnd) {
     // Kéo hàng đầu xuống dưới 1 vị trí (react-sortable-hoc + useDragHandle)
@@ -190,8 +227,9 @@ test("luồng §8: tạo lại → In D3 PDF → hoàn tất soạn", async ({ p
   // PDF preview render (react-pdf → canvas) + zoom slider tồn tại
   const canvas = page.locator(".print-preview-area canvas").first();
   await canvas.waitFor({ timeout: 45_000 });
-  // antd 4 Slider không nhận aria-label trực tiếp → dùng role=slider của handle
-  const zoom = page.getByRole("slider");
+  // antd 4 Slider không nhận aria-label trực tiếp → dùng role=slider của handle.
+  // Scope vào remote-mount: SF-21 thêm FontSizeSlider (slider thứ 2) ở header.
+  const zoom = page.getByTestId("remote-mount").getByRole("slider");
   await expect(zoom).toBeVisible();
   await zoom.click();
   await page.keyboard.press("ArrowRight"); // tăng zoom — canvas re-render không crash

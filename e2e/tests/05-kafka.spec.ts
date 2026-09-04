@@ -19,9 +19,9 @@ test.skip(
   "KAFKA_ENABLED not enabled — kafka spec skipped",
 );
 
-const BFF = "http://localhost:8080";
+const BFF = process.env.E2E_BFF_URL ?? "http://localhost:8080"; // private-port seam (SF-15/SF-14 precedent)
 const KAFKA_UI = "http://localhost:8085";
-const APP = "http://localhost:3000";
+const APP = process.env.E2E_SHELL_URL ?? "http://localhost:3000"; // private-port seam
 
 /**
  * Bearer token cho BFF — đọc từ localStorage của shell (oidc-client-ts

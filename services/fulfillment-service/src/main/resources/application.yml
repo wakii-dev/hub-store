@@ -41,6 +41,8 @@ fulfillment:
   # Nguồn dữ liệu duy nhất: api/seed/canonical-seed.json (SF-2 authored).
   # Rỗng = auto-resolve (README): SEED_PATH > ../../api/seed > ../api/seed > api/seed.
   seed-path: ${SEED_PATH:}
+  # SF-12 — HTTP health side-port (HealthHttpServer; 8081=Keycloak, 8082=Go health).
+  health-port: ${HEALTH_PORT:8083}
 
 kafka:
   # SF-27 — event bus flag (env KAFKA_ENABLED; false → NoopEventPublisher).
@@ -51,3 +53,21 @@ payment:
     # SF-17: chọn PaymentAccountVerifier — mock (default) | zalopay.
     # zalopay yêu cầu env ZALOPAY_APP_ID/ZALOPAY_KEY1 (fail-loud lúc boot nếu thiếu).
     provider: ${PAYMENT_VERIFY_PROVIDER:mock}
+
+webhook:
+  # SF-26 (FI-271) — ngưỡng stale reclaim claim webhook (giây): PENDING cũ hơn
+  # ngưỡng = crash mồ côi → reclaim + xử lý lại; PENDING mới → UNAVAILABLE.
+  claim-stale-seconds: ${WEBHOOK_CLAIM_STALE_SECONDS:120}
+
+# SF-12 (FI-257) — s2s auth (token passthrough, spec §3.1 CONTRACT):
+#   - oidc.issuer  = giá trị claim `iss` trong JWT (localhost dev);
+#   - oidc.jwks-url = URL mạng THẬT fetch JWKS (trong compose là http://keycloak:8081 —
+#     KHÔNG derive từ issuer — same gotcha BFF compose);
+#   - auth.internal-service-token = machine-call credential (Go→Java, reconciler).
+# Fail-closed: thiếu cả user JWT hợp lệ lẫn internal token → PERMISSION_DENIED.
+oidc:
+  # Giá trị claim `iss` trong JWT (full realm URL) — KHÔNG phải base như BFF env.
+  issuer: ${OIDC_ISSUER:http://localhost:8081/realms/hubstore}
+  jwks-url: ${OIDC_JWKS_URL:}
+auth:
+  internal-service-token: ${INTERNAL_SERVICE_TOKEN:}

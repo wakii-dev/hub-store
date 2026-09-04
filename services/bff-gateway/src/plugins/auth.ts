@@ -3,12 +3,15 @@
  * createRemoteJWKSet — TỰ REFETCH khi gặp unknown kid). issuer/audience từ
  * BffOidcConfig (config.ts derive /realms/hubstore). Role lấy từ claim
  * `realm_access.roles` ∩ KNOWN_ROLES (Coordinator/WarehouseOps/Manager/
- * WarehouseEmployee) →
- * request.user; gRPC calls truyền metadata { x-user-role: role } — services
- * KHÔNG đổi (vẫn tin BFF, zero-trust s2s = M-3 out-of-scope).
+ * WarehouseEmployee/InsideTechnician/OutsideTechnician) →
+ * request.user (SF-12: giữ cả raw token); gRPC calls forward
+ * `authorization: Bearer <token>` — Go/Java verify JWKS độc lập (token
+ * passthrough), x-user-role chỉ được tin sau khi verify (claim wins).
  *
- * Public routes: /healthz (liveness) + /auth/reset-password (dev-only,
- * KHÔNG có token để verify — chính nó là endpoint cấp lại password).
+ * Public routes: /healthz (liveness) + /health (SF-12 readiness — compose
+ * probe KHÔNG có JWT) + /auth/reset-password (dev-only,
+ * KHÔNG có token để verify — chính nó là endpoint cấp lại password) +
+ * /webhooks/orders (SF-26 — máy-máy, auth HMAC tại route).
  */
 import { createRemoteJWKSet, jwtVerify } from 'jose';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -17,18 +20,28 @@ import type { BffOidcConfig } from '../config.js';
 
 /** Roles mà app nhận — khớp role matrix shell (nav.ts / PERMISSION_MATRIX).
  *  Admin (SF-17): role write của StaffArea — gate per-route qua requireRole.
- *  WarehouseEmployee (SF-18): role D2C consumer-trực-tiếp. */
+ *  WarehouseEmployee (SF-18): role D2C consumer-trực-tiếp.
+ *  InsideTechnician/OutsideTechnician (SF-25): KTV/CTV mobile — BFF override
+ *  technicianCode/driverName từ token ở các route filter. */
 export const KNOWN_ROLES = [
   'Coordinator',
   'WarehouseOps',
   'Manager',
   'Admin',
   'WarehouseEmployee',
+  'InsideTechnician',
+  'OutsideTechnician',
 ] as const;
 
 export interface RequestUser {
   sub: string;
+  /** SF-25 security-audit P1-2: full name từ token claim `name` (realm mappers
+   *  given/family/full-name trên hubstore-mobile) — ép driverName cho KTV/CTV. */
+  name?: string;
   role: (typeof KNOWN_ROLES)[number];
+  /** SF-12 s2s token passthrough: raw access token đã verify — grpc clients
+   *  forward `authorization: Bearer` xuống Go/Java (verify JWKS độc lập). */
+  token: string;
 }
 
 declare module 'fastify' {
@@ -52,14 +65,37 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
     if (request.url === '/healthz' || request.url.startsWith('/healthz?')) {
       return;
     }
+    // SF-12 — /health readiness (DB ping): compose probe không JWT — public,
+    // KHÔNG thêm → probe 401 → stack boot deadlock (plan-critic P0).
+    if (request.url === '/health' || request.url.startsWith('/health?')) {
+      return;
+    }
     if (request.url === '/auth/reset-password' || request.url.startsWith('/auth/reset-password?')) {
       return;
     }
+    // SF-21 — /version là harmless metadata (build version) → public.
+    if (request.url === '/version' || request.url.startsWith('/version?')) {
+      return;
+    }
+    // SF-26 — webhook máy-máy từ sàn TMĐT: sàn KHÔNG có JWT user → auth bằng
+    // HMAC X-Signature tại route (verifyHmac). EXACT-PATH /webhooks/orders —
+    // KHÔNG prefix /webhooks (route khác trong /webhooks/* vẫn bắt JWT).
+    if (request.url === '/webhooks/orders' || request.url.startsWith('/webhooks/orders?')) {
+      return;
+    }
+    // SF-10 — EventSource (SSE) KHÔNG set được Authorization header → CHỈ url
+    // /events (kể cả query) cho phép token từ query `access_token` thay Bearer.
+    // Verify JWKS y như Bearer; MỌI route khác vẫn bắt buộc header (không hồi quy).
     const header = request.headers.authorization;
-    if (!header || !header.startsWith('Bearer ')) {
+    let token: string | null = null;
+    if (header && header.startsWith('Bearer ')) {
+      token = header.slice('Bearer '.length);
+    } else if (request.url === '/events' || request.url.startsWith('/events?')) {
+      token = new URL(request.url, 'http://localhost').searchParams.get('access_token');
+    }
+    if (!token) {
       return unauthorized(reply, 'Missing Authorization: Bearer <token> header.');
     }
-    const token = header.slice('Bearer '.length);
     try {
       const { payload } = await jwtVerify(token, JWKS, {
         issuer: opts.oidc.issuer,
@@ -80,7 +116,12 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
       if (typeof sub !== 'string') {
         return unauthorized(reply, 'Token payload missing sub.');
       }
-      request.user = { sub, role: matched };
+      request.user = {
+        sub,
+        name: typeof payload.name === 'string' ? payload.name : undefined,
+        role: matched,
+        token, // SF-12 — raw access token cho s2s passthrough
+      };
     } catch {
       return unauthorized(reply, 'Invalid or expired token.');
     }

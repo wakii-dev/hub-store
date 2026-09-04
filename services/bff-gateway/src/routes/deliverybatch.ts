@@ -111,11 +111,11 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
 
   // Báo giá theo tải trọng — NVC step 1 (mock: 6 mức SGCN→8T).
   app.post<{ Body: DeliveryQuotesRequest }>('/delivery-batch/quotes', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     try {
       const resp = await deliveryBatch.getQuotes(
         { shopCode: request.body.shopCode, stopOrders: request.body.stopOrders.map(toStopOrderQuote) },
-        role,
+        caller,
       );
       return await reply.send({
         quotes: (resp.quotes ?? []).map(mapQuote),
@@ -130,11 +130,11 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
   app.post<{ Body: DeliveryConfirmPlanningRequest }>(
     '/delivery-batch/planning/confirm',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await deliveryBatch.confirmPlanning(
           { batchCode: request.body.batchCode, plannings: request.body.plannings },
-          role,
+          caller,
         );
         return await reply.send({
           plannings: (resp.plannings ?? []).map(mapPlanning),
@@ -150,7 +150,7 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
   app.post<{ Body: { batchCode: string; shipmentPlannings: Array<{ planningId: string; codAmount: number; totalBill: number; stopOrder: number }> } }>(
     '/delivery-batch/booking',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await deliveryBatch.createBooking(
           {
@@ -162,7 +162,7 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
               stopOrder: s.stopOrder,
             })),
           },
-          role,
+          caller,
         );
         return await reply.send({
           bookings: (resp.bookings ?? []).map(mapBooking),
@@ -179,11 +179,11 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
   app.post<{ Body: DeliveryCancelOrderRequest }>(
     '/delivery-batch/cancel-delivery-order',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await deliveryBatch.cancelDeliveryOrder(
           { planningId: request.body.planningId, reason: request.body.reason },
-          role,
+          caller,
         );
         return await reply.send({
           planningId: resp.planningId,
@@ -198,11 +198,11 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
 
   // Hủy theo lô — booking ACTIVE → CANCELLED; planning CONFIRMED chưa book → DRAFT.
   app.post<{ Body: DeliveryCancelBatchRequest }>('/delivery-batch/cancel-batch', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     try {
       const resp = await deliveryBatch.cancelDeliveryBatch(
         { batchCode: request.body.batchCode, reason: request.body.reason },
-        role,
+        caller,
       );
       return await reply.send({
         results: resp.results ?? [],
@@ -218,13 +218,13 @@ export function registerDeliveryBatchRoutes(app: FastifyInstance, deliveryBatch:
   app.get<{ Querystring: { planningIds?: string } }>(
     '/delivery-batch/searchbookingdetail',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       const planningIds = (request.query.planningIds ?? '')
         .split(',')
         .map((s) => s.trim())
         .filter(Boolean);
       try {
-        const resp = await deliveryBatch.searchBookingDetail({ planningIds }, role);
+        const resp = await deliveryBatch.searchBookingDetail({ planningIds }, caller);
         return await reply.send({
           bookings: (resp.bookings ?? []).map(mapBookingEntry),
           meta: resp.meta ?? { mock: false },

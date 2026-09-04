@@ -12,10 +12,12 @@ import java.time.Instant;
 import java.time.LocalDate;
 import java.time.OffsetDateTime;
 import java.time.ZoneOffset;
+import java.time.format.DateTimeFormatter;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 
 /**
  * Postgres store cho SF-19 (đơn dịch vụ kỹ thuật) — GIỮ ĐÚNG semantics từng
@@ -112,7 +114,9 @@ public class PostgresTechOrderRepository implements TechOrderRepository {
             params.addAll(f.statuses());
         }
         if (isNotBlank(f.technicianCode())) {
-            where.append(" AND technician_code = ?");
+            // SF-25: token preferred_username lowercase (KC 26 import) vs DB
+            // 'KTV-001' — filter match case-insensitive cả 2 phía.
+            where.append(" AND LOWER(technician_code) = LOWER(?)");
             params.add(f.technicianCode());
         }
         if (present(f.categoryL1())) {
@@ -213,6 +217,78 @@ public class PostgresTechOrderRepository implements TechOrderRepository {
                         rs.getString("changed_by"),
                         rs.getObject("changed_at", OffsetDateTime.class)),
                 serviceOrderCode);
+    }
+
+    // ---------------- SF-25 mutations (spec §4.2) ----------------
+
+    /** Guard + UPDATE chung 3 SF-25 mutations — @Transactional như assign:
+     *  SELECT FOR UPDATE, verify owner + trạng thái (ISE khớp in-memory),
+     *  UPDATE status/expected_time + timeline = timeline || entry::jsonb. */
+    private TechModels.InstallationOrder mutateInstallation(String serviceOrderCode, String technicianCode,
+                                                            Set<String> allowedFrom, String newStatus,
+                                                            String timelineNote, OffsetDateTime newExpectedTime,
+                                                            OffsetDateTime at, String stateErrorPrefix) {
+        Row row = jdbc.query("SELECT " + INSTALLATION_COLS + " FROM installation_orders "
+                        + "WHERE service_order_code = ? ORDER BY id ASC LIMIT 1 FOR UPDATE",
+                INSTALLATION_ROW_MAPPER, serviceOrderCode).stream().findFirst()
+                .orElseThrow(() -> new IllegalArgumentException(
+                        "Installation order không tồn tại: " + serviceOrderCode));
+        // SF-25: KC 26 lowercase username khi import → token sub 'ktv-001' vs DB
+        // 'KTV-001' — owner check case-insensitive (e2e seam finding).
+        if (!technicianCode.equalsIgnoreCase(row.order().technicianCode())) {
+            throw new IllegalStateException(
+                    "Đơn " + serviceOrderCode + " không thuộc KTV " + technicianCode);
+        }
+        if (!allowedFrom.contains(row.order().status())) {
+            throw new IllegalStateException(
+                    stateErrorPrefix + row.order().status() + ": " + serviceOrderCode);
+        }
+        String entry = TechModels.appendTimeline(null,
+                at.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME), newStatus, timelineNote, technicianCode);
+        if (newExpectedTime != null) {
+            jdbc.update("UPDATE installation_orders SET status = ?, expected_time = ?, "
+                            + "timeline = timeline || ?::jsonb WHERE id = ?",
+                    newStatus, newExpectedTime, entry, row.id());
+        } else {
+            jdbc.update("UPDATE installation_orders SET status = ?, timeline = timeline || ?::jsonb "
+                            + "WHERE id = ?", newStatus, entry, row.id());
+        }
+        return new TechModels.InstallationOrder(
+                row.order().serviceOrderCode(), row.order().deliveryOrderCode(), technicianCode,
+                newStatus, newExpectedTime != null ? newExpectedTime : row.order().expectedTime(),
+                TechModels.appendTimeline(row.order().timelineJson(),
+                        at.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME), newStatus, timelineNote,
+                        technicianCode),
+                row.order().serviceFee(), row.order().feeAdjust(), row.order().items(),
+                row.order().regionCode(), row.order().province(), row.order().createdAt());
+    }
+
+    @Override
+    @Transactional
+    public TechModels.InstallationOrder acceptInstallation(String serviceOrderCode, String technicianCode,
+                                                           OffsetDateTime at) {
+        return mutateInstallation(serviceOrderCode, technicianCode,
+                Set.of("CONFIRMED", "RESCHEDULED"), "PROCESSING", "KTV nhận việc", null, at,
+                "Không nhận được việc ở trạng thái ");
+    }
+
+    @Override
+    @Transactional
+    public TechModels.InstallationOrder completeInstallation(String serviceOrderCode, String technicianCode,
+                                                             OffsetDateTime at) {
+        return mutateInstallation(serviceOrderCode, technicianCode,
+                Set.of("PROCESSING"), "DELIVERED", "Hoàn tất lắp đặt", null, at,
+                "Không hoàn tất được ở trạng thái ");
+    }
+
+    @Override
+    @Transactional
+    public TechModels.InstallationOrder rescheduleInstallation(String serviceOrderCode, String technicianCode,
+                                                               OffsetDateTime newExpectedTime, String note,
+                                                               OffsetDateTime at) {
+        return mutateInstallation(serviceOrderCode, technicianCode,
+                Set.of("CONFIRMED", "PROCESSING", "REDELIVERY", "RESCHEDULED"), "RESCHEDULED",
+                note == null ? "" : note, newExpectedTime, at, "Không dời lịch được ở trạng thái ");
     }
 
     // ---------------- suggest ----------------

@@ -157,12 +157,24 @@ services:
       FULFILLMENT_DB_NAME: fulfillment
       FULFILLMENT_DB_USER: ${POSTGRES_USER:-hubstore}
       FULFILLMENT_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
+      # SF-12 s2s token passthrough — Java verify JWT độc lập (FULL realm URL, KHÁC BFF OIDC_ISSUER base)
+      OIDC_ISSUER: http://keycloak:8081/realms/hubstore
+      OIDC_JWKS_URL: http://keycloak:8081/realms/hubstore/protocol/openid-connect/certs
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-} # Go→Java + reconciler x-internal-token
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092 # internal listener (host view = localhost:9092)
     depends_on:
       db-seed:
         condition: service_completed_successfully
     expose: ["50051"]
+    # SF-12 — probe /health (curl cài vào image — temurin không có curl/wget);
+    # Java boot chậm (Flyway + seed) → start_period 30s.
+    healthcheck:
+      test: ["CMD-SHELL", "curl -fsS http://localhost:8083/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
 
   batching-service: # Go gRPC :50052 (SF-4) — boot độc lập (KHÔNG depends fulfillment-service)
     build:
@@ -176,12 +188,23 @@ services:
       BATCHING_DB_PASSWORD: ${POSTGRES_PASSWORD:?set POSTGRES_PASSWORD in root .env}
       FULFILLMENT_ADDR: fulfillment-service:50051
       BATCHING_PORT: "50052"
+      # SF-12 s2s token passthrough — Go verify JWT độc lập (FULL realm URL, KHÁC BFF OIDC_ISSUER base)
+      OIDC_ISSUER: http://keycloak:8081/realms/hubstore
+      OIDC_JWKS_URL: http://keycloak:8081/realms/hubstore/protocol/openid-connect/certs
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-} # Go→Java x-internal-token
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092 # internal listener (host view = localhost:9092)
     depends_on:
       db-seed:
         condition: service_completed_successfully
     expose: ["50052"]
+    # SF-12 — probe /health HTTP side-port (alpine busybox wget; 503 → unhealthy).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8082/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   print-service: # Python gRPC :50053 (SF-5) — context root (_proto.py parents[3])
     build:
@@ -190,6 +213,13 @@ services:
     volumes:
       - ./api/seed:/seed:ro # printers registry load từ canonical seed (fail-fast nếu thiếu)
     expose: ["50053"]
+    # SF-12 — liveness probe :8084 (python3 urllib — image python:slim không có curl).
+    healthcheck:
+      test: ["CMD-SHELL", "python3 -c 'import urllib.request; urllib.request.urlopen(\"http://localhost:8084/health\", timeout=4)'"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   bff: # Node Fastify REST :8080 (SF-6)
     build:
@@ -201,12 +231,15 @@ services:
       GRPC_BATCHING: batching-service:50052
       GRPC_PRINT: print-service:50053
       BFF_CORS_ORIGINS: http://localhost:3000
-      OIDC_ISSUER: http://localhost:8081 # claim iss + browser redirect (public)
+      OIDC_ISSUER: http://localhost:8081 # claim iss + browser redirect (public) — BASE URL, KHÁC Go/Java FULL realm URL
       OIDC_AUDIENCE: hubstore-api
       OIDC_JWKS_URL: http://keycloak:8081 # JWKS fetch trong network compose — URL riêng (gotcha Keycloak-in-Docker)
+      INTERNAL_SERVICE_TOKEN: ${INTERNAL_SERVICE_TOKEN:-} # SF-12 — webhooks machine-call qua gRPC (x-internal-token)
       KC_ADMIN_CLIENT_ID: ${KC_ADMIN_CLIENT_ID:-hubstore-admin} # SF-8 — Users management
-      KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:-hubstore-admin-dev-secret}
+      KC_ADMIN_CLIENT_SECRET: ${KC_ADMIN_CLIENT_SECRET:-ac865e01df73169f63e8b07002bc85b7} # SF-12 rotated — khớp realm JSON client hubstore-admin secret
       ENABLE_DEV_RESET_PASSWORD: "1" # DEV-ONLY — bật /auth/reset-password (prod không set → 404)
+      ONESIGNAL_APP_ID: ${ONESIGNAL_APP_ID:-} # SF-23 — trống = push mock/off (dual-mode)
+      ONESIGNAL_REST_API_KEY: ${ONESIGNAL_REST_API_KEY:-}
       KAFKA_ENABLED: ${KAFKA_ENABLED:-false}
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092 # internal listener (host view = localhost:9092)
       # SF-7 (FI-252): audit trail — BFF ghi activity_log trực tiếp DB fulfillment
@@ -221,11 +254,22 @@ services:
       - batching-service
       - print-service
     expose: ["8080"]
+    # SF-12 — probe /health readiness (alpine busybox wget; 503 degraded → unhealthy).
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:8080/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
 
   web: # nginx — shell + 2 remotes static + proxy /api → bff
     build:
       context: .
       dockerfile: Dockerfile.web
+      args:
+        # SF-23 BUILD-TIME (vite nhúng lúc build — đổi key phải rebuild image web)
+        VITE_ONESIGNAL_APP_ID: ${VITE_ONESIGNAL_APP_ID:-}
+        VITE_GA_MEASUREMENT_ID: ${VITE_GA_MEASUREMENT_ID:-}
     ports:
       - "3000:3000"
     depends_on:

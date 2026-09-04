@@ -47,6 +47,7 @@ message TechButtons {
   bool allow_reassign = 3;
   bool allow_accept = 4;
   bool allow_reschedule = 5;
+  bool allow_complete = 6; // SF-25: assigned && PROCESSING
 }
 
 message DeliveryOrder {
@@ -154,9 +155,36 @@ message SuggestTechniciansResponse {
   repeated SuggestedTechnician items = 1;
 }
 
+// SF-25 (FI-270) — thao tác KTV/CTV mobile. Additive. technician_code = actor
+// tự khai — BE verify ownership (order.technician_code phải khớp, spec §4.2).
+message AcceptOrderRequest {
+  string service_order_code = 1;
+  string technician_code = 2;
+}
+
+message CompleteOrderRequest {
+  string service_order_code = 1;
+  string technician_code = 2;
+}
+
+message RescheduleOrderRequest {
+  string service_order_code = 1;
+  string new_expected_time = 2; // ISO-8601; quá khứ → INVALID_ARGUMENT
+  string note = 3;
+  string technician_code = 4;
+}
+
+message MutateTechOrderResponse {
+  InstallationOrder order = 1; // flags re-computed sau mutate
+}
+
 service TechService {
   rpc FilterDeliveryOrders(FilterDeliveryOrdersRequest) returns (FilterDeliveryOrdersResponse);
   rpc FilterInstallationOrders(FilterInstallationOrdersRequest) returns (FilterInstallationOrdersResponse);
   rpc AssignTechnician(AssignTechnicianRequest) returns (AssignTechnicianResponse);
   rpc SuggestTechnicians(SuggestTechniciansRequest) returns (SuggestTechniciansResponse);
+  // SF-25 — accept/complete/reschedule KTV mobile (spec §4.2)
+  rpc AcceptOrder(AcceptOrderRequest) returns (MutateTechOrderResponse);
+  rpc CompleteOrder(CompleteOrderRequest) returns (MutateTechOrderResponse);
+  rpc RescheduleOrder(RescheduleOrderRequest) returns (MutateTechOrderResponse);
 }

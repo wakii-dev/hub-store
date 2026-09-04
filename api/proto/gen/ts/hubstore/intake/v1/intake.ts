@@ -155,6 +155,22 @@ export interface GetOrderAuditResponse {
   entries: AuditEntry[];
 }
 
+/** SF-26 — webhook nhận đơn từ sàn (FI-27). Additive-only. */
+export interface CreateWebhookOrderRequest {
+  /** từ header X-Source (BFF truyền), vd "shopee" */
+  source: string;
+  /** mã đơn phía sàn — dedupe key */
+  externalId: string;
+  /** đã map + quantity = Σ items */
+  order: IntakeOrder | undefined;
+}
+
+export interface CreateWebhookOrderResponse {
+  /** lần đầu hoặc kết quả lần đầu (replay) */
+  fulfillCode: string;
+  replayed: boolean;
+}
+
 function createBaseIntakeOrder(): IntakeOrder {
   return {
     customerName: "",
@@ -1264,6 +1280,176 @@ export const GetOrderAuditResponse: MessageFns<GetOrderAuditResponse> = {
   },
 };
 
+function createBaseCreateWebhookOrderRequest(): CreateWebhookOrderRequest {
+  return { source: "", externalId: "", order: undefined };
+}
+
+export const CreateWebhookOrderRequest: MessageFns<CreateWebhookOrderRequest> = {
+  encode(message: CreateWebhookOrderRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.source !== "") {
+      writer.uint32(10).string(message.source);
+    }
+    if (message.externalId !== "") {
+      writer.uint32(18).string(message.externalId);
+    }
+    if (message.order !== undefined) {
+      IntakeOrder.encode(message.order, writer.uint32(26).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CreateWebhookOrderRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCreateWebhookOrderRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.source = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.externalId = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.order = IntakeOrder.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CreateWebhookOrderRequest {
+    return {
+      source: isSet(object.source) ? globalThis.String(object.source) : "",
+      externalId: isSet(object.externalId) ? globalThis.String(object.externalId) : "",
+      order: isSet(object.order) ? IntakeOrder.fromJSON(object.order) : undefined,
+    };
+  },
+
+  toJSON(message: CreateWebhookOrderRequest): unknown {
+    const obj: any = {};
+    if (message.source !== "") {
+      obj.source = message.source;
+    }
+    if (message.externalId !== "") {
+      obj.externalId = message.externalId;
+    }
+    if (message.order !== undefined) {
+      obj.order = IntakeOrder.toJSON(message.order);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CreateWebhookOrderRequest>, I>>(base?: I): CreateWebhookOrderRequest {
+    return CreateWebhookOrderRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CreateWebhookOrderRequest>, I>>(object: I): CreateWebhookOrderRequest {
+    const message = createBaseCreateWebhookOrderRequest();
+    message.source = object.source ?? "";
+    message.externalId = object.externalId ?? "";
+    message.order = (object.order !== undefined && object.order !== null)
+      ? IntakeOrder.fromPartial(object.order)
+      : undefined;
+    return message;
+  },
+};
+
+function createBaseCreateWebhookOrderResponse(): CreateWebhookOrderResponse {
+  return { fulfillCode: "", replayed: false };
+}
+
+export const CreateWebhookOrderResponse: MessageFns<CreateWebhookOrderResponse> = {
+  encode(message: CreateWebhookOrderResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.fulfillCode !== "") {
+      writer.uint32(10).string(message.fulfillCode);
+    }
+    if (message.replayed !== false) {
+      writer.uint32(16).bool(message.replayed);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CreateWebhookOrderResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCreateWebhookOrderResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.fulfillCode = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 16) {
+            break;
+          }
+
+          message.replayed = reader.bool();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CreateWebhookOrderResponse {
+    return {
+      fulfillCode: isSet(object.fulfillCode) ? globalThis.String(object.fulfillCode) : "",
+      replayed: isSet(object.replayed) ? globalThis.Boolean(object.replayed) : false,
+    };
+  },
+
+  toJSON(message: CreateWebhookOrderResponse): unknown {
+    const obj: any = {};
+    if (message.fulfillCode !== "") {
+      obj.fulfillCode = message.fulfillCode;
+    }
+    if (message.replayed !== false) {
+      obj.replayed = message.replayed;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CreateWebhookOrderResponse>, I>>(base?: I): CreateWebhookOrderResponse {
+    return CreateWebhookOrderResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CreateWebhookOrderResponse>, I>>(object: I): CreateWebhookOrderResponse {
+    const message = createBaseCreateWebhookOrderResponse();
+    message.fulfillCode = object.fulfillCode ?? "";
+    message.replayed = object.replayed ?? false;
+    return message;
+  },
+};
+
 /** IntakeService — SF-13 (Java fulfillment-service :50051, CÙNG DB orders). */
 export type IntakeServiceService = typeof IntakeServiceService;
 export const IntakeServiceService = {
@@ -1332,6 +1518,18 @@ export const IntakeServiceService = {
       Buffer.from(GetOrderAuditResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): GetOrderAuditResponse => GetOrderAuditResponse.decode(value),
   },
+  /** SF-26 — webhook nhận đơn từ sàn (FI-271). Additive-only. */
+  createWebhookOrder: {
+    path: "/hubstore.intake.v1.IntakeService/CreateWebhookOrder",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: CreateWebhookOrderRequest): Buffer =>
+      Buffer.from(CreateWebhookOrderRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): CreateWebhookOrderRequest => CreateWebhookOrderRequest.decode(value),
+    responseSerialize: (value: CreateWebhookOrderResponse): Buffer =>
+      Buffer.from(CreateWebhookOrderResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): CreateWebhookOrderResponse => CreateWebhookOrderResponse.decode(value),
+  },
 } as const;
 
 export interface IntakeServiceServer extends UntypedServiceImplementation {
@@ -1341,6 +1539,8 @@ export interface IntakeServiceServer extends UntypedServiceImplementation {
   markOrderFailed: handleUnaryCall<MarkOrderFailedRequest, MarkOrderFailedResponse>;
   redeliverOrder: handleUnaryCall<RedeliverOrderRequest, RedeliverOrderResponse>;
   getOrderAudit: handleUnaryCall<GetOrderAuditRequest, GetOrderAuditResponse>;
+  /** SF-26 — webhook nhận đơn từ sàn (FI-271). Additive-only. */
+  createWebhookOrder: handleUnaryCall<CreateWebhookOrderRequest, CreateWebhookOrderResponse>;
 }
 
 export interface IntakeServiceClient extends Client {
@@ -1433,6 +1633,22 @@ export interface IntakeServiceClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: GetOrderAuditResponse) => void,
+  ): ClientUnaryCall;
+  /** SF-26 — webhook nhận đơn từ sàn (FI-271). Additive-only. */
+  createWebhookOrder(
+    request: CreateWebhookOrderRequest,
+    callback: (error: ServiceError | null, response: CreateWebhookOrderResponse) => void,
+  ): ClientUnaryCall;
+  createWebhookOrder(
+    request: CreateWebhookOrderRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: CreateWebhookOrderResponse) => void,
+  ): ClientUnaryCall;
+  createWebhookOrder(
+    request: CreateWebhookOrderRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: CreateWebhookOrderResponse) => void,
   ): ClientUnaryCall;
 }
 

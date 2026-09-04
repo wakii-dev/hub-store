@@ -23,6 +23,7 @@ import { requireUser } from '../plugins/auth.js';
 import { paginated } from '../lib/envelope.js';
 import { sendGrpcError } from '../lib/grpc-error.js';
 import { logActivity } from '../lib/audit.js';
+import { emitLocalEvent } from '../lib/realtime-publish.js';
 import { mapBatch, mapPackingGroup, mapOrderDistance } from '../mappers/batching.js';
 
 /**
@@ -42,11 +43,11 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
   app.post<{ Body: PackingSuggestRequest }>(
     '/fulfillment/batches/packing-suggest',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await batching.packingSuggest(
           { shopCode: '', fulfillCodes: request.body.orderCodes },
-          role,
+          caller,
         );
         const body: PackingSuggestResponse = {
           groups: (resp.groups ?? []).map(mapPackingGroup),
@@ -61,7 +62,7 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
   // Tạo phiếu (D1b) — rule 1 §3.6 validate server-side ở Go (GetOrdersByCodes
   // → Java). shopCode trống → Go derive.
   app.post<{ Body: CreateBatchRequest }>('/fulfillment/batches/create', async (request, reply) => {
-    const { role, sub } = requireUser(request);
+    const { sub, ...caller } = requireUser(request);
     try {
       const resp = await batching.createBatch(
         {
@@ -70,7 +71,7 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
           deliveryTime: request.body.deliveryTime,
           fulfillCodes: request.body.orderCodes,
         },
-        role,
+        caller,
       );
       // SF-7 audit — fire-and-forget SAU gRPC thành công, fail-open.
       logActivity({
@@ -79,6 +80,12 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
         targetType: 'batch',
         targetId: resp.batch?.batchCode ?? '',
         detail: { orderCodes: request.body.orderCodes },
+      });
+      // SF-10 — dual-source local emit: mirror publish 'batch.created' phía Go
+      // (kafka.go BatchCreated — payload batchCode + itemCount).
+      emitLocalEvent('batch.created', {
+        batchCode: resp.batch?.batchCode ?? '',
+        itemCount: request.body.orderCodes.length,
       });
       return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
     } catch (err) {
@@ -90,7 +97,7 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
   app.post<{ Body: FilterBatchesRequest }>(
     '/fulfillment/batches/filter',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       const b = request.body;
       try {
         const resp = await batching.filterBatches(
@@ -101,7 +108,7 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
             page: b.page,
             pageSize: b.pageSize,
           },
-          role,
+          caller,
         );
         const body: FilterBatchesResponse = paginated(
           (resp.items ?? []).map(mapBatch),
@@ -118,9 +125,9 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
 
   // Config trạng thái cho phép hủy — ĐẶT TRƯỚC /:code để không bị nuốt.
   app.get('/fulfillment/batches/criteria', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     try {
-      const resp = await batching.getBatchCriteria({}, role);
+      const resp = await batching.getBatchCriteria({}, caller);
       const body: BatchCriteriaResponse = {
         cancellableStatuses: (resp.cancellableStatuses ?? []).map(Number) as BatchEntityStatus[],
       };
@@ -132,9 +139,9 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
 
   // D2 detail / expand.
   app.get<{ Params: { code: string } }>('/fulfillment/batches/:code', async (request, reply) => {
-    const { role } = requireUser(request);
+    const caller = requireUser(request);
     try {
-      const resp = await batching.getBatchDetail({ batchCode: request.params.code }, role);
+      const resp = await batching.getBatchDetail({ batchCode: request.params.code }, caller);
       const body: BatchDto | null = resp.batch ? mapBatch(resp.batch) : null;
       return await reply.send(body);
     } catch (err) {
@@ -146,11 +153,11 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
   app.put<{ Params: { code: string }; Body: CancelBatchRequest }>(
     '/fulfillment/batches/:code/cancel',
     async (request, reply) => {
-      const { role, sub } = requireUser(request);
+      const { sub, ...caller } = requireUser(request);
       try {
         const resp = await batching.cancelBatch(
           { batchCode: request.params.code, reason: request.body.reason },
-          role,
+          caller,
         );
         logActivity({
           actor: sub,
@@ -158,6 +165,15 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
           targetType: 'batch',
           targetId: request.params.code,
           detail: { reason: request.body.reason },
+        });
+        // SF-10 — dual-source local emit: mirror publish 'batch.transitioned'
+        // (from/to + reason) phía Go (batching_server.go CancelBatch hook — Go
+        // dùng batch.transitioned cho cancel, KHÔNG phải batch.cancelled).
+        emitLocalEvent('batch.transitioned', {
+          batchCode: request.params.code,
+          from: 'active',
+          to: 'cancelled',
+          reason: request.body.reason,
         });
         return await reply.send(resp.batch ? mapBatch(resp.batch) : null);
       } catch (err) {
@@ -170,11 +186,11 @@ export function registerBatchRoutes(app: FastifyInstance, batching: BatchingApi)
   app.post<{ Body: { orderCodes: string[] } }>(
     '/fulfillment/batches/recalculate-distance',
     async (request, reply) => {
-      const { role } = requireUser(request);
+      const caller = requireUser(request);
       try {
         const resp = await batching.recalculateDistance(
           { shopCode: '', fulfillCodes: request.body.orderCodes },
-          role,
+          caller,
         );
         const body: RecalculateDistanceResponse = {
           items: (resp.distances ?? []).map(mapOrderDistance),

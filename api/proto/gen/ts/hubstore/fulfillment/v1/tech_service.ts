@@ -132,6 +132,8 @@ export interface TechButtons {
   allowReassign: boolean;
   allowAccept: boolean;
   allowReschedule: boolean;
+  /** SF-25: assigned && PROCESSING */
+  allowComplete: boolean;
 }
 
 export interface DeliveryOrder {
@@ -246,6 +248,33 @@ export interface SuggestedTechnician {
 
 export interface SuggestTechniciansResponse {
   items: SuggestedTechnician[];
+}
+
+/**
+ * SF-25 (FI-270) — thao tác KTV/CTV mobile. Additive. technician_code = actor
+ * tự khai — BE verify ownership (order.technician_code phải khớp, spec §4.2).
+ */
+export interface AcceptOrderRequest {
+  serviceOrderCode: string;
+  technicianCode: string;
+}
+
+export interface CompleteOrderRequest {
+  serviceOrderCode: string;
+  technicianCode: string;
+}
+
+export interface RescheduleOrderRequest {
+  serviceOrderCode: string;
+  /** ISO-8601; quá khứ → INVALID_ARGUMENT */
+  newExpectedTime: string;
+  note: string;
+  technicianCode: string;
+}
+
+export interface MutateTechOrderResponse {
+  /** flags re-computed sau mutate */
+  order: InstallationOrder | undefined;
 }
 
 function createBaseGeoPoint(): GeoPoint {
@@ -543,7 +572,14 @@ export const Contact: MessageFns<Contact> = {
 };
 
 function createBaseTechButtons(): TechButtons {
-  return { allowCancel: false, allowAssign: false, allowReassign: false, allowAccept: false, allowReschedule: false };
+  return {
+    allowCancel: false,
+    allowAssign: false,
+    allowReassign: false,
+    allowAccept: false,
+    allowReschedule: false,
+    allowComplete: false,
+  };
 }
 
 export const TechButtons: MessageFns<TechButtons> = {
@@ -562,6 +598,9 @@ export const TechButtons: MessageFns<TechButtons> = {
     }
     if (message.allowReschedule !== false) {
       writer.uint32(40).bool(message.allowReschedule);
+    }
+    if (message.allowComplete !== false) {
+      writer.uint32(48).bool(message.allowComplete);
     }
     return writer;
   },
@@ -613,6 +652,14 @@ export const TechButtons: MessageFns<TechButtons> = {
           message.allowReschedule = reader.bool();
           continue;
         }
+        case 6: {
+          if (tag !== 48) {
+            break;
+          }
+
+          message.allowComplete = reader.bool();
+          continue;
+        }
       }
       if ((tag & 7) === 4 || tag === 0) {
         break;
@@ -629,6 +676,7 @@ export const TechButtons: MessageFns<TechButtons> = {
       allowReassign: isSet(object.allowReassign) ? globalThis.Boolean(object.allowReassign) : false,
       allowAccept: isSet(object.allowAccept) ? globalThis.Boolean(object.allowAccept) : false,
       allowReschedule: isSet(object.allowReschedule) ? globalThis.Boolean(object.allowReschedule) : false,
+      allowComplete: isSet(object.allowComplete) ? globalThis.Boolean(object.allowComplete) : false,
     };
   },
 
@@ -649,6 +697,9 @@ export const TechButtons: MessageFns<TechButtons> = {
     if (message.allowReschedule !== false) {
       obj.allowReschedule = message.allowReschedule;
     }
+    if (message.allowComplete !== false) {
+      obj.allowComplete = message.allowComplete;
+    }
     return obj;
   },
 
@@ -662,6 +713,7 @@ export const TechButtons: MessageFns<TechButtons> = {
     message.allowReassign = object.allowReassign ?? false;
     message.allowAccept = object.allowAccept ?? false;
     message.allowReschedule = object.allowReschedule ?? false;
+    message.allowComplete = object.allowComplete ?? false;
     return message;
   },
 };
@@ -2400,6 +2452,326 @@ export const SuggestTechniciansResponse: MessageFns<SuggestTechniciansResponse> 
   },
 };
 
+function createBaseAcceptOrderRequest(): AcceptOrderRequest {
+  return { serviceOrderCode: "", technicianCode: "" };
+}
+
+export const AcceptOrderRequest: MessageFns<AcceptOrderRequest> = {
+  encode(message: AcceptOrderRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.serviceOrderCode !== "") {
+      writer.uint32(10).string(message.serviceOrderCode);
+    }
+    if (message.technicianCode !== "") {
+      writer.uint32(18).string(message.technicianCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): AcceptOrderRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseAcceptOrderRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.serviceOrderCode = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.technicianCode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): AcceptOrderRequest {
+    return {
+      serviceOrderCode: isSet(object.serviceOrderCode) ? globalThis.String(object.serviceOrderCode) : "",
+      technicianCode: isSet(object.technicianCode) ? globalThis.String(object.technicianCode) : "",
+    };
+  },
+
+  toJSON(message: AcceptOrderRequest): unknown {
+    const obj: any = {};
+    if (message.serviceOrderCode !== "") {
+      obj.serviceOrderCode = message.serviceOrderCode;
+    }
+    if (message.technicianCode !== "") {
+      obj.technicianCode = message.technicianCode;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<AcceptOrderRequest>, I>>(base?: I): AcceptOrderRequest {
+    return AcceptOrderRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<AcceptOrderRequest>, I>>(object: I): AcceptOrderRequest {
+    const message = createBaseAcceptOrderRequest();
+    message.serviceOrderCode = object.serviceOrderCode ?? "";
+    message.technicianCode = object.technicianCode ?? "";
+    return message;
+  },
+};
+
+function createBaseCompleteOrderRequest(): CompleteOrderRequest {
+  return { serviceOrderCode: "", technicianCode: "" };
+}
+
+export const CompleteOrderRequest: MessageFns<CompleteOrderRequest> = {
+  encode(message: CompleteOrderRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.serviceOrderCode !== "") {
+      writer.uint32(10).string(message.serviceOrderCode);
+    }
+    if (message.technicianCode !== "") {
+      writer.uint32(18).string(message.technicianCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): CompleteOrderRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseCompleteOrderRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.serviceOrderCode = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.technicianCode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): CompleteOrderRequest {
+    return {
+      serviceOrderCode: isSet(object.serviceOrderCode) ? globalThis.String(object.serviceOrderCode) : "",
+      technicianCode: isSet(object.technicianCode) ? globalThis.String(object.technicianCode) : "",
+    };
+  },
+
+  toJSON(message: CompleteOrderRequest): unknown {
+    const obj: any = {};
+    if (message.serviceOrderCode !== "") {
+      obj.serviceOrderCode = message.serviceOrderCode;
+    }
+    if (message.technicianCode !== "") {
+      obj.technicianCode = message.technicianCode;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<CompleteOrderRequest>, I>>(base?: I): CompleteOrderRequest {
+    return CompleteOrderRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<CompleteOrderRequest>, I>>(object: I): CompleteOrderRequest {
+    const message = createBaseCompleteOrderRequest();
+    message.serviceOrderCode = object.serviceOrderCode ?? "";
+    message.technicianCode = object.technicianCode ?? "";
+    return message;
+  },
+};
+
+function createBaseRescheduleOrderRequest(): RescheduleOrderRequest {
+  return { serviceOrderCode: "", newExpectedTime: "", note: "", technicianCode: "" };
+}
+
+export const RescheduleOrderRequest: MessageFns<RescheduleOrderRequest> = {
+  encode(message: RescheduleOrderRequest, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.serviceOrderCode !== "") {
+      writer.uint32(10).string(message.serviceOrderCode);
+    }
+    if (message.newExpectedTime !== "") {
+      writer.uint32(18).string(message.newExpectedTime);
+    }
+    if (message.note !== "") {
+      writer.uint32(26).string(message.note);
+    }
+    if (message.technicianCode !== "") {
+      writer.uint32(34).string(message.technicianCode);
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): RescheduleOrderRequest {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseRescheduleOrderRequest();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.serviceOrderCode = reader.string();
+          continue;
+        }
+        case 2: {
+          if (tag !== 18) {
+            break;
+          }
+
+          message.newExpectedTime = reader.string();
+          continue;
+        }
+        case 3: {
+          if (tag !== 26) {
+            break;
+          }
+
+          message.note = reader.string();
+          continue;
+        }
+        case 4: {
+          if (tag !== 34) {
+            break;
+          }
+
+          message.technicianCode = reader.string();
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): RescheduleOrderRequest {
+    return {
+      serviceOrderCode: isSet(object.serviceOrderCode) ? globalThis.String(object.serviceOrderCode) : "",
+      newExpectedTime: isSet(object.newExpectedTime) ? globalThis.String(object.newExpectedTime) : "",
+      note: isSet(object.note) ? globalThis.String(object.note) : "",
+      technicianCode: isSet(object.technicianCode) ? globalThis.String(object.technicianCode) : "",
+    };
+  },
+
+  toJSON(message: RescheduleOrderRequest): unknown {
+    const obj: any = {};
+    if (message.serviceOrderCode !== "") {
+      obj.serviceOrderCode = message.serviceOrderCode;
+    }
+    if (message.newExpectedTime !== "") {
+      obj.newExpectedTime = message.newExpectedTime;
+    }
+    if (message.note !== "") {
+      obj.note = message.note;
+    }
+    if (message.technicianCode !== "") {
+      obj.technicianCode = message.technicianCode;
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<RescheduleOrderRequest>, I>>(base?: I): RescheduleOrderRequest {
+    return RescheduleOrderRequest.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<RescheduleOrderRequest>, I>>(object: I): RescheduleOrderRequest {
+    const message = createBaseRescheduleOrderRequest();
+    message.serviceOrderCode = object.serviceOrderCode ?? "";
+    message.newExpectedTime = object.newExpectedTime ?? "";
+    message.note = object.note ?? "";
+    message.technicianCode = object.technicianCode ?? "";
+    return message;
+  },
+};
+
+function createBaseMutateTechOrderResponse(): MutateTechOrderResponse {
+  return { order: undefined };
+}
+
+export const MutateTechOrderResponse: MessageFns<MutateTechOrderResponse> = {
+  encode(message: MutateTechOrderResponse, writer: BinaryWriter = new BinaryWriter()): BinaryWriter {
+    if (message.order !== undefined) {
+      InstallationOrder.encode(message.order, writer.uint32(10).fork()).join();
+    }
+    return writer;
+  },
+
+  decode(input: BinaryReader | Uint8Array, length?: number): MutateTechOrderResponse {
+    const reader = input instanceof BinaryReader ? input : new BinaryReader(input);
+    const end = length === undefined ? reader.len : reader.pos + length;
+    const message = createBaseMutateTechOrderResponse();
+    while (reader.pos < end) {
+      const tag = reader.uint32();
+      switch (tag >>> 3) {
+        case 1: {
+          if (tag !== 10) {
+            break;
+          }
+
+          message.order = InstallationOrder.decode(reader, reader.uint32());
+          continue;
+        }
+      }
+      if ((tag & 7) === 4 || tag === 0) {
+        break;
+      }
+      reader.skip(tag & 7);
+    }
+    return message;
+  },
+
+  fromJSON(object: any): MutateTechOrderResponse {
+    return { order: isSet(object.order) ? InstallationOrder.fromJSON(object.order) : undefined };
+  },
+
+  toJSON(message: MutateTechOrderResponse): unknown {
+    const obj: any = {};
+    if (message.order !== undefined) {
+      obj.order = InstallationOrder.toJSON(message.order);
+    }
+    return obj;
+  },
+
+  create<I extends Exact<DeepPartial<MutateTechOrderResponse>, I>>(base?: I): MutateTechOrderResponse {
+    return MutateTechOrderResponse.fromPartial(base ?? ({} as any));
+  },
+  fromPartial<I extends Exact<DeepPartial<MutateTechOrderResponse>, I>>(object: I): MutateTechOrderResponse {
+    const message = createBaseMutateTechOrderResponse();
+    message.order = (object.order !== undefined && object.order !== null)
+      ? InstallationOrder.fromPartial(object.order)
+      : undefined;
+    return message;
+  },
+};
+
 export type TechServiceService = typeof TechServiceService;
 export const TechServiceService = {
   filterDeliveryOrders: {
@@ -2448,6 +2820,38 @@ export const TechServiceService = {
       Buffer.from(SuggestTechniciansResponse.encode(value).finish()),
     responseDeserialize: (value: Buffer): SuggestTechniciansResponse => SuggestTechniciansResponse.decode(value),
   },
+  /** SF-25 — accept/complete/reschedule KTV mobile (spec §4.2) */
+  acceptOrder: {
+    path: "/hubstore.fulfillment.v1.TechService/AcceptOrder",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: AcceptOrderRequest): Buffer => Buffer.from(AcceptOrderRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): AcceptOrderRequest => AcceptOrderRequest.decode(value),
+    responseSerialize: (value: MutateTechOrderResponse): Buffer =>
+      Buffer.from(MutateTechOrderResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): MutateTechOrderResponse => MutateTechOrderResponse.decode(value),
+  },
+  completeOrder: {
+    path: "/hubstore.fulfillment.v1.TechService/CompleteOrder",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: CompleteOrderRequest): Buffer => Buffer.from(CompleteOrderRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): CompleteOrderRequest => CompleteOrderRequest.decode(value),
+    responseSerialize: (value: MutateTechOrderResponse): Buffer =>
+      Buffer.from(MutateTechOrderResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): MutateTechOrderResponse => MutateTechOrderResponse.decode(value),
+  },
+  rescheduleOrder: {
+    path: "/hubstore.fulfillment.v1.TechService/RescheduleOrder",
+    requestStream: false,
+    responseStream: false,
+    requestSerialize: (value: RescheduleOrderRequest): Buffer =>
+      Buffer.from(RescheduleOrderRequest.encode(value).finish()),
+    requestDeserialize: (value: Buffer): RescheduleOrderRequest => RescheduleOrderRequest.decode(value),
+    responseSerialize: (value: MutateTechOrderResponse): Buffer =>
+      Buffer.from(MutateTechOrderResponse.encode(value).finish()),
+    responseDeserialize: (value: Buffer): MutateTechOrderResponse => MutateTechOrderResponse.decode(value),
+  },
 } as const;
 
 export interface TechServiceServer extends UntypedServiceImplementation {
@@ -2455,6 +2859,10 @@ export interface TechServiceServer extends UntypedServiceImplementation {
   filterInstallationOrders: handleUnaryCall<FilterInstallationOrdersRequest, FilterInstallationOrdersResponse>;
   assignTechnician: handleUnaryCall<AssignTechnicianRequest, AssignTechnicianResponse>;
   suggestTechnicians: handleUnaryCall<SuggestTechniciansRequest, SuggestTechniciansResponse>;
+  /** SF-25 — accept/complete/reschedule KTV mobile (spec §4.2) */
+  acceptOrder: handleUnaryCall<AcceptOrderRequest, MutateTechOrderResponse>;
+  completeOrder: handleUnaryCall<CompleteOrderRequest, MutateTechOrderResponse>;
+  rescheduleOrder: handleUnaryCall<RescheduleOrderRequest, MutateTechOrderResponse>;
 }
 
 export interface TechServiceClient extends Client {
@@ -2517,6 +2925,52 @@ export interface TechServiceClient extends Client {
     metadata: Metadata,
     options: Partial<CallOptions>,
     callback: (error: ServiceError | null, response: SuggestTechniciansResponse) => void,
+  ): ClientUnaryCall;
+  /** SF-25 — accept/complete/reschedule KTV mobile (spec §4.2) */
+  acceptOrder(
+    request: AcceptOrderRequest,
+    callback: (error: ServiceError | null, response: MutateTechOrderResponse) => void,
+  ): ClientUnaryCall;
+  acceptOrder(
+    request: AcceptOrderRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: MutateTechOrderResponse) => void,
+  ): ClientUnaryCall;
+  acceptOrder(
+    request: AcceptOrderRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: MutateTechOrderResponse) => void,
+  ): ClientUnaryCall;
+  completeOrder(
+    request: CompleteOrderRequest,
+    callback: (error: ServiceError | null, response: MutateTechOrderResponse) => void,
+  ): ClientUnaryCall;
+  completeOrder(
+    request: CompleteOrderRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: MutateTechOrderResponse) => void,
+  ): ClientUnaryCall;
+  completeOrder(
+    request: CompleteOrderRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: MutateTechOrderResponse) => void,
+  ): ClientUnaryCall;
+  rescheduleOrder(
+    request: RescheduleOrderRequest,
+    callback: (error: ServiceError | null, response: MutateTechOrderResponse) => void,
+  ): ClientUnaryCall;
+  rescheduleOrder(
+    request: RescheduleOrderRequest,
+    metadata: Metadata,
+    callback: (error: ServiceError | null, response: MutateTechOrderResponse) => void,
+  ): ClientUnaryCall;
+  rescheduleOrder(
+    request: RescheduleOrderRequest,
+    metadata: Metadata,
+    options: Partial<CallOptions>,
+    callback: (error: ServiceError | null, response: MutateTechOrderResponse) => void,
   ): ClientUnaryCall;
 }
 

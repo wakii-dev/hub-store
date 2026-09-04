@@ -19,6 +19,12 @@ export interface PrinterDto {
   shopCode: string;
   /** Vị trí vật lý (vd "Tầng 2 — khu soạn"). */
   location?: string;
+  /** SF-21 T1 additive — IP máy in (DB-backed registry, Task 2). */
+  printerIp?: string;
+  /** SF-21 T1 additive — địa chỉ MAC. */
+  mac?: string;
+  /** SF-21 T1 additive — nhóm máy in: bill (tem/nhãn) hoặc a4 (A4). */
+  type?: 'bill' | 'a4';
 }
 
 export interface PrintersResponse {
@@ -45,4 +51,18 @@ export interface PrintRequest {
 export interface PrintResponseMeta {
   readonly responseType: 'blob';
   readonly contentType: 'application/pdf';
+}
+
+// ---------------------------------------------------------------------------
+// SF-21 (spec D2) — GET /fulfillment/print-errors/counts?batchCode=
+// Số lỗi in per đơn trong phiếu (badge + sort D3). Additive.
+// ---------------------------------------------------------------------------
+
+export interface PrintErrorCountDto {
+  orderCode: string;
+  count: number;
+}
+
+export interface PrintErrorCountsResponse {
+  items: PrintErrorCountDto[];
 }

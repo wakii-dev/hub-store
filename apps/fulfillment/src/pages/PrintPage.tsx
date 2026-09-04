@@ -1,12 +1,17 @@
-import { Component, type ReactNode, Suspense, lazy, useCallback, useEffect, useRef, useState } from 'react';
+import { Component, type ReactNode, Suspense, lazy, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Provider } from 'react-redux';
-import { Alert, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Typography, message } from 'antd';
+import { Alert, Badge, Button, Progress, Result, Select, Slider, Space, Spin, Tabs, Tooltip, Typography, message } from 'antd';
 import { PrinterOutlined } from '@ant-design/icons';
 import { useTranslation } from 'react-i18next';
 import { useSearchParams } from 'react-router-dom';
-import { DESIGN_TOKENS, PRINT_TYPES, type PrintType } from '@hub-store/shared';
+import { BATCH_ENTITY_STATUS, DESIGN_TOKENS, EmptyState, PRINT_TYPES, trackEvent, type PrintType } from '@hub-store/shared';
 import { fulfillmentStore } from '../store';
-import { printDocument, useGetBatchDetailQuery, useGetPrintersQuery } from '../api/printApi';
+import {
+  printDocument,
+  useGetBatchDetailQuery,
+  useGetPrintErrorCountsQuery,
+  useGetPrintersQuery,
+} from '../api/printApi';
 import { registerFulfillmentResources } from '../i18n';
 
 // Chạy 1 lần khi module được import (lần đầu bởi shell lazy load, hoặc standalone boot)
@@ -92,6 +97,28 @@ function PrintPageInner() {
   });
   const printers = printersData?.items ?? [];
 
+  // SF-21 (spec D2): số lỗi in per đơn — badge + sort đơn nhiều lỗi nhất lên đầu.
+  const { data: errorCountsData } = useGetPrintErrorCountsQuery(batchCode, {
+    skip: !batchCode,
+  });
+  const errorCounts = useMemo(() => {
+    const map: Record<string, number> = {};
+    for (const c of errorCountsData?.items ?? []) {
+      map[c.orderCode] = c.count;
+    }
+    return map;
+  }, [errorCountsData]);
+
+  // Sort: count DESC trước, tie → orderCode asc (stable per spec D2).
+  const sortedOrders = useMemo(() => {
+    return [...(batch?.items ?? [])].sort((a, b) => {
+      const ca = errorCounts[a.orderCode] ?? 0;
+      const cb = errorCounts[b.orderCode] ?? 0;
+      if (ca !== cb) return cb - ca;
+      return a.orderCode.localeCompare(b.orderCode);
+    });
+  }, [batch?.items, errorCounts]);
+
   // Load PDF bytes cho tab active (cache per tab — không refetch tab đã load;
   // lỗi/loading theo TỪNG type — không chấm nhầm tab kế).
   const requestSeq = useRef(0);
@@ -135,6 +162,7 @@ function PrintPageInner() {
     try {
       await printDocument({ batchCode, printType: activeType, printerId: pid });
       message.success(t('print.success', { doc: t(`print.tab.${activeType}`) }));
+      trackEvent('print'); // SF-23 T7
     } catch (err) {
       message.error(`${t('print.failed')}: ${err instanceof Error ? err.message : String(err)}`);
     } finally {
@@ -176,6 +204,20 @@ function PrintPageInner() {
 
   const busy = printing || printAll !== null;
 
+  // SF-21 T5 — FE-only gate: batch CANCELLED → chặn in (In + In tất cả).
+  // Fail-open: batch chưa load / status vắng → KHÔNG chặn (E2E cũ in khi
+  // batch đang xử lý không có status trong mock).
+  const printBlocked = batch?.status === BATCH_ENTITY_STATUS.CANCELLED;
+  // antd4: Button disabled không nhận mouse event → bọc span để Tooltip hiện.
+  const withCancelTooltip = (node: ReactNode) =>
+    printBlocked ? (
+      <Tooltip title={t('print.cancelled.reason')}>
+        <span style={{ display: 'inline-flex' }}>{node}</span>
+      </Tooltip>
+    ) : (
+      node
+    );
+
   const tabItems = PRINT_TYPES.map((type) => ({
     key: type,
     label: t(`print.tab.${type}`),
@@ -215,7 +257,48 @@ function PrintPageInner() {
         {batch?.shopCode ? ` · ${t('print.shop.label')}: ${shopCode}` : ''}
       </Typography.Text>
 
-      <Space wrap style={{ display: 'flex', marginTop: 16, gap: 12 }} align="center">
+      {/* SF-21 D2 — danh sách đơn phiếu, sort lỗi in desc (tie → code asc);
+          Badge đếm lỗi chỉ hiện khi count > 0. T7: batch load xong nhưng
+          không còn đơn hợp lệ → shared EmptyState (spec §2). Khi còn đơn,
+          0 lỗi in là trạng thái tốt — list hiển thị nguyên trạng. */}
+      {sortedOrders.length > 0 ? (
+        <ul data-testid="print-order-list" style={{ listStyle: 'none', padding: 0, marginTop: 12, maxWidth: 480 }}>
+          {sortedOrders.map((item) => {
+            const count = errorCounts[item.orderCode] ?? 0;
+            return (
+              <li
+                key={item.orderCode}
+                data-testid="print-order-row"
+                data-order-code={item.orderCode}
+                style={{
+                  display: 'flex',
+                  alignItems: 'center',
+                  gap: 12,
+                  padding: '6px 0',
+                  borderBottom: `1px solid ${DESIGN_TOKENS.color.border}`,
+                }}
+              >
+                <Badge count={count} overflowCount={999} offset={[0, 0]}>
+                  <Typography.Text strong>{item.orderCode}</Typography.Text>
+                </Badge>
+                <Typography.Text type="secondary" ellipsis style={{ flex: 1 }}>
+                  {item.customerAddress}
+                </Typography.Text>
+              </li>
+            );
+          })}
+        </ul>
+      ) : (
+        batch && (
+          <EmptyState
+            title={t('print.orders.empty.title')}
+            sub={t('print.orders.empty.sub')}
+          />
+        )
+      )}
+
+      {/* SF-11 (FI-256 D3) — className cho stack dọc ≤768px (CSS sf6-antd-overrides) */}
+      <Space wrap className="sf11-print-controls" style={{ display: 'flex', marginTop: 16, gap: 12 }} align="center">
         <Select
           style={{ minWidth: 240 }}
           placeholder={t('print.printer.placeholder')}
@@ -224,30 +307,55 @@ function PrintPageInner() {
           loading={printersLoading}
           disabled={busy}
           notFoundContent={printersLoading ? <Spin size="small" /> : t('print.printer.empty')}
-          options={printers.map((p) => ({
-            value: p.printerId,
-            label: p.location ? `${p.name} — ${p.location}` : p.name,
-          }))}
+          options={
+            // SF-21: registry DB-backed có `type` — nhóm máy in Bill vs A4
+            // (optional chaining: field có thể vắng — fallback 'a4', flat list
+            // khi KHÔNG printer nào có type — pin E2E cũ vẫn xanh).
+            printers.some((p) => p.type)
+              ? (['bill', 'a4'] as const)
+                  .map((type) => ({
+                    label: type === 'bill' ? 'Bill' : 'A4',
+                    options: printers
+                      .filter((p) => (p.type ?? 'a4') === type)
+                      .map((p) => ({
+                        value: p.printerId,
+                        label: p.location ? `${p.name} — ${p.location}` : p.name,
+                      })),
+                  }))
+                  .filter((group) => group.options.length > 0)
+              : printers.map((p) => ({
+                  value: p.printerId,
+                  label: p.location ? `${p.name} — ${p.location}` : p.name,
+                }))
+          }
         />
-        <Button
-          type="primary"
-          icon={<PrinterOutlined />}
-          onClick={handlePrint}
-          loading={printing}
-          disabled={busy && !printing}
-        >
-          {t('action.print')}
-        </Button>
-        <Button onClick={handlePrintAll} loading={printAll !== null} disabled={busy && printAll === null}>
-          {t('print.action.printAll')}
-        </Button>
+        {withCancelTooltip(
+          <Button
+            type="primary"
+            icon={<PrinterOutlined />}
+            onClick={handlePrint}
+            loading={printing}
+            disabled={printBlocked || (busy && !printing)}
+          >
+            {t('action.print')}
+          </Button>,
+        )}
+        {withCancelTooltip(
+          <Button
+            onClick={handlePrintAll}
+            loading={printAll !== null}
+            disabled={printBlocked || (busy && printAll === null)}
+          >
+            {t('print.action.printAll')}
+          </Button>,
+        )}
         <Space align="center" style={{ marginLeft: 'auto' }}>
           <Typography.Text>{t('print.zoom.label')}</Typography.Text>
           <Slider
             style={{ width: 140, marginBottom: 0 }}
-            min={50}
+            min={25}
             max={200}
-            step={10}
+            step={5}
             value={zoomPct}
             onChange={setZoomPct}
             tooltip={{ formatter: (v) => `${v}%` }}

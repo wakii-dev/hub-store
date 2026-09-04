@@ -26,6 +26,7 @@ import { SERVICE_NAMES } from '../config.js';
 import { requireUser, requireRole } from '../plugins/auth.js';
 import { sendGrpcError, sendBadRequest, grpcError } from '../lib/grpc-error.js';
 import { errorEnvelope } from '../lib/envelope.js';
+import { emitLocalEvent } from '../lib/realtime-publish.js';
 import { toProtoIntakeOrder, mapImportError, mapAuditEntry } from '../mappers/intake.js';
 import { mapOrderItem } from '../mappers/fulfillment.js';
 
@@ -105,7 +106,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     });
 
     try {
-      const resp = await intake.validateImportOrders({ orders }, user.role, user.sub);
+      const resp = await intake.validateImportOrders({ orders }, user, user.sub);
       // DROP validation errors của placeholder rows (rác từ row parse-fail).
       const grpcErrors = (resp.errors ?? [])
         .filter((e) => !placeholderIdx.has(e.row - 1))
@@ -146,7 +147,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     try {
       const resp = await intake.confirmImportOrders(
         { orders: orders.map(toProtoIntakeOrder) },
-        user.role,
+        user,
         user.sub,
       );
       return await reply.send({ fulfillCodes: resp.fulfillCodes ?? [] });
@@ -162,7 +163,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     try {
       const resp = await intake.createManualOrder(
         { order: toProtoIntakeOrder(request.body) },
-        user.role,
+        user,
         user.sub,
       );
       return await reply.code(201).send({ fulfillCode: resp.fulfillCode });
@@ -191,9 +192,13 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
             reason,
             note: request.body.note ?? '',
           },
-          user.role,
+          user,
           user.sub,
         );
+        // SF-10 — dual-source local emit (KAFKA_ENABLED=false): type trong
+        // allow-list. Lưu ý Java Intake KHÔNG publish kafka event cho fail —
+        // local emit là kênh realtime duy nhất cho mutation này.
+        emitLocalEvent('order.failed', { fulfillCode: request.params.code });
         return await reply.code(204).send();
       } catch (err) {
         return sendGrpcError(reply, err, SERVICE_NAMES.intake);
@@ -207,9 +212,15 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     try {
       const resp = await intake.redeliverOrder(
         { fulfillCode: request.params.code },
-        user.role,
+        user,
         user.sub,
       );
+      // SF-10 — dual-source local emit (KAFKA_ENABLED=false): mirror audit
+      // 'order.redelivered' phía Java (IntakeServiceImpl.redeliverOrder).
+      emitLocalEvent('order.redelivered', {
+        fulfillCode: resp.newFulfillCode,
+        oldFulfillCode: request.params.code,
+      });
       return await reply.code(201).send({ fulfillCode: resp.newFulfillCode });
     } catch (err) {
       return sendGrpcError(reply, err, SERVICE_NAMES.intake);
@@ -221,7 +232,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     try {
       const resp = await intake.getOrderAudit(
         { fulfillCode: request.params.code },
-        user.role,
+        user,
         user.sub,
       );
       return await reply.send({ items: (resp.entries ?? []).map(mapAuditEntry) });
@@ -238,7 +249,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
     try {
       const detail = await deps.batching.getBatchDetail(
         { batchCode: request.params.batchCode },
-        user.role,
+        user,
       );
       if (!detail.batch) {
         return sendGrpcError(
@@ -248,7 +259,7 @@ export function registerIntakeRoutes(app: FastifyInstance, deps: IntakeRouteDeps
         );
       }
       const codes = (detail.batch.items ?? []).map((i) => i.orderCode);
-      const resp = await deps.fulfillment.getOrdersByCodes({ fulfillCodes: codes }, user.role);
+      const resp = await deps.fulfillment.getOrdersByCodes({ fulfillCodes: codes }, user);
       return await reply.send((resp.orders ?? []).map(mapOrderItem));
     } catch (err) {
       return sendGrpcError(reply, err, SERVICE_NAMES.batching);

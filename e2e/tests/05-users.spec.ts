@@ -1,4 +1,5 @@
 import { expect, test, type Page } from "@playwright/test";
+import { E2E_PASSWORD } from "../lib/credentials";
 
 /**
  * SF-8 — Users management: Manager list/tạo/login-user-mới/set-password/
@@ -6,7 +7,7 @@ import { expect, test, type Page } from "@playwright/test";
  * storage — KHÔNG dùng cookie-only vì BFF verify Bearer → 401 nếu thiếu).
  */
 
-const BFF = "http://localhost:8080";
+const BFF = process.env.E2E_BFF_URL ?? "http://localhost:8080"; // private-port seam (SF-15/SF-14 precedent)
 
 /** Đọc access token từ oidc-client-ts storage (localStorage key oidc.user:*). */
 async function accessToken(page: Page): Promise<string> {
@@ -31,7 +32,8 @@ async function bffGet(page: Page, path: string): Promise<Response> {
 }
 
 /** Login thật qua KC hosted UI với username/password bất kỳ (helper riêng —
- * realLogin của 02-spec describe-scoped + hardcode Password123!). */
+ * realLogin của 02-spec describe-scoped + hardcode password manager —
+ * SF-12: import E2E_PASSWORD từ lib/credentials). */
 async function realLogin(page: Page, username: string, password: string): Promise<void> {
   await page.goto("/");
   await page.getByTestId("login-submit").click();
@@ -79,7 +81,7 @@ test.describe("Manager — Users management", () => {
 
     // Quay lại manager: set password + disable
     await page.getByTestId("logout-button").click();
-    await realLogin(page, "manager", "Password123!");
+    await realLogin(page, "manager", E2E_PASSWORD);
     await page.goto("/users");
     await page.getByTestId(`user-set-password-${username}`).click();
     const pwModal = page.locator(".ant-modal:visible", { hasText: /Đặt lại mật khẩu|Reset password/i });

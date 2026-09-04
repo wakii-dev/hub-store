@@ -9,6 +9,7 @@ import { SignJWT } from 'jose';
 import { startHarness, signTestToken, invalidArgument, mockGrpcError, generateSecondIdentity, TEST_ISSUER, TEST_AUDIENCE } from './harness.js';
 import type { Harness } from './harness.js';
 import { staffAreaResponses } from './fixtures.js';
+import { __setAuditPoolForTests } from '../src/lib/audit.js';
 
 let h: Harness;
 
@@ -25,6 +26,33 @@ describe('Task 5 — bootstrap: JWT guard + public /healthz', () => {
     const res = await h.app.inject({ method: 'GET', url: '/healthz' });
     expect(res.statusCode).toBe(200);
     expect(res.json()).toEqual({ status: 'ok' });
+  });
+
+  // SF-12 — /health readiness public (compose probe không JWT).
+  it('GET /health public — DB env thiếu → disabled, vẫn 200 (fail-open như audit)', async () => {
+    delete process.env.FULFILLMENT_DB_HOST;
+    const res = await h.app.inject({ method: 'GET', url: '/health' });
+    expect(res.statusCode).toBe(200);
+    expect(res.json()).toEqual({ status: 'ok', db: { fulfillment: 'disabled' } });
+  });
+
+  it('GET /health — DB ping fail → 503 degraded', async () => {
+    // getAuditPool gate theo env TRƯỚC khi trả pool → phải set env để pool
+    // inject (test hook) được dùng.
+    process.env.FULFILLMENT_DB_HOST = 'localhost';
+    __setAuditPoolForTests({
+      query: async () => {
+        throw new Error('connection refused');
+      },
+    } as never);
+    try {
+      const res = await h.app.inject({ method: 'GET', url: '/health' });
+      expect(res.statusCode).toBe(503);
+      expect(res.json()).toEqual({ status: 'degraded', db: { fulfillment: 'down' } });
+    } finally {
+      __setAuditPoolForTests(null);
+      delete process.env.FULFILLMENT_DB_HOST;
+    }
   });
 
   it('401 khi thiếu Authorization header (error envelope)', async () => {
@@ -253,7 +281,7 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     const res = await h.app.inject({
       method: 'POST',
       url: '/fulfillment/print',
-      payload: { batchCode: 'BAT-1001', printType: 'bill', printerId: 'P-30201-01' },
+      payload: { batchCode: 'BAT-1001', printType: 'bill', printerId: 'PRN-30201-01' },
       headers: { authorization: `Bearer ${await signTestToken('Manager')}` },
     });
     expect(res.statusCode).toBe(200);
@@ -269,7 +297,7 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     const res = await h.app.inject({
       method: 'POST',
       url: '/fulfillment/print',
-      payload: { batchCode: 'BAT-1001', printType: 'printAll', printerId: 'P' },
+      payload: { batchCode: 'BAT-1001', printType: 'printAll', printerId: 'PRN-30201-01' },
       headers: { authorization: `Bearer ${await signTestToken()}` },
     });
     expect(res.statusCode).toBe(422);
@@ -284,7 +312,7 @@ describe('Task 7 — semantics + print PDF bytes', () => {
     const res = await h.app.inject({
       method: 'POST',
       url: '/fulfillment/print',
-      payload: { batchCode: 'BAT-KHONG-TON-TAI', printType: 'bill', printerId: 'P' },
+      payload: { batchCode: 'BAT-KHONG-TON-TAI', printType: 'bill', printerId: 'PRN-30201-01' },
       headers: { authorization: `Bearer ${await signTestToken()}` },
     });
     expect(res.statusCode).toBe(404);
@@ -328,6 +356,21 @@ describe('Task 7 — semantics + print PDF bytes', () => {
       headers: { authorization: `Bearer ${token}` },
     });
     expect(res.statusCode).toBe(200);
+  });
+
+  it('InsideTechnician/OutsideTechnician (SF-25) nằm trong KNOWN_ROLES → guard cho qua + role claim map', async () => {
+    for (const [role, username] of [
+      ['InsideTechnician', 'KTV-001'],
+      ['OutsideTechnician', 'CTV-001'],
+    ] as const) {
+      const token = await signTestToken(role, username);
+      const res = await h.app.inject({
+        method: 'GET',
+        url: '/master-data/regions',
+        headers: { authorization: `Bearer ${token}` },
+      });
+      expect(res.statusCode).toBe(200);
+    }
   });
 
   it('JWKS refetch khi gặp unknown kid (SF-4): key mới thêm → token verify 200', async () => {

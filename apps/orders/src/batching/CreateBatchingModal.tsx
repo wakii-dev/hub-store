@@ -16,7 +16,7 @@
  *   success → micro-interaction "✓" 800ms → đóng + invalidate Fulfillment LIST.
  */
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Button, DatePicker, Empty, Modal, Select, Space, Tag, Tooltip, Typography, message } from "antd";
+import { Button, DatePicker, Empty, Modal, Radio, Select, Space, Spin, Tag, Tooltip, Typography, message } from "antd";
 import {
   SortableContainer,
   SortableElement,
@@ -33,19 +33,37 @@ import {
   StatusTag,
   formatPeriodOfTime,
   formatVnd,
+  trackEvent,
+  savePlanningMap,
+  type DeliveryAddonDto,
+  type DeliveryBookingDto,
+  type DeliveryQuoteDto,
   type DeliveryStaffResponse,
   type HubStoreOrderFilterItem,
   type PackingGroup,
+  type PlanningMapEntry,
   type TimeRange,
 } from "@hub-store/shared";
 import { useGetDeliveryStaffQuery, useListOrdersQuery } from "@hub-store/api-client";
 import {
   useCreateBatchMutation,
+  useGetCriteriaPresetsQuery,
   useGetTimeDeliveryQuery,
   usePackingSuggestMutation,
   useRecalculateDistanceMutation,
+  useSelectCriteriaPresetMutation,
+  type CriteriaPresetItem,
 } from "./batchingApi";
+import {
+  useConfirmPlanningMutation,
+  useCreateBookingMutation,
+  useGetQuotesMutation,
+} from "./deliveryBatchApi";
 import { buildAddOrderFilterRequest, extractRejectMessages } from "./batchingHelpers";
+import { computeTotalFee, hasBlockedSelection, isQuoteBlocked, toStopOrders } from "./carrierHelpers";
+import { CarrierSection } from "./CarrierSection";
+import { AddonSelector } from "./AddonSelector";
+import type { CarrierGroup } from "./carrierHelpers";
 import "./batching-modal.css";
 
 const GROUP_COLORS: Array<{ bg: string; border: string }> = [
@@ -61,6 +79,22 @@ function groupColor(index: number): { bg: string; border: string } {
   return GROUP_COLORS[index % GROUP_COLORS.length];
 }
 
+// SF-28 T7 — step 1 criteria preset (design §2.4, hướng B). Copy VI chính xác
+// theo design (tên/mô tả/chip render qua i18n theo preset id của API); preset
+// id lạ (API thêm mới) → fallback name/description từ payload. Icon = emoji
+// placeholder theo prototype (§6 — icon library là out-of-scope dev-decided).
+const DEFAULT_PRESET_ID = "balanced"; // design §2.4: mặc định chọn sẵn BALANCED
+const PRESET_META: Record<string, { icon: string; chipKeys: string[] }> = {
+  shortest: { icon: "📏", chipKeys: ["shortest.1", "shortest.2"] },
+  cod_priority: { icon: "💰", chipKeys: ["cod_priority.1", "cod_priority.2"] },
+  fewest_stops: { icon: "📍", chipKeys: ["fewest_stops.1", "fewest_stops.2"] },
+  balanced: { icon: "⚖️", chipKeys: ["balanced.1", "balanced.2"] },
+};
+
+function presetDisplayName(p: CriteriaPresetItem, t: (k: string) => string): string {
+  return PRESET_META[p.id] ? t(`createBatch.preset.name.${p.id}`) : p.name;
+}
+
 const DragHandle = SortableHandle(() => (
   <span className="batch-drag-handle" data-testid="batch-drag-handle">
     ⠿
@@ -71,6 +105,7 @@ interface SortableRowValue {
   order: HubStoreOrderFilterItem;
   stopOrder: number;
   groupIndex: number; // -1 = không thuộc nhóm suggest nào
+  locked: boolean; // rebook — ẩn drag handle (section 1 khóa)
 }
 
 // react-sortable-hoc@2 typings không infer P qua WrappedComponentFactory union —
@@ -78,7 +113,7 @@ interface SortableRowValue {
 const SortableRow = SortableElement(({ value }: { value: SortableRowValue }) => {
   const { t, i18n } = useTranslation("orders");
   const statusLocale = (i18n.language ?? "vi").startsWith("vi") ? "vi" : "en";
-  const { order, stopOrder, groupIndex } = value;
+  const { order, stopOrder, groupIndex, locked } = value;
   const color = groupIndex >= 0 ? groupColor(groupIndex) : null;
   return (
     <li
@@ -86,7 +121,7 @@ const SortableRow = SortableElement(({ value }: { value: SortableRowValue }) => 
       data-testid={`batch-row-${order.fulfillCode}`}
       style={color ? { background: color.bg } : undefined}
     >
-      <DragHandle />
+      {!locked && <DragHandle />}
       <span className="batch-cell-stop" data-testid="batch-stop-order">
         {stopOrder}
       </span>
@@ -115,26 +150,75 @@ const SortableRows = SortableContainer(({ items }: { items: SortableRowValue[] }
   </ul>
 )) as unknown as ComponentClass<{ items: SortableRowValue[] } & SortableContainerProps>;
 
+export type CreateBatchingModalMode = "create" | "replan" | "rebook";
+
 export interface CreateBatchingModalProps {
   open: boolean;
   /** Đơn đã chọn trên D1 — snapshot khi mở modal (KHÔNG re-fetch). */
   orders: HubStoreOrderFilterItem[];
   onClose: () => void;
+  /**
+   * SF-16 (spec §2.5): 'create' (default — flow legacy byte-for-byte) ·
+   * 'replan' (tạo lại phiếu) · 'rebook' (book lại vận đơn — Task 6 lắp behavior).
+   */
+  mode?: CreateBatchingModalMode;
+  /** SF-16 rebook — mã phiếu hiện có (confirmPlanning BẬT buộc khi rebook). */
+  batchCode?: string;
+  /** SF-16 rebook — planning cần book lại (từ planning map, D1Page truyền). */
+  rebookEntries?: PlanningMapEntry[];
 }
 
-export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingModalProps) {
+/** Kết quả createBatch cần giữ lại khi confirm/booking fail (retry reuse). */
+interface BatchResult {
+  batchCode?: string;
+  items?: Array<{ stopOrder: number; orderCode: string }>;
+}
+
+export function CreateBatchingModal({
+  open,
+  orders,
+  onClose,
+  mode = "create",
+  batchCode,
+  rebookEntries,
+}: CreateBatchingModalProps) {
   const { t, i18n } = useTranslation("orders");
   const fmtLocale = (i18n.language ?? "vi").startsWith("vi") ? "vi" : "en";
+  const rebook = mode === "rebook";
+  const entries = rebookEntries ?? [];
 
   // Rows state — sync khi MỞ modal (snapshot selection); DnD/thêm đơn/recalc đổi state.
   const [rows, setRows] = useState<HubStoreOrderFilterItem[]>([]);
   const [groups, setGroups] = useState<PackingGroup[] | null>(null);
+  // SF-16 §2.1 — nhóm vận chuyển: KHO_CN default → flow cũ byte-for-byte.
+  const [carrierGroup, setCarrierGroup] = useState<CarrierGroup>("KHO_CN");
+  // SF-16 §2.2 — quotes NVC (Task 3): fetch khi nhóm TRUCK, debounce 300ms;
+  // refetch khi rows đổi (recalc distance → km mới → báo giá mới).
+  const [quotes, setQuotes] = useState<DeliveryQuoteDto[] | null>(null);
+  const [metaMock, setMetaMock] = useState(false);
+  // P1 review (T3-T5): seq-guard — response của fetch CŨ về sau response mới
+  // không được ghi đè quotes (debounce + rows đổi liên tiếp).
+  const quotesSeqRef = useRef(0);
+  const [selectedServiceId, setSelectedServiceId] = useState<string | null>(null);
+  // SF-16 §2.3 — addons (Task 4): mã addon đã tick theo quote đang chọn.
+  const [selectedAddonCodes, setSelectedAddonCodes] = useState<string[]>([]);
+  // SF-16 §2.2 (Task 5) — banner cảnh báo khi quote đang chọn bị vượt hạn mức (refetch).
+  const [feeLimitWarning, setFeeLimitWarning] = useState(false);
+  const [bookingResults, setBookingResults] = useState<DeliveryBookingDto[] | null>(null);
+  const [nvcSubmitting, setNvcSubmitting] = useState(false);
+  // P1 review (T3-T5): createBatch OK mà confirm/booking 422 → giữ phiếu đã
+  // tạo để retry DÙNG LẠI (không createBatch lần 2 → không trùng phiếu).
+  const [pendingBatch, setPendingBatch] = useState<BatchResult | null>(null);
   const [shipperId, setShipperId] = useState<string | undefined>(undefined);
   const [deliveryTime, setDeliveryTime] = useState<TimeRange | null>(null);
+  // SF-28 T7: step 1 = criteria preset; 2/3/4 = nội dung cũ theo thứ tự (renumber).
+  const [presetId, setPresetId] = useState<string | null>(null);
   // SF-6 §2.3 stepper — NON-BLOCKING (Deviation D1): content không bao giờ ẩn,
   // activeSection chỉ điều khiển highlight + scroll-to khi bấm node/Tiếp tục.
-  const [activeSection, setActiveSection] = useState<1 | 2 | 3>(1);
+  const [activeSection, setActiveSection] = useState<1 | 2 | 3 | 4>(1);
   const [created, setCreated] = useState(false); // micro-interaction "✓" 800ms
+  const section1Ref = useRef<HTMLDivElement | null>(null);
+  const ordersRef = useRef<HTMLDivElement | null>(null);
   const section2Ref = useRef<HTMLDivElement | null>(null);
   const section3Ref = useRef<HTMLDivElement | null>(null);
   // Reviewer-sf6 P1: timer đóng sau micro-interaction phải clear được —
@@ -147,10 +231,12 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
     }
   };
 
-  const scrollToSection = (s: 1 | 2 | 3) => {
+  const scrollToSection = (s: 1 | 2 | 3 | 4) => {
     setActiveSection(s);
-    if (s === 2) section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
-    if (s === 3) section3Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (s === 1) section1Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (s === 2) ordersRef.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (s === 3) section2Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
+    if (s === 4) section3Ref.current?.scrollIntoView({ behavior: "smooth", block: "start" });
   };
 
   useEffect(() => {
@@ -158,8 +244,20 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
       clearCloseTimer(); // P1: hủy timer version trước trước khi reset state
       setRows(orders);
       setGroups(null);
+      // SF-16 rebook — luôn NVC: đặt TRUCK ngay để fetch quotes + prefill xe.
+      setCarrierGroup(rebook ? "TRUCK" : "KHO_CN");
+      setQuotes(null);
+      setMetaMock(false);
+      setSelectedServiceId(null);
+      setSelectedAddonCodes([]);
+      setFeeLimitWarning(false);
+      setBookingResults(null);
+      setNvcSubmitting(false);
+      setPendingBatch(null); // P1: modal mở lại → không reuse phiếu cũ
+      prefillingAddonsRef.current = false; // P1 group-3: guard không trôi sang lần mở sau
       setShipperId(undefined);
       setDeliveryTime(null);
+      setPresetId(null); // re-default BALANCED khi presets data có sẵn (effect dưới)
       setActiveSection(1);
       setCreated(false);
     }
@@ -167,8 +265,57 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
 
+  // SF-16 rebook — prefill xe theo serviceId PHỔ BIẾN NHẤT khi đồng nhất
+  // (entries cùng 1 serviceId → tick sẵn quote đó; khác nhau → NG tự chọn).
+  // P1 review (group 3): prefill CẢ addons cũ từ entries — nhưng chỉ giữ mã
+  // còn trong catalog của quote (catalog embed theo quote — mã hết hạn bỏ qua).
+  const prefillingAddonsRef = useRef(false);
+  useEffect(() => {
+    if (!rebook || quotes === null || entries.length === 0) return;
+    const uniform = entries.every((e) => e.serviceId === entries[0].serviceId);
+    if (!uniform) return;
+    const serviceId = entries[0].serviceId;
+    const quote = quotes.find((q) => q.serviceId === serviceId);
+    if (!quote) return;
+    // P1 review (round 2): chỉ bật guard khi serviceId THẬT SỰ đổi — set cùng
+    // giá trị → React bail-out → guard effect không chạy → ref kẹt true vĩnh
+    // viễn, lần đổi xe sau đó của NG bị guard "tiêu" oan (stale addon không
+    // reset). Refetch cùng serviceId (toggle carrier / recalc) chỉ prefill lại
+    // addons — không đụng guard.
+    if (serviceId !== selectedServiceId) {
+      prefillingAddonsRef.current = true; // stale-addon guard không xóa prefill
+      setSelectedServiceId(serviceId);
+    }
+    const oldAddons = new Set(entries.flatMap((e) => e.addons ?? []));
+    setSelectedAddonCodes(quote.addonServices.filter((a) => oldAddons.has(a.code)).map((a) => a.code));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quotes]);
+
   // P1: unmount (navigate/destroyOnClose) → không fire onClose sau khi chết.
   useEffect(() => () => clearCloseTimer(), []);
+
+  // SF-16 §2.3 (Task 4) — stale-addon guard (CRITICAL): addonServices là CỦA
+  // từng quote — đổi xe → mã addon cũ không còn hợp lệ → reset selection.
+  // Ngoại lệ: set serviceId do REBOOK PREFILL (effect trên) — giữ addon prefill.
+  useEffect(() => {
+    if (prefillingAddonsRef.current) {
+      prefillingAddonsRef.current = false;
+      return;
+    }
+    setSelectedAddonCodes([]);
+  }, [selectedServiceId]);
+
+  // SF-16 §2.2 (Task 5) — fee-limit auto-clear: refetch quotes (recalc km /
+  // thêm-bớt đơn) có thể trả quote ĐANG CHỌN vượt hạn mức → clear selection
+  // + banner cảnh báo. Chọn quote mới tự tắt banner (onChange handler).
+  useEffect(() => {
+    if (selectedServiceId === null) return;
+    const selected = (quotes ?? []).find((q) => q.serviceId === selectedServiceId);
+    if (selected != null && isQuoteBlocked(selected)) {
+      setSelectedServiceId(null);
+      setFeeLimitWarning(true);
+    }
+  }, [quotes, selectedServiceId]);
 
   const shopCode = rows[0]?.shopAssignment.shopCode ?? "";
 
@@ -176,6 +323,60 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
   const [packingSuggest, { isLoading: suggesting }] = usePackingSuggestMutation();
   const [recalculate, { isLoading: recalculating }] = useRecalculateDistanceMutation();
   const [createBatch, { isLoading: creating }] = useCreateBatchMutation();
+
+  // ---- Step 1: criteria preset (SF-28 T7) --------------------------------------
+  const {
+    data: presetData,
+    isError: presetsError,
+    refetch: refetchPresets,
+  } = useGetCriteriaPresetsQuery(undefined, { skip: !open });
+  const [selectCriteriaPreset] = useSelectCriteriaPresetMutation();
+  const presets: CriteriaPresetItem[] = presetData?.items ?? [];
+
+  // Default chọn sẵn BALANCED khi API trả về list có preset đó (design §2.4) —
+  // user không đổi vẫn hợp lệ; API fail → không default, "Tiếp tục" disabled.
+  useEffect(() => {
+    if (presetId === null && presets.some((p) => p.id === DEFAULT_PRESET_ID)) {
+      setPresetId(DEFAULT_PRESET_ID);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [presetData, presetId]);
+
+  const handlePickPreset = (id: string) => {
+    if (id === presetId) return; // click lại card đang chọn — không audit đôi
+    setPresetId(id);
+    // Audit fire-and-forget (T6 contract): gọi nhưng lỗi KHÔNG block UI.
+    void selectCriteriaPreset({ presetId: id, orderCount: rows.length }).catch(() => undefined);
+  };
+
+
+  // ---- Quotes NVC (SF-16 §2.2 — Task 3) -----------------------------------------
+  const [getQuotes, { isLoading: quotesLoading }] = useGetQuotesMutation();
+  const [confirmPlanning] = useConfirmPlanningMutation();
+  const [createBooking] = useCreateBookingMutation();
+
+  useEffect(() => {
+    if (carrierGroup !== "TRUCK" || rows.length === 0) return;
+    const seq = ++quotesSeqRef.current; // P1: đánh dấu đợt fetch hiện hành
+    // Debounce 300ms — gộp burst (thêm nhiều đơn / recalc): chỉ fetch lần cuối.
+    const timer = setTimeout(() => {
+      getQuotes({ shopCode, stopOrders: toStopOrders(rows) })
+        .unwrap()
+        .then((resp) => {
+          if (seq !== quotesSeqRef.current) return; // stale — response fetch cũ
+          setQuotes(resp.quotes ?? []);
+          setMetaMock(resp.meta?.mock ?? false);
+        })
+        .catch(() => {
+          if (seq !== quotesSeqRef.current) return;
+          setQuotes(null);
+          message.error(t("batching.quotes.fetchError"));
+        });
+    }, 300);
+    return () => clearTimeout(timer);
+    // refetch khi rows đổi (DnD/thêm đơn/recalc distance); getQuotes/t ổn định.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [carrierGroup, rows, shopCode, getQuotes]);
 
   const handlePackingSuggest = async () => {
     try {
@@ -249,10 +450,38 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
   const pickedFromHint = deliveryTime !== null && hintSlots.some((s) => s.from === deliveryTime.from && s.to === deliveryTime.to);
 
   // ---- Submit -------------------------------------------------------------------
-  const canSubmit = rows.length > 0 && !!shipperId && deliveryTime !== null;
+  // SF-16 §2.3 — addons Task 4: addon DTO của quote đang chọn theo mã đã tick
+  // (computeTotalFee = quote.fee + Σ addon.fee).
+  const selectedQuote = (quotes ?? []).find((q) => q.serviceId === selectedServiceId) ?? null;
+  const selectedAddons: DeliveryAddonDto[] = (selectedQuote?.addonServices ?? []).filter((a) =>
+    selectedAddonCodes.includes(a.code),
+  );
+  const shippingFee = selectedQuote !== null ? computeTotalFee(selectedQuote, selectedAddons) : null;
+  // SF-16 §2.2 (Task 5) — submit gate: selection vượt hạn mức phí → chặn
+  // (BE-authoritative 422 vẫn là lớp chặn cuối).
+  const submitBlocked = hasBlockedSelection(selectedQuote);
+  // TRUCK: phải chọn quote HỢP LỆ (không vượt hạn mức) trước khi submit.
+  // rebook: chỉ cần quote hợp lệ (shipper/TG giao là flow KHO_CN legacy — NVC
+  // booking không dùng; plan T6.5 submit KHÔNG tạo phiếu).
+  const canSubmit = rebook
+    ? rows.length > 0 && !!selectedQuote && !submitBlocked
+    : rows.length > 0 &&
+      !!shipperId &&
+      deliveryTime !== null &&
+      (carrierGroup !== "TRUCK" || (!!selectedQuote && !submitBlocked));
 
   const handleCreate = async () => {
     if (!canSubmit) return;
+    if (rebook) {
+      await handleRebook();
+      return;
+    }
+    if (carrierGroup === "TRUCK") {
+      await handleCreateTruck();
+      return;
+    }
+    // Guard narrowing (ternary canSubmit làm mất aliased-narrowing của state)
+    if (!shipperId || deliveryTime === null) return;
     try {
       await createBatch({
         orderCodes: rows.map((r) => r.fulfillCode), // theo THỨ TỰ GIAO hiện hành
@@ -260,12 +489,119 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
         deliveryTime,
       }).unwrap();
       message.success(t("createBatch.success"));
+      trackEvent("batch_created"); // SF-23 T7
       // SF-6 §3 micro-interaction: label "✓" 800ms trước khi đóng.
       setCreated(true);
       closeTimerRef.current = setTimeout(onClose, 800); // ref để clear (P1 review)
     } catch (err) {
       // Error UX: backend reject (khác kho / đơn ≠0) → message, modal GIỮ state.
       message.error(extractRejectMessages(err, t("createBatch.error")).join("; "));
+    }
+  };
+
+  /**
+   * Submit TRUCK (SF-16 §2.4 — Task 3): sequence 3 bước NVC —
+   * createBatch (tạo phiếu) → confirmPlanning (chốt giá + plannings) →
+   * createBooking (book xe — driver/biển số). 422 ở bất kỳ bước → message từ
+   * details[], modal GIỮ state. Success KHÔNG auto-close (khác legacy):
+   * booking results hiển thị ở review section cho NG xem trước khi tự đóng.
+   */
+  const handleCreateTruck = async () => {
+    if (selectedQuote === null || deliveryTime === null || !shipperId) return;
+    setNvcSubmitting(true);
+    try {
+      // P1: pendingBatch có (retry sau 422) → BỎ QUA create, dùng phiếu cũ.
+      let batch: BatchResult | null = pendingBatch;
+      if (batch === null) {
+        batch = await createBatch({
+          orderCodes: rows.map((r) => r.fulfillCode), // theo THỨ TỰ GIAO hiện hành
+          shipperId,
+          deliveryTime,
+        }).unwrap();
+        setPendingBatch(batch);
+      }
+      const batchCode = batch?.batchCode ?? "";
+      const confirmResp = await confirmPlanning({
+        batchCode,
+        plannings: (batch?.items ?? []).map((it) => ({
+          stopOrder: it.stopOrder,
+          orderCode: it.orderCode,
+          vehicleType: selectedQuote.vehicleType,
+          serviceId: selectedQuote.serviceId,
+          addons: selectedAddons.map((a) => a.code), // Task 4 — mã addon (từ DTO của quote đang chọn)
+        })),
+      }).unwrap();
+      const plannings = confirmResp.plannings ?? [];
+      // SF-16 Task 6 — persist planning map (gate rebook ở D2 + prefill D1).
+      if (batchCode) {
+        savePlanningMap(
+          batchCode,
+          plannings.map((p) => ({
+            planningId: p.planningId,
+            orderCode: p.orderCode,
+            stopOrder: p.stopOrder,
+            serviceId: p.serviceId,
+            vehicleType: p.vehicleType,
+            addons: p.addons,
+          })),
+        );
+      }
+      const bookingResp = await createBooking({
+        batchCode,
+        shipmentPlannings: plannings.map((p) => ({
+          planningId: p.planningId,
+          codAmount: p.codAmount,
+          totalBill: 0, // FE chưa có field totalBill (contract §3.6) — 0 như toStopOrders
+          stopOrder: p.stopOrder,
+        })),
+      }).unwrap();
+      setBookingResults(bookingResp.bookings ?? []);
+      message.success(t("batching.quotes.bookingSuccess"));
+      setCreated(true); // disable nút submit — modal mở để NG xem booking results
+    } catch (err) {
+      message.error(extractRejectMessages(err, t("batching.quotes.error")).join("; "));
+    } finally {
+      setNvcSubmitting(false);
+    }
+  };
+
+  /**
+   * Submit rebook (SF-16 §2.5 — Task 6): KHÔNG createBatch — chỉ
+   * confirmPlanning trên phiếu HIỆN CÓ (batchCode prop, chỉ planningIdsToRebook;
+   * planning CONFIRMED/BOOKED khác BE giữ nguyên) → createBooking. Kết quả book
+   * mới hiển thị ở review section (như flow TRUCK).
+   */
+  const handleRebook = async () => {
+    if (!batchCode || selectedQuote === null || entries.length === 0) return;
+    setNvcSubmitting(true);
+    try {
+      const confirmResp = await confirmPlanning({
+        batchCode,
+        plannings: entries.map((e) => ({
+          stopOrder: e.stopOrder,
+          orderCode: e.orderCode,
+          vehicleType: selectedQuote.vehicleType,
+          serviceId: selectedQuote.serviceId,
+          addons: selectedAddons.map((a) => a.code),
+        })),
+      }).unwrap();
+      const plannings = confirmResp.plannings ?? [];
+      const bookingResp = await createBooking({
+        batchCode,
+        shipmentPlannings: plannings.map((p) => ({
+          planningId: p.planningId,
+          codAmount: p.codAmount,
+          totalBill: 0, // như flow TRUCK — FE chưa có field totalBill
+          stopOrder: p.stopOrder,
+        })),
+      }).unwrap();
+      setBookingResults(bookingResp.bookings ?? []);
+      message.success(t("batching.quotes.bookingSuccess"));
+      setCreated(true);
+    } catch (err) {
+      message.error(extractRejectMessages(err, t("batching.quotes.error")).join("; "));
+    } finally {
+      setNvcSubmitting(false);
     }
   };
 
@@ -276,11 +612,12 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
       order,
       stopOrder: index + 1,
       groupIndex: codeToGroup.get(order.fulfillCode) ?? -1,
+      locked: rebook,
     }));
-  }, [rows, groups]);
+  }, [rows, groups, rebook]);
 
   const handleSortEnd = ({ oldIndex, newIndex }: SortEnd) => {
-    if (oldIndex === newIndex) return;
+    if (rebook || oldIndex === newIndex) return; // rebook — section 1 khóa
     setRows((prev) => arrayMove(prev, oldIndex, newIndex));
   };
 
@@ -289,24 +626,37 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
   const totalDistance = rows.reduce((s, r) => s + (r.distance ?? 0), 0);
   const totalCod = rows.reduce((s, r) => s + (r.codAmount ?? 0), 0);
   const shipperLabel = staffOptions.find((o) => o.value === shipperId)?.label ?? "—";
+  const selectedPreset = presets.find((p) => p.id === presetId) ?? null;
+  // SF-28 T7: stepper 4 bước — 1 preset (mới), 2/3/4 = nội dung cũ theo thứ tự.
+  const stepPresetDone = presetId !== null;
   const step1Done = rows.length > 0;
   const step2Done = !!shipperId && deliveryTime !== null;
-  const steps: Array<{ n: 1 | 2 | 3; label: string; done: boolean }> = [
-    { n: 1, label: t("createBatch.step1"), done: step1Done },
-    { n: 2, label: t("createBatch.step2"), done: step2Done },
-    { n: 3, label: t("createBatch.step3"), done: false },
+  const steps: Array<{ n: 1 | 2 | 3 | 4; label: string; done: boolean }> = [
+    { n: 1, label: t("createBatch.stepPreset"), done: stepPresetDone },
+    { n: 2, label: t("createBatch.step1"), done: step1Done },
+    { n: 3, label: t("createBatch.step2"), done: step2Done },
+    { n: 4, label: t("createBatch.step3"), done: false },
   ];
+  // SF-16 §2.5 — title theo mode (create giữ key cũ byte-for-byte).
+  const titleKey =
+    mode === "replan" ? "createBatch.titleReplan" : mode === "rebook" ? "createBatch.titleRebook" : "createBatch.title";
 
   return (
     <Modal
       title={
         <div>
           <div style={{ fontSize: 17, fontWeight: 700, color: DESIGN_TOKENS.color.textStrong }}>
-            {t("createBatch.title")}
+            {t(titleKey)}
           </div>
           <div style={{ fontSize: 12.5, fontWeight: 400, color: DESIGN_TOKENS.color.textMuted }}>
             {t("createBatch.selectedCount", { count: rows.length })}
             {shopCode ? ` · ${t("createBatch.shopLabel", { code: shopCode })}` : ""}
+            {/* SF-28 T7: chip preset đã chọn ở header các step sau (chỉ display). */}
+            {activeSection !== 1 && selectedPreset && (
+              <span className="batch-preset-header-chip" data-testid="wizard-preset-chip">
+                {presetDisplayName(selectedPreset, t)}
+              </span>
+            )}
           </div>
         </div>
       }
@@ -353,35 +703,98 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
         })}
       </div>
 
-      {/* ─── Section 1: danh sách đơn & thứ tự giao ─── */}
-      <div className="batch-toolbar">
-        <Button data-testid="batch-packing-suggest" loading={suggesting} onClick={() => void handlePackingSuggest()}>
-          {t("createBatch.packingSuggest")}
-        </Button>
-        <Button data-testid="batch-recalc-distance" loading={recalculating} onClick={() => void handleRecalculate()}>
-          {t("createBatch.recalcDistance")}
-        </Button>
-        <Select
-          className="batch-add-order"
-          mode="multiple"
-          showSearch
-          optionFilterProp="label"
-          value={[]}
-          placeholder={t("createBatch.addOrderPlaceholder")}
-          notFoundContent={searching ? t("common.loading") : t("createBatch.addOrderEmpty")}
-          onSearch={(v) => setSearchText(v)}
-          onSelect={(code: string) => handleAddOrders([code])}
-          onDeselect={() => undefined}
-          data-testid="batch-add-order"
-        >
-          {addItems.map((o) => (
-            <Select.Option key={o.fulfillCode} value={o.fulfillCode} label={o.fulfillCode}>
-              {o.fulfillCode} — {o.customerAddress}
-            </Select.Option>
-          ))}
-        </Select>
-        <Typography.Text type="secondary">{t("createBatch.addOrder")}</Typography.Text>
+      {/* ─── Step 1 (MỚI — SF-28 T7, design §2.4): tiêu chí tối ưu ─── */}
+      <div className="batch-preset" ref={section1Ref} data-testid="wizard-step1-preset">
+        <div className="batch-preset-overline">{t("createBatch.preset.label")}</div>
+        {presetsError ? (
+          <div className="batch-preset-error">
+            <span>{t("createBatch.preset.loadError")}</span>
+            <Button size="small" onClick={() => void refetchPresets()}>
+              {t("createBatch.preset.retry")}
+            </Button>
+          </div>
+        ) : (
+          <div className="batch-preset-grid">
+            {presets.map((p) => {
+              const meta = PRESET_META[p.id];
+              const selected = p.id === presetId;
+              return (
+                <div
+                  key={p.id}
+                  role="radio"
+                  aria-checked={selected}
+                  // a11y (P1 review): role="radio" phải focusable + Enter/Space
+                  // select — trước đây tabIndex={-1} + click-only.
+                  tabIndex={0}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      handlePickPreset(p.id);
+                    }
+                  }}
+                  className={`batch-preset-card${selected ? " batch-preset-card-selected" : ""}`}
+                  data-testid={`wizard-preset-${p.id}`}
+                  onClick={() => handlePickPreset(p.id)}
+                >
+                  <span className="batch-preset-radio" aria-hidden="true">
+                    {selected && <span className="batch-preset-radio-dot" />}
+                  </span>
+                  <div className="batch-preset-head">
+                    <span className="batch-preset-icon" aria-hidden="true">
+                      {meta?.icon ?? "⚙️"}
+                    </span>
+                    <span className="batch-preset-name">{presetDisplayName(p, t)}</span>
+                  </div>
+                  <div className="batch-preset-desc">{meta ? t(`createBatch.preset.desc.${p.id}`) : p.description}</div>
+                  {(meta?.chipKeys ?? []).length > 0 && (
+                    <div className="batch-preset-chips">
+                      {meta!.chipKeys.map((k) => (
+                        <span key={k} className="batch-preset-chip">
+                          {t(`createBatch.preset.chip.${k}`)}
+                        </span>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
+
+      {/* ─── Step 2: danh sách đơn & thứ tự giao (nội dung cũ — KHÔNG đổi logic) ─── */}
+      <div ref={ordersRef}>
+      {/* rebook (SF-16 §2.5) — section 1 khóa: ẩn toolbar (không DnD/thêm/bớt). */}
+      {!rebook && (
+        <div className="batch-toolbar">
+          <Button data-testid="batch-packing-suggest" loading={suggesting} onClick={() => void handlePackingSuggest()}>
+            {t("createBatch.packingSuggest")}
+          </Button>
+          <Button data-testid="batch-recalc-distance" loading={recalculating} onClick={() => void handleRecalculate()}>
+            {t("createBatch.recalcDistance")}
+          </Button>
+          <Select
+            className="batch-add-order"
+            mode="multiple"
+            showSearch
+            optionFilterProp="label"
+            value={[]}
+            placeholder={t("createBatch.addOrderPlaceholder")}
+            notFoundContent={searching ? t("common.loading") : t("createBatch.addOrderEmpty")}
+            onSearch={(v) => setSearchText(v)}
+            onSelect={(code: string) => handleAddOrders([code])}
+            onDeselect={() => undefined}
+            data-testid="batch-add-order"
+          >
+            {addItems.map((o) => (
+              <Select.Option key={o.fulfillCode} value={o.fulfillCode} label={o.fulfillCode}>
+                {o.fulfillCode} — {o.customerAddress}
+              </Select.Option>
+            ))}
+          </Select>
+          <Typography.Text type="secondary">{t("createBatch.addOrder")}</Typography.Text>
+        </div>
+      )}
 
       {groups !== null && groups.length > 0 && (
         <div className="batch-groups" data-testid="batch-groups">
@@ -418,9 +831,84 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
           <SortableRows items={sortableItems} onSortEnd={handleSortEnd} useDragHandle lockToContainerEdges helperClass="batch-row-dragging" />
         )}
       </div>
+      </div>
 
-      {/* ─── Section 2: shipper & thời gian giao + sumbar ─── */}
+      {/* ─── Step 3 (Section 2): carrier & shipper & thời gian giao + sumbar ─── */}
       <div className="batch-form" ref={section2Ref}>
+        {/* SF-16 §2.1 — nhóm vận chuyển, chèn TRÊN shipper-select (testid cũ nguyên vẹn) */}
+        <CarrierSection
+          value={carrierGroup}
+          onChange={(g) => {
+            setFeeLimitWarning(false); // P2 review: banner cũ không theo nhóm mới
+            setCarrierGroup(g);
+          }}
+        >
+          {carrierGroup === "TRUCK" &&
+            (quotesLoading ? (
+              <Spin size="small" data-testid="quotes-loading" />
+            ) : quotes === null ? (
+              <Typography.Text type="secondary">{t("batching.carrierGroup.quotesPlaceholder")}</Typography.Text>
+            ) : (
+              <div className="quote-list" data-testid="quote-list">
+                {quotes.map((q) => {
+                  // SF-16 §2.2 (Task 5) — fee-limit gate: quote vượt hạn mức →
+                  // disabled + Tooltip + tag tone error (a11y: tooltip vẫn đọc được).
+                  const blocked = isQuoteBlocked(q);
+                  const item = (
+                    <label
+                      key={q.serviceId}
+                      className={`quote-item${q.serviceId === selectedServiceId ? " quote-item-selected" : ""}${blocked ? " quote-item-blocked" : ""}`}
+                      data-testid={`quote-${q.serviceId}`}
+                      onClick={blocked ? (e) => e.preventDefault() : undefined}
+                    >
+                      <Radio
+                        checked={q.serviceId === selectedServiceId}
+                        disabled={blocked}
+                        onChange={() => {
+                          setSelectedServiceId(q.serviceId);
+                          setFeeLimitWarning(false); // chọn quote hợp lệ → tắt banner
+                        }}
+                      />
+                      <span className="quote-name">{q.name}</span>
+                      <Tag className="quote-vehicle">{q.vehicleType}</Tag>
+                      <span className="quote-eta">{t("batching.quotes.eta", { minutes: q.etaMinutes })}</span>
+                      {blocked && (
+                        <Tag className="quote-limit-tag" data-testid={`quote-limit-tag-${q.serviceId}`}>
+                          {t("batching.quotes.exceedFeeLimitTag")}
+                        </Tag>
+                      )}
+                      {metaMock && <Tag className="quote-mock-tag">[MOCK]</Tag>}
+                      <span className="quote-fee">{formatVnd(computeTotalFee(q, q.serviceId === selectedServiceId ? selectedAddons : []))}</span>
+                    </label>
+                  );
+                  return blocked ? (
+                    <Tooltip key={q.serviceId} title={t("batching.quotes.exceedFeeLimit")}>
+                      {item}
+                    </Tooltip>
+                  ) : (
+                    item
+                  );
+                })}
+              </div>
+            ))}
+          {/* SF-16 §2.2 (Task 5) — banner auto-clear khi quote đang chọn bị vượt hạn mức */}
+          {carrierGroup === "TRUCK" && feeLimitWarning && (
+            <div className="sf6-note-banner sf6-note-error" data-testid="fee-limit-banner">
+              <span className="sf6-note-icon" aria-hidden="true">
+                !
+              </span>
+              <span>{t("batching.quotes.feeLimitCleared")}</span>
+            </div>
+          )}
+          {/* SF-16 §2.3 — AddonSelector theo quote đang chọn (Task 4) */}
+          {selectedQuote !== null && selectedQuote.addonServices.length > 0 && (
+            <AddonSelector
+              addons={selectedQuote.addonServices}
+              value={selectedAddonCodes}
+              onChange={setSelectedAddonCodes}
+            />
+          )}
+        </CarrierSection>
         <div className="batch-form-row">
           <div className="sf6-form-card">
             <Typography.Text strong>{t("createBatch.shipper")}</Typography.Text>
@@ -460,7 +948,7 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
                       color={pickedFromHint && deliveryTime?.from === slot.from ? "gold" : "default"}
                       onClick={(e) => {
                         setDeliveryTime({ from: slot.from, to: slot.to });
-                        setActiveSection((cur) => (cur === 1 ? 2 : cur));
+                        setActiveSection((cur) => (cur === 2 ? 3 : cur)); // renumber T7: đơn=2, shipper=3
                         void e;
                       }}
                       data-testid={`batch-time-hint-${i}`}
@@ -492,9 +980,16 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
             <span className="sf6-sum-key">{t("createBatch.sum.cod")}</span>
             <span className="sf6-sum-val">{formatVnd(totalCod, fmtLocale)}</span>
           </div>
+          {/* SF-16 §2.2 — Phí vận chuyển (dòng MỚI, KHÔNG đụng 4 ô cũ) */}
+          {shippingFee !== null && (
+            <div className="sf6-sum-cell" data-testid="sum-shipping-fee">
+              <span className="sf6-sum-key">{t("batching.quotes.sumShippingFee")}</span>
+              <span className="sf6-sum-val">{formatVnd(shippingFee)}</span>
+            </div>
+          )}
         </div>
 
-        {/* ─── Section 3: review + note banner ─── */}
+        {/* ─── Step 4: review + note banner (nội dung cũ) ─── */}
         <div className="sf6-review" ref={section3Ref}>
           <div className="sf6-review-row">
             <span className="sf6-review-key">{t("createBatch.review.shop")}</span>
@@ -518,6 +1013,21 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
             <span className="sf6-review-key">{t("createBatch.review.cod")}</span>
             <span className="sf6-review-val">{formatVnd(totalCod, fmtLocale)}</span>
           </div>
+          {/* SF-16 §2.2 — Phí vận chuyển (dòng MỚI) + booking results (sau submit TRUCK) */}
+          {shippingFee !== null && (
+            <div className="sf6-review-row" data-testid="review-shipping-fee">
+              <span className="sf6-review-key">{t("batching.quotes.reviewShippingFee")}</span>
+              <span className="sf6-review-val">{formatVnd(shippingFee)}</span>
+            </div>
+          )}
+          {bookingResults !== null && bookingResults.length > 0 && (
+            <div className="sf6-review-row" data-testid="review-booking">
+              <span className="sf6-review-key">{t("batching.quotes.reviewBooking")}</span>
+              <span className="sf6-review-val">
+                {bookingResults.map((b) => `${b.driver} · ${b.licensePlate} · ${b.carrierBookingId}`).join(" | ")}
+              </span>
+            </div>
+          )}
           <div className="sf6-review-row">
             <span className="sf6-review-key">{t("createBatch.review.note")}</span>
             <span className="sf6-review-val">—</span>
@@ -539,33 +1049,47 @@ export function CreateBatchingModal({ open, orders, onClose }: CreateBatchingMod
           <span className="sf6-footer-hint">
             {t("createBatch.footer.step", { step: activeSection })} —{" "}
             {activeSection === 1
-              ? t("createBatch.footer.hint1")
+              ? t("createBatch.footer.hint0")
               : activeSection === 2
-                ? t("createBatch.footer.hint2")
-                : t("createBatch.footer.hint3")}
+                ? t("createBatch.footer.hint1")
+                : activeSection === 3
+                  ? t("createBatch.footer.hint2")
+                  : t("createBatch.footer.hint3")}
           </span>
           <span style={{ flex: 1 }} />
           <Button data-testid="batch-close" onClick={onClose}>
             {t("createBatch.close")}
           </Button>
-          {activeSection < 3 && (
-            <Button onClick={() => scrollToSection((activeSection + 1) as 2 | 3)}>
-              {t("createBatch.continue")}
+          {activeSection < 4 && (
+            <Button
+              data-testid="batch-continue"
+              disabled={activeSection === 1 && presetId === null}
+              onClick={() => scrollToSection((activeSection + 1) as 2 | 3 | 4)}
+            >
+              {activeSection === 1 ? t("createBatch.continuePreset") : t("createBatch.continue")}
             </Button>
           )}
           <Button
             type="primary"
             disabled={!canSubmit || created}
-            loading={creating}
+            loading={creating || nvcSubmitting}
             onClick={() => void handleCreate()}
             data-testid="batch-submit"
           >
             {created
               ? t("createBatch.created")
-              : activeSection === 3
-                ? `✓ ${t("createBatch.createStep3")}`
-                : t("createBatch.create")}
+              : rebook
+                ? t("createBatch.rebookSubmit")
+                : activeSection === 4
+                  ? `✓ ${t("createBatch.createStep3")}`
+                  : t("createBatch.create")}
           </Button>
+          {/* SF-16 §2.2 (Task 5) — message line dưới nút khi selection bị chặn */}
+          {carrierGroup === "TRUCK" && submitBlocked && (
+            <Typography.Text type="danger" className="sf6-footer-block-msg" data-testid="fee-limit-submit-block">
+              {t("batching.quotes.feeLimitSubmitBlock")}
+            </Typography.Text>
+          )}
         </div>
       </div>
     </Modal>
