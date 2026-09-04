@@ -94,19 +94,23 @@ done
 # KHÔNG derive realm (khác BFF withRealm).
 OIDC_FULL_ISSUER="http://localhost:8081/realms/hubstore"
 OIDC_FULL_JWKS="http://localhost:8081/realms/hubstore/protocol/openid-connect/certs"
+# GRPC_* export TRỰC TIẾP — .env KHÔNG được chứa var mà seam runners override
+# (run.sh java/go + python source .env → clobber prefix env → seam java bind
+# nhầm :50051 đụng main stack — baseline FI-281 04/09).
+GRPC_MAIN=(GRPC_FULFILLMENT=50051 GRPC_BATCHING=50052 GRPC_PRINT=50053)
 
 echo "[boot-all] boot fulfillment-service (Java :50051)..."
 (cd "$ROOT/services/fulfillment-service" && \
-  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" exec ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
+  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" "${GRPC_MAIN[@]}" exec ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
 JAVA_PID=$!
 
 wait_port java 50051 || exit 1
 
 echo "[boot-all] boot batching-service (Go :50052)..."
-(cd "$ROOT/services/batching-service" && exec ./run.sh) >"$LOG_DIR/e2e-go.log" 2>&1 &
+(cd "$ROOT/services/batching-service" && "${GRPC_MAIN[@]}" exec ./run.sh) >"$LOG_DIR/e2e-go.log" 2>&1 &
 
 echo "[boot-all] boot print-service (Python :50053)..."
-(cd "$ROOT/services/print-service" && exec ./run.sh) >"$LOG_DIR/e2e-python.log" 2>&1 &
+(cd "$ROOT/services/print-service" && "${GRPC_MAIN[@]}" exec ./run.sh) >"$LOG_DIR/e2e-python.log" 2>&1 &
 
 wait_port go 50052 || exit 1
 wait_port python 50053 || exit 1
@@ -121,7 +125,7 @@ echo "[boot-all] boot BFF (:8080)..."
   FULFILLMENT_DB_HOST=127.0.0.1 FULFILLMENT_DB_PORT=5432 \
   FULFILLMENT_DB_NAME=fulfillment FULFILLMENT_DB_USER="${POSTGRES_USER:-hubstore}" \
   FULFILLMENT_DB_PASSWORD="$POSTGRES_PASSWORD" \
-  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" \
+  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" "${GRPC_MAIN[@]}" \
   exec pnpm dev) >"$LOG_DIR/e2e-bff.log" 2>&1 &
 wait_port bff 8080 || exit 1
 
