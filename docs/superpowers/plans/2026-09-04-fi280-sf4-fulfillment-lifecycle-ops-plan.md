@@ -33,7 +33,7 @@
 
 - [x] **Step 3.1:** Sau mỗi mutation UI ở Task 2 → check audit entry ghi đúng actor/action (GET /fulfillment/audit hoặc /audit UI), đợi poll ~15s (fire-and-forget)
 - [x] **Step 3.2:** Walkthrough /audit viewer: filter actor/action, range picker, forbidden checks (coordinator/admin không thấy nav-audit)
-- [ ] **Step 3.3:** Bug → log + fix P0–P2
+- [x] **Step 3.3:** Bug → log + fix P0–P2
 
 ### Task 4: 05-area walkthrough + fix [P1][AREA]
 
