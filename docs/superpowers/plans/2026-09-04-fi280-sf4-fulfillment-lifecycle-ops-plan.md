@@ -56,11 +56,11 @@
 
 ### Task 7: 06-exception + cancel/edge cases walkthrough + fix [P1][EXCEPTION]
 
-- [ ] **Step 7.1:** Tự lập state: ≥2 unbatched orders shop 30201
-- [ ] **Step 7.2:** Walkthrough cascade: tạo batch → hoàn tất soạn → mark-fail → redeliver (201 rồi 422 double) → old-order-link trên D1; GET /orders/{code}/audit
-- [ ] **Step 7.3:** Root-cause cascade 0/4 baseline; fix P0–P2
-- [ ] **Step 7.4:** Cancel/edge cases: hủy đơn từng trạng thái, boundary states
-- [ ] **Step 7.5:** Re-run 06-exception PASS
+- [x] **Step 7.1:** Tự lập state: ≥2 unbatched orders shop 30201
+- [x] **Step 7.2:** Walkthrough cascade: tạo batch → hoàn tất soạn → mark-fail → redeliver (201 rồi 422 double) → old-order-link trên D1; GET /orders/{code}/audit
+- [x] **Step 7.3:** Root-cause cascade 0/4 baseline; fix P0–P2
+- [x] **Step 7.4:** Cancel/edge cases: hủy đơn từng trạng thái, boundary states
+- [x] **Step 7.5:** Re-run 06-exception PASS
 
 ### Task 8: Regression specs 12xx (tự lập state)
 
