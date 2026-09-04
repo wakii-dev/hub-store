@@ -1,0 +1,273 @@
+# SF-12 (FI-257) — CI pipeline: lint/typecheck + unit tests (Node/Go/Java) + docker build.
+#
+# Env-for-tests notes (plan Step 6.3 — verified by reading test setups):
+# - Go (services/batching-service): `go test ./...` self-skips when Postgres is
+#   unreachable — internal/store tests ping the DB and t.Skip on failure
+#   (store_test.go header: "ping fail → t.Skip — go test ./... pass khi không có
+#   Postgres"). SMOKE_ADDR-gated tests also skip (batching_test.go:467). No env needed.
+# - Java (services/fulfillment-service): integration tests live in *IT classes,
+#   which surefire's DEFAULT includes do NOT run (`mvn test` runs *Test classes
+#   only). Additionally the *IT classes are skip-if-no-DB by design
+#   (@BeforeAll connectOrSkip aborts gracefully when Postgres is absent —
+#   PostgresOrderRepositoryIT.java). No dummy env (e.g. FULFILLMENT_DB_*) needed.
+# - Node: workspace packages run pure unit tests; the Playwright e2e package
+#   (@hub-store/e2e) has NO `test` script (only `e2e`/`backend-integration`),
+#   and is additionally excluded via explicit --filter list below so Playwright
+#   can never be triggered from this job.
+#
+# SF-12 Task 7 appends the `e2e` job below (needs: unit) — Playwright with
+# E2E=1, Postgres as a GH service container + Keycloak booted via docker run
+# (GH services do NOT support command override). Local seam simulation:
+# scripts/ci-e2e-boot.sh (see README "CI (GitHub Actions)").
+
+name: ci
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+# Security-audit P1-1 (FI-257): least-privilege GITHUB_TOKEN — untrusted PR
+# deps (postinstall scripts) chỉ được contents:read, không write bất kể
+# repo settings default.
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  unit:
+    name: unit (node + go + java)
+    runs-on: ubuntu-latest
+    steps:
+      # ---------- Node segment (pnpm workspace: typecheck + unit tests) ----------
+      - uses: actions/checkout@v4
+
+      # pnpm/action-setup@v4 reads the `packageManager` field (pnpm@10.19.0)
+      # from the root package.json when no version input is given.
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # No package in the workspace has a `lint` script (root `lint` = turbo run
+      # lint would no-op), so typecheck is the lint gate: tsc --noEmit for BFF +
+      # FE/shared packages. KNOWN DEBT: @hub-store/fulfillment is EXCLUDED — it
+      # has pre-existing tsc errors (missing axios type deps, antd Button
+      # data-testid prop, PrintPage option-group typing) and was never
+      # tsc-gated; fixing it is out of SF-12 scope (follow-up task needed).
+      - name: Typecheck (tsc --noEmit)
+        run: >
+          pnpm --filter @hub-store/bff-gateway --filter @hub-store/ktv-mobile
+          --filter @hub-store/orders --filter @hub-store/shell
+          --filter @hub-store/api-client --filter @hub-store/shared
+          exec tsc --noEmit
+
+      # Explicit per-package filter list (NOT `-r test`) so the Playwright e2e
+      # package (@hub-store/e2e) can never be descended into (plan-critic P2).
+      - name: Node unit tests
+        run: >
+          pnpm --filter @hub-store/bff-gateway --filter @hub-store/fulfillment
+          --filter @hub-store/ktv-mobile --filter @hub-store/orders
+          --filter @hub-store/shell --filter @hub-store/api-client
+          --filter @hub-store/shared -r test
+
+      # ---------- Go segment (batching-service) ----------
+      # Unit/integration tests skip themselves when Postgres is absent (see file
+      # header notes) — no DB service container or dummy env required here.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/batching-service/go.mod
+
+      - name: Go vet + test (batching-service)
+        working-directory: services/batching-service
+        run: |
+          go vet ./...
+          go test ./...
+
+      # ---------- Java segment (fulfillment-service) ----------
+      # `mvn test` runs surefire unit tests only (*Test classes); Postgres-backed
+      # *IT tests are excluded by surefire default includes AND skip-if-no-DB.
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+          cache-dependency-path: services/fulfillment-service/pom.xml
+
+      - name: Java tests (fulfillment-service)
+        working-directory: services/fulfillment-service
+        run: mvn -B test
+
+  docker-build:
+    name: docker build (no push)
+    runs-on: ubuntu-latest
+    needs: unit
+    steps:
+      - uses: actions/checkout@v4
+
+      # All Dockerfiles COPY from the repo root (api/proto/gen/*, workspace
+      # files), so every build context is `.` with -f pointing at the Dockerfile
+      # (mirrors docker-compose.yml build contexts).
+      - name: Build batching-service image
+        run: docker build -f services/batching-service/Dockerfile -t ci-batching-service .
+
+      - name: Build fulfillment-service image
+        run: docker build -f services/fulfillment-service/Dockerfile -t ci-fulfillment-service .
+
+      - name: Build bff-gateway image
+        run: docker build -f services/bff-gateway/Dockerfile -t ci-bff-gateway .
+
+      - name: Build print-service image
+        run: docker build -f services/print-service/Dockerfile -t ci-print-service .
+
+      - name: Build web (FE shell) image
+        run: docker build -f Dockerfile.web -t ci-web .
+
+  # -----------------------------------------------------------------------
+  # e2e (SF-12 Task 7) — Playwright với E2E=1 (reset DB + realm re-import).
+  #
+  # ⚠ NEEDS FIRST-RUN TUNING ON A REAL GH RUNNER (plan risk #4 — KHÔNG verify
+  # được hết từ local): local chỉ seam được phần INFRA qua
+  # scripts/ci-e2e-boot.sh (containers postgres-ci/keycloak-ci port riêng +
+  # migrate + seed — đã chạy xanh cục bộ). Các app services host-run (java/
+  # go/python/bff/vite qua boot-all.sh webServer) chạy đúng local nhưng GH
+  # runner có thể cần tinh chỉnh nhỏ (python3-venv apt, playwright OS deps,
+  # timing boot…).
+  #
+  # Topology:
+  # - Postgres: GH `services:` (127.0.0.1:5432) — GH services support
+  #   health-cmd (pg_isready) nên job start sau khi DB ready.
+  # - Keycloak: GH services KHÔNG support command/args override (cần
+  #   `start-dev --import-realm`) → boot bằng step `docker run` — image 26.0
+  #   CÙNG version docker-compose.yml, realm JSON mount vào
+  #   /opt/keycloak/data/import.
+  # - Create 2 DB + migrate + seed: scripts/ci-e2e-boot.sh (one-shot
+  #   flyway/golang-migrate containers qua host.docker.internal:host-gateway).
+  # - webServer mặc định playwright.config.ts = scripts/boot-all.sh: với
+  #   PGHOST set, wait-db/reset-db/seed-db đi đường psql TRỰC TIẾP (không
+  #   docker compose exec); `docker compose up -d postgres|keycloak` trong
+  #   boot-all fail do port conflict nhưng boot-all CHỈ log (subshell, không
+  #   set -e) rồi wait port/realm của containers trên → app services
+  #   host-run như local. reset-db PGHOST-mode KHÔNG xoá keycloak volume →
+  #   realm import sạch của container docker run giữ nguyên.
+  # - Spec subset: suite mặc định SERIAL + phụ thuộc mutation data giữa các
+  #   spec (01 chạy trước, tiền tố 01/02/03…). Mặc định CI chạy 1 spec
+  #   đọc-là-chính (03-audit — seed BATCH-0001, không mutate) làm seam sống.
+  #   Widen sau lần chạy thật đầu: set env E2E_CI_SPECS (vd
+  #   "tests/03-audit.spec.ts tests/01-main-flow.spec.ts", rỗng = full suite).
+  e2e:
+    name: e2e (E2E=1)
+    runs-on: ubuntu-latest
+    needs: unit
+    services:
+      postgres:
+        image: postgres:16.4
+        env:
+          POSTGRES_USER: hubstore
+          # GH services không đọc repo .env — password DB throwaway CI-only
+          # (KHÔNG phải credential dev/README; password USER e2e rotate riêng
+          # qua secret E2E_PASSWORD trong ci-e2e-boot.sh sau realm import).
+          POSTGRES_PASSWORD: ci-e2e-pg-throwaway
+          POSTGRES_DB: fulfillment
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U hubstore -d postgres"
+          --health-interval 5s
+          --health-timeout 3s
+          --health-retries 20
+    env:
+      # --- DB (wait-db/reset-db/seed-db PGHOST-mode + run.sh Go/Java) ------
+      POSTGRES_USER: hubstore
+      POSTGRES_PASSWORD: ci-e2e-pg-throwaway
+      PGHOST: 127.0.0.1
+      PGPORT: "5432"
+      PGUSER: hubstore
+      PGPASSWORD: ci-e2e-pg-throwaway
+      # --- Keycloak admin (kcadm grant/rotate + BFF Admin API) -------------
+      KEYCLOAK_ADMIN: admin
+      KEYCLOAK_ADMIN_PASSWORD: admin
+      # dev literal trong realm JSON (SF-12, dev-only) — khớp compose default
+      KC_ADMIN_CLIENT_SECRET: ac865e01df73169f63e8b07002bc85b7
+      # --- OIDC host-run --------------------------------------------------
+      # GOTCHA base-vs-full (T1): Go/Java interceptor so khớp claim `iss` =
+      # FULL realm URL (như compose wiring), BFF withRealm() IDEMPOTENT với
+      # full URL → dùng FULL cho cả 3 qua 1 env chung. FE (VITE_*) cần base.
+      # RESOLVED (611924f): BFF strip suffix certs + derive admin* từ origin —
+      # FULL certs URL cho cả 3 env không còn sai adminBaseUrl (test
+      # config.oidc.test.ts khóa contract).
+      OIDC_ISSUER: http://localhost:8081/realms/hubstore
+      OIDC_JWKS_URL: http://localhost:8081/realms/hubstore/protocol/openid-connect/certs
+      VITE_OIDC_AUTHORITY: http://localhost:8081
+      VITE_OIDC_CLIENT_ID: hubstore-web
+      VITE_OIDC_REDIRECT_URI: http://localhost:3000/callback
+      # --- s2s internal token (cùng giá trị cho BFF/Go/Java) ---------------
+      INTERNAL_SERVICE_TOKEN: ci-e2e-internal-token
+      ENABLE_DEV_RESET_PASSWORD: "1"
+      # Rotate password 6 user e2e sau realm import. Không có secret trên repo
+      # → env rỗng → ci-e2e-boot bỏ qua rotate → realm JSON default (khớp
+      # e2e/lib/credentials.ts default) — pipeline vẫn xanh.
+      E2E_PASSWORD: ${{ secrets.E2E_PASSWORD }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      # Toolchains cho app services host-run trong webServer (boot-all.sh):
+      # Java (mvn spring-boot:run) + Go (go run) — python3 có sẵn trên runner.
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: services/batching-service/go.mod
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+          cache: maven
+          cache-dependency-path: services/fulfillment-service/pom.xml
+
+      - name: Playwright chromium (+ OS deps)
+        run: pnpm --filter @hub-store/e2e exec playwright install --with-deps chromium
+
+      - name: Boot Keycloak (GH services không support command override)
+        run: |
+          docker run -d --name keycloak -p 8081:8080 \
+            -e KEYCLOAK_ADMIN=admin -e KEYCLOAK_ADMIN_PASSWORD=admin \
+            -v "$GITHUB_WORKSPACE/docker/keycloak:/opt/keycloak/data/import" \
+            quay.io/keycloak/keycloak:26.0 start-dev --import-realm
+
+      - name: Infra boot — wait realm + create DBs + migrate + seed
+        run: bash scripts/ci-e2e-boot.sh
+
+      - name: Playwright e2e (E2E=1)
+        run: >
+          E2E=1 pnpm --filter @hub-store/e2e exec playwright test
+          ${E2E_CI_SPECS:-tests/03-audit.spec.ts}
+
+      - name: Upload Playwright artifacts (failure only)
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: playwright-artifacts
+          path: |
+            e2e/playwright-report
+            e2e/test-results
+          retention-days: 7
+          if-no-files-found: ignore
