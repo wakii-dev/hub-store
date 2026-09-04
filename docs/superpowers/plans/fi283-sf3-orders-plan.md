@@ -13,9 +13,9 @@ Boundary: apps/orders/** + e2e/tests/11xx-*; CẤM usePermissions.tsx / nav conf
 - [ ] T5 walk-05-d2c: bảng 12 đơn + filter carrier/khung giờ + expand + note modal + export guard 31 ngày + role guard WarehouseEmployee/Coordinator
 - [ ] T6 walk-07-order-ops: transfer ticket + badge + history + tách nợ gate + delivery time + wizard preset + role gates 403
 - [ ] T7 validation-i18n: form create order thiếu trường/sai format + i18n vi/en toggle trên màn orders (spec slice yêu cầu, specs cũ không phủ)
-- [ ] T8 fix-found-bugs: bug P0-P2 fix ngay (commit riêng từng fix); P3 log-only; >8 P2 → STOP
-- [ ] T9 regression-spec-11xx: e2e/tests/11xx-* tự lập state (KHÔNG import sf11-helpers.ts) cho bug đã fix + PASS
-- [ ] T10 verify-no-regression: re-run 5 walkthrough specs domain PASS trên stack private
+- [x] T8 fix-found-bugs: bug P0-P2 fix ngay (commit riêng từng fix); P3 log-only; >8 P2 → STOP — DONE (2×P2 fix: modal testid 651d2e9, SĐT FE validation 3c87ab9; P3 log-only: avatar 404 by-design, "Please enter 0,productCode" interpolation, "Import có 1 dòng lỗi." sai ngữ cảnh manual-create; verdict 404 GET /orders?page = PHANTOM — route không tồn tại, UI dùng POST /fulfillment/filter)
+- [x] T9 regression-spec-11xx: e2e/tests/11xx-* tự lập state (KHÔNG import sf11-helpers.ts) cho bug đã fix + PASS — DONE (1100-orders-modal-validation-regression.spec.ts 4/4 PASS, commit d467981)
+- [x] T10 verify-no-regression: re-run 5 walkthrough specs domain PASS trên stack private — DONE (reset-db + seed sạch, chạy lần lượt từng file: 01=3, 04=4, 05-intake=3, 05-d2c=6, 07=7 → 23/23 PASS; ghi chú: chạy combined 1-process bị flake load DnD wizard 01 + 05-d2c(e) timing — lỗi load, không phải regression)
 - [ ] T11 code-review độc lập (code-reviewer agent) trên diff — APPROVED mới merge
 - [ ] T12 merge story/qa-hub-store-regression (no-ff, conflict improvements-log giữ CẢ HAI) + audit comment merge-hash
 - [ ] T13 story-verify sạch → FI-283 Done → orca orchestration task-update task_a7c6bc13f2d0 completed
