@@ -1,4 +1,6 @@
-import { expect, test, type Page } from "@playwright/test";
+import fs from "node:fs";
+import path from "node:path";
+import { expect, request as newRequest, test, type Page } from "@playwright/test";
 import { E2E_PASSWORD } from "../lib/credentials";
 
 /**
@@ -54,6 +56,39 @@ async function realLogin(page: Page, username: string, password: string): Promis
 
 test.describe("Manager — Users management", () => {
   test.use({ storageState: ".auth/manager.json" });
+
+  // SF-7 QA FI-287: user test `e2e-user-*` (disable-only, KC persist) tích tụ
+  // qua mỗi lần chạy → list FE phân trang client-side 10/trang → user seeded
+  // (warehouse) rớt khỏi trang 1 → assert row timeout. Dọn hẳn (DELETE /users
+  // — SF-7 thêm route) TRƯỚC mỗi lần chạy để list về bộ seeded.
+  test.beforeAll(async () => {
+    const storagePath = path.resolve(__dirname, "..", ".auth", "manager.json");
+    const state = JSON.parse(fs.readFileSync(storagePath, "utf8")) as {
+      origins?: Array<{ localStorage?: Array<{ name: string; value: string }> }>;
+    };
+    let token = "";
+    for (const origin of state.origins ?? []) {
+      for (const entry of origin.localStorage ?? []) {
+        if (!entry.name.startsWith("oidc.user:")) continue;
+        const user = JSON.parse(entry.value) as { access_token?: string };
+        if (user.access_token) token = user.access_token;
+      }
+    }
+    expect(token, "manager storageState phải có access_token").toBeTruthy();
+    const api = await newRequest.newContext({
+      baseURL: BFF,
+      extraHTTPHeaders: { authorization: `Bearer ${token}` },
+    });
+    const res = await api.get("/users");
+    expect(res.status(), await res.text()).toBe(200);
+    const body = (await res.json()) as { items?: Array<{ id: string; username: string }> };
+    for (const u of body.items ?? []) {
+      if (u.username.startsWith("e2e-user-")) {
+        await api.delete(`/users/${u.id}`);
+      }
+    }
+    await api.dispose();
+  });
 
   test("nav-users + list 3 users mẫu", async ({ page }) => {
     await page.goto("/users");
