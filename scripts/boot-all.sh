@@ -125,8 +125,8 @@ echo "[boot-all] boot BFF (:8080)..."
   FULFILLMENT_DB_HOST=127.0.0.1 FULFILLMENT_DB_PORT=5432 \
   FULFILLMENT_DB_NAME=fulfillment FULFILLMENT_DB_USER="${POSTGRES_USER:-hubstore}" \
   FULFILLMENT_DB_PASSWORD="$POSTGRES_PASSWORD" \
-  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" "${GRPC_MAIN[@]}" \
-  exec pnpm dev) >"$LOG_DIR/e2e-bff.log" 2>&1 &
+  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" \
+  exec env "${GRPC_MAIN[@]}" pnpm dev) >"$LOG_DIR/e2e-bff.log" 2>&1 &
 wait_port bff 8080 || exit 1
 
 echo "[boot-all] boot FE remotes (:3001 orders, :3002 fulfillment)..."
