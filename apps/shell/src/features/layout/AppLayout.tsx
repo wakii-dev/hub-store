@@ -158,31 +158,44 @@ export default function AppLayout(props: {
             {navOpen ? <MenuFoldOutlined /> : <MenuOutlined />}
           </button>
           <GradientLogo size={34} />
-          <div style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25 }}>
-            <strong style={{ fontSize: 14.5, fontWeight: 700, color: DESIGN_TOKENS.color.textStrong }}>
+          <div
+            className="sf11-header-title"
+            style={{ display: 'flex', flexDirection: 'column', lineHeight: 1.25, minWidth: 0 }}
+          >
+            <strong style={{ fontSize: 14.5, fontWeight: 700, color: DESIGN_TOKENS.color.textStrong, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {t('header.title')}
             </strong>
-            <span style={{ fontSize: 11, color: DESIGN_TOKENS.color.textMuted }}>
+            <span style={{ fontSize: 11, color: DESIGN_TOKENS.color.textMuted, overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
               {t('header.subtitle')}
             </span>
           </div>
         </div>
-        <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
-          {/* SF-21 D6: font-size slider — node MỚI, không đổi testid header có sẵn. */}
-          <FontSizeSlider />
+        <div style={{ display: 'flex', alignItems: 'center', gap: 12, minWidth: 0 }}>
+          {/* SF-21 D6: font-size slider — node MỚI, không đổi testid header có sẵn.
+              SF-6 :375 fix — cụm tiện ích phụ bị ẩn ≤768px (header không còn
+              overflow 604px → logoutButton thấy được; BUG-1 FI-286). */}
+          <span className="sf21-header-extra">
+            <FontSizeSlider />
+          </span>
           {/* SF-21 D7/D8: fullscreen toggle + version badge/prompt — nodes MỚI. */}
-          <FullscreenToggle />
+          <span className="sf21-header-extra">
+            <FullscreenToggle />
+          </span>
           {/* SF-21 D5: hotkey helper — node MỚI, mở bảng phím tắt. */}
-          <Tooltip title="Phím tắt">
-            <Button
-              type="text"
-              icon={<KeyOutlined />}
-              onClick={() => setHotkeyHelpOpen(true)}
-              data-testid="hotkey-helper-button"
-              aria-label="Phím tắt"
-            />
-          </Tooltip>
-          <VersionCheck />
+          <span className="sf21-header-extra">
+            <Tooltip title="Phím tắt">
+              <Button
+                type="text"
+                icon={<KeyOutlined />}
+                onClick={() => setHotkeyHelpOpen(true)}
+                data-testid="hotkey-helper-button"
+                aria-label="Phím tắt"
+              />
+            </Tooltip>
+          </span>
+          <span className="sf21-header-extra">
+            <VersionCheck />
+          </span>
           <span
             style={{ ...langPillStyle }}
             onClick={props.onToggleLanguage}

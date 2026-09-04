@@ -12,6 +12,19 @@ import { resolve } from "node:path";
  *   bash e2e/scripts/run-ktv-private.sh &   # đợi "seam ready"
  *   pnpm --dir e2e exec playwright test -c playwright.ktv.config.ts
  */
+
+/**
+ * E2E_PG_SEAM — PATH-prepend shim `docker` (redirect `docker compose exec -T
+ * postgres psql` → container sf6-postgres của seam này) cho state-prep spec
+ * 1401. Shim COMMIT trong repo (code-reviewer FI-286 P1: isolation không được
+ * phụ thuộc state /tmp cục bộ) — override bằng E2E_PG_SHIM nếu cần.
+ */
+if (process.env.E2E_PG_SEAM === "1") {
+  const PG_SHIM =
+    process.env.E2E_PG_SHIM ?? resolve(__dirname, "scripts/pg-shim-sf6");
+  process.env.PATH = `${PG_SHIM}:${process.env.PATH ?? ""}`;
+}
+
 export default defineConfig({
   testDir: "./tests",
   testMatch: process.env.E2E_TEST_MATCH ?? "09-ktv-mobile.spec.ts",
