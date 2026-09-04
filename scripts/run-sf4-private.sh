@@ -191,7 +191,10 @@ GRPC_FULFILLMENT=52071 FULFILLMENT_HEALTH_PORT=52073 \
   OIDC_ISSUER=http://localhost:8282/realms/hubstore \
   OIDC_JWKS_URL=http://localhost:8282/realms/hubstore/protocol/openid-connect/certs \
   ./services/fulfillment-service/run.sh >"$LOG/sf4-java.log" 2>&1 &
-BATCHING_PORT=52072 FULFILLMENT_ADDR=localhost:52071 HEALTH_PORT=52074 ./services/batching-service/run.sh >"$LOG/sf4-go.log" 2>&1 &
+BATCHING_PORT=52072 FULFILLMENT_ADDR=localhost:52071 HEALTH_PORT=52074 \
+  OIDC_ISSUER=http://localhost:8282/realms/hubstore \
+  OIDC_JWKS_URL=http://localhost:8282/realms/hubstore/protocol/openid-connect/certs \
+  ./services/batching-service/run.sh >"$LOG/sf4-go.log" 2>&1 &
 GRPC_PRINT_PORT=52075 PRINT_HEALTH_PORT=52076 ./services/print-service/run.sh >"$LOG/sf4-print.log" 2>&1 &
 for i in $(seq 1 120); do /usr/bin/nc -z localhost 52071 >/dev/null 2>&1 && break; sleep 2; done
 /usr/bin/nc -z localhost 52071 || { echo JAVA_TIMEOUT; exit 1; }
