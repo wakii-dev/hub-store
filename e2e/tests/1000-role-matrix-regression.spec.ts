@@ -81,7 +81,7 @@ for (const c of CASES) {
 
     test("nav ẩn-hiện đúng PERMISSION_MATRIX", async ({ page }) => {
       await page.goto(c.allowed);
-      await expect(page.getByTestId("remote-mount").first()).toBeVisible();
+      await expect(page.getByTestId("remote-mount")).toBeVisible();
       for (const tid of c.nav) {
         await expect(page.getByTestId(tid)).toBeVisible();
       }
@@ -93,7 +93,7 @@ for (const c of CASES) {
     test(`route ${c.allowed} vào được, ${c.forbidden} bị chặn`, async ({ page }) => {
       await page.goto(c.allowed);
       await expect(page.getByTestId("forbidden")).toHaveCount(0);
-      await expect(page.getByTestId("remote-mount").first()).toBeVisible();
+      await expect(page.getByTestId("remote-mount")).toBeVisible();
       await page.goto(c.forbidden);
       await expect(page.getByTestId("forbidden")).toBeVisible();
     });
@@ -118,7 +118,7 @@ test.describe("Session handling (tự lập state — KHÔNG storageState)", () 
     await realLogin(page, "coordinator");
     await expect(page).toHaveURL(/\/hub-store-order\/order$/);
     // Logout
-    await page.locator("[class*=logout]").first().click();
+    await page.getByTestId("logout-button").click();
     await expect(page.getByTestId("login-submit")).toBeVisible();
     // SSO session đã end — login lại phải qua Keycloak form (không auto-redirect)
     await page.getByTestId("login-submit").click();
