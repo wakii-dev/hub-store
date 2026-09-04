@@ -37,10 +37,10 @@
 
 ### Task 4: 05-area walkthrough + fix [P1][AREA]
 
-- [ ] **Step 4.1:** Walkthrough /area-staff: list, create (admin), verify payment account, TreeSelect provinces, toggle active, coordinator 403 view-only
-- [ ] **Step 4.2:** Root-cause baseline bug POST /service-employees 403 (1/2 test đỏ): xác định đúng role/token nào bị 403 oan
-- [ ] **Step 4.3:** Fix trong domain (KHÔNG đụng usePermissions.tsx — bug permission file → [PERM] lên FI-282)
-- [ ] **Step 4.4:** Re-run 05-area PASS
+- [x] **Step 4.1:** Walkthrough /area-staff: list, create (admin), verify payment account, TreeSelect provinces, toggle active, coordinator 403 view-only
+- [x] **Step 4.2:** Root-cause baseline bug POST /service-employees 403 (1/2 test đỏ): xác định đúng role/token nào bị 403 oan
+- [x] **Step 4.3:** Fix trong domain (KHÔNG đụng usePermissions.tsx — bug permission file → [PERM] lên FI-282)
+- [x] **Step 4.4:** Re-run 05-area PASS
 
 ### Task 5: 05-settlement walkthrough
 
