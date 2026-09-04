@@ -102,14 +102,14 @@ cd e2e && pnpm exec playwright test -c playwright.ktv.config.ts 09-ktv-mobile --
 
 **Files:** Create `e2e/tests/1401-ktv-mobile-regression.spec.ts` (dưới playwright.ktv.config glob), KHÔNG import sf11-helpers
 
-- [ ] **Step 1: Viết spec tự lập state** (seed tech-sample từ runner là state gốc; mutation serial trong spec): S1 SW offline fallback offline.html; S2 `/api/` offline fail-không-stale; S3 :375 accept→complete flow; S4 cache version bump hoạt động; S5 CTV isolation.
-- [ ] **Step 2: Run** `pnpm exec playwright test -c playwright.ktv.config.ts 1401 --reporter=line` → PASS.
-- [ ] **Step 3: verify-no-regression**: re-run `09-ktv-mobile` (và `08-mobile`+`08-pwa` trên Seam A nếu fix đụng shell-domain) → PASS.
+- [x] **Step 1: Viết spec tự lập state** (seed tech-sample từ runner là state gốc; mutation serial trong spec): S1 SW offline fallback offline.html; S2 `/api/` offline fail-không-stale; S3 :375 accept→complete flow; S4 cache version bump hoạt động; S5 CTV isolation.
+- [x] **Step 2: Run** `pnpm exec playwright test -c playwright.ktv.config.ts 1401 --reporter=line` → PASS.
+- [x] **Step 3: verify-no-regression**: re-run `09-ktv-mobile` (và `08-mobile`+`08-pwa` trên Seam A nếu fix đụng shell-domain) → PASS.
 
 ### Task 7: Review + Rule 0 final + merge + gate + Done
 
 - [ ] **Step 1: code-reviewer độc lập** trên `git diff story/qa-hub-store-regression..HEAD` (fix commits + 14xx spec + docs). CHANGES-REQUESTED → fix trước merge.
-- [ ] **Step 2: Rule 0 final**: walkthrough trọn login→navigate→action→logout trên bản fix, hard-reload, screenshot before/after.
+- [x] **Step 2: Rule 0 final**: walkthrough trọn login→navigate→action→logout trên bản fix, hard-reload, screenshot before/after.
 - [ ] **Step 3: Merge no-ff** vào `story/qa-hub-store-regression` (conflict improvements-log giữ CẢ HAI) + audit comment merge-hash lên FI-286.
 - [ ] **Step 4: Gate:** `~/.claude/bin/story-verify sf-6` sạch.
 - [ ] **Step 5: FI-286 → Done** (SAU gate). Audit Phase 5 comment.
