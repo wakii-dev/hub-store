@@ -79,10 +79,14 @@ wait_keycloak_realm || exit 1
 docker exec hub-store-keycloak-1 /opt/keycloak/bin/kcadm.sh config credentials \
   --server http://localhost:8081 --realm master \
   --user "${KEYCLOAK_ADMIN:-admin}" --password "${KEYCLOAK_ADMIN_PASSWORD:-admin}" >/dev/null 2>&1 &&
-docker exec hub-store-keycloak-1 /opt/keycloak/bin/kcadm.sh add-roles \
-  -r hubstore --uusername service-account-hubstore-admin \
-  --cclientid realm-management --rolename manage-users >/dev/null 2>&1 ||
-  echo "[boot-all] WARN: grant manage-users cho service-account thất bại (SF-8 Admin API sẽ thiếu quyền)" >&2
+for ROLE in manage-users view-realm view-users query-users query-groups; do
+  docker exec hub-store-keycloak-1 /opt/keycloak/bin/kcadm.sh add-roles \
+    -r hubstore --uusername service-account-hubstore-admin \
+    --cclientid realm-management --rolename "$ROLE" >/dev/null 2>&1 ||
+    echo "[boot-all] WARN: grant $ROLE cho service-account thất bại (SF-8 Admin API sẽ thiếu quyền)" >&2
+done
+# view-realm cần cho GET /admin/.../roles/{name} (BFF findRoleId — users page
+# 503 "Keycloak role lookup failed (403)" khi thiếu — baseline FI-281 04/09).
 
 echo "[boot-all] boot fulfillment-service (Java :50051)..."
 (cd "$ROOT/services/fulfillment-service" && exec ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
