@@ -57,8 +57,10 @@ test.describe("Regression 1100 — Orders modal testid + SĐT validation (FI-283
     await page.getByTestId("create-order-cod-amount").fill("1000");
 
     // No-op request guard: form KHÔNG được submit khi SĐT sai format.
+    // createManualOrder fire POST /orders (intake.ts) — KHÔNG phải /intake
+    // (review P1 FI-283: predicate cũ không bao giờ match → guard vacuous).
     const createReq = page.waitForRequest(
-      (r) => r.url().includes("/intake") && r.method() === "POST",
+      (r) => r.url().endsWith("/orders") && r.method() === "POST",
       { timeout: 2000 },
     );
     await page.getByTestId("create-order-submit").click();
