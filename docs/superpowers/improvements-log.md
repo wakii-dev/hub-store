@@ -78,3 +78,8 @@
 - **Story merge-back KHÔNG được假设 ancestor**: `story/fi245-postgres-production` tiến 71 commits trong lúc SF chạy. Update-ref mù = rewind base, mất work SF khác. Luôn `git merge-base --is-ancestor` trước; nếu không → merge base vào nhánh SF (conflicts keep-both: shared/index.ts exports, CreateBatchingModal imports, bff app.ts routes) rồi update-ref. Suggested: thêm check ancestor vào story-verify B4 (hiện chỉ check dest ref reachable).
 - **`orca orchestration task-update` dùng `--id`** không phải `--task` (error validFlagsreveals). Note vào watchdog memory.
 - **SW register sau MF bootstrap**: MF dev bootstrap execute main.tsx SAU `load` → `window.addEventListener('load')` treo vĩnh viễn. Pattern: `document.readyState === 'complete' ? register() : addEventListener(...)`.
+
+## 2026-09-04 — FI-280 SF-1 (FI-281)
+- **story-verify B2 substring-match bug (ĐÃ FIX trong ~/.claude/bin/story-verify)**: pattern `*sf1*` khớp nhầm `fi245-sf13-order-intake-plan.md` cho SF `sf-1` (sf13 ⊃ sf1) → B2 FAIL ảo với plan của SF khác. Fix: dash-boundary match (`sf1-`/`sf1_` + non-digit). Suggested by gate run FI-281 04/09.
+- **orca linear read-back comments trả 0 despite comment tồn tại** (FI-280/FI-281 đều vậy, post ok:true có URL) — không tin read-back để dedupe; dùng transcript/URL trả về từ lệnh post. Flag: orca CLI bug chưa fix.
+- **.env clobber class mở rộng**: root `.env` KHÔNG được chứa BẤT KỲ var nào seam runners override (đã chốt FULFILLMENT_DB_*/OIDC_*/GRPC_*); runner scripts nên export sau `source .env` thay vì prefix-env để tự phòng.
