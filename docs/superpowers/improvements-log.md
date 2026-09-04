@@ -106,3 +106,14 @@
 
 ## 2026-09-05 — FI-280 SF-8 (FI-288) — OPEN
 - **FE build không typecheck**: mọi app FE `build` = `vite build` thuần (KHÔNG `tsc -b`) → lỗi type production-code trượt qua build (FI-288 lộ 2 lỗi fulfillment). Suggested: thêm `tsc --noEmit &&` vào build script từng app FE hoặc turbo task `typecheck` riêng + wire vào CI gate.
+
+## 2026-09-05 — FI-288: story-verify B2 cross-story slug collision (FIXED)
+
+- **What:** B2 plan matcher (p1="sf-8"/p2="sf8") khớp nhầm `2026-09-02-sf8-users-management-plan.md`
+  (plan của SF-8 story fi233) cho worktree `sf-8-convergence` (FI-288) — glob alphabet-first
+  break ở match đầu → B2 FAIL ảo dù plan đúng tồn tại. Cùng class bug FI-281 sf13 (fix trước
+  chỉ khóa dash-boundary, chưa kín vì "sf8-" vẫn là prefix của "sf8-users").
+- **Where:** ~/.claude/bin/story-verify — verify_sf() B2.
+- **Fix:** thêm Pass 0 ưu tiên plan file chứa Linear issue-id lowercase (vd "fi288") trong
+  tên — issue-id unique toàn workspace, luôn thắng slug matching. Slug loop giữ làm fallback.
+- **Convention đề xuất:** đặt tên plan file kèm issue-id (vd `2026-09-04-fi288-...-plan.md`).
