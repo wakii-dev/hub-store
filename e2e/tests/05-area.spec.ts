@@ -105,6 +105,9 @@ test.describe("Coordinator — view-only (không nút tạo + API 403)", () => {
     });
     expect(res.status()).toBe(403);
     const body = await res.json();
-    expect(body.code).toBe("FORBIDDEN");
+    // SF-4 (FI-284): BFF error-envelope convention là PERMISSION_DENIED cho
+    // role-gate 403 (services/bff-gateway/src/plugins/auth.ts + README §codes);
+    // assertion cũ "FORBIDDEN" là sai envelope (không tồn tại trong BFF src).
+    expect(body.code).toBe("PERMISSION_DENIED");
   });
 });
