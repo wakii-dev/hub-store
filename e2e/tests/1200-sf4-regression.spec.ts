@@ -17,8 +17,8 @@ import path from "node:path";
  *   (RPC IntakeService) reachable — regression cho GRPC_INTAKE seam.
  */
 
-/** psql qua shim `docker compose exec -T postgres` — đa DB theo -d. */
-function psql(db: string, sql: string) {
+/** psql qua shim `docker compose exec -T postgres` — đa DB theo -d, trả stdout. */
+function psql(db: string, sql: string): string {
   // Fail-fast: state-prep phá-data — chỉ hợp lệ trên private pg seam
   // (code-reviewer FI-284 P1; chạy mặc định sẽ đụng postgres compose chính).
   if (process.env.E2E_PG_SEAM !== "1") {
@@ -26,9 +26,9 @@ function psql(db: string, sql: string) {
       "1200 state-prep phá-data — chạy với E2E_PG_SEAM=1 (private pg seam), không đụng postgres chính",
     );
   }
-  execSync(
+  return execSync(
     `docker compose exec -T postgres psql -U hubstore -d ${db} -At -v ON_ERROR_STOP=1 -c ${JSON.stringify(sql)}`,
-    { stdio: "pipe" },
+    { stdio: "pipe", encoding: "utf-8" },
   );
 }
 
@@ -93,11 +93,9 @@ test.describe("SF-4 regression — [P1][EXCEPTION] cascade mark-fail/redeliver r
     // failReason — BatchListPage `failed = Boolean(order?.failReason)`).
     const SCRATCH = "BATCH-RG01";
     psql("batching", `DELETE FROM batch_items WHERE batch_code = '${SCRATCH}'; DELETE FROM batches WHERE batch_code = '${SCRATCH}';`);
-    const failedCode = execSync(
-      `docker compose exec -T postgres psql -U hubstore -d fulfillment -At -c ${JSON.stringify(
-        `UPDATE orders SET batch_status = 3, fail_reason = 'KHACH_VANG', fail_note = 'SF-4 regression', failed_at = now(), batch_code = '${SCRATCH}' WHERE id = (SELECT id FROM orders WHERE batch_status <> 3 AND shop_code = '30202' ORDER BY fulfill_code DESC LIMIT 1) RETURNING fulfill_code;`,
-      )}`,
-      { stdio: "pipe", encoding: "utf-8" },
+    const failedCode = psql(
+      "fulfillment",
+      `UPDATE orders SET batch_status = 3, fail_reason = 'KHACH_VANG', fail_note = 'SF-4 regression', failed_at = now(), batch_code = '${SCRATCH}' WHERE id = (SELECT id FROM orders WHERE batch_status <> 3 AND shop_code = '30202' ORDER BY fulfill_code DESC LIMIT 1) RETURNING fulfill_code;`,
     )
       .split("\n")
       .find((l) => /^ORD-\d+$/.test(l.trim()))
