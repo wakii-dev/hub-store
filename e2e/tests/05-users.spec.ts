@@ -39,7 +39,8 @@ async function bffGet(page: Page, path: string): Promise<Response> {
  * navigation giữa chừng → KC SSO cookie không được clear → login tiếp bị
  * silent-SSO (không bao giờ thấy form). Chờ logout HOÀN TẤT trước. */
 async function waitLoggedOut(page: Page): Promise<void> {
-  await page.waitForURL("http://localhost:4300/");
+  const origin = process.env.E2E_SHELL_URL ?? "http://localhost:3000";
+  await page.waitForURL(`${origin}/`);
 }
 
 async function realLogin(page: Page, username: string, password: string): Promise<void> {
