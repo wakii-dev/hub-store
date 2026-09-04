@@ -17,8 +17,8 @@ Boundary: apps/orders/** + e2e/tests/11xx-*; CẤM usePermissions.tsx / nav conf
 - [x] T9 regression-spec-11xx: e2e/tests/11xx-* tự lập state (KHÔNG import sf11-helpers.ts) cho bug đã fix + PASS — DONE (1100-orders-modal-validation-regression.spec.ts 4/4 PASS, commit d467981)
 - [x] T10 verify-no-regression: re-run 5 walkthrough specs domain PASS trên stack private — DONE (reset-db + seed sạch, chạy lần lượt từng file: 01=3, 04=4, 05-intake=3, 05-d2c=6, 07=7 → 23/23 PASS; ghi chú: chạy combined 1-process bị flake load DnD wizard 01 + 05-d2c(e) timing — lỗi load, không phải regression)
 - [x] T11 code-review độc lập (code-reviewer agent) trên diff merge-base 73805f7..HEAD — DONE: verdict CHANGES-REQUESTED → P1 fix (1100 spec request-guard predicate /intake → POST /orders đúng endpoint — guard cũ vacuous; commit d7995d5) + typo comment; re-run 1100 = 4/4 PASS. P2 ghi nhận: indentation div wrapper (cosmetic), FE không trim phone (an toàn hơn BE — intentional)
-- [ ] T12 merge story/qa-hub-store-regression (no-ff, conflict improvements-log giữ CẢ HAI) + audit comment merge-hash
-- [ ] T13 story-verify sạch → FI-283 Done → orca orchestration task-update task_a7c6bc13f2d0 completed
+- [x] T12 merge story/qa-hub-store-regression (no-ff, conflict improvements-log giữ CẢ HAI) + audit comment merge-hash — DONE (merge 6d5d6f7 vào parent đã tiến e1576ac/SF-7 — auto-merge 0 conflict; temp worktree pattern, audit comment đã post)
+- [x] T13 story-verify sạch → FI-283 Done → orca orchestration task-update task_a7c6bc13f2d0 completed
 
 ## ACCEPTANCE (context pack)
 1. Từng walkthrough spec PASS (DOM+VISUAL+FLOW) hoặc bug đã fix
