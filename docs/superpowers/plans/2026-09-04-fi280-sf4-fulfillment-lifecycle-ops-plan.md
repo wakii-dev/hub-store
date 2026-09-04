@@ -69,8 +69,8 @@
 
 ### Task 9: verify-no-regression
 
-- [ ] **Step 9.1:** Re-run walkthrough specs domain (03-audit, 05-area, 05-settlement, 05-tech-service, 06-exception) trên stack sau fix — tất cả PASS
-- [ ] **Step 9.2:** Browser walkthrough smoke cuối (Rule 0 FLOW): login → lifecycle chính → logout
+- [x] **Step 9.1:** Re-run walkthrough specs domain (03-audit, 05-area, 05-settlement, 05-tech-service, 06-exception) trên stack sau fix — tất cả PASS
+- [x] **Step 9.2:** Browser walkthrough smoke cuối (Rule 0 FLOW): login → lifecycle chính → logout
 
 ### Task 10: Merge + gate + Done
 
