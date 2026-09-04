@@ -44,9 +44,9 @@
 
 ### Task 5: 05-settlement walkthrough
 
-- [ ] **Step 5.1:** Walkthrough /hub-store-order/batch: cod-badge, Xác nhận thu (batch + order); /settlement: KPI, shop table, segment, row expand cod-order-card
-- [ ] **Step 5.2:** Đối soát số tiền COD UI ↔ DB/CSV export khớp
-- [ ] **Step 5.3:** Bug → log + fix P0–P2
+- [x] **Step 5.1:** Walkthrough /hub-store-order/batch: cod-badge, Xác nhận thu (batch + order); /settlement: KPI, shop table, segment, row expand cod-order-card
+- [x] **Step 5.2:** Đối soát số tiền COD UI ↔ DB/CSV export khớp
+- [x] **Step 5.3:** Bug → log + fix P0–P2
 
 ### Task 6: 05-tech-service walkthrough + fix [P1][TECH]
 
