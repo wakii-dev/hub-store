@@ -176,6 +176,10 @@ sleep 1
 
 export FULFILLMENT_DB_HOST=localhost FULFILLMENT_DB_PORT=55442
 export BATCHING_DB_HOST=localhost BATCHING_DB_PORT=55442 BATCHING_DB_NAME=batching
+# PGHOST → wait-db.sh (dùng chung run.sh BE) pg_isready TRỰC TIẾP vào seam
+# postgres :55442; không set → compose exec MAIN postgres — main stack down
+# khi Go boot → TIMEOUT ảo (baseline FI-281 04/09).
+export PGHOST=localhost PGPORT=55442 PGUSER="${POSTGRES_USER:-hubstore}" PGPASSWORD="$POSTGRES_PASSWORD"
 export FULFILLMENT_DB_PASSWORD="$POSTGRES_PASSWORD" BATCHING_DB_PASSWORD="$POSTGRES_PASSWORD"
 # Cross-SF Flyway collision gotcha (fi245): shared-DB sibling migrations
 export SPRING_FLYWAY_VALIDATE_ON_MIGRATE=false SPRING_FLYWAY_OUT_OF_ORDER=true
