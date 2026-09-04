@@ -172,8 +172,19 @@ with open(sys.argv[1], "w") as f:
 print("[sf4] remotes.config.json (private) -> 4201/4202")
 PY
 
-# --- app port-guard (chỉ seam app ports của mình) ---
-lsof -nP -tiTCP:52071,52072,52073,52074,52075,4285,4200,4201,4202 -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
+# --- app port-guard (chỉ kill process CỦA seam sf4; lạ → REPORT, không kill) ---
+for PORT in 52071 52072 52073 52074 52075 52076 4285 4200 4201 4202; do
+  for PID in $(lsof -nP -tiTCP:$PORT -sTCP:LISTEN 2>/dev/null || true); do
+    CMD=$(ps -p "$PID" -o command= 2>/dev/null || true)
+    case "$CMD" in
+      *fulfillment-service*|*batching-service*|*print-service*|*bff-gateway*|*/vite*|*esbuild*|*"/tsx"*)
+        kill -9 "$PID" 2>/dev/null || true ;;
+      *)
+        echo "ERROR: :$PORT bị chiếm (pid $PID: $CMD) — không phải process seam sf4. REPORT, không kill." >&2
+        exit 1 ;;
+    esac
+  done
+done
 sleep 1
 
 export FULFILLMENT_DB_HOST=localhost FULFILLMENT_DB_PORT=56442

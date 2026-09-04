@@ -122,6 +122,14 @@ async function getAudit(page: Page, request: APIRequestContext, code: string): P
 }
 
 test("chuẩn bị: tick 2 đơn Chưa soạn 30201 → tạo phiếu → hoàn tất soạn", async ({ page }) => {
+  // Fail-fast: state-prep DELETE/UPDATE phá-data — chỉ hợp lệ trên private pg
+  // seam (E2E_PG_SHIM redirect sf4-postgres). Chạy mặc định (không seam) sẽ
+  // đụng postgres compose chính → chặn ngay (code-reviewer FI-284 P1).
+  if (process.env.E2E_PG_SEAM !== "1") {
+    throw new Error(
+      "06-exception state-prep phá-data — chạy với E2E_PG_SEAM=1 (private pg seam), không đụng postgres chính",
+    );
+  }
   // State-prep (SF-4 FI-284, pattern psql 05-tech): DB persist giữa các run →
   // các run trước có thể đã batch HẾT đơn 30201 Chưa soạn, hoặc seed
   // CURRENT_DATE stale qua ngày (delivery hôm qua → filter mặc định hôm nay

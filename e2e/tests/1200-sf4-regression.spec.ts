@@ -19,6 +19,13 @@ import path from "node:path";
 
 /** psql qua shim `docker compose exec -T postgres` — đa DB theo -d. */
 function psql(db: string, sql: string) {
+  // Fail-fast: state-prep phá-data — chỉ hợp lệ trên private pg seam
+  // (code-reviewer FI-284 P1; chạy mặc định sẽ đụng postgres compose chính).
+  if (process.env.E2E_PG_SEAM !== "1") {
+    throw new Error(
+      "1200 state-prep phá-data — chạy với E2E_PG_SEAM=1 (private pg seam), không đụng postgres chính",
+    );
+  }
   execSync(
     `docker compose exec -T postgres psql -U hubstore -d ${db} -At -v ON_ERROR_STOP=1 -c ${JSON.stringify(sql)}`,
     { stdio: "pipe" },
@@ -93,8 +100,8 @@ test.describe("SF-4 regression — [P1][EXCEPTION] cascade mark-fail/redeliver r
       { stdio: "pipe", encoding: "utf-8" },
     )
       .split("\n")
-      .find((l) => /^ORD-\d+$/.test(l.trim()))!
-      .trim();
+      .find((l) => /^ORD-\d+$/.test(l.trim()))
+      ?.trim();
     expect(failedCode, "phải còn đơn 30202 chưa FAILED để dùng làm state").toMatch(/^ORD-\d+$/);
     psql(
       "batching",
