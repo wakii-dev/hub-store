@@ -66,6 +66,52 @@ Routing bug-app: orders→SF-3 · fulfillment/audit→SF-4 · batching/kafka/rea
 
 ## BASELINE FI-281 (2026-09-04)
 
-> Verdict 25/25 — chạy serial workers=1, E2E=1 reset+seed trước run. Chi tiết đỏ/xanh xem comment baseline trên FI-281.
+> Verdict 25/25 — chạy serial workers=1, `E2E=1 bash scripts/boot-all.sh` (reset+seed) trước run.
+> Tally main-stack: **76 pass / 22 fail / 10 skipped / 8 did-not-run** (14.5m).
+> Anti-flake: mọi đỏ dưới đây đỏ ở **2/2 runs** (run3 + final) — không có flake.
+> Log đầy đủ: `/tmp/story/fi280-sf1/baseline-final.log` + comment baseline trên FI-281.
 
-_(điền sau baseline run — bảng verdict + spec đỏ đã xử lý)_
+### Bảng verdict per spec (main-stack :3000/:8080)
+
+| Spec | ✓ | ✘ | Ghi chú |
+|------|---|---|---------|
+| 01-main-flow | 3 | 0 | xanh |
+| 02-role-matrix | 5 | 0 | xanh |
+| 03-audit | 2 | 0 | xanh |
+| 04-regression-8b | 4 | 0 | xanh |
+| 05-area | 1 | 1 | ✘ POST /service-employees 403 → FI-280 `[P1][AREA]` |
+| 05-d2c | 4 | 2 | ✘ filter GHN/khung-giờ 0 đơn + export 40d gate → FI-280 `[P1][D2C]` |
+| 05-dashboard | 5 | 0 | xanh |
+| 05-intake | 2 | 1 | ✘ tạo đơn thủ công không thấy mã mới → FI-280 `[P1][INTAKE]` |
+| 05-kafka | 0 | 0 | skip-gate `KAFKA_ENABLED=false` (by-design); **seam enabled-mode: 3/3 ✓** |
+| 05-nvc-api | 6 | 0 | 1 skip data-conditional (fee-limit không trigger được với seed — by-design) |
+| 05-settlement | 6 | 0 | xanh |
+| 05-tech-service | 4 | 1 | ✘ SO-0001 NEW không có nút Gán KTV → FI-280 `[P1][TECH]` |
+| 05-users | 2 | 2 | ✘ 2 test → đã route FI-280 (users domain, SF-7) |
+| 06-exception | 0 | 4 | ✘ cascade prep-timeout/mark-fail/redeliver → FI-280 `[P1][EXCEPTION]` |
+| 07-nvc-fe | 4 | 0 | xanh |
+| 07-order-ops | 7 | 0 | xanh |
+| 07-realtime | 2 | 0 | xanh |
+| 08-audit-viewer | 0 | 3 | **seam-gated by-design** (sf11StorageState fail-loud); **seam sf-11: 6/6 ✓** |
+| 08-export | 0 | 3 | seam-gated by-design; **seam sf-11: 3/3 ✓** |
+| 08-map | 2 | 0 | xanh (sf11-config URL từ run trước là wrong-seam noise) |
+| 08-mobile | 0 | 2 | seam-gated by-design; **seam sf-11: 2/2 ✓** |
+| 08-print-expansion | 12 | 1 | ✘ T11 kill :52053 by-design (sf-26 private print stack) |
+| 08-pwa | 5 | 0 | xanh |
+| 09-ktv-mobile | 0 | 2 | seam-gated by-design; **seam sf-25: 7/7 ✓** |
+| 09-webhook | 0 | 0 | skip-gate `E2E_SF26=1` (by-design — chạy qua run-sf26-private.sh, 6 test) |
+
+### Verdict lớp (baseline ground-truth cho SF-2..7)
+
+1. **Xanh main-stack: 16 spec** — regression base cho sweep.
+2. **Seam-gated by-design (đỏ trên main-stack là fail-loud ĐÚNG):** 08-audit-viewer, 08-export, 08-mobile, 09-ktv-mobile (→ sf-11/sf-25 seam, đã verify xanh trên seam riêng); 09-webhook + 05-kafka (skip-gate, đã verify xanh enabled-mode); 08-print-expansion T11 (sf-26 private print).
+3. **App-bug candidates (đỏ 2/2, đã route FI-280):** 05-area (SF-4) · 05-d2c (SF-3) · 05-intake (SF-3) · 05-tech-service (SF-4) · 05-users (SF-7) · 06-exception cascade 4 test (SF-4). Tổng **11 test đỏ** + 11 test skip-by-design.
+
+### Infra lessons (SF-2..7 boot seam PHẢI đọc)
+
+- Root `.env` KHÔNG được chứa var mà seam runners override (`FULFILLMENT_DB_*`, `OIDC_*`, `GRPC_*`) — run.sh source `.env` clobber prefix env → Java bind sai port / verify sai issuer. boot-all export trực tiếp.
+- Java `TokenAuthInterceptor` cần FULL issuer (`.../realms/hubstore`), BFF tự derive (`withRealm`) — bare base chỉ dùng được cho BFF.
+- SF-12 health side-ports: Java `FULFILLMENT_HEALTH_PORT` (default :8083 đụng main-stack Java), Go `HEALTH_PORT` (default :8082 đụng keycloak) — seam runner luôn override.
+- Port-guard trên port do container publish (:55443/:8082/...) phải skip process docker (docker_safe_kill) — kill docker-proxy giết daemon.
+- KC 26 realm import: không khai báo explicit `service-account-*` user cho client `serviceAccountsEnabled` (duplicate → boot fail); grant realm-management roles idempotent sau boot.
+- `exec env "${ARR[@]}" cmd` — bash không chấp nhận `VAR=x "${ARR[@]}" exec cmd`.
