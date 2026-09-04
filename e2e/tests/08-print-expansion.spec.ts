@@ -86,8 +86,11 @@ async function selectFirstPrinter(page: Page): Promise<void> {
  * print-fail kill nó cuối) — đảm bảo sống trước khi test in. KHÔNG đụng BFF.
  */
 function ensurePrintService(): void {
+  // SF-7 QA: print port private-stack seam (mặc định :52053 giữ behavior cũ).
+  const port = process.env.E2E_PRINT_PORT ?? "52053";
+  const log = process.env.E2E_PRINT_LOG ?? "/tmp/story/sf-21/e2e-print.log";
   execSync(
-    `(nc -z localhost 52053 2>/dev/null || (cd services/print-service && nohup .venv/bin/python -c "from print_service.server import create_server; srv = create_server(52053); srv.start(); srv.wait_for_termination()" >> /tmp/story/sf-21/e2e-print.log 2>&1 &)) && sleep 2`,
+    `(nc -z localhost ${port} 2>/dev/null || (cd services/print-service && nohup .venv/bin/python -c "from print_service.server import create_server; srv = create_server(${port}); srv.start(); srv.wait_for_termination()" >> ${log} 2>&1 &)) && sleep 2`,
     { cwd: ROOT, stdio: "ignore" },
   );
 }
@@ -404,10 +407,11 @@ test.describe("SF-21 print expansion (coordinator)", () => {
     // lần in-thất-bại thật (1 record/đơn, print.ts) + seed bên dưới.
     psql("fulfillment", `DELETE FROM print_errors WHERE order_code IN ('ORD-3004','ORD-3005')`);
 
-    // Kill print-service PRIVATE (:52053) — BFF proxy fail → record per đơn.
-    // -sTCP:LISTEN BẮT BUỘC: lsof không flag cũng match socket REMOTE port
-    // 52053 (connection gRPC của BFF) → kill -9 giết nhầm BFF (run 4).
-    execSync("lsof -ti tcp:52053 -sTCP:LISTEN | xargs kill -9 || true", { stdio: "ignore" });
+    // Kill print-service PRIVATE (:52053 / E2E_PRINT_PORT) — BFF proxy fail →
+    // record per đơn. -sTCP:LISTEN BẮT BUỘC: lsof không flag cũng match socket
+    // REMOTE port 52053 (connection gRPC của BFF) → kill -9 giết nhầm BFF (run 4).
+    const printPort = process.env.E2E_PRINT_PORT ?? "52053";
+    execSync(`lsof -ti tcp:${printPort} -sTCP:LISTEN | xargs kill -9 || true`, { stdio: "ignore" });
     await page.getByRole("button", { name: /In$/ }).click();
     await expect(page.locator(".ant-message")).toContainText("In thất bại", { timeout: 30_000 });
 

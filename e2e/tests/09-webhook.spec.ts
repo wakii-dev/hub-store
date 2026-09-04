@@ -102,7 +102,10 @@ function bff(request: APIRequestContext) {
  * message.content = JSON envelope {type, payload:{...}}.
  */
 async function orderCreatedPayloads(): Promise<Array<Record<string, unknown>>> {
-  const res = await fetch(`${KAFKA_UI}/api/clusters/local/topics/order-events/messages?limit=50`);
+  // limit=1000: kafka-ui trả messages từ ĐẦU partition — topic order-events
+  // lớn dần sau mỗi lần chạy (SF-7 QA: 134 offsets → limit=50 không bao giờ
+  // thấy event mới ở tail → test 6 timeout 30s deterministic).
+  const res = await fetch(`${KAFKA_UI}/api/clusters/local/topics/order-events/messages?limit=1000`);
   if (!res.ok) return [];
   const sse = await res.text();
   const out: Array<Record<string, unknown>> = [];
