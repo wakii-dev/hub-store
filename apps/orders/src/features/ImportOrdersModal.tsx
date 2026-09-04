@@ -115,8 +115,10 @@ export function ImportOrdersModal({ open, onClose }: ImportOrdersModalProps) {
       footer={null}
       width={720}
       destroyOnClose
-      data-testid="import-orders-modal"
     >
+      {/* testid trên div content (pattern TransferHubModal) — trên <Modal> thì
+          antd4 spread lên .ant-modal-root (height 0 → Playwright hidden). */}
+      <div data-testid="import-orders-modal">
       <Space direction="vertical" style={{ width: "100%" }} size={12}>
         <Upload.Dragger
           accept=".csv,.xlsx,.xls"
@@ -179,6 +181,7 @@ export function ImportOrdersModal({ open, onClose }: ImportOrdersModalProps) {
           </Button>
         </Space>
       </Space>
+      </div>
     </Modal>
   );
 }

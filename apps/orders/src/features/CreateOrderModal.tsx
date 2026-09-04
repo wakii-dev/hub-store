@@ -91,8 +91,11 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
       footer={null}
       width={640}
       destroyOnClose
-      data-testid="create-order-modal"
     >
+      {/* testid trên div content (pattern TransferHubModal) — đặt trên <Modal>
+          thì antd4 spread lên .ant-modal-root (height 0 → Playwright xem là
+          hidden, baseline FI-281 test 30 đỏ). */}
+      <div data-testid="create-order-modal">
       <Form
         form={form}
         layout="vertical"
@@ -109,7 +112,16 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
         <Form.Item
           name="customerPhone"
           label={t("intake.createOrder.customerPhone")}
-          rules={[{ required: true }]}
+          rules={[
+            { required: true },
+            // SF-3 (FI-283): mirror rule backend IntakeValidator.PHONE — trước
+            // đây FE chỉ check required, phone sai format vẫn submit rồi báo
+            // lỗi server với message sai ngữ cảnh ("Import có 1 dòng lỗi").
+            {
+              pattern: /^(\+84|0)\d{9}$/,
+              message: t("intake.createOrder.customerPhoneInvalid"),
+            },
+          ]}
         >
           <Input data-testid="create-order-customer-phone" />
         </Form.Item>
@@ -225,6 +237,7 @@ export function CreateOrderModal({ open, onClose }: CreateOrderModalProps) {
           </Button>
         </Space>
       </Form>
+      </div>
     </Modal>
   );
 }
