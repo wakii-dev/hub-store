@@ -26,6 +26,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 # Security-audit P1-1 (FI-257): least-privilege GITHUB_TOKEN — untrusted PR
 # deps (postinstall scripts) chỉ được contents:read, không write bất kể
