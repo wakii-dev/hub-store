@@ -204,6 +204,7 @@ for i in $(seq 1 30); do /usr/bin/nc -z localhost 52075 >/dev/null 2>&1 && break
 /usr/bin/nc -z localhost 52075 || { echo PRINT_TIMEOUT; exit 1; }
 
 PORT_BFF=4285 GRPC_FULFILLMENT=52071 GRPC_BATCHING=52072 GRPC_PRINT=52075 \
+  GRPC_INTAKE=52071 \
   BFF_CORS_ORIGINS="http://localhost:4200,http://localhost:4201,http://localhost:4202,http://127.0.0.1:4200" \
   KC_ADMIN_CLIENT_ID=hubstore-admin \
   KC_ADMIN_CLIENT_SECRET="$(python3 -c "import json,sys; r=json.load(open('docker/keycloak/hubstore-realm.json')); print(next(c['secret'] for c in r['clients'] if c['clientId']=='hubstore-admin'))")" \
