@@ -88,8 +88,16 @@ done
 # view-realm cần cho GET /admin/.../roles/{name} (BFF findRoleId — users page
 # 503 "Keycloak role lookup failed (403)" khi thiếu — baseline FI-281 04/09).
 
+# OIDC_ISSUER/JWKS export TRỰC TIẾP — cùng lý do FULFILLMENT_DB_*: .env không
+# được chứa var mà seam runners override (run.sh source .env clobber prefix
+# env → Java seam verify sai issuer). Full realm URL — Java TokenAuthInterceptor
+# KHÔNG derive realm (khác BFF withRealm).
+OIDC_FULL_ISSUER="http://localhost:8081/realms/hubstore"
+OIDC_FULL_JWKS="http://localhost:8081/realms/hubstore/protocol/openid-connect/certs"
+
 echo "[boot-all] boot fulfillment-service (Java :50051)..."
-(cd "$ROOT/services/fulfillment-service" && exec ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
+(cd "$ROOT/services/fulfillment-service" && \
+  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" exec ./run.sh) >"$LOG_DIR/e2e-java.log" 2>&1 &
 JAVA_PID=$!
 
 wait_port java 50051 || exit 1
@@ -104,7 +112,17 @@ wait_port go 50052 || exit 1
 wait_port python 50053 || exit 1
 
 echo "[boot-all] boot BFF (:8080)..."
-(cd "$ROOT/services/bff-gateway" && exec pnpm dev) >"$LOG_DIR/e2e-bff.log" 2>&1 &
+# FULFILLMENT_DB_* export TRỰC TIẾP (không đưa vào root .env): run.sh java/go
+# cũng source .env — nếu .env chứa FULFILLMENT_DB_* thì CLOBBER override của
+# seam runners (sf-11/sf-25 private stacks boot riêng DB). BFF host-run cần
+# các var này cho avatar pool (503 "Avatar storage is unavailable" khi thiếu
+# — baseline FI-281 04/09).
+(cd "$ROOT/services/bff-gateway" && . "$ROOT/.env" && \
+  FULFILLMENT_DB_HOST=127.0.0.1 FULFILLMENT_DB_PORT=5432 \
+  FULFILLMENT_DB_NAME=fulfillment FULFILLMENT_DB_USER="${POSTGRES_USER:-hubstore}" \
+  FULFILLMENT_DB_PASSWORD="$POSTGRES_PASSWORD" \
+  OIDC_ISSUER="$OIDC_FULL_ISSUER" OIDC_JWKS_URL="$OIDC_FULL_JWKS" \
+  exec pnpm dev) >"$LOG_DIR/e2e-bff.log" 2>&1 &
 wait_port bff 8080 || exit 1
 
 echo "[boot-all] boot FE remotes (:3001 orders, :3002 fulfillment)..."

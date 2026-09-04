@@ -68,10 +68,23 @@ cleanup() {
 trap cleanup EXIT INT TERM
 
 # Port-guard: nếu bận → kill listener cũ trên block CỦA MÌNH (không đụng SF khác).
+# :56443/:8082 do docker-proxy/com.docker.backend giữ (publish port container
+# sf-25 GIỮ giữa các run) — kill nhầm backend → Docker daemon CHẾT toàn bộ
+# (monitor "watchdog detected parent process disappeared", baseline FI-281
+# 04/09 daemon rớt 4 lần). Skip mọi process docker — container do `docker rm -f`.
+docker_safe_kill() {
+  local pids
+  pids=$(lsof -ti tcp:"$1" 2>/dev/null) || return 0
+  local victim=""
+  for pid in $pids; do
+    ps -p "$pid" -o command= 2>/dev/null | grep -qE 'docker|com\.docker' || victim="$victim $pid"
+  done
+  [ -n "$victim" ] && kill -9 $victim 2>/dev/null || true
+}
 for p in "${PORTS[@]}"; do
   if port_busy "$p"; then
-    echo "[sf-25] port $p bận — kill listener cũ"
-    lsof -ti tcp:"$p" | xargs kill -9 2>/dev/null || true
+    echo "[sf-25] port $p bận — kill listener cũ (skip docker)"
+    docker_safe_kill "$p"
   fi
 done
 sleep 1
