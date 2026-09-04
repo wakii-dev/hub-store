@@ -44,7 +44,9 @@ test.describe.serial("SF-6 ktv-mobile regression — KTV-001", () => {
     psql(
       "fulfillment",
       `INSERT INTO installation_orders (service_order_code, technician_code, status, expected_time, region_code, province)
-       VALUES ('${REG_CODE}', 'KTV-001', 'CONFIRMED', now() + interval '2 hours', 'HN', 'Hà Nội')`,
+       VALUES ('${REG_CODE}', 'KTV-001', 'CONFIRMED', date_trunc('day', now()) + interval '23 hours', 'HN', 'Hà Nội')`,
+    // SF-8 convergence: seed giờ neo VÀO HÔM NAY (23:00) — now()+2h vượt nửa đêm
+    // khi run sau 22:00 → đơn rơi ngày mai → list "hôm nay" lọc mất (S3 fail).
     );
     const check = psql(
       "fulfillment",
