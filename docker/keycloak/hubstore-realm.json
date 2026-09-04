@@ -104,7 +104,7 @@
       ],
       "attributes": {
         "pkce.code.challenge.method": "S256",
-        "post.logout.redirect.uris": "http://localhost:3010/* http://127.0.0.1:4220/*"
+        "post.logout.redirect.uris": "http://localhost:3010/*##http://127.0.0.1:4220/*"
       },
       "defaultClientScopes": [
         "profile",
