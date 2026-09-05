@@ -1,0 +1,57 @@
+# git-cliff — sinh changelog từ conventional commits, format Keep a Changelog.
+# Repo này dùng type mở rộng 'merge' cho story merge commits (merge(story)/merge(sf)).
+# Dùng bởi: .github/workflows/release.yml (tag v*.*.*) — validate local:
+#   git cliff --latest --strip all          # section cho release mới nhất
+#   git cliff --unreleased --tag vX.Y.Z --prepend CHANGELOG.md
+
+[changelog]
+title_template = ""
+header = """
+# Changelog
+
+Các thay đổi đáng chú ý theo format [Keep a Changelog](https://keepachangelog.com/),
+version theo [Semver](https://semver.org/). Sinh tự động từ conventional commits
+bởi git-cliff — chạy tay qua workflow release khi push tag `v*.*.*`.
+
+"""
+body = """
+{% if version %}\
+## [{{ version }}] - {{ timestamp | date(format="%Y-%m-%d") }}
+{% else %}\
+## [Unreleased]
+{% endif %}\
+{% for group, commits in commits | group_by(attribute="group") %}\
+### {{ group | upper_first }}\n\
+{% for commit in commits %}\
+- {% if commit.scope %}**{{ commit.scope }}:** {% endif %}\
+  {{ commit.message | split(pat="\n") | first | upper_first }} \
+  ([`{{ commit.id | truncate(length=7, end="") }}`](https://github.com/wakii-dev/hub-store/commit/{{ commit.id }}))\n\
+{% endfor %}\n\
+{% endfor %}\
+"""
+footer = "<!-- changelog:begin (git-cliff) -->\n"
+# trim: dùng footer làm mốc cho --prepend cập nhật phần dưới
+postprocessors = []
+
+[git]
+conventional_commits = true
+filter_unconventional = false
+split_commits = false
+commit_parsers = [
+  { message = "^feat", group = "Features" },
+  { message = "^fix", group = "Bug Fixes" },
+  { message = "^perf", group = "Performance" },
+  { message = "^refactor", group = "Refactor" },
+  { message = "^revert", group = "Reverts" },
+  { message = "^doc", group = "Documentation" },
+  { message = "^test", group = "Tests" },
+  { message = "^ci", group = "CI" },
+  { message = "^chore\\(release\\)", skip = true },
+  { message = "^chore", group = "Chores" },
+  { message = "^merge", group = "Story Merges" },
+  { message = ".*", group = "Other" },
+]
+protect_breaking_commits = true
+filter_commits = false
+tag_pattern = "v[0-9].*"
+sort_commits = "oldest"

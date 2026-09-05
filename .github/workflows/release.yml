@@ -1,0 +1,62 @@
+# Release pipeline — chạy khi push tag v*.*.*:
+#   1. git-cliff render TOÀN BỘ CHANGELOG.md từ conventional commits (cliff.toml)
+#      — regen full (không --prepend) để tránh duplicate/stale Unreleased khi
+#      tag đã nằm trên HEAD (checkout ở tag → --unreleased rỗng, đã test local).
+#   2. Commit CHANGELOG.md lên main (github-actions[bot]) — [skip ci] để không
+#      vòng lặp CI. Quy ước: tag phải cut từ main HEAD, nếu không push HEAD:main
+#      sẽ non-fast-forward fail lộ ra (cố tình — tag lệch main là lỗi quy trình).
+#   3. Tạo GitHub Release với notes = section của tag vừa push (--latest).
+# Test locally (không cần push tag):
+#   git tag v9.9.9-test && git cliff --config cliff.toml && git tag -d v9.9.9-test
+name: release
+
+on:
+  push:
+    tags: ["v*.*.*"]
+
+# contents:write — push CHANGELOG.md lên main + tạo Release
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  changelog:
+    name: changelog + GitHub Release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # git-cliff cần full history + toàn bộ tags
+
+      # Installer binary git-cliff (không chạy gì — chạy ở các step dưới)
+      - uses: taiki-e/install-action@v2
+        with:
+          tool: git-cliff
+
+      - name: Regen CHANGELOG.md + commit lên main
+        env:
+          TAG: ${{ github.ref_name }}
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git cliff --config cliff.toml -o CHANGELOG.md
+          git add CHANGELOG.md
+          if git diff --cached --quiet; then
+            echo "CHANGELOG không đổi — bỏ qua commit"
+          else
+            git commit -m "chore(release): CHANGELOG $TAG [skip ci]"
+            git push origin HEAD:main
+          fi
+
+      - name: Tạo GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          git cliff --config cliff.toml --latest --strip all > /tmp/release-notes.md
+          gh release create "$TAG" --verify-tag --title "$TAG" \
+            --notes-file /tmp/release-notes.md \
+            || gh release edit "$TAG" --title "$TAG" --notes-file /tmp/release-notes.md
