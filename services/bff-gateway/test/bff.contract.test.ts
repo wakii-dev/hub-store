@@ -471,6 +471,56 @@ describe('SF-9 — GET /fulfillment/dashboard-stats (BFF owns aggregation)', () 
     ]);
   });
 
+  it('scale fix — paging ĐỦ phiếu theo window createdTime hôm nay (không còn cắt 100 phiếu đầu)', async () => {
+    h.fulfillment.override({
+      getDashboardStats: (_c, cb) =>
+        cb(null, {
+          ordersPerDay: [],
+          totalToday: 3,
+          pendingApproval: 0,
+          ordersPerBatch: [
+            { batchCode: 'B-TODAY-1', count: 2 },
+            { batchCode: 'B-TODAY-2', count: 1 },
+          ],
+        }),
+      listDeliveryStaff: (_c, cb) => cb(null, { items: [] }),
+    });
+    const pages = [
+      [
+        { batchCode: 'B-TODAY-1', shipperId: 'S-01', status: 0, items: [], createdAt: '' },
+      ],
+      [
+        { batchCode: 'B-TODAY-2', shipperId: 'S-02', status: 1, items: [], createdAt: '' },
+      ],
+    ];
+    const seenPages: number[] = [];
+    h.batching.override({
+      filterBatches: (call, cb) => {
+        const req = call.request;
+        seenPages.push(req.page);
+        cb(null, {
+          items: pages[req.page - 1] ?? [],
+          total: 2,
+          page: req.page,
+          pageSize: 500,
+        });
+      },
+    });
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/fulfillment/dashboard-stats',
+      headers: { authorization: `Bearer ${await signTestToken()}` },
+    });
+    expect(res.statusCode).toBe(200);
+    const body = res.json();
+    expect(seenPages).toEqual([1, 2]); // loop tới khi hết total
+    // B-TODAY-1 ACTIVE(0) trang 2 + B-TODAY-2 COMPLETED(1) trang 2 đều được map
+    expect(body.delivering).toBe(2);
+    expect(body.completed).toBe(1);
+    expect(body.cancelled).toBe(0);
+    expect(body.totalBatches).toBe(2);
+  });
+
   it('decided=0 → rates 0; mọi đơn vào staff đã biết → KHÔNG bucket Chưa gán', async () => {
     // Fixture mặc định: BAT-1001 (S-01, status 0) 2 đơn — hết staff đã biết.
     const res = await h.app.inject({
@@ -598,5 +648,54 @@ describe('SF-17 Task 7 — Admin role gate trên 4 write routes /service-employe
     const body = list.json();
     expect(Object.keys(body).sort()).toEqual(['items', 'page', 'pageSize', 'total']);
     expect(body.items[0]).toMatchObject({ employeeCode: 'NV-001', fullName: 'Nguyễn Nhân Viên' });
+  });
+});
+
+describe('GET /fulfillment/order-status-stats — StatStrip toàn cục (thống kê TOÀN BỘ data)', () => {
+  it('GROUP BY batch_status toàn bảng + codPending (batch_status=0), không phân trang', async () => {
+    const queries: string[] = [];
+    const pool = {
+      query: async (sql: string) => {
+        queries.push(sql);
+        return { rows: [
+          { batch_status: 0, c: '6787', cod: '123456789' },
+          { batch_status: 2, c: '2472635', cod: '0' },
+        ] };
+      },
+    };
+    __setAuditPoolForTests(pool as unknown as Pool);
+    process.env.FULFILLMENT_DB_HOST = 'localhost'; // gate env của getAuditPool
+    try {
+      const res = await h.app.inject({
+        method: 'GET',
+        url: '/fulfillment/order-status-stats',
+        headers: { authorization: `Bearer ${await signTestToken()}` },
+      });
+      expect(res.statusCode).toBe(200);
+      expect(res.json()).toEqual({
+        counts: [
+          { batchStatus: 0, count: 6787 },
+          { batchStatus: 2, count: 2472635 },
+        ],
+        codPending: 123456789,
+      });
+      expect(queries[0]).toContain('GROUP BY batch_status');
+      expect(queries[0]).not.toContain('LIMIT');
+    } finally {
+      __setAuditPoolForTests(null);
+      delete process.env.FULFILLMENT_DB_HOST;
+    }
+  });
+
+  it('thiếu DB pool → 503 STATS_UNAVAILABLE', async () => {
+    delete process.env.FULFILLMENT_DB_HOST;
+    __setAuditPoolForTests(null);
+    const res = await h.app.inject({
+      method: 'GET',
+      url: '/fulfillment/order-status-stats',
+      headers: { authorization: `Bearer ${await signTestToken()}` },
+    });
+    expect(res.statusCode).toBe(503);
+    expect(res.json().code).toBe('STATS_UNAVAILABLE');
   });
 });

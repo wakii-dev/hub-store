@@ -27,7 +27,7 @@ import type { HubStoreOrderFilterItem as ProtoOrderItem } from '../../../../api/
 import type { FulfillmentApi, BatchingApi } from '../clients/index.js';
 import { SERVICE_NAMES } from '../config.js';
 import { requireRole, requireUser } from '../plugins/auth.js';
-import { paginated } from '../lib/envelope.js';
+import { paginated, errorEnvelope } from '../lib/envelope.js';
 import { sendGrpcError, grpcError } from '../lib/grpc-error.js';
 import { logActivity, getAuditPool, buildAuditWhere, normalizeAuditPage, type AuditQuery } from '../lib/audit.js';
 import { csvRow, EXPORT_COLUMNS } from '../lib/csv.js';
@@ -298,21 +298,44 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
   app.get('/fulfillment/dashboard-stats', async (request, reply) => {
     const caller = requireUser(request);
     try {
-      const [stats, batches, staff] = await Promise.all([
+      const [stats, staff] = await Promise.all([
         f.getDashboardStats({}, caller),
-        deps.batching.filterBatches(
-          { search: '', statuses: [], createdTime: undefined, page: 1, pageSize: 100 },
-          caller,
-        ),
         f.listDeliveryStaff({}, caller),
       ]);
+      // Scale fix (2.5M đơn): ordersPerBatch (Java) là window HÔM NAY (+07) —
+      // status batch phải lấy ĐỦ phiếu trong cùng window. Trước đây:
+      // filterBatches {page:1, pageSize:100, không filter} = 100 phiếu ĐẦU
+      // (tháng 1) → delivering/completed/cancelled + workload sai hoàn toàn.
+      const dayFmt = new Intl.DateTimeFormat('en-CA', { timeZone: 'Asia/Ho_Chi_Minh' });
+      const today = dayFmt.format(new Date());
+      const createdTime = {
+        from: `${today}T00:00:00.000+07:00`,
+        to: `${today}T23:59:59.999+07:00`,
+      };
+      const PAGE = 500;
+      const statusByBatch = new Map<string, number>();
+      const shipperByBatch = new Map<string, string>();
+      let batchesTotal = 0;
+      let collected = 0;
+      for (let page = 1, guard = 0; guard < 50; guard++, page++) {
+        const bp = await deps.batching.filterBatches(
+          { search: '', statuses: [], createdTime, page, pageSize: PAGE },
+          caller,
+        );
+        batchesTotal = Number(bp.total);
+        const items = bp.items ?? [];
+        collected += items.length;
+        for (const b of items) {
+          statusByBatch.set(b.batchCode, Number(b.status));
+          shipperByBatch.set(b.batchCode, b.shipperId);
+        }
+        if (collected >= batchesTotal) break;
+      }
       const countByBatch = new Map((stats.ordersPerBatch ?? []).map((b) => [b.batchCode, b.count]));
       let delivering = 0;
       let completed = 0;
       let cancelled = 0;
       const loadByStaff = new Map<string, number>();
-      const statusByBatch = new Map((batches.items ?? []).map((b) => [b.batchCode, Number(b.status)]));
-      const shipperByBatch = new Map((batches.items ?? []).map((b) => [b.batchCode, b.shipperId]));
       for (const [code, count] of countByBatch) {
         const st = statusByBatch.get(code);
         if (st === 0) delivering += count;
@@ -330,7 +353,7 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
       const knownIds = new Set(workload.map((w) => w.staffId));
       let unassigned = 0;
       for (const [shipper, count] of loadByStaff) if (!knownIds.has(shipper)) unassigned += count;
-      const totalBatches = Number(batches.total);
+      const totalBatches = batchesTotal;
       const decided = completed + cancelled;
       const body: DashboardStats = {
         ordersPerDay: (stats.ordersPerDay ?? []).map((d) => ({ date: d.date, count: d.count })),
@@ -350,6 +373,40 @@ export function registerFulfillmentRoutes(app: FastifyInstance, deps: RouteDeps)
       return await reply.send(body);
     } catch (err) {
       return sendGrpcError(reply, err, SERVICE_NAMES.fulfillment);
+    }
+  });
+
+  // StatStrip toàn cục (quy mô triệu đơn — thống kê TOÀN BỘ data, KHÔNG phải
+  // items trang hiện tại): đếm orders theo batch_status + tổng COD chờ giao
+  // (batch_status=0) bằng 1 GROUP BY trực tiếp DB fulfillment (cùng pattern
+  // audit/activity_log — BFF owns aggregation, không regeneration proto).
+  app.get('/fulfillment/order-status-stats', async (request, reply) => {
+    requireUser(request);
+    const pool = getAuditPool();
+    if (!pool) {
+      return reply
+        .code(503)
+        .send(errorEnvelope(503, 'Order stats unavailable.', { code: 'STATS_UNAVAILABLE' }));
+    }
+    try {
+      const { rows } = await pool.query<{
+        batch_status: number;
+        c: string;
+        cod: string;
+      }>(
+        `SELECT batch_status, COUNT(*)::int AS c,
+                COALESCE(SUM(cod_amount) FILTER (WHERE batch_status = 0), 0)::bigint AS cod
+         FROM orders GROUP BY batch_status ORDER BY batch_status`,
+      );
+      return await reply.send({
+        counts: rows.map((r) => ({ batchStatus: r.batch_status, count: Number(r.c) })),
+        codPending: Number(rows.find((r) => r.batch_status === 0)?.cod ?? 0),
+      });
+    } catch (err) {
+      request.log.error(err);
+      return reply
+        .code(503)
+        .send(errorEnvelope(503, 'Order stats unavailable.', { code: 'STATS_UNAVAILABLE' }));
     }
   });
 

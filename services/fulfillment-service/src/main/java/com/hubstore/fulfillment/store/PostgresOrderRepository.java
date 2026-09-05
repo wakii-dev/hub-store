@@ -312,10 +312,16 @@ public class PostgresOrderRepository implements OrderRepository {
             Integer.class, OffsetDateTime.ofInstant(todayFrom, zone), OffsetDateTime.ofInstant(todayTo, zone));
         Integer pending = jdbc.queryForObject(
             "SELECT COUNT(*) FROM orders WHERE order_status = 0", Integer.class);
+        // perBatch chỉ window HÔM NAY theo NGÀY GIAO (khớp created_at của phiếu
+        // soạn — BFF page batching theo createdTime cùng bounds) — trước đây
+        // ALL-TIME: ở quy mô triệu đơn gRPC trả hàng trăm nghìn entry và BFF
+        // không thể map đủ status → dashboard sai nghĩa.
         List<DashboardStatsData.BatchCount> perBatch = jdbc.query(
             "SELECT batch_code, COUNT(*) AS c FROM orders WHERE batch_code IS NOT NULL AND batch_code <> '' "
+                + "AND delivery_time_from >= ? AND delivery_time_from < ? "
                 + "GROUP BY batch_code ORDER BY batch_code ASC",
-            (rs, n) -> new DashboardStatsData.BatchCount(rs.getString(1), rs.getInt(2)));
+            (rs, n) -> new DashboardStatsData.BatchCount(rs.getString(1), rs.getInt(2)),
+            OffsetDateTime.ofInstant(todayFrom, zone), OffsetDateTime.ofInstant(todayTo, zone));
         return new DashboardStatsData(days,
                 totalToday == null ? 0 : totalToday,
                 pending == null ? 0 : pending,
