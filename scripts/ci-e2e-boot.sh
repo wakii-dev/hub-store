@@ -140,8 +140,10 @@ if kcadm_out=$(kcadm config credentials --realm master 2>&1); then
   fi
   if [ -n "${E2E_PASSWORD:-}" ]; then
     # 6 user share 1 password (e2e/lib/credentials.ts) — CTV-001 password
-    # riêng, KHÔNG rotate ở đây.
-    for u in coordinator warehouse manager admin warehouse-emp KTV-001; do
+    # riêng, KHÔNG rotate ở đây. Username lowercase: KC 26 import lowercase
+    # ("KTV-001" realm JSON → "ktv-001" stored) còn set-password lookup
+    # case-SENSITIVE → "User not found" nếu truyền mixed-case.
+    for u in coordinator warehouse manager admin warehouse-emp ktv-001; do
       kcadm set-password -r hubstore --username "$u" --new-password "$E2E_PASSWORD"
     done
     echo "[ci-e2e-boot] đã rotate password 6 user e2e từ E2E_PASSWORD (CI secret)"
