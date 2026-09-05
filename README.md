@@ -1,13 +1,43 @@
-# Hub Store — Fulfillment Operations Platform
+<div align="center">
 
-pnpm workspaces + Turborepo monorepo for a hub-store logistics operation:
-order intake and coordination, warehouse picking batches, last-mile delivery
-and technician dispatch, D2C/dropship hand-off to carriers, COD settlement,
-label/receipt printing, and a mobile PWA for field staff.
+# 📦 Hub Store
 
-Frontend microfrontends (`apps/*`), shared FE packages (`packages/*`), and
-polyglot backend services (`services/*`). Services talk gRPC to each other;
-the browser only talks REST to the BFF gateway.
+**Fulfillment operations platform** — order intake & coordination, warehouse
+picking batches, last-mile delivery, technician dispatch, D2C/dropship
+hand-off to carriers, COD settlement, label/receipt printing, and a mobile
+PWA for field staff.
+
+[![CI](https://github.com/wakii-dev/hub-store/actions/workflows/ci.yml/badge.svg)](https://github.com/wakii-dev/hub-store/actions/workflows/ci.yml)
+![release](https://img.shields.io/badge/release-v0.1.1-8b5cf6)
+![seed](https://img.shields.io/badge/dev_seed-≈2.5M_orders-10b981)
+![e2e](https://img.shields.io/badge/e2e-Playwright-2e9e5b)
+
+`React 18` · `Module Federation` · `TypeScript` · `Fastify` · `Java 17 · Spring Boot 3` · `Go` · `Python` · `gRPC` · `PostgreSQL 16` · `Keycloak 26` · `Kafka 3.9` · `Turborepo` · `Playwright`
+
+</div>
+
+---
+
+pnpm workspaces + Turborepo monorepo. Frontend microfrontends (`apps/*`),
+shared FE packages (`packages/*`), and polyglot backend services
+(`services/*`). Services talk **gRPC** to each other; the browser only talks
+**REST** to the BFF gateway.
+
+| ✨ | Highlight |
+| -- | --------- |
+| 🔀 | **Module Federation** — shell host + 3 remotes, federation rebuilt from source on every image build |
+| 🌐 | **Polyglot gRPC backbone** — Java owns orders, Go owns batches, Python prints — contract-first via central protobuf |
+| 🏭 | **Production-like dev data** — deterministic seed simulating a full year: ≈2.5M orders, ≈480k picking batches |
+| ✅ | **Full CI matrix** — typecheck + unit (Node/Go/Java) + 5 Docker builds + real-infra Playwright e2e on every push |
+
+## 🏗️ Architecture
+
+<p align="center">
+  <img src="docs/architecture.svg" alt="Hub Store architecture" width="900">
+</p>
+
+<details>
+<summary>ASCII version (terminal-friendly)</summary>
 
 ```
                         ┌────────────────────────────────────────────┐
@@ -36,15 +66,17 @@ the browser only talks REST to the BFF gateway.
         Kafka 3.9 :9092 (opt-in side-channel, default off) + kafka-ui :8085
 ```
 
+</details>
+
 Cross-service mutation chain: `CreateBatch` → Go calls Java
 `MutateOrderStatus` (batchStatus 0→1); `CancelBatch` → reverts to 0;
 `CompletePicking` → 2.
 
 The system is exercised at **production-like scale** — the dev seed simulates
 a full year of operations (~2.5M orders, ~480k picking batches). See
-[Data seeding](#data-seeding).
+[Data seeding](#-data-seeding).
 
-## Repository layout
+## 📁 Repository layout
 
 ```
 apps/
@@ -68,7 +100,7 @@ k8s/                kustomize base + overlays
 docs/               plans, specs, QA rubric, improvement log
 ```
 
-## Tech stack
+## 🧰 Tech stack
 
 | Layer    | Tech                                                            |
 | -------- | --------------------------------------------------------------- |
@@ -80,7 +112,7 @@ docs/               plans, specs, QA rubric, improvement log
 | Infra    | PostgreSQL 16, Keycloak 26, Kafka 3.9 (KRaft), Docker Compose, kustomize |
 | Tooling  | pnpm 10 workspaces + Turborepo, Vitest, Playwright              |
 
-## Dev port map
+## 🔌 Dev port map
 
 | Service                 | Port  |
 | ----------------------- | ----- |
@@ -98,7 +130,7 @@ docs/               plans, specs, QA rubric, improvement log
 | Postgres                | 5432  |
 | Kafka                   | 9092  |
 
-## Running the whole system
+## 🚀 Running the whole system
 
 ### Option 1 — dev (one command, all 7 processes)
 
@@ -108,8 +140,11 @@ bash scripts/boot-all.sh              # boots postgres → keycloak → java →
 BOOT_ONLY=1 bash scripts/boot-all.sh  # boot and exit — processes keep running
 ```
 
-Then open <http://localhost:3000>. `pnpm dev` alone only starts the 3 FE apps
-— the polyglot services must go through their own `run.sh` or `boot-all.sh`.
+Then open <http://localhost:3000>.
+
+> [!NOTE]
+> `pnpm dev` alone only starts the 3 FE apps — the polyglot services must go
+> through their own `run.sh` or `boot-all.sh`.
 
 ### Option 2 — docker compose (no java/go/python needed)
 
@@ -118,11 +153,12 @@ docker compose up --build
 # open http://localhost:3000
 ```
 
-Compose is the **local-run configuration** (not a production deployment):
-postgres (2 DBs: `fulfillment` + `batching`) → one-shot migrations (Flyway
-`orders-migrate`, golang-migrate `batches-migrate`) → `db-seed` → app
-services + keycloak + nginx serving shell/remotes static builds and proxying
-`/api` to the BFF.
+> [!NOTE]
+> Compose is the **local-run configuration** (not a production deployment):
+> postgres (2 DBs: `fulfillment` + `batching`) → one-shot migrations (Flyway
+> `orders-migrate`, golang-migrate `batches-migrate`) → `db-seed` → app
+> services + keycloak + nginx serving shell/remotes static builds and proxying
+> `/api` to the BFF.
 
 **From a clean machine:** only Docker + a `.env` file are needed —
 `docker compose up --build` runs the whole migrate + seed + boot chain. Data
@@ -140,10 +176,11 @@ Each service has its own `run.sh`:
 (cd services/bff-gateway         && pnpm dev)   # REST :8080
 ```
 
-## Fresh-clone setup
+## 🌱 Fresh-clone setup
 
-The repo does **not** track `.env` (git-ignored — local secrets only). Before
-the first run:
+> [!IMPORTANT]
+> The repo does **not** track `.env` (git-ignored — local secrets only).
+> Before the first run:
 
 ```bash
 cp .env.example .env
@@ -158,7 +195,7 @@ cp .env.example .env
 
 Everything else has sensible defaults (see `.env.example`).
 
-## Data seeding
+## 🗃️ Data seeding
 
 Three complementary tools:
 
@@ -192,7 +229,7 @@ sequences and creates indexes used by list filters and the dashboard.
   (Flyway for `fulfillment`, golang-migrate for `batching`); the column
   contract is documented in the `scripts/seed-db.sh` header.
 
-## Commands
+## ⌨️ Commands
 
 ```bash
 pnpm install        # install all workspaces
@@ -205,7 +242,7 @@ pnpm dev            # turbo run dev (FE dev servers)
 cd e2e && pnpm exec playwright test
 ```
 
-## Environment variables
+## 🔑 Environment variables
 
 | Var                  | Where            | Default                 | Meaning |
 | -------------------- | ---------------- | ----------------------- | ------- |
@@ -222,7 +259,7 @@ cd e2e && pnpm exec playwright test
 | `KAFKA_ENABLED`      | `.env`           | `false`                 | Opt-in event side-channel (`'true'` only when on) |
 | `ENABLE_DEV_RESET_PASSWORD` | `.env`    | unset                   | Mounts dev-only `/auth/reset-password` (fail-safe: unset in prod → 404) |
 
-## Testing
+## 🧪 Testing
 
 ```bash
 pnpm test                 # everything wired into Turborepo (TS workspaces)
@@ -240,7 +277,7 @@ cd e2e && pnpm exec playwright test                # full e2e (boot-all first)
   volume **before** booting, for a clean seeded state (`auth.setup.ts` logs 3
   users in through the hosted UI and stores storageState under `.auth/`).
 
-## Roles and permissions
+## 👮 Roles and permissions
 
 Roles come from Keycloak (`realm_access.roles`) and are mapped to permissions
 by a single matrix shared by frontend and backend:
@@ -259,7 +296,7 @@ When changing a permission, update **both** the FE matrix
 the same change — the regression suite (`e2e/tests/1000-*`) asserts nav
 visibility per role, and API-level gates must stay in sync with it.
 
-## OIDC auth (Keycloak)
+## 🔐 OIDC auth (Keycloak)
 
 - Start + auto-import the realm: `docker compose up -d keycloak` (realm JSON:
   `docker/keycloak/hubstore-realm.json`; `--import-realm` skips when the realm
@@ -274,8 +311,10 @@ visibility per role, and API-level gates must stay in sync with it.
 
 ### Dev credentials (rotated — never use in prod)
 
-The dev realm imports from `docker/keycloak/hubstore-realm.json`. Passwords
-are dev-only:
+> [!WARNING]
+> Passwords below are dev-only.
+
+The dev realm imports from `docker/keycloak/hubstore-realm.json`:
 
 | User            | Password                | Notes                        |
 | --------------- | ----------------------- | ---------------------------- |
@@ -316,6 +355,7 @@ Rotation procedure (dev realm):
 6. Production style: never use literals — secrets live in a secret manager or
    environment; realm JSON import is for dev only.
 
+> [!CAUTION]
 > Git history still contains OLD dev secrets (pre-SF-12 untracking) — do not
 > reuse them; rotate every secret before any real deployment.
 
@@ -338,14 +378,16 @@ the realm JSON — a fresh container volume loses them.
 
 ### Forgot password (DEV-ONLY)
 
-The shell's "Forgot password" page and the `POST /auth/reset-password`
-endpoint reset the password directly through the Keycloak Admin API — **no
-identity verification step** (no email, no OTP). The endpoint is only mounted
-when `ENABLE_DEV_RESET_PASSWORD=1` is explicitly set (fail-safe: prod without
-it → 404). Replace with email OTP or Keycloak's built-in forgot-password flow
-in production.
+> [!WARNING]
+> No identity verification step (no email, no OTP) — dev only.
 
-## CI (GitHub Actions)
+The shell's "Forgot password" page and the `POST /auth/reset-password`
+endpoint reset the password directly through the Keycloak Admin API. The
+endpoint is only mounted when `ENABLE_DEV_RESET_PASSWORD=1` is explicitly set
+(fail-safe: prod without it → 404). Replace with email OTP or Keycloak's
+built-in forgot-password flow in production.
+
+## 🤖 CI (GitHub Actions)
 
 `.github/workflows/ci.yml` runs 3 jobs on every PR / push to main:
 
@@ -374,7 +416,7 @@ Run one e2e spec CI-style:
 E2E=1 pnpm --filter @hub-store/e2e exec playwright test tests/03-audit.spec.ts
 ```
 
-## Backup / restore
+## 💾 Backup / restore
 
 ```bash
 # Backup both databases (postgres container must be running)
@@ -422,7 +464,7 @@ curl -s localhost:8080/health
 Backups do **not** include the `keycloak-data` volume (users/realm) — restore
 does not re-create Keycloak; that volume persists separately in compose.
 
-## Kubernetes (minikube)
+## ☸️ Kubernetes (minikube)
 
 Requirements: minikube ≥ 1.30, kubectl, Docker Desktop/OrbStack driver, and
 **≥ 6GB RAM / 4 CPU** for the VM (3 JVM-backed services + Keycloak + Kafka —
@@ -442,7 +484,7 @@ uses a minimal dev realm exposed under the `/keycloak` prefix
 `kubectl -n hub-store rollout restart deployment/keycloak` — import only runs
 at boot.
 
-## Conventions
+## 📐 Conventions
 
 - **Contracts first** — protobuf definitions in `api/proto` are the single
   source of truth; generated stubs are committed. REST DTOs are camelCase and
@@ -455,10 +497,14 @@ at boot.
 - **Secrets** — local-only in `.env`; never commit. Dev-only rotated literals
   live in the Keycloak realm JSON.
 
-## Contributors
+---
 
-- **HoiVu** — author / product owner
-- **Claude** (Anthropic) — AI coding agent
-- **Kiro** (AWS) — AI coding agent
+<div align="center">
 
-Built through human–AI agent collaboration.
+## 🫱 Contributors
+
+**HoiVu** — author / product owner · **Claude** (Anthropic) — AI coding agent · **Kiro** (AWS) — AI coding agent
+
+*Built through human–AI agent collaboration.*
+
+</div>

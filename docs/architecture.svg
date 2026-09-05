@@ -1,0 +1,127 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 830" font-family="-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <style>
+    .bg    { fill: var(--bg); }
+    .panel { fill: var(--panel); stroke: var(--panel-line); stroke-width: 1.5; rx: 14; }
+    .box   { fill: var(--box); stroke: var(--box-line); stroke-width: 1.2; }
+    .ink   { fill: var(--ink); }
+    .sub   { fill: var(--sub); }
+    .wire  { stroke: var(--line); stroke-width: 1.6; fill: none; marker-end: url(#arr); }
+    .lbl   { fill: var(--lbl); font-size: 12px; font-weight: 600; }
+    .mono  { font-family: ui-monospace,'SF Mono',Menlo,Consolas,monospace; }
+    svg    { --bg:#ffffff; --panel:#eef2ff; --panel-line:#a5b4fc; --box:#ffffff; --box-line:#c7d2fe;
+             --ink:#1e1b4b; --sub:#64748b; --line:#94a3b8; --lbl:#475569; }
+    @media (prefers-color-scheme: dark) {
+      svg  { --bg:#0b1220; --panel:#1e2638; --panel-line:#4f46e5; --box:#111a2c; --box-line:#334155;
+             --ink:#e2e8f0; --sub:#94a3b8; --line:#64748b; --lbl:#94a3b8; }
+      .fe-box   { fill:#182136; stroke:#6366f1; }
+      .bff-box  { fill:#272016; stroke:#d97706; }
+      .svc-box  { fill:#12241d; stroke:#10b981; }
+      .db-box   { fill:#16202e; stroke:#64748b; }
+      .infra-box{ fill:#1d1a2e; stroke:#8b5cf6; }
+    }
+    @media (prefers-color-scheme: light) {
+      .fe-box    { fill:#eef2ff; stroke:#818cf8; }
+      .bff-box   { fill:#fffbeb; stroke:#f59e0b; }
+      .svc-box   { fill:#ecfdf5; stroke:#34d399; }
+      .db-box    { fill:#f8fafc; stroke:#94a3b8; }
+      .infra-box { fill:#f5f3ff; stroke:#a78bfa; }
+    }
+  </style>
+  <defs>
+    <marker id="arr" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse">
+      <path d="M 0 0 L 10 5 L 0 10 z" class="wire" style="fill:var(--line)"/>
+    </marker>
+  </defs>
+
+  <rect class="bg" x="0" y="0" width="1180" height="830" rx="12"/>
+
+  <!-- ============ Browser / PWA ============ -->
+  <rect class="box db-box" x="30" y="100" width="170" height="96" rx="10"/>
+  <text class="ink" x="115" y="140" text-anchor="middle" font-size="15" font-weight="700">Browser / PWA</text>
+  <text class="sub" x="115" y="162" text-anchor="middle" font-size="12">ops staff · field staff</text>
+  <line class="wire" x1="200" y1="148" x2="242" y2="148"/>
+
+  <!-- ============ Frontend panel ============ -->
+  <rect class="panel fe-box" x="250" y="40" width="900" height="204" rx="14"/>
+  <text class="ink" x="700" y="70" text-anchor="middle" font-size="15" font-weight="700">Frontend — React 18 · Module Federation</text>
+
+  <rect class="box" x="270" y="86" width="860" height="54" rx="10" style="fill:var(--box)"/>
+  <text class="ink" x="286" y="109" font-size="13.5" font-weight="700">shell <tspan class="mono sub" font-size="12">:3000</tspan></text>
+  <text class="sub" x="286" y="127" font-size="12">MF host · OIDC login · app layout · notifications</text>
+
+  <rect class="box" x="270" y="150" width="270" height="66" rx="10" style="fill:var(--box)"/>
+  <text class="ink" x="286" y="173" font-size="13.5" font-weight="700">orders <tspan class="mono sub" font-size="12">:3001</tspan></text>
+  <text class="sub" x="286" y="191" font-size="12">MF remote</text>
+  <text class="sub" x="286" y="206" font-size="12">order list · D2C · dashboard</text>
+
+  <rect class="box" x="552" y="150" width="270" height="66" rx="10" style="fill:var(--box)"/>
+  <text class="ink" x="568" y="173" font-size="13.5" font-weight="700">fulfillment <tspan class="mono sub" font-size="12">:3002</tspan></text>
+  <text class="sub" x="568" y="191" font-size="12">MF remote</text>
+  <text class="sub" x="568" y="206" font-size="12">batches · print · delivery</text>
+
+  <rect class="box" x="834" y="150" width="296" height="66" rx="10" style="fill:var(--box)"/>
+  <text class="ink" x="850" y="173" font-size="13.5" font-weight="700">ktv-mobile <tspan class="mono sub" font-size="12">:3010</tspan></text>
+  <text class="sub" x="850" y="191" font-size="12">field-staff PWA</text>
+  <text class="sub" x="850" y="206" font-size="12">offline-tolerant mobile flows</text>
+
+  <!-- FE → BFF -->
+  <line class="wire" x1="700" y1="244" x2="700" y2="296"/>
+  <text class="lbl mono" x="716" y="274">REST · JWT bearer (RS256)</text>
+
+  <!-- ============ BFF ============ -->
+  <rect class="panel bff-box" x="340" y="300" width="720" height="88" rx="14"/>
+  <text class="ink" x="700" y="336" text-anchor="middle" font-size="15" font-weight="700">BFF gateway — Fastify <tspan class="mono">:8080</tspan></text>
+  <text class="sub" x="700" y="360" text-anchor="middle" font-size="12.5">authz (role gates) · audit trail · aggregation — the only REST surface</text>
+
+  <!-- BFF → services -->
+  <line class="wire" x1="430" y1="388" x2="430" y2="446"/>
+  <line class="wire" x1="700" y1="388" x2="700" y2="446"/>
+  <line class="wire" x1="970" y1="388" x2="970" y2="446"/>
+  <text class="lbl mono" x="446" y="422">gRPC :50051</text>
+  <text class="lbl mono" x="716" y="422">gRPC :50052</text>
+  <text class="lbl mono" x="986" y="422">gRPC :50053</text>
+
+  <!-- ============ Services ============ -->
+  <rect class="panel svc-box" x="290" y="450" width="272" height="118" rx="12"/>
+  <text class="ink" x="430" y="482" text-anchor="middle" font-size="14.5" font-weight="700">fulfillment-service</text>
+  <text class="sub" x="430" y="504" text-anchor="middle" font-size="12">Java 17 · Spring Boot 3</text>
+  <text class="sub" x="430" y="522" text-anchor="middle" font-size="12">owns orders · COD · audit</text>
+  <text class="sub mono" x="430" y="548" text-anchor="middle" font-size="11.5">Flyway · :50051</text>
+
+  <rect class="panel svc-box" x="564" y="450" width="272" height="118" rx="12"/>
+  <text class="ink" x="700" y="482" text-anchor="middle" font-size="14.5" font-weight="700">batching-service</text>
+  <text class="sub" x="700" y="504" text-anchor="middle" font-size="12">Go · gRPC</text>
+  <text class="sub" x="700" y="522" text-anchor="middle" font-size="12">owns batches · planning</text>
+  <text class="sub mono" x="700" y="548" text-anchor="middle" font-size="11.5">golang-migrate · :50052</text>
+
+  <rect class="panel svc-box" x="838" y="450" width="272" height="118" rx="12"/>
+  <text class="ink" x="970" y="482" text-anchor="middle" font-size="14.5" font-weight="700">print-service</text>
+  <text class="sub" x="970" y="504" text-anchor="middle" font-size="12">Python · grpcio (pinned)</text>
+  <text class="sub" x="970" y="522" text-anchor="middle" font-size="12">PDF label / receipt</text>
+  <text class="sub mono" x="970" y="548" text-anchor="middle" font-size="11.5">reportlab · :50053</text>
+
+  <!-- Services → DB -->
+  <line class="wire" x1="430" y1="568" x2="430" y2="618"/>
+  <line class="wire" x1="700" y1="568" x2="700" y2="618"/>
+
+  <!-- ============ PostgreSQL ============ -->
+  <rect class="panel db-box" x="290" y="622" width="820" height="112" rx="14"/>
+  <text class="ink" x="700" y="650" text-anchor="middle" font-size="14.5" font-weight="700">PostgreSQL 16 — two databases</text>
+
+  <rect class="box db-box" x="312" y="664" width="376" height="50" rx="10"/>
+  <text class="ink mono" x="500" y="685" text-anchor="middle" font-size="13" font-weight="700">fulfillment</text>
+  <text class="sub" x="500" y="703" text-anchor="middle" font-size="11.5">orders · COD · audit · activity_log</text>
+
+  <rect class="box db-box" x="712" y="664" width="376" height="50" rx="10"/>
+  <text class="ink mono" x="900" y="685" text-anchor="middle" font-size="13" font-weight="700">batching</text>
+  <text class="sub" x="900" y="703" text-anchor="middle" font-size="11.5">batches · batch_items · planning</text>
+
+  <!-- ============ Infra strip ============ -->
+  <rect class="panel infra-box" x="290" y="756" width="398" height="52" rx="12" stroke-dasharray="5 4"/>
+  <text class="ink" x="489" y="778" text-anchor="middle" font-size="13" font-weight="700">Keycloak 26 <tspan class="mono sub" font-size="12">:8081</tspan></text>
+  <text class="sub" x="489" y="796" text-anchor="middle" font-size="11.5">OIDC · PKCE · realm <tspan class="mono">hubstore</tspan></text>
+
+  <rect class="panel infra-box" x="712" y="756" width="398" height="52" rx="12" stroke-dasharray="5 4"/>
+  <text class="ink" x="911" y="778" text-anchor="middle" font-size="13" font-weight="700">Kafka 3.9 <tspan class="mono sub" font-size="12">:9092</tspan> · kafka-ui <tspan class="mono sub" font-size="12">:8085</tspan></text>
+  <text class="sub" x="911" y="796" text-anchor="middle" font-size="11.5">opt-in event side-channel — default off</text>
+</svg>
