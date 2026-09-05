@@ -1,0 +1,130 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1180 570" font-family="-apple-system,'Segoe UI',Roboto,Helvetica,Arial,sans-serif">
+  <style>
+    .bg    { fill: var(--bg); }
+    .panel { fill: var(--panel); stroke: var(--panel-line); stroke-width: 1.5; }
+    .box   { fill: var(--box); stroke: var(--box-line); stroke-width: 1.2; }
+    .ink   { fill: var(--ink); }
+    .sub   { fill: var(--sub); }
+    svg    { --bg:#ffffff; --panel:#eef2ff; --panel-line:#a5b4fc; --box:#ffffff; --box-line:#c7d2fe;
+             --ink:#1e1b4b; --sub:#64748b; }
+    @media (prefers-color-scheme: dark) {
+      svg  { --bg:#0b1220; --panel:#1e2638; --panel-line:#4f46e5; --box:#111a2c; --box-line:#334155;
+             --ink:#e2e8f0; --sub:#94a3b8; }
+      .p-svc  { fill:#12241d; stroke:#10b981; }
+      .p-pkg  { fill:#0e2233; stroke:#38bdf8; }
+      .p-plat { fill:#1d1a2e; stroke:#8b5cf6; }
+    }
+    @media (prefers-color-scheme: light) {
+      .p-svc  { fill:#ecfdf5; stroke:#34d399; }
+      .p-pkg  { fill:#f0f9ff; stroke:#7dd3fc; }
+      .p-plat { fill:#f5f3ff; stroke:#a78bfa; }
+    }
+    .mono { font-family: ui-monospace,'SF Mono',Menlo,Consolas,monospace; }
+  </style>
+
+  <rect class="bg" x="0" y="0" width="1180" height="570" rx="12"/>
+
+  <!-- root -->
+  <rect class="panel" x="395" y="24" width="390" height="46" rx="12"/>
+  <text class="ink" x="590" y="45" text-anchor="middle" font-size="14.5" font-weight="700"><tspan class="mono">hub-store/</tspan> — monorepo</text>
+  <text class="sub" x="590" y="62" text-anchor="middle" font-size="11.5">pnpm workspaces + Turborepo · contract-first proto</text>
+
+  <!-- ============ apps/ ============ -->
+  <rect class="panel" x="40" y="106" width="545" height="204" rx="14"/>
+  <text class="ink" x="60" y="132" font-size="14" font-weight="700"><tspan class="mono">apps/</tspan> <tspan class="sub" font-weight="400" font-size="12">— frontend microfrontends</tspan></text>
+
+  <rect class="box" x="60" y="146" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="74" y="167" font-size="12.5" font-weight="700">shell/ <tspan class="sub">:3000</tspan></text>
+  <text class="sub" x="74" y="184" font-size="11">MF host — layout · auth · routing</text>
+  <text class="sub" x="74" y="199" font-size="11">notifications</text>
+
+  <rect class="box" x="318" y="146" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="332" y="167" font-size="12.5" font-weight="700">orders/ <tspan class="sub">:3001</tspan></text>
+  <text class="sub" x="332" y="184" font-size="11">order list · D2C · dashboard</text>
+  <text class="sub" x="332" y="199" font-size="11">area staff</text>
+
+  <rect class="box" x="60" y="222" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="74" y="243" font-size="12.5" font-weight="700">fulfillment/ <tspan class="sub">:3002</tspan></text>
+  <text class="sub" x="74" y="260" font-size="11">batches · print · delivery</text>
+  <text class="sub" x="74" y="275" font-size="11"> </text>
+
+  <rect class="box" x="318" y="222" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="332" y="243" font-size="12.5" font-weight="700">ktv-mobile/ <tspan class="sub">:3010</tspan></text>
+  <text class="sub" x="332" y="260" font-size="11">field-staff PWA</text>
+  <text class="sub" x="332" y="275" font-size="11"> </text>
+
+  <!-- ============ services/ ============ -->
+  <rect class="panel p-svc" x="595" y="106" width="545" height="204" rx="14"/>
+  <text class="ink" x="615" y="132" font-size="14" font-weight="700"><tspan class="mono">services/</tspan> <tspan class="sub" font-weight="400" font-size="12">— polyglot backend</tspan></text>
+
+  <rect class="box" x="615" y="146" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="629" y="167" font-size="12.5" font-weight="700">bff-gateway/ <tspan class="sub">:8080</tspan></text>
+  <text class="sub" x="629" y="184" font-size="11">Fastify BFF — the only REST</text>
+  <text class="sub" x="629" y="199" font-size="11">surface · authz · audit</text>
+
+  <rect class="box" x="873" y="146" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="887" y="167" font-size="12.5" font-weight="700">fulfillment-service/ <tspan class="sub">:50051</tspan></text>
+  <text class="sub" x="887" y="184" font-size="11">Java 17 · Spring Boot · gRPC</text>
+  <text class="sub" x="887" y="199" font-size="11">owns orders</text>
+
+  <rect class="box" x="615" y="222" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="629" y="243" font-size="12.5" font-weight="700">batching-service/ <tspan class="sub">:50052</tspan></text>
+  <text class="sub" x="629" y="260" font-size="11">Go · gRPC</text>
+  <text class="sub" x="629" y="275" font-size="11">owns batches</text>
+
+  <rect class="box" x="873" y="222" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="887" y="243" font-size="12.5" font-weight="700">print-service/ <tspan class="sub">:50053</tspan></text>
+  <text class="sub" x="887" y="260" font-size="11">Python · grpcio (pinned)</text>
+  <text class="sub" x="887" y="275" font-size="11">PDF label / receipt</text>
+
+  <!-- ============ packages/ ============ -->
+  <rect class="panel p-pkg" x="40" y="336" width="545" height="116" rx="14"/>
+  <text class="ink" x="60" y="362" font-size="14" font-weight="700"><tspan class="mono">packages/</tspan> <tspan class="sub" font-weight="400" font-size="12">— shared FE packages</tspan></text>
+
+  <rect class="box" x="60" y="376" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="74" y="397" font-size="12.5" font-weight="700">api-client/</text>
+  <text class="sub" x="74" y="414" font-size="11">RTK Query api singleton +</text>
+  <text class="sub" x="74" y="429" font-size="11">typed axios base query</text>
+
+  <rect class="box" x="318" y="376" width="246" height="64" rx="10"/>
+  <text class="ink mono" x="332" y="397" font-size="12.5" font-weight="700">shared/</text>
+  <text class="sub" x="332" y="414" font-size="11">design tokens · permission matrix</text>
+  <text class="sub" x="332" y="429" font-size="11">shared DTO contracts</text>
+
+  <!-- ============ platform & tooling ============ -->
+  <rect class="panel p-plat" x="595" y="336" width="545" height="204" rx="14"/>
+  <text class="ink" x="615" y="362" font-size="14" font-weight="700"><tspan class="mono">platform/</tspan> <tspan class="sub" font-weight="400" font-size="12">— contracts, tests, infra, docs</tspan></text>
+
+  <rect class="box" x="615" y="376" width="166" height="76" rx="10"/>
+  <text class="ink mono" x="627" y="395" font-size="11.5" font-weight="700">api/proto/</text>
+  <text class="sub" x="627" y="411" font-size="10.5">protobuf contracts +</text>
+  <text class="sub" x="627" y="424" font-size="10.5">generated stubs</text>
+  <text class="sub mono" x="627" y="440" font-size="10">(java/go/ts)</text>
+
+  <rect class="box" x="793" y="376" width="166" height="76" rx="10"/>
+  <text class="ink mono" x="805" y="395" font-size="11.5" font-weight="700">e2e/</text>
+  <text class="sub" x="805" y="411" font-size="10.5">Playwright suites</text>
+  <text class="sub" x="805" y="424" font-size="10.5">main flows + regression</text>
+  <text class="sub mono" x="805" y="440" font-size="10">10xx–15xx</text>
+
+  <rect class="box" x="971" y="376" width="149" height="76" rx="10"/>
+  <text class="ink mono" x="983" y="395" font-size="11.5" font-weight="700">docker/</text>
+  <text class="sub" x="983" y="411" font-size="10.5">keycloak realm JSON</text>
+  <text class="sub" x="983" y="424" font-size="10.5">kafka · postgres</text>
+  <text class="sub" x="983" y="440" font-size="10.5">nginx configs</text>
+
+  <rect class="box" x="615" y="464" width="166" height="64" rx="10"/>
+  <text class="ink mono" x="627" y="483" font-size="11.5" font-weight="700">scripts/</text>
+  <text class="sub" x="627" y="499" font-size="10.5">boot-all · seed-db · reset-db</text>
+  <text class="sub" x="627" y="512" font-size="10.5">seed-history · backup-db · k8s</text>
+
+  <rect class="box" x="793" y="464" width="166" height="64" rx="10"/>
+  <text class="ink mono" x="805" y="483" font-size="11.5" font-weight="700">k8s/</text>
+  <text class="sub" x="805" y="499" font-size="10.5">kustomize base</text>
+  <text class="sub" x="805" y="512" font-size="10.5">+ overlays</text>
+
+  <rect class="box" x="971" y="464" width="149" height="64" rx="10"/>
+  <text class="ink mono" x="983" y="483" font-size="11.5" font-weight="700">docs/</text>
+  <text class="sub" x="983" y="499" font-size="10.5">plans · specs · QA rubric</text>
+  <text class="sub" x="983" y="512" font-size="10.5">improvement log</text>
+</svg>

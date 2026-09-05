@@ -78,6 +78,13 @@ a full year of operations (~2.5M orders, ~480k picking batches). See
 
 ## 📁 Repository layout
 
+<p align="center">
+  <img src="docs/repo-map.svg" alt="Hub Store repository layout" width="900">
+</p>
+
+<details>
+<summary>Plain-text tree</summary>
+
 ```
 apps/
   shell/            MF host — layout, auth, routing, notifications (:3000)
@@ -99,6 +106,8 @@ scripts/            boot-all, seed-db, reset-db, seed-history, backup-db, k8s he
 k8s/                kustomize base + overlays
 docs/               plans, specs, QA rubric, improvement log
 ```
+
+</details>
 
 ## 🧰 Tech stack
 
