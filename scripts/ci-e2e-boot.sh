@@ -120,12 +120,16 @@ done
 echo "[ci-e2e-boot] realm hubstore ready"
 
 # ---- 4. kcadm: grant manage-users (SF-8) + optional E2E_PASSWORD rotate --
+# kcadm YÊU CẦU global options (--server/--user/--password) SAU subcommand —
+# đặt trước làm usage error (đã bị >/dev/null che từ đầu: grant/rotate chưa
+# từng chạy). Không truyền --realm ở đây: config credentials default master,
+# các call khác tự mang -r <realm> đích.
 kcadm() {
-  docker exec "$KC_CONTAINER" /opt/keycloak/bin/kcadm.sh \
-    --server "http://localhost:${KC_INT_PORT}" --realm master \
-    --user "${KEYCLOAK_ADMIN:-admin}" --password "${KEYCLOAK_ADMIN_PASSWORD:-admin}" "$@"
+  docker exec "$KC_CONTAINER" /opt/keycloak/bin/kcadm.sh "$@" \
+    --server "http://localhost:${KC_INT_PORT}" \
+    --user "${KEYCLOAK_ADMIN:-admin}" --password "${KEYCLOAK_ADMIN_PASSWORD:-admin}"
 }
-if kcadm config credentials >/dev/null 2>&1; then
+if kcadm_out=$(kcadm config credentials --realm master 2>&1); then
   # boot-all.sh grant cùng vai trò cho container compose — container name
   # khác ở đây nên phải grant lại cho CI container (idempotent).
   if kcadm add-roles -r hubstore --uusername service-account-hubstore-admin \
@@ -144,6 +148,7 @@ if kcadm config credentials >/dev/null 2>&1; then
   fi
 else
   echo "[ci-e2e-boot] WARN: kcadm login fail — bỏ qua grant + rotate" >&2
+  echo "$kcadm_out" | tail -n 8 >&2
 fi
 
 # ---- 5. migrate (one-shot containers — CÙNG image + volume compose) -----
