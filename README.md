@@ -1,15 +1,13 @@
 # Hub Store — Fulfillment Operations Platform
 
-A polyglot monorepo for a hub-store logistics operation: order intake and
-coordination, warehouse picking batches, last-mile delivery and technician
-dispatch, D2C/dropship hand-off to carriers, COD settlement, label/receipt
-printing, and a mobile PWA for field staff.
+pnpm workspaces + Turborepo monorepo for a hub-store logistics operation:
+order intake and coordination, warehouse picking batches, last-mile delivery
+and technician dispatch, D2C/dropship hand-off to carriers, COD settlement,
+label/receipt printing, and a mobile PWA for field staff.
 
-The system is exercised at **production-like scale** — the dev seed simulates a
-full year of operations (~2.5M orders, ~480k picking batches) — see
-[Data seeding](#data-seeding).
-
-## Architecture
+Frontend microfrontends (`apps/*`), shared FE packages (`packages/*`), and
+polyglot backend services (`services/*`). Services talk gRPC to each other;
+the browser only talks REST to the BFF gateway.
 
 ```
                         ┌────────────────────────────────────────────┐
@@ -24,45 +22,27 @@ full year of operations (~2.5M orders, ~480k picking batches) — see
                         │       BFF gateway — Fastify :8080          │
                         │  authz (role gates) · audit · aggregation  │
                         └───┬──────────────┬──────────────┬──────────┘
-                            │ gRPC         │ gRPC         │ gRPC
+                            │ gRPC :50051  │ gRPC :50052  │ gRPC :50053
               ┌─────────────▼───┐   ┌──────▼──────┐  ┌────▼─────────┐
               │ fulfillment-svc │   │ batching-svc│  │ print-service│
               │ Java 17/Spring  │   │ Go          │  │ Python       │
-              │ :50051          │   │ :50052      │  │ :50053       │
+              │ owns orders     │   │ owns batches│  │ PDF print    │
               └───┬─────────────┘   └──────┬──────┘  └──────────────┘
-                  │                        │
-        ┌─────────▼────────────────────────▼─────────┐
-        │        PostgreSQL 16 — two databases       │
-        │  fulfillment (orders, COD, audit, tech…)   │
-        │  batching (batches, batch_items, planning) │
-        └────────────────────────────────────────────┘
-                  │
-        ┌─────────▼──────────┐   ┌──────────────────────────┐
-        │ Keycloak 26 :8081  │   │ Kafka 3.9 :9092 (opt-in  │
-        │ realm `hubstore`   │   │ side-channel, default off│
-        │ OIDC/PKCE login    │   │ + kafka-ui :8085)        │
-        └────────────────────┘   └──────────────────────────┘
+                  │        PostgreSQL 16 — two databases         │
+                  │  fulfillment (orders, COD, audit, tech…)     │
+                  │  batching (batches, batch_items, planning)   │
+                  └──────────────────────────────────────────────┘
+        Keycloak 26 :8081 (realm `hubstore`, OIDC/PKCE)
+        Kafka 3.9 :9092 (opt-in side-channel, default off) + kafka-ui :8085
 ```
 
-- **Frontend** — Module Federation: `shell` is the host (auth, layout, routing,
-  notifications); `orders` and `fulfillment` are remotes; `ktv-mobile` is the
-  field-staff PWA. Shared code lives in `packages/shared` (design tokens,
-  permissions matrix, contracts) and `packages/api-client` (RTK Query
-  singleton + axios instance).
-- **BFF gateway** — the only REST surface the browser talks to. Owns JWT
-  verification (JWKS from Keycloak), per-route role gates, error envelopes,
-  audit-trail writing, and cross-service aggregation (dashboard, settlement).
-- **fulfillment-service** (Java 17, Spring Boot + gRPC) — orders, intake,
-  coordination status, COD confirmations, tech/installation dispatch, master
-  data, print errors, webhook intake. Owns the `fulfillment` database.
-- **batching-service** (Go + gRPC) — picking-batch lifecycle (create → pick →
-  complete), batch items, distance-based packing suggestions, carrier quotes
-  and bookings (mock/real Ahamove adapter), shipment planning. Owns the
-  `batching` database.
-- **print-service** (Python + gRPC) — receipt/label rendering and printer
-  integrations.
-- **Protobuf contracts** live centrally in [`api/proto`](api/proto) with
-  generated stubs for Java, Go and TypeScript under `api/proto/gen`.
+Cross-service mutation chain: `CreateBatch` → Go calls Java
+`MutateOrderStatus` (batchStatus 0→1); `CancelBatch` → reverts to 0;
+`CompletePicking` → 2.
+
+The system is exercised at **production-like scale** — the dev seed simulates
+a full year of operations (~2.5M orders, ~480k picking batches). See
+[Data seeding](#data-seeding).
 
 ## Repository layout
 
@@ -76,14 +56,14 @@ services/
   bff-gateway/      Fastify BFF (:8080)
   fulfillment-service/  Java 17 · Spring Boot · gRPC (:50051)
   batching-service/     Go · gRPC (:50052)
-  print-service/        Python · gRPC (:50053)
+  print-service/        Python · grpcio (:50053)
 packages/
   api-client/       RTK Query api singleton + typed axios base query
   shared/           design tokens, permission matrix, shared DTO contracts
-api/proto/          central protobuf contracts + generated stubs
+api/proto/          central protobuf contracts + generated stubs (java/go/ts)
 e2e/                Playwright suites (main flows + regression 10xx–15xx)
 docker/             keycloak realm JSON, kafka, postgres, nginx configs
-scripts/            boot-all, seed-db, reset-db, seed-history, k8s helpers
+scripts/            boot-all, seed-db, reset-db, seed-history, backup-db, k8s helpers
 k8s/                kustomize base + overlays
 docs/               plans, specs, QA rubric, improvement log
 ```
@@ -94,57 +74,98 @@ docs/               plans, specs, QA rubric, improvement log
 | -------- | --------------------------------------------------------------- |
 | Frontend | React 18, Vite 5, Module Federation, Ant Design 4, RTK Query 2, i18next |
 | BFF      | Node 20+, TypeScript, Fastify, tsx, `pg`, `@grpc/grpc-js`, jose  |
-| Java svc | Java 17, Spring Boot, gRPC, Flyway, jOOQ-free JDBC              |
+| Java svc | Java 17, Spring Boot 3, gRPC, Flyway                            |
 | Go svc   | Go, gRPC, golang-migrate                                        |
 | Python   | grpcio 1.83 (pinned), reportlab                                 |
 | Infra    | PostgreSQL 16, Keycloak 26, Kafka 3.9 (KRaft), Docker Compose, kustomize |
 | Tooling  | pnpm 10 workspaces + Turborepo, Vitest, Playwright              |
 
-## Quick start
+## Dev port map
 
-Prerequisites: **Node ≥ 20**, **pnpm 10**, **Docker** (for Postgres/Keycloak/
-Kafka), and toolchains for the services you want to run (JDK 17 + Maven, Go,
-Python 3).
+| Service                 | Port  |
+| ----------------------- | ----- |
+| shell (MF host)         | 3000  |
+| orders (MF remote)      | 3001  |
+| fulfillment (MF remote) | 3002  |
+| ktv-mobile PWA          | 3010  |
+| BFF gateway (HTTP)      | 8080  |
+| Keycloak                | 8081  |
+| batching health (HTTP)  | 8082  |
+| kafka-ui                | 8085  |
+| fulfillment gRPC        | 50051 |
+| batching gRPC           | 50052 |
+| print gRPC              | 50053 |
+| Postgres                | 5432  |
+| Kafka                   | 9092  |
 
-1. **Configure environment** — copy the template and fill local secrets:
+## Running the whole system
 
-   ```bash
-   cp .env.example .env
-   # Required: POSTGRES_PASSWORD, JWT_DEV_SECRET, VITE_JWT_DEV_SECRET,
-   # INTERNAL_SERVICE_TOKEN. See inline comments in .env.example.
-   ```
+### Option 1 — dev (one command, all 7 processes)
 
-   > `.env` is git-ignored and must never be committed.
+```bash
+bash scripts/boot-all.sh              # boots postgres → keycloak → java → go →
+                                      # python → bff → 2 remotes → shell (Ctrl-C stops all)
+BOOT_ONLY=1 bash scripts/boot-all.sh  # boot and exit — processes keep running
+```
 
-2. **Boot the whole stack** (postgres + keycloak + 3 gRPC services + BFF +
-   3 FE dev servers):
+Then open <http://localhost:3000>. `pnpm dev` alone only starts the 3 FE apps
+— the polyglot services must go through their own `run.sh` or `boot-all.sh`.
 
-   ```bash
-   bash scripts/boot-all.sh           # boot and block
-   BOOT_ONLY=1 bash scripts/boot-all.sh  # boot and exit, processes keep running
-   E2E=1 bash scripts/boot-all.sh        # reset DBs + keycloak volume first
-   ```
+### Option 2 — docker compose (no java/go/python needed)
 
-   The script waits for Postgres, Keycloak realm import, and all 7 service
-   ports before reporting ready.
+```bash
+docker compose up --build
+# open http://localhost:3000
+```
 
-3. **Open the app** — <http://localhost:3000>, sign in via Keycloak (PKCE).
+Compose is the **local-run configuration** (not a production deployment):
+postgres (2 DBs: `fulfillment` + `batching`) → one-shot migrations (Flyway
+`orders-migrate`, golang-migrate `batches-migrate`) → `db-seed` → app
+services + keycloak + nginx serving shell/remotes static builds and proxying
+`/api` to the BFF.
 
-   Seeded dev users (realm `hubstore`, same password unless rotated):
-   `admin`, `manager`, `coordinator`, `warehouse`, `warehouse-emp`, `ktv-001`.
-   Direct access grants are disabled by design — login goes through the
-   browser PKCE flow.
+**From a clean machine:** only Docker + a `.env` file are needed —
+`docker compose up --build` runs the whole migrate + seed + boot chain. Data
+persists through the `pgdata` volume; `docker compose restart` keeps created
+records, while `docker compose down -v` resets to the seed state.
 
-4. **Seed demo data** — see below.
+### Individual services
+
+Each service has its own `run.sh`:
+
+```bash
+(cd services/fulfillment-service && ./run.sh)   # Java gRPC :50051 (also: ./run.sh smoke | test)
+(cd services/batching-service    && ./run.sh)   # Go gRPC :50052
+(cd services/print-service       && ./run.sh)   # Python gRPC :50053
+(cd services/bff-gateway         && pnpm dev)   # REST :8080
+```
+
+## Fresh-clone setup
+
+The repo does **not** track `.env` (git-ignored — local secrets only). Before
+the first run:
+
+```bash
+cp .env.example .env
+# open .env and fill in the required variables below (local dev values — never commit)
+```
+
+| Required                       | Meaning                                                              |
+| ------------------------------ | -------------------------------------------------------------------- |
+| `POSTGRES_PASSWORD`            | compose fails loudly without it (`:?` pattern in every DB consumer)  |
+| `INTERNAL_SERVICE_TOKEN`       | s2s Go→Java + reconciler + webhook machine calls                     |
+| `JWT_DEV_SECRET` / `VITE_JWT_DEV_SECRET` | dev JWT secret BFF/FE — must be the same value            |
+
+Everything else has sensible defaults (see `.env.example`).
 
 ## Data seeding
 
-Two complementary tools:
+Three complementary tools:
 
-| Script                  | Purpose                                                        |
-| ----------------------- | -------------------------------------------------------------- |
-| `scripts/seed-db.sh`    | Canonical baseline seed (idempotent, emptiness-gated): shops, regions, staff, printers, a handful of orders/batches from `api/seed/*.json`. |
-| `scripts/reset-db.sh`   | Wipe both databases + Keycloak volume, then re-seed.           |
+| Script                   | Purpose                                                        |
+| ------------------------ | -------------------------------------------------------------- |
+| `scripts/seed-db.sh`     | Canonical baseline seed (idempotent, emptiness-gated): shops, regions, staff, printers, a handful of orders/batches from `api/seed/*.json`. |
+| `scripts/reset-db.sh`    | Truncate both databases + remove the keycloak volume, then re-seed. |
 | `scripts/seed-history.mjs` | **Production-scale simulation**: streams ~1 year of operations (≈2.5M orders) as COPY-format files and bulk-loads them via `COPY FROM STDIN`. |
 
 Year-scale simulation:
@@ -154,33 +175,52 @@ node scripts/seed-history.mjs             # ~2.5M orders (default)
 SCALE=0.2 node scripts/seed-history.mjs   # ~500k orders
 ```
 
-Deterministic (fixed PRNG seed), ongoing codes continue from the current
-database maxima with a +100k safety buffer so it never collides with codes the
-running app mints mid-seed. Distributions model realistic operations: monthly
-growth, weekday/weekend cycles, a Tet-holiday dip, ~5% failed deliveries with
-reasons, COD reconciliation at ~99.9% collected, picking batches capped at
-5 orders each, hiring of service staff across the year, plus transfers, print
-errors, webhook events and regional service-employee assignments. After
-loading it refreshes sequences and creates indexes used by list filters and
-the dashboard.
+Deterministic (fixed PRNG seed); ongoing codes continue from current database
+maxima with a +100k safety buffer, and the batching code sequence is parked at
+1,000,000 so it never collides with codes the running app mints mid-seed.
+Distributions model realistic operations: monthly growth, weekday/weekend
+cycles, a Tet-holiday dip, ~5% failed deliveries with reasons, COD
+reconciliation at ~99.9% collected, picking batches capped at 5 orders each,
+hiring of regional service staff across the year, plus transfer tickets,
+print errors, webhook events and shipment bookings. After loading it refreshes
+sequences and creates indexes used by list filters and the dashboard.
 
-## Ports (dev)
+- **Emptiness gate**: the canonical seed skips any database that already has
+  data (no upserts). If `api/seed/canonical-seed.json` changes, reset manually
+  with `reset-db.sh`.
+- Tables and the `batches_code_seq` sequence are created by migrations
+  (Flyway for `fulfillment`, golang-migrate for `batching`); the column
+  contract is documented in the `scripts/seed-db.sh` header.
 
-| Service                | Port |
-| ---------------------- | ---- |
-| shell (MF host)        | 3000 |
-| orders remote          | 3001 |
-| fulfillment remote     | 3002 |
-| ktv-mobile PWA         | 3010 |
-| BFF gateway            | 8080 |
-| Keycloak               | 8081 |
-| batching health (HTTP) | 8082 |
-| kafka-ui               | 8085 |
-| fulfillment gRPC       | 50051 |
-| batching gRPC          | 50052 |
-| print gRPC             | 50053 |
-| Postgres               | 5432 |
-| Kafka                  | 9092 |
+## Commands
+
+```bash
+pnpm install        # install all workspaces
+pnpm build          # turbo run build (apps: vite build, packages: tsc --noEmit)
+pnpm build --force  # disable turbo cache — use when federation remoteEntry looks stale
+pnpm test           # turbo run test
+pnpm dev            # turbo run dev (FE dev servers)
+
+# E2E (Playwright) — boots the whole system automatically via webServer
+cd e2e && pnpm exec playwright test
+```
+
+## Environment variables
+
+| Var                  | Where            | Default                 | Meaning |
+| -------------------- | ---------------- | ----------------------- | ------- |
+| `JWT_DEV_SECRET`     | root `.env`      | — (required by BFF)     | HS256 secret for dev JWTs |
+| `VITE_JWT_DEV_SECRET`| root `.env`      | —                       | Same secret, FE side |
+| `VITE_API_BASE_URL`  | FE build-time    | `http://localhost:8080` | BFF base URL (compose builds with `/api`) |
+| `VITE_OIDC_*`        | shell `.env`     | —                       | OIDC authority/client/redirect for PKCE login |
+| `GRPC_FULFILLMENT`   | BFF/Java         | `50051`                 | Port number or full `host:port` |
+| `GRPC_BATCHING`      | BFF/Go           | `50052`                 | same |
+| `GRPC_PRINT`         | BFF              | `50053`                 | same |
+| `FULFILLMENT_ADDR`   | Go service       | `localhost:50051`       | Java endpoint Go calls to mutate orders |
+| `SEED_PATH` / `CANONICAL_SEED_PATH` / `PRINT_SERVICE_SEED_PATH` | Java/Go/Python | `../../api/seed/canonical-seed.json` | Canonical seed path |
+| `BFF_CORS_ORIGINS`   | BFF              | `:3000, :3001, :3002`   | CORS allow-list |
+| `KAFKA_ENABLED`      | `.env`           | `false`                 | Opt-in event side-channel (`'true'` only when on) |
+| `ENABLE_DEV_RESET_PASSWORD` | `.env`    | unset                   | Mounts dev-only `/auth/reset-password` (fail-safe: unset in prod → 404) |
 
 ## Testing
 
@@ -188,44 +228,219 @@ the dashboard.
 pnpm test                 # everything wired into Turborepo (TS workspaces)
 cd services/fulfillment-service && ./run.sh test   # mvn test
 cd services/batching-service    && go test ./...
-cd e2e && npx playwright test                      # full e2e (boot-all first)
+cd e2e && pnpm exec playwright test                # full e2e (boot-all first)
 ```
 
-- BFF contract tests spin up **real gRPC mock servers** from the protobuf
+- The BFF contract tests spin up **real gRPC mock servers** from the protobuf
   definitions and inject the Fastify app — no hand-rolled HTTP stubs.
 - The e2e suites cover the main flows plus regression specs (`10xx` role
   matrix, `1100` order validation, `1200` fulfillment ops, `13xx` batching &
   realtime, `1401` KTV mobile, `15xx` SF-7 sweep) with per-suite config files.
+- `E2E=1 bash scripts/boot-all.sh` resets both databases and the keycloak
+  volume **before** booting, for a clean seeded state (`auth.setup.ts` logs 3
+  users in through the hosted UI and stores storageState under `.auth/`).
 
 ## Roles and permissions
 
-Roles live in Keycloak (`realm_access.roles`) and are mapped to permissions by
-a single matrix shared by frontend and backend:
+Roles come from Keycloak (`realm_access.roles`) and are mapped to permissions
+by a single matrix shared by frontend and backend:
 
-| Role             | Highlights                                              |
-| ---------------- | ------------------------------------------------------- |
-| Admin            | everything except audit; printer & area-staff management |
-| Manager          | orders, users, audit, settlement — no printer admin     |
-| Coordinator      | order coordination, COD confirmation                    |
-| WarehouseOps     | warehouse picking operations                            |
-| WarehouseEmployee| D2C only                                                |
-| KTV / CTV        | technician & contractor mobile flows                    |
+| Role              | Highlights                                              |
+| ----------------- | ------------------------------------------------------- |
+| Admin             | everything except audit; printer & area-staff management |
+| Manager           | orders, users, audit, settlement — no printer admin     |
+| Coordinator       | order coordination, COD confirmation                    |
+| WarehouseOps      | warehouse picking operations                            |
+| WarehouseEmployee | D2C only                                                |
+| KTV / CTV         | technician & contractor mobile flows                    |
 
 When changing a permission, update **both** the FE matrix
 (`packages/shared/src/hooks/usePermissions.tsx`) and the BFF route guard in
 the same change — the regression suite (`e2e/tests/1000-*`) asserts nav
 visibility per role, and API-level gates must stay in sync with it.
 
-## Kubernetes
+## OIDC auth (Keycloak)
 
-Helper scripts for building images, preflight checks and deploying via
-kustomize overlays:
+- Start + auto-import the realm: `docker compose up -d keycloak` (realm JSON:
+  `docker/keycloak/hubstore-realm.json`; `--import-realm` skips when the realm
+  already exists — after changing realm/users run `docker compose down -v` to
+  reset the keycloak-data volume and re-import).
+- Shell login uses PKCE (public client `hubstore-web`); silent renew via
+  refresh token; logout ends the Keycloak session. **Direct access grants are
+  disabled** — login always goes through the browser.
+- The BFF verifies RS256 via JWKS (`OIDC_ISSUER` / `OIDC_AUDIENCE` /
+  `OIDC_JWKS_URL`); the role comes from the `realm_access.roles` claim and is
+  forwarded as gRPC metadata `x-user-role`.
+
+### Dev credentials (rotated — never use in prod)
+
+The dev realm imports from `docker/keycloak/hubstore-realm.json`. Passwords
+are dev-only:
+
+| User            | Password                | Notes                        |
+| --------------- | ----------------------- | ---------------------------- |
+| `coordinator`   | `gY0pM9SO7QEmqil_lWHQ`  | e2e (auth.setup storageState) |
+| `warehouse`     | `gY0pM9SO7QEmqil_lWHQ`  | e2e                          |
+| `manager`       | `gY0pM9SO7QEmqil_lWHQ`  | e2e (users/dashboard specs)  |
+| `admin`         | `gY0pM9SO7QEmqil_lWHQ`  | e2e                          |
+| `warehouse-emp` | `gY0pM9SO7QEmqil_lWHQ`  | e2e (SF-18 D2C)              |
+| `ktv-001`       | `gY0pM9SO7QEmqil_lWHQ`  | ktv-mobile mint script       |
+| `ctv-001`       | `GSzIMCBcUNtcbKwnTn_o`  | not on the shared e2e password |
+
+E2E reads passwords from `e2e/lib/credentials.ts` (override with env
+`E2E_PASSWORD`) — never re-hardcode literals inside specs.
+
+### Secrets & rotation runbook
+
+Every secret must be rotated **in lockstep** everywhere it appears — missing
+one place causes token/secret drift at boot.
+
+| Secret | Places to change together |
+| ------ | ------------------------- |
+| Admin client secret (`hubstore-admin`) | `docker/keycloak/hubstore-realm.json` (`clients[].secret`) + `docker-compose.yml` (`KC_ADMIN_CLIENT_SECRET` default) + `.env.example` + local `.env` |
+| Realm user passwords (7 users) | `docker/keycloak/hubstore-realm.json` (`credentials[].value`) + `e2e/lib/credentials.ts` + `e2e/scripts/mint_*.py` scripts |
+| `KEYCLOAK_ADMIN_PASSWORD` | compose default + local `.env` |
+| `JWT_DEV_SECRET` / `VITE_JWT_DEV_SECRET` | local `.env` (no defaults in git — empty placeholders) |
+| `INTERNAL_SERVICE_TOKEN` | local `.env` (compose reads `${INTERNAL_SERVICE_TOKEN:-}` — no default) |
+| `POSTGRES_PASSWORD` | local `.env` (compose `:?` fails loudly — no default) |
+
+Rotation procedure (dev realm):
+
+1. Generate new values: `openssl rand -hex 16` (or `-base64 15` for passwords).
+2. Edit the realm JSON (client secret + credentials — Keycloak hashes on import).
+3. Edit the compose default, `.env.example`, `e2e/lib/credentials.ts` and mint
+   scripts in the **same commit** (lockstep).
+4. Reset the keycloak volume to re-import: `bash scripts/reset-db.sh`, then
+   `docker compose up -d keycloak`.
+5. Verify login with `E2E_PASSWORD=<new> python3 e2e/scripts/mint_sf11.py coordinator /tmp/auth.json`.
+6. Production style: never use literals — secrets live in a secret manager or
+   environment; realm JSON import is for dev only.
+
+> Git history still contains OLD dev secrets (pre-SF-12 untracking) — do not
+> reuse them; rotate every secret before any real deployment.
+
+### Creating / changing Keycloak users
+
+Realm import only runs when the `keycloak-data` volume is empty/new. To change
+the realm JSON or add sample users:
 
 ```bash
-bash scripts/k8s-preflight.sh
+# 1. Edit docker/keycloak/hubstore-realm.json (users[].username/credentials)
+# 2. Reset the volume → clean realm re-import on next up
+bash scripts/reset-db.sh          # includes removing the keycloak volume
+docker compose up -d keycloak
+# 3. Wait for the realm: curl -sf http://localhost:8081/realms/hubstore
+```
+
+Users created manually through the Admin Console (`http://localhost:8081`,
+`admin` / `$KEYCLOAK_ADMIN_PASSWORD`) work too but are **not** persisted into
+the realm JSON — a fresh container volume loses them.
+
+### Forgot password (DEV-ONLY)
+
+The shell's "Forgot password" page and the `POST /auth/reset-password`
+endpoint reset the password directly through the Keycloak Admin API — **no
+identity verification step** (no email, no OTP). The endpoint is only mounted
+when `ENABLE_DEV_RESET_PASSWORD=1` is explicitly set (fail-safe: prod without
+it → 404). Replace with email OTP or Keycloak's built-in forgot-password flow
+in production.
+
+## CI (GitHub Actions)
+
+`.github/workflows/ci.yml` runs 3 jobs on every PR / push to main:
+
+| Job            | Content                                                                                                                    |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------- |
+| `unit`         | `tsc --noEmit` (TS packages), Node unit tests, `go vet + test` (self-skips without a DB), `mvn test` (ITs skip without DB)  |
+| `docker-build` | builds the 5 Dockerfiles (no push)                                                                                          |
+| `e2e`          | Playwright with `E2E=1` — GH service `postgres:16.4` + a Keycloak container with `--import-realm` → `scripts/ci-e2e-boot.sh` → webServer `boot-all.sh` → `playwright test` |
+
+**E2E password in CI:** the repo secret `E2E_PASSWORD` (when set) is used by
+`ci-e2e-boot.sh` to rotate the 6 e2e user passwords after realm import, so CI
+does not depend on the realm-JSON dev password.
+
+**Local CI seam** (simulates the e2e job infra):
+
+```bash
+bash scripts/ci-e2e-boot.sh
+# boots dedicated containers postgres-ci :55441 + keycloak-ci :18081
+# (ports isolated from the main compose stack), creates both DBs,
+# runs flyway + golang-migrate, seeds, grants kcadm manage-users, echoes READY.
+```
+
+Run one e2e spec CI-style:
+
+```bash
+E2E=1 pnpm --filter @hub-store/e2e exec playwright test tests/03-audit.spec.ts
+```
+
+## Backup / restore
+
+```bash
+# Backup both databases (postgres container must be running)
+bash scripts/backup-db.sh        # dumps → gzip → backups/<db>-<ts>.sql.gz,
+                                 # keeps BACKUP_KEEP (default 7), fails loudly
+BACKUP_KEEP=14 bash scripts/backup-db.sh
+
+# Manual
+docker compose exec -T postgres pg_dump -U hubstore -d fulfillment > backup-fulfillment-$(date +%F).sql
+docker compose exec -T postgres pg_dump -U hubstore -d batching    > backup-batching-$(date +%F).sql
+```
+
+Nightly cron (`crontab -e`):
+
+```cron
+0 2 * * * cd /path/to/hub-store && BACKUP_KEEP=7 bash scripts/backup-db.sh >> backups/backup.log 2>&1
+```
+
+(`backups/` is git-ignored — dumps contain data. A systemd user-timer variant
+is documented in `scripts/backup-db.sh`.)
+
+**Per-DB restore** (one database at a time, same cluster):
+
+```bash
+# 1. Stop apps — do NOT stop postgres (the DB container must run to restore into)
+docker compose stop fulfillment-service batching-service bff
+
+# 2. Drop + recreate ONLY the fulfillment DB
+docker exec -i hub-store-postgres-1 psql -U hubstore \
+  -c 'DROP DATABASE fulfillment WITH (FORCE);' -c 'CREATE DATABASE fulfillment;'
+
+# 3. Restore from a backup (replace <ts>)
+gunzip -c backups/fulfillment-<ts>.sql.gz | \
+  docker exec -i hub-store-postgres-1 psql -U hubstore -d fulfillment
+
+# 4. Repeat for batching (same pattern)
+# 5. Start apps again
+docker compose start fulfillment-service batching-service bff
+#    migrations re-run as no-ops (history tables are in the dump); the
+#    seed-verify boot check sees orders > 0 and does NOT overwrite data.
+# 6. Verify
+curl -s localhost:8080/health
+```
+
+Backups do **not** include the `keycloak-data` volume (users/realm) — restore
+does not re-create Keycloak; that volume persists separately in compose.
+
+## Kubernetes (minikube)
+
+Requirements: minikube ≥ 1.30, kubectl, Docker Desktop/OrbStack driver, and
+**≥ 6GB RAM / 4 CPU** for the VM (3 JVM-backed services + Keycloak + Kafka —
+the 2GB default will OOM):
+
+```bash
+minikube start --memory=6g --cpus=4
+bash scripts/k8s-preflight.sh     # checks driver/resources/addons, non-zero on gaps
 bash scripts/k8s-build-images.sh
 bash scripts/k8s-deploy.sh
 ```
+
+All secrets under `k8s/` are DEV-ONLY placeholders. The in-cluster Keycloak
+uses a minimal dev realm exposed under the `/keycloak` prefix
+(`KC_HTTP_RELATIVE_PATH` — matches the Ingress route). After editing
+`realm-hub-store.json` + `kubectl apply`, you **must**
+`kubectl -n hub-store rollout restart deployment/keycloak` — import only runs
+at boot.
 
 ## Conventions
 
@@ -237,5 +452,13 @@ bash scripts/k8s-deploy.sh
   (`PERMISSION_DENIED`, `UPSTREAM_UNAVAILABLE`, `VALIDATION_ERROR`, …).
 - **Audit trail** — every mutation goes through the BFF, which writes
   `activity_log` directly to the fulfillment database (fail-open).
-- **Secrets** — local-only in `.env`; never commit. Rotated dev literals live
-  in the Keycloak realm JSON (dev-only).
+- **Secrets** — local-only in `.env`; never commit. Dev-only rotated literals
+  live in the Keycloak realm JSON.
+
+## Contributors
+
+- **HoiVu** — author / product owner
+- **Claude** (Anthropic) — AI coding agent
+- **Kiro** (AWS) — AI coding agent
+
+Built through human–AI agent collaboration.
