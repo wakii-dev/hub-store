@@ -13,6 +13,9 @@ COPY packages/api-client/package.json packages/api-client/
 COPY apps/shell/package.json apps/shell/
 COPY apps/orders/package.json apps/orders/
 COPY apps/fulfillment/package.json apps/fulfillment/
+# ktv-mobile thêm sau SF-23 — thiếu COPY này làm pnpm --frozen-lockfile lệch
+# importers → node_modules KHÔNG link cho apps/services/e2e → vite not found.
+COPY apps/ktv-mobile/package.json apps/ktv-mobile/
 COPY services/bff-gateway/package.json services/bff-gateway/
 COPY e2e/package.json e2e/
 RUN pnpm install --frozen-lockfile

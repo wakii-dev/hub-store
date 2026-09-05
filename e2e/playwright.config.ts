@@ -54,7 +54,11 @@ export default defineConfig({
   webServer: {
     command: "bash ../scripts/boot-all.sh",
     url: SHELL_URL,
-    timeout: 300_000,
+    // 15' — GH runner cold-boot chậm hơn local nhiều (mvn spring-boot:run
+    // tải toàn bộ deps khi không trúng maven cache; boot-all chờ im lặng
+    // qua wait_port/realm vì log service đi vào $LOG_DIR/*.log). 5' timeout
+    // giết boot ngay trước khi java mở :50051 (first-run ci 05/09/2026).
+    timeout: 900_000,
     reuseExistingServer: !!process.env.E2E_REUSE,
   },
 });
