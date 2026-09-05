@@ -33,6 +33,12 @@ describe('POST /d2c-orders/filter', () => {
     // ts-proto Date → ISO string (14:45+07 = 07:45Z).
     expect(item.pushTime).toBe('2026-08-15T07:45:00.000Z');
   });
+
+  it('Admin → 200 (d2c.view = Manager + Admin — 1000-spec admin nav-d2c)', async () => {
+    const res = await authedInject(h.app, 'POST', '/d2c-orders/filter', { page: 1, pageSize: 20 }, 'Admin');
+    expect(res.statusCode).toBe(200);
+    expect((res.body as Record<string, unknown>).total).toBe(12);
+  });
 });
 
 describe('GET /d2c-orders/export — guard 31 ngày (date-only +07)', () => {

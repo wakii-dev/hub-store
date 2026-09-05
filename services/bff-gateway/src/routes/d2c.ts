@@ -17,8 +17,10 @@ import { requireUser } from '../plugins/auth.js';
 import { errorEnvelope, paginated } from '../lib/envelope.js';
 import { sendGrpcError } from '../lib/grpc-error.js';
 
-/** Roles được phép truy cập D2C — spec §3.3 (Coordinator KHÔNG có). */
-export const D2C_ROLES = ['WarehouseEmployee', 'WarehouseOps', 'Manager'] as const;
+/** Roles được phép truy cập D2C — spec §3.3 (Coordinator KHÔNG có). Admin có
+ * theo FE PERMISSION_MATRIX + 1000-role-matrix spec (admin nav-d2c) — BFF từng
+ * thiếu Admin → admin mở D2C nhận 403, trang hiện "Trống". */
+export const D2C_ROLES = ['WarehouseEmployee', 'WarehouseOps', 'Manager', 'Admin'] as const;
 
 const EXPORT_RANGE_MESSAGE = 'Khoảng thời gian export tối đa 31 ngày';
 const EXPORT_PAGE_SIZE = 500;

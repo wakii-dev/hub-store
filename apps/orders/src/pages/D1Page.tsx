@@ -29,7 +29,6 @@ import {
   useUrlState,
   useHotkeys,
   DESIGN_TOKENS,
-  StatStripSkeleton,
   EmptyState,
   loadPlanningMap,
   type HubStoreOrderFilterItem,
@@ -554,8 +553,8 @@ function D1Content() {
         </Space>
       </div>
 
-      {/* Stat-strip — SF-6 §2.2 (page-scoped, Deviation D2) */}
-      {isLoading ? <StatStripSkeleton /> : <StatStrip items={rows} />}
+      {/* Stat-strip — toàn cục (order-status-stats), tự quản loading */}
+      <StatStrip />
 
       <FilterBar
         onSearch={() => setFilter({})}
