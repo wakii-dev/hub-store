@@ -1,5 +1,5 @@
 /**
- * SF-8 — Manager guard. Reply envelope TRỰC TIẾP (KHÔNG throw qua
+ * SF-8 — Manager/Admin guard. Reply envelope TRỰC TIẾP (KHÔNG throw qua
  * setErrorHandler — app.ts clobber code<500 → BAD_REQUEST, mất PERMISSION_DENIED).
  */
 import type { FastifyReply, FastifyRequest } from 'fastify';
@@ -23,4 +23,19 @@ export function sendKcAdminError(reply: FastifyReply, err: unknown): void {
 
 export function isManager(request: FastifyRequest): boolean {
   return requireUser(request).role === 'Manager';
+}
+
+export function isAdmin(request: FastifyRequest): boolean {
+  return requireUser(request).role === 'Admin';
+}
+
+/**
+ * users.manage — FE PERMISSION_MATRIX (packages/shared usePermissions) + 1000-
+ * role-matrix regression spec: Manager + Admin (admin có nav-users). BFF từng
+ * Manager-only → admin mở /users nhận 403 PERMISSION_DENIED ("Thao tác thất
+ * bại") dù FE cho phép — contract mismatch, đã đồng bộ về Manager ∨ Admin.
+ */
+export function canManageUsers(request: FastifyRequest): boolean {
+  const role = requireUser(request).role;
+  return role === 'Manager' || role === 'Admin';
 }

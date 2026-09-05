@@ -1,23 +1,26 @@
 /**
- * SF-8 — contract tests users routes (Manager-only) qua harness thật:
+ * SF-8 — contract tests users routes (Manager + Admin — FE PERMISSION_MATRIX
+ * users.manage: Manager + Admin; 1000-spec admin có nav-users) qua harness thật:
  * JWT guard global + mock KC admin server + mock gRPC upstreams.
  */
 import { afterAll, beforeAll, describe, expect, it } from 'vitest';
 import { startHarness, type Harness } from './harness.js';
 
-describe('users routes (SF-8, Manager-only)', () => {
+describe('users routes (SF-8, Manager + Admin)', () => {
   let harness: Harness;
   beforeAll(async () => {
     harness = await startHarness();
-    harness.kc.setRoleIds({ Coordinator: 'r-co', WarehouseOps: 'r-wh', Manager: 'r-mg' });
+    harness.kc.setRoleIds({ Coordinator: 'r-co', WarehouseOps: 'r-wh', Manager: 'r-mg', Admin: 'r-ad' });
     harness.kc.setUsers([
       { id: 'u-1', username: 'coordinator', enabled: true },
       { id: 'u-2', username: 'warehouse', enabled: true },
       { id: 'u-3', username: 'manager', enabled: true },
+      { id: 'u-4', username: 'admin', enabled: true },
     ]);
     harness.kc.setRoleUsers('Coordinator', ['coordinator']);
     harness.kc.setRoleUsers('WarehouseOps', ['warehouse']);
     harness.kc.setRoleUsers('Manager', ['manager']);
+    harness.kc.setRoleUsers('Admin', ['admin']);
   });
   afterAll(async () => { await harness.closeAll(); });
 
@@ -32,11 +35,18 @@ describe('users routes (SF-8, Manager-only)', () => {
     expect(res.statusCode).toBe(403);
   });
 
+  it('Admin → GET /users 200 (users.manage: Manager + Admin — 1000-spec admin nav-users)', async () => {
+    const res = await harness.app.inject({ method: 'GET', url: '/users', headers: { authorization: `Bearer ${await harness.identity.signToken('Admin')}` } });
+    expect(res.statusCode).toBe(200);
+    const body = res.json() as { items: Array<{ username: string; roles: string[] }> };
+    expect(body.items.find((u) => u.username === 'admin')?.roles).toEqual(['Admin']);
+  });
+
   it('Manager → GET /users list kèm roles join', async () => {
     const res = await harness.app.inject({ method: 'GET', url: '/users', headers: { authorization: `Bearer ${await harness.identity.signToken('Manager')}` } });
     expect(res.statusCode).toBe(200);
     const body = res.json() as { items: Array<{ username: string; roles: string[] }>; total: number; page: number; pageSize: number };
-    expect(body.total).toBe(3);
+    expect(body.total).toBe(4);
     expect(body.items.find((u) => u.username === 'coordinator')?.roles).toEqual(['Coordinator']);
     expect(body.items.find((u) => u.username === 'warehouse')?.roles).toEqual(['WarehouseOps']);
   });

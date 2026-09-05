@@ -1,12 +1,12 @@
 /**
  * SF-8 — Users management (Manager-only): list / create (+1 role) /
  * set-password / enable-disable qua KC Admin REST (kc-admin.ts).
- * Mọi handler: JWT guard (global) → isManager (403) → kcAdmin op.
+ * Mọi handler: JWT guard (global) → canManageUsers — Manager ∨ Admin (403) → kcAdmin op.
  */
 import type { FastifyInstance } from 'fastify';
 import { KNOWN_ROLES, requireUser } from '../plugins/auth.js';
 import { errorEnvelope, paginated } from '../lib/envelope.js';
-import { sendForbidden, sendKcAdminError, isManager } from '../lib/authz.js';
+import { sendForbidden, sendKcAdminError, canManageUsers } from '../lib/authz.js';
 import { KcAdminError, type KcAdminClient } from '../kc-admin.js';
 
 const USERNAME_RE = /^[a-zA-Z0-9._-]{3,64}$/;
@@ -23,7 +23,7 @@ export function registerUsersRoutes(
   opts: { kcAdmin: KcAdminClient },
 ): void {
   app.get('/users', async (request, reply) => {
-    if (!isManager(request)) return sendForbidden(reply);
+    if (!canManageUsers(request)) return sendForbidden(reply);
     try {
       const users = await opts.kcAdmin.listUsers();
       const byRole = new Map<string, Set<string>>();
@@ -48,7 +48,7 @@ export function registerUsersRoutes(
   });
 
   app.post('/users', async (request, reply) => {
-    if (!isManager(request)) return sendForbidden(reply);
+    if (!canManageUsers(request)) return sendForbidden(reply);
     const body = request.body as { username?: unknown; password?: unknown; role?: unknown } | null;
     const { username, password, role } = body ?? {};
     const details: Array<{ field: string; message: string }> = [];
@@ -80,7 +80,7 @@ export function registerUsersRoutes(
   });
 
   app.post('/users/:userId/set-password', async (request, reply) => {
-    if (!isManager(request)) return sendForbidden(reply);
+    if (!canManageUsers(request)) return sendForbidden(reply);
     const { userId } = request.params as { userId: string };
     const body = request.body as { password?: unknown } | null;
     if (typeof body?.password !== 'string' || body.password.length < 8) {
@@ -100,7 +100,7 @@ export function registerUsersRoutes(
   });
 
   app.put('/users/:userId/enabled', async (request, reply) => {
-    if (!isManager(request)) return sendForbidden(reply);
+    if (!canManageUsers(request)) return sendForbidden(reply);
     const { userId } = request.params as { userId: string };
     const body = request.body as { enabled?: unknown } | null;
     if (typeof body?.enabled !== 'boolean') {
@@ -132,7 +132,7 @@ export function registerUsersRoutes(
   });
 
   app.delete('/users/:userId', async (request, reply) => {
-    if (!isManager(request)) return sendForbidden(reply);
+    if (!canManageUsers(request)) return sendForbidden(reply);
     const { userId } = request.params as { userId: string };
     try {
       const target = await opts.kcAdmin.getUserById(userId);
