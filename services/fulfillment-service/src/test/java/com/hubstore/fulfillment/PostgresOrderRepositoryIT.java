@@ -317,7 +317,7 @@ class PostgresOrderRepositoryIT {
         assertThat(savedBatchStatus).isEqualTo(1);
         assertThat(savedBatchCode).isEqualTo("BATCH-0001");
 
-        List<SeedModels.OrderSeed> updated = pg.mutateBatchStatus(List.of(MUTATE_CODE, "ORD-KHONG-TON-TAI"), 0);
+        List<SeedModels.OrderSeed> updated = pg.mutateBatchStatus(List.of(MUTATE_CODE, "ORD-KHONG-TON-TAI"), 0, null);
         assertThat(updated).hasSize(1); // code lạ skip
         assertThat(updated.get(0).fulfillCode()).isEqualTo(MUTATE_CODE);
 
@@ -435,7 +435,7 @@ class PostgresOrderRepositoryIT {
 
     @Test
     void mutateBatchStatusNonZeroKeepsBatchCode() {
-        List<SeedModels.OrderSeed> updated = pg.mutateBatchStatus(List.of(MUTATE_CODE), 2);
+        List<SeedModels.OrderSeed> updated = pg.mutateBatchStatus(List.of(MUTATE_CODE), 2, null);
         assertThat(updated).hasSize(1);
         assertThat(updated.get(0).batchCode()).isEqualTo("BATCH-0001");
 
@@ -445,6 +445,22 @@ class PostgresOrderRepositoryIT {
         assertThat(((Number) row.get("batch_status")).intValue()).isEqualTo(2);
         assertThat(row.get("batch_code")).isEqualTo("BATCH-0001");
         assertThat(pg.findByFulfillCode(MUTATE_CODE).orElseThrow().batchCode()).isEqualTo("BATCH-0001");
+        // Restore batch_status/batch_code qua @AfterEach.
+    }
+
+    @Test
+    void mutateBatchStatusNonZeroPersistsRequestBatchCode() {
+        // FI-285: batchCode từ request (create-batch Go pass-through) phải persist
+        // cho target≠0 — trước đây target=1 bỏ qua → đơn Đang soạn batch_code NULL.
+        List<SeedModels.OrderSeed> updated = pg.mutateBatchStatus(List.of(MUTATE_CODE), 1, "BATCH-FI285");
+        assertThat(updated).hasSize(1);
+        assertThat(updated.get(0).batchCode()).isEqualTo("BATCH-FI285");
+
+        Map<String, Object> row = jdbc.queryForMap(
+                "SELECT batch_status, batch_code FROM orders WHERE fulfill_code = ?", MUTATE_CODE);
+        assertThat(((Number) row.get("batch_status")).intValue()).isEqualTo(1);
+        assertThat(row.get("batch_code")).isEqualTo("BATCH-FI285");
+        assertThat(pg.findByFulfillCode(MUTATE_CODE).orElseThrow().batchCode()).isEqualTo("BATCH-FI285");
         // Restore batch_status/batch_code qua @AfterEach.
     }
 

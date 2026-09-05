@@ -78,3 +78,42 @@
 - **Story merge-back KHÔNG được假设 ancestor**: `story/fi245-postgres-production` tiến 71 commits trong lúc SF chạy. Update-ref mù = rewind base, mất work SF khác. Luôn `git merge-base --is-ancestor` trước; nếu không → merge base vào nhánh SF (conflicts keep-both: shared/index.ts exports, CreateBatchingModal imports, bff app.ts routes) rồi update-ref. Suggested: thêm check ancestor vào story-verify B4 (hiện chỉ check dest ref reachable).
 - **`orca orchestration task-update` dùng `--id`** không phải `--task` (error validFlagsreveals). Note vào watchdog memory.
 - **SW register sau MF bootstrap**: MF dev bootstrap execute main.tsx SAU `load` → `window.addEventListener('load')` treo vĩnh viễn. Pattern: `document.readyState === 'complete' ? register() : addEventListener(...)`.
+
+## 2026-09-04 — FI-280 SF-1 (FI-281) — RESOLVED qua ritual 2026-09-04 (memory fi280-sf1-baseline-patterns.md; B2 fix trực tiếp ~/.claude/bin/story-verify)
+- **story-verify B2 substring-match bug (ĐÃ FIX trong ~/.claude/bin/story-verify)**: pattern `*sf1*` khớp nhầm `fi245-sf13-order-intake-plan.md` cho SF `sf-1` (sf13 ⊃ sf1) → B2 FAIL ảo với plan của SF khác. Fix: dash-boundary match (`sf1-`/`sf1_` + non-digit). Suggested by gate run FI-281 04/09.
+- **orca linear read-back comments trả 0 despite comment tồn tại** (FI-280/FI-281 đều vậy, post ok:true có URL) — không tin read-back để dedupe; dùng transcript/URL trả về từ lệnh post. Flag: orca CLI bug chưa fix.
+- **.env clobber class mở rộng**: root `.env` KHÔNG được chứa BẤT KỲ var nào seam runners override (đã chốt FULFILLMENT_DB_*/OIDC_*/GRPC_*); runner scripts nên export sau `source .env` thay vì prefix-env để tự phòng.
+
+## 2026-09-04 — FI-280 SF-2 (FI-282)
+- **story-verify orca() wrapper ưu tiên orca-dev data path** (tool-gap, không phải bug mới): `orca()` thử `ORCA_USER_DATA_PATH=orca-dev` TRƯỚC — nếu dev runtime trả ok:true (kể cả worktrees của project KHÁC, vd mxs-cms) thì WT_META chỉ chứa worktrees dev → fallback bracket-glob chọn nhầm bracket cũ (FI-246 tái phát đường khác). Workaround không sửa tool: `ORCA_BIN` wrapper ép prod path (`/tmp/orca-prod-only`). Suggested change: story-verify nên reject dev-path output khi không chứa worktree khớp, hoặc thử CẢ path rồi merge.
+- **Vite dev-server watcher stale trong orca worktree**: Edit-tool sửa shell source KHÔNG được pick up (ETag mtime cũ, `touch` không cứu) → restart vite là cách duy nhất thấy được. Kết hợp với entry-poisoning (FI-268): sau restart, verify freshness qua module THẬT `/src/App.tsx?mf-entry-bootstrap`, KHÔNG curl bare URL (poison). Rule mới cho QA sweep: sau MỌI lần sửa shell/remote source → restart vite đó → load page thật trước khi probe.
+- **Assertion 401/redirect phải strict theo URL + heading**: 404 render BÊN TRONG AppLayout (nav vẫn hiện) → mọi assertion "nav visible" là false positive cho auth-flow. Pattern: `waitForURL(landing-regex)` + heading content.
+- **Keycloak hosted form trong orca browser**: fill+click lần đầu sau navigation hay không ăn (form chưa hydrated) — cần submit lần 2; SSO session cookie cũng chết nhanh trong orca browser (playwright context thì sống) — SSO-alive flows verify bằng playwright, không bằng orca browser.
+
+## 2026-09-04 — FI-280 SF-5 (FI-285)
+- **spec 05-kafka hardcode KAFKA_UI :8085** (kafka-ui stack chính) — private seam không thể chạy spec nguyên bản khi cần tách broker; assert tương đương chuyển vào regression 13xx với `E2E_KAFKA_UI_URL` seam env (default :8086). Suggested: spec 05-kafka đọc `process.env.E2E_KAFKA_UI_URL ?? "http://localhost:8085"` (1 dòng, thuộc ownership SF-27/FI-273 — KHÔNG tự sửa).
+- **kafka-ui messages endpoint đọc từ ĐẦU partition** (limit=20): topic tái sử dụng giữa các run → event cũ có thể thỏa assert (`waitForType`) → false-PASS. Suggested: assert theo event sinh ra trong run (offset/timestamp) hoặc reset topic.
+- **Docker Desktop crash khi nhiều seam song song** (sf4+sf5+main stack): toàn bộ container Exited(255) giữa chừng; app services host-run vẫn sống nhưng mất DB/KC ngầm. Runner nên re-check `docker info` trước boot + containers health sau restart.
+- **Hai agent song song cùng worktree SF** (coordinator dispatch trùng): commits xen kẽ nhau trong 2 phút — cần coordination-lock (task claim) ở orchestration layer trước khi dispatch SF trùng id.
+
+## 2026-09-04 — FI-280 SF-7 (FI-287) — RESOLVED qua ritual 2026-09-04 (memory fi287-sf7-sweep-patterns.md; fixes: 4fff06e/785dc56/bffd0c2)
+- **Test-state pollution class "list pagination"**: spec tạo user test (disable-only, KC persist) → FE list phân trang client-side 10/trang → user seeded rớt khỏi trang 1 sau vài lần chạy → assert timeout "flake" giả. Fix: DELETE /users/:userId (manager-only) + beforeAll dọn prefix riêng của test. Rule: mọi spec tạo row test PHẢI tự dọn (delete > disable) hoặc sort-safe username.
+- **kafka-ui `/messages?limit=N` trả từ ĐẦU partition**: topic lớn dần theo số run → event mới ở tail không bao giờ vào cửa sổ quét → assertion "kafka có event" fail deterministic khi topic vượt limit. Đừng hardcode limit nhỏ "vì topic còn nhỏ" — topic e2e chỉ lớn dần.
+- **Partial-TRUNCATE + reseed = ghost-state generator**: dashboard beforeAll truncate `batches, batch_items` thiếu 3 bảng runtime SF-15 (`shipment_plannings/bookings/shipment_tracking_events`) + seed setval seq về max seed → batch_code mint lại dính planning BOOKED cũ → confirmPlanning no-op trả trạng thái cũ TỨC THÌ. Rule: TRUNCATE lists phải derive từ reset-db.sh (single source), không copy tay.
+- **Access token 5 phút < serial e2e sweep**: KC accessTokenLifespan mặc định realm import cũ; sweep serial > 5 phút chết token giữa chừng (auth-dir stale class). Nâng 3600 runtime trước sweep dài; sf11 auth-dir copy phải refresh TỪ .auth mới mint, không dùng bản cũ.
+- **Playwright APIRequestContext.post phải bọc `{data: ...}`**: truyền object trực tiếp = empty body → 500/422 âm thầm (cleanup no-op dẫn tới 422 "rule 1 violated" khó truy).
+- **Merge-ngược chiều khi target đã tiến**: `git merge story/...` trên branch SF là merge target VÀO mình (đảo chiều). Branch target không được check-out ở worktree nào → checkout target + merge --no-ff tại đó là đường an toàn nhất; ancestor-guard (`merge-base --is-ancestor`) BẮT BUỘC trước update-ref.
+
+## 2026-09-05 — FI-280 SF-8 (FI-288) — OPEN
+- **FE build không typecheck**: mọi app FE `build` = `vite build` thuần (KHÔNG `tsc -b`) → lỗi type production-code trượt qua build (FI-288 lộ 2 lỗi fulfillment). Suggested: thêm `tsc --noEmit &&` vào build script từng app FE hoặc turbo task `typecheck` riêng + wire vào CI gate.
+
+## 2026-09-05 — FI-288: story-verify B2 cross-story slug collision (FIXED)
+
+- **What:** B2 plan matcher (p1="sf-8"/p2="sf8") khớp nhầm `2026-09-02-sf8-users-management-plan.md`
+  (plan của SF-8 story fi233) cho worktree `sf-8-convergence` (FI-288) — glob alphabet-first
+  break ở match đầu → B2 FAIL ảo dù plan đúng tồn tại. Cùng class bug FI-281 sf13 (fix trước
+  chỉ khóa dash-boundary, chưa kín vì "sf8-" vẫn là prefix của "sf8-users").
+- **Where:** ~/.claude/bin/story-verify — verify_sf() B2.
+- **Fix:** thêm Pass 0 ưu tiên plan file chứa Linear issue-id lowercase (vd "fi288") trong
+  tên — issue-id unique toàn workspace, luôn thắng slug matching. Slug loop giữ làm fallback.
+- **Convention đề xuất:** đặt tên plan file kèm issue-id (vd `2026-09-04-fi288-...-plan.md`).

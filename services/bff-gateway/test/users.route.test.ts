@@ -81,4 +81,31 @@ describe('users routes (SF-8, Manager-only)', () => {
       harness.kc.setCreateStatus(201);
     }
   });
+
+  it('Manager → DELETE /users/:id xóa user; self-delete 422; 404 user lạ; Coordinator 403 (SF-7 FI-287)', async () => {
+    harness.kc.setUsers([
+      { id: 'u-1', username: 'coordinator', enabled: true },
+      { id: 'u-3', username: 'manager', enabled: true },
+      { id: 'gone-uid', username: 'e2e-user-stale', enabled: false },
+    ]);
+    const denied = await harness.app.inject({ method: 'DELETE', url: '/users/gone-uid', headers: { authorization: `Bearer ${await harness.identity.signToken('Coordinator')}` } });
+    expect(denied.statusCode).toBe(403);
+
+    const self = await harness.app.inject({ method: 'DELETE', url: '/users/u-3', headers: { authorization: `Bearer ${await harness.identity.signToken('Manager', 'manager')}` } });
+    expect(self.statusCode).toBe(422);
+    expect(self.json().code).toBe('SELF_DELETE_DENIED');
+
+    const ok = await harness.app.inject({ method: 'DELETE', url: '/users/gone-uid', headers: { authorization: `Bearer ${await harness.identity.signToken('Manager')}` } });
+    expect(ok.statusCode).toBe(200);
+    expect(harness.kc.requests.some((r) => r.method === 'DELETE' && r.url.includes('/users/gone-uid'))).toBe(true);
+
+    // idempotent: user đã biến mất khỏi KC → 404 route-level
+    harness.kc.setUsers([
+      { id: 'u-1', username: 'coordinator', enabled: true },
+      { id: 'u-3', username: 'manager', enabled: true },
+    ]);
+    const missing = await harness.app.inject({ method: 'DELETE', url: '/users/gone-uid', headers: { authorization: `Bearer ${await harness.identity.signToken('Manager')}` } });
+    expect(missing.statusCode).toBe(404);
+    expect(missing.json().code).toBe('NOT_FOUND');
+  });
 });

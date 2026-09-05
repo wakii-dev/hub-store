@@ -26,6 +26,23 @@ PASSWORD = os.environ.get("E2E_PASSWORD", "gY0pM9SO7QEmqil_lWHQ")  # SF-12 — d
 CLIENT = "hubstore-mobile"
 REDIRECT = f"{ORIGIN}/callback"
 
+# Password theo username từ realm JSON (dev-only plaintext) — KTV-001/CTV-001
+# có password KHÁC nhau; cũ hardcode 1 pass → mint CTV-001 NO_CODE (baseline
+# FI-281 04/09). Fallback E2E_PASSWORD nếu realm JSON không đọc được.
+def _realm_password(username: str) -> str:
+    try:
+        realm_path = os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                  "..", "..", "docker", "keycloak", "hubstore-realm.json")
+        realm = json.load(open(realm_path))
+        for u in realm.get("users", []):
+            if u.get("username", "").lower() == username.lower():
+                return u["credentials"][0]["value"]
+    except Exception:
+        pass
+    return os.environ.get("E2E_PASSWORD", "gY0pM9SO7QEmqil_lWHQ")
+
+PASSWORD = _realm_password(USER)
+
 cj = http.cookiejar.CookieJar()
 verifier = base64.urlsafe_b64encode(secrets.token_bytes(48)).rstrip(b"=").decode()
 challenge = base64.urlsafe_b64encode(hashlib.sha256(verifier.encode()).digest()).rstrip(b"=").decode()

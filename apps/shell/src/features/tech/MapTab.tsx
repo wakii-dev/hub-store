@@ -4,7 +4,7 @@
  * pageSize 200 tường minh vì seed hiện tại << 200). Đơn thiếu
  * receiver.location → note đếm ở dưới map (fallback "chưa có tọa độ").
  */
-import { useMemo } from 'react';
+import { useEffect, useMemo } from 'react';
 import { Skeleton } from 'antd';
 import { useTranslation } from 'react-i18next';
 import { EmptyState, escapeHtml, MapView, type StopSpec } from '@hub-store/shared';
@@ -57,14 +57,21 @@ export function buildPins(
   return { pinned, missing };
 }
 
-export function MapTab() {
+export function MapTab(props: { onTotal?: (total: number) => void }) {
   const { t } = useTranslation('tech');
   const { data, isLoading, isFetching, error, refetch } = useTechFetch(
-    () => filterDeliveryOrders({ page: 1, pageSize: PAGE_SIZE }).then((r) => r.items ?? []),
+    () => filterDeliveryOrders({ page: 1, pageSize: PAGE_SIZE }),
     [],
   );
+  const total = data?.total ?? 0;
+  // FI-285 bug #2: map tab render thiếu onTotal → header đếm "0 đơn" dù pins
+  // render đủ. Mirror DeliveryTab — useEffect trước early return (Rules of Hooks).
+  useEffect(() => {
+    props.onTotal?.(total);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [total]);
   const { pinned, missing } = useMemo(
-    () => buildPins(data ?? [], t('map.call')),
+    () => buildPins(data?.items ?? [], t('map.call')),
     [data, t],
   );
 

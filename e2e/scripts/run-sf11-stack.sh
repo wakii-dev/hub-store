@@ -171,11 +171,15 @@ if changed:
 PY
 
 # --- app port-guard (chỉ seam app ports — pattern run-sf16-v2 line 16) ---
-lsof -nP -tiTCP:50071,50072,4085,4010,4011,4012 -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
+lsof -nP -tiTCP:50071,50072,50073,50074,4085,4010,4011,4012 -sTCP:LISTEN 2>/dev/null | xargs kill -9 2>/dev/null || true
 sleep 1
 
 export FULFILLMENT_DB_HOST=localhost FULFILLMENT_DB_PORT=55442
 export BATCHING_DB_HOST=localhost BATCHING_DB_PORT=55442 BATCHING_DB_NAME=batching
+# PGHOST → wait-db.sh (dùng chung run.sh BE) pg_isready TRỰC TIẾP vào seam
+# postgres :55442; không set → compose exec MAIN postgres — main stack down
+# khi Go boot → TIMEOUT ảo (baseline FI-281 04/09).
+export PGHOST=localhost PGPORT=55442 PGUSER="${POSTGRES_USER:-hubstore}" PGPASSWORD="$POSTGRES_PASSWORD"
 export FULFILLMENT_DB_PASSWORD="$POSTGRES_PASSWORD" BATCHING_DB_PASSWORD="$POSTGRES_PASSWORD"
 # Cross-SF Flyway collision gotcha (fi245): shared-DB sibling migrations
 export SPRING_FLYWAY_VALIDATE_ON_MIGRATE=false SPRING_FLYWAY_OUT_OF_ORDER=true
@@ -184,8 +188,14 @@ export KAFKA_ENABLED=false
 # BFF OIDC — issuer/JWKS về keycloak seam :8082 (override .env :8081)
 export OIDC_ISSUER=http://localhost:8082 OIDC_JWKS_URL=http://localhost:8082
 
-GRPC_FULFILLMENT=50071 ./services/fulfillment-service/run.sh >"$LOG/sf11-java.log" 2>&1 &
-BATCHING_PORT=50072 FULFILLMENT_ADDR=localhost:50071 ./services/batching-service/run.sh >"$LOG/sf11-go.log" 2>&1 &
+# SF-12 health side-ports override (baseline FI-281): Java health default
+# :8083 (đụng main-stack Java), Go health default :8082 (đụng keycloak seam
+# này) → đẩy vào block riêng 50073/50074.
+GRPC_FULFILLMENT=50071 FULFILLMENT_HEALTH_PORT=50073 \
+  OIDC_ISSUER=http://localhost:8082/realms/hubstore \
+  OIDC_JWKS_URL=http://localhost:8082/realms/hubstore/protocol/openid-connect/certs \
+  ./services/fulfillment-service/run.sh >"$LOG/sf11-java.log" 2>&1 &
+BATCHING_PORT=50072 FULFILLMENT_ADDR=localhost:50071 HEALTH_PORT=50074 ./services/batching-service/run.sh >"$LOG/sf11-go.log" 2>&1 &
 for i in $(seq 1 120); do /usr/bin/nc -z localhost 50071 >/dev/null 2>&1 && break; sleep 2; done
 /usr/bin/nc -z localhost 50071 || { echo JAVA_TIMEOUT; exit 1; }
 for i in $(seq 1 60); do /usr/bin/nc -z localhost 50072 >/dev/null 2>&1 && break; sleep 2; done

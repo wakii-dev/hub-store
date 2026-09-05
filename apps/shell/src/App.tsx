@@ -202,6 +202,11 @@ export default function App() {
   return (
     <ConfigProvider locale={lang.startsWith("vi") ? viVN : enUS}>
       <Routes>
+        {/* /callback PHẢI mount cả khi ĐÃ login — 401 interceptor signinRedirect
+            với SSO Keycloak còn sống quay về đây kèm code mới; nếu route chỉ ở
+            nhánh chưa-login thì rơi 404 trong AppLayout, code không được exchange
+            → 401 → redirect → 404 → loop vô hạn (FI-282 [P1][PERM]). */}
+        <Route path="/callback" element={<CallbackPage onSignedIn={setSession} />} />
         <Route
           path="*"
           element={
