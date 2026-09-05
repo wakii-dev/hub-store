@@ -42,6 +42,12 @@ jobs:
   unit:
     name: unit (node + go + java)
     runs-on: ubuntu-latest
+    env:
+      # Root .env là gitignored → KHÔNG có trên runner. OIDC_ISSUER là env duy
+      # nhất loadConfig bắt buộc (không default — throw khi thiếu), các var còn
+      # lại đã có default khớp .env. Cơ chế "test/CI set trước khi import" —
+      # xem comment dotenv ở config.ts (không override process.env).
+      OIDC_ISSUER: http://localhost:8081/realms/hubstore
     steps:
       # ---------- Node segment (pnpm workspace: typecheck + unit tests) ----------
       - uses: actions/checkout@v4

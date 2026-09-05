@@ -20,6 +20,10 @@ jobs:
   unit:
     name: dev unit (node + go + java)
     runs-on: ubuntu-latest
+    env:
+      # Root .env gitignored → không có trên runner; OIDC_ISSUER là env duy
+      # nhất loadConfig bắt buộc (xem comment chi tiết ở ci.yml job unit).
+      OIDC_ISSUER: http://localhost:8081/realms/hubstore
     steps:
       - uses: actions/checkout@v4
 
