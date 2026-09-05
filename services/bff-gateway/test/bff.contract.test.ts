@@ -10,6 +10,7 @@ import { startHarness, signTestToken, invalidArgument, mockGrpcError, generateSe
 import type { Harness } from './harness.js';
 import { staffAreaResponses } from './fixtures.js';
 import { __setAuditPoolForTests } from '../src/lib/audit.js';
+import type { Pool } from 'pg';
 
 let h: Harness;
 
