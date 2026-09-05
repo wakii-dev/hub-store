@@ -4,16 +4,20 @@ Các thay đổi đáng chú ý theo format [Keep a Changelog](https://keepachan
 version theo [Semver](https://semver.org/). Sinh tự động từ conventional commits
 bởi git-cliff — chạy tay qua workflow release khi push tag `v*.*.*`.
 
-## [Unreleased]
+## [v0.1.1] - 2026-09-05
 ### Bug Fixes
 - **bff:** Thiếu import type Pool trong bff.contract.test.ts — TS2304 fail CI typecheck ([`de9b15e`](https://github.com/wakii-dev/hub-store/commit/de9b15eb6d55f471150f7fe2c383efd9741f06c3))
 - **ci:** Unit job set OIDC_ISSUER — root .env gitignored, không có trên runner ([`7049547`](https://github.com/wakii-dev/hub-store/commit/7049547e4fdaec8c3ee99fd26d97ed726d345337))
 - **ci:** Unit job pin TZ=Asia/Ho_Chi_Minh — 3 test orders encode business rule +07 ([`b0cdf13`](https://github.com/wakii-dev/hub-store/commit/b0cdf131270641f75e33afd8f55ea6928ad54390))
+- **ci,docker:** Dockerfile.web thiếu COPY ktv-mobile/package.json + e2e webServer timeout 15' ([`0448f5a`](https://github.com/wakii-dev/hub-store/commit/0448f5a598fbd92ff9439aa10494acb04bc157ba))
 
 ### Documentation
 - **readme:** Credits — contributors HoiVu, Claude, Kiro [skip ci] ([`5bc1c96`](https://github.com/wakii-dev/hub-store/commit/5bc1c963a139cecf008bc1bcb838699fb20f2f7d))
 - Add English README — architecture, stack, quick start, seeding, ports, roles, testing ([`f03ca78`](https://github.com/wakii-dev/hub-store/commit/f03ca78cf4fcdde2c739b653c6d6a6fd5fe04d29))
 - **readme:** Full English rewrite — merges ops manual (env/CI/backup/K8s/rotation) with architecture + year-scale seeding ([`be2b8f9`](https://github.com/wakii-dev/hub-store/commit/be2b8f915b4a32c96716c472000891d3e19aeae2))
+
+### Features
+- **release:** Changelog tự động mỗi bản release — git-cliff + workflow tag push ([`6a3da5d`](https://github.com/wakii-dev/hub-store/commit/6a3da5d9e570c8dba8d0f57d81703db11db331b5))
 
 ## [v0.1.0] - 2026-09-05
 ### Bug Fixes
