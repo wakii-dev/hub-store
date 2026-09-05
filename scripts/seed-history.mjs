@@ -7,7 +7,9 @@
  *
  * Nạp thêm (KHÔNG xoá data seed chuẩn):
  *   fulfillment : orders, shop_assignment_history, cod_confirmations, d2c_orders,
- *                 installation_orders, delivery_orders, activity_log, notification_log
+ *                 installation_orders, delivery_orders, activity_log, notification_log,
+ *                 transfer_tickets, print_errors, webhook_events,
+ *                 service_employees + service_employee_regions (nhân viên DV theo năm)
  *   batching    : batches, batch_items, shipment_plannings, bookings
  *
  * Deterministic (PRNG seed cố định). Mã ongoing (ORD/D2C/SO/TD/BATCH/planning)
@@ -69,8 +71,8 @@ const actors = ['admin', 'manager', 'coordinator', 'warehouse'];
 const TODAY = new Date(`${new Date().toISOString().slice(0, 10)}T00:00:00${TZ}`);
 const START = new Date('2026-01-01T00:00:00+07:00');
 const days = [];
-for (let d = new Date(START); d < TODAY; d = new Date(d.getTime() + 86400000)) days.push(new Date(d));
-const ymd = (d) => d.toISOString().slice(0, 10);
+for (let d = new Date(START); d <= TODAY; d = new Date(d.getTime() + 86400000)) days.push(new Date(d)); // gồm cả HÔM NAY (dashboard "Hôm nay" phải có data)
+const ymd = (d) => new Date(d.getTime() + 7 * 3600 * 1000).toISOString().slice(0, 10); // ngày lịch +07 (ISO là UTC — bị trừ 1 ngày nếu dùng thẳng)
 const at = (day, h, m = ri(0, 59)) => `${ymd(day)}T${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:00${TZ}`;
 const jsDate = (iso) => new Date(iso);
 
@@ -112,24 +114,30 @@ const files = {
   orders: open('orders', 'f-orders.copy'), hist: open('hist', 'f-hist.copy'), cod: open('cod', 'f-cod.copy'),
   d2c: open('d2c', 'f-d2c.copy'), inst: open('inst', 'f-inst.copy'), dlv: open('dlv', 'f-dlv.copy'),
   act: open('act', 'f-act.copy'), notif: open('notif', 'f-notif.copy'),
+  tr: open('tr', 'f-tr.copy'), perr: open('perr', 'f-perr.copy'), wh: open('wh', 'f-wh.copy'),
+  emp: open('emp', 'f-emp.copy'), empreg: open('empreg', 'f-empreg.copy'),
   batches: open('batches', 'b-batches.copy'), items: open('items', 'b-items.copy'),
   plans: open('plans', 'b-plans.copy'), bookings: open('bookings', 'b-bookings.copy'),
 };
 const W = (name, line) => ws[name].write(line + '\n');
 
 // ongoing counters từ max hiện có
-let ordN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(fulfill_code),'\\D','','g'),'')::bigint, 3000) FROM orders`, 3000);
+let ordN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(fulfill_code),'\\D','','g'),'')::bigint, 3000) FROM orders`, 3000) + 100000; // buffer 100k — né mã live app mint trong lúc seed;
 let rsaN = 7000000; // mã tham chiếu khách (order_code) — counter unique, KHÔNG random (join batch_items cần unique)
-let d2cN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(order_code),'\\D','','g'),'')::bigint, 2000) FROM d2c_orders`, 2000);
-let soN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(service_order_code),'\\D','','g'),'')::bigint, 0) FROM installation_orders`, 0);
-let tdN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(code),'\\D','','g'),'')::bigint, 0) FROM delivery_orders`, 0);
+let d2cN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(order_code),'\\D','','g'),'')::bigint, 2000) FROM d2c_orders`, 2000) + 100000;
+let soN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(service_order_code),'\\D','','g'),'')::bigint, 0) FROM installation_orders`, 0) + 100000;
+let tdN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(code),'\\D','','g'),'')::bigint, 0) FROM delivery_orders`, 0) + 100000;
 let batchN = numB(`SELECT COALESCE(NULLIF(regexp_replace(max(batch_code),'\\D','','g'),'')::bigint, 0) FROM batches`, 0);
 let planN = numB(`SELECT COALESCE(max(id), 0) FROM shipment_plannings`, 0);
 const techCodes = val(`SELECT COALESCE(string_agg(code, ','), 'KTV-001') FROM technicians`).split(',');
+const printerIds = val(`SELECT COALESCE(string_agg(printer_id, ','), 'PRN-30201-01') FROM printers`).split(',');
+let ttN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(ticket_code),'\\D','','g'),'')::bigint, 0) FROM transfer_tickets`, 0) + 100000;
+let whN = num(`SELECT COALESCE(NULLIF(max(id), 0), 0) FROM webhook_events`, 0) + 100000;
+let empN = num(`SELECT COALESCE(NULLIF(regexp_replace(max(employee_code),'\\D','','g'),'')::bigint, 1000) FROM service_employees`, 1000) + 100000;
 console.log(`[seed-history] counters: ORD>${ordN} D2C>${d2cN} SO>${soN} TD>${tdN} BATCH>${batchN} | UNIT=${UNIT.toFixed(1)} đơn/ngày hệ số`);
 
 // ================= stream theo ngày =================
-let stats = { orders: 0, batches: 0, items: 0, cod: 0, d2c: 0, inst: 0, dlv: 0, act: 0, hist: 0, plans: 0, bookings: 0, notif: 0 };
+let stats = { orders: 0, batches: 0, items: 0, cod: 0, d2c: 0, inst: 0, dlv: 0, act: 0, hist: 0, plans: 0, bookings: 0, notif: 0, tr: 0, perr: 0, wh: 0, emp: 0, empreg: 0 };
 const t0 = Date.now();
 const lastNotifs = [];
 
@@ -152,7 +160,7 @@ for (const day of days) {
       statusCode: 2, batchStatus: 2, batchCode: null,
       shop: shop.shopCode,
       otFrom: at(day, 8), otTo: at(day, 12),
-      dtFrom: at(day, 8), dtTo: at(day, 18),
+      dtFrom: at(new Date(day.getTime() + 86400000), 8), dtTo: at(new Date(day.getTime() + 86400000), 18), // giao NGÀY MAI — khớp batch (created_at = ngày giao)
       orderStatus: 1,
       items,
       cod: chance(0.65) ? ri(25, 800) * 10000 : 0,
@@ -201,8 +209,8 @@ for (const day of days) {
   }
   const nextDay = new Date(day.getTime() + 86400000);
   for (const [shopCode, group] of byShop) {
-    for (let i = 0; i < group.length; i += ri(40, 90)) { // batch thực tế ~40-90 stop
-      const members = group.slice(i, i + 90);
+    for (let i = 0; i < group.length; i += 5) { // tối đa 5 đơn / phiếu soạn
+      const members = group.slice(i, i + 5);
       const bc = `BATCH-${String(++batchN).padStart(4, '0')}`;
       const staff = staffByShop.get(shopCode) ?? 'STAFF-001';
       const afternoon = chance(0.4);
@@ -279,7 +287,35 @@ for (const day of days) {
     }
   }
 
+  // transfer_tickets (chuyển kho giữa CN) + print_errors + webhook_events (sàn)
+  const ntr = Math.round(n * 0.004);
+  for (let k = 0; k < ntr; k++) {
+    const o = pick(buf);
+    const ageDays = Math.round((TODAY - jsDate(o.created)) / 86400000);
+    const status = ageDays > 7 ? pick(['APPROVED', 'APPROVED', 'APPROVED', 'REJECTED']) : pick(['PENDING', 'APPROVED']);
+    const fromShop = pick(shopList), toShop = pick(shopList);
+    const approved = status !== 'PENDING';
+    W('tr', [`TT-${String(++ttN).padStart(4, '0')}`, o.fc, fromShop.shopName, toShop.shopName, pick(['Khách đổi địa chỉ giao', 'Gần kho xuất hơn', 'Kho đích thiếu hàng']), status, pick(actors), approved ? pick(actors) : null, approved ? at(day, ri(10, 20)) : null].map(T).join('\t'));
+    stats.tr++;
+  }
+  const nperr = Math.max(0, Math.round(n * 0.0008));
+  for (let k = 0; k < nperr; k++) {
+    const o = pick(buf);
+    W('perr', [o.fc, o.batchCode ?? '\\N', pick(['bill', 'a4']), pick(printerIds), pick(['Hết giấy', 'Mất kết nối máy in', 'Khẹt giấy', 'Hết mực']), o.created].map(T).join('\t'));
+    stats.perr++;
+  }
+  const nwh = Math.round(n * 0.012);
+  for (let k = 0; k < nwh; k++) {
+    const o = pick(buf);
+    const src = pick(['shopee', 'lazada', 'tiktok_shop']);
+    const ageDays = Math.round((TODAY - jsDate(o.created)) / 86400000);
+    const status = ageDays <= 0 ? pick(['PENDING', 'PROCESSED']) : chance(0.05) ? 'FAILED' : 'PROCESSED';
+    W('wh', [src, `${src}-${++whN}`, J({ orderNumber: o.oc ?? o.fc, amountDue: o.cod, customerName: o.cname, items: o.items }), status, status === 'FAILED' ? null : o.fc, o.created, status === 'PROCESSED' ? o.created : null].map(T).join('\t'));
+    stats.wh++;
+  }
+
   // activity cơ bản: order.created 1/đơn (mẫu 1/10 để không phình), đối soát cuối tháng
+
   for (const o of buf) {
     if (chance(0.1)) { W('act', [pick(actors), 'order.created', o.fc, J({ shop: o.shop }), o.created].join('\t')); stats.act++; }
   }
@@ -288,6 +324,24 @@ for (const day of days) {
     W('act', ['coordinator', 'cod.batch_confirmed', `${shop.shopCode}-${ymd(day).slice(0, 7)}`, J({ shopCode: shop.shopCode, month: ymd(day).slice(0, 7), note: 'Đối soát COD kỳ tháng' }), at(day, 17)].join('\t'));
     stats.act++;
   }
+}
+
+// ---- service_employees — nhân viên DV khu vực, tuyển dần trong năm ----
+const TITLES = ['SHIPPER', 'SHIPPER', 'WAREHOUSE', 'CSKH', 'KTV']; // shipper chiếm đa số
+const empRegionPool = ['01', '01', '48', '79', '79']; // mã tỉnh thật (regions)
+const nEmp = Math.round(45 * SCALE);
+const empIds = [];
+for (let k = 0; k < nEmp; k++) {
+  const code = `NV-${++empN}`;
+  const hireDay = days[Math.floor((k / nEmp) * (days.length - 1))]; // tuyển dần đều trong năm
+  const regions = [...new Set(Array.from({ length: ri(1, 3) }, () => pick(empRegionPool)))];
+  W('emp', [code, `${pick(custNames)}`, pick(TITLES), `${ri(10000000000, 99999999999)}`, chance(0.92), at(hireDay, 9), at(hireDay, 9)].map(T).join('\t'));
+  stats.emp++;
+  for (const rg of regions) {
+    W('empreg', [code, rg].map(T).join('\t'));
+    stats.empreg++;
+  }
+  empIds.push(code);
 }
 
 // notification: giới hạn 200 dòng mới nhất (trang 1 UI)
@@ -314,6 +368,11 @@ if (!SKIP_FULFILLMENT_COPY) {
   copyIn('fulfillment', 'delivery_orders', 'code, status, driver_name, driver_phone, receiver_name, receiver_phone, receiver_lat, receiver_long, sender_name, sender_phone, sender_lat, sender_long, fee, tip, items, region_code, province, delivery_date, created_at', `${OUT}/f-dlv.copy`);
   copyIn('fulfillment', 'activity_log', 'actor, action, target, detail, created_at', `${OUT}/f-act.copy`);
   copyIn('fulfillment', 'notification_log', 'type, title, body, payload, dedupe_key, created_at', `${OUT}/f-notif.copy`);
+  copyIn('fulfillment', 'transfer_tickets', 'ticket_code, order_fulfill_code, from_hub, to_hub, reason, status, created_by, confirmed_by, confirmed_at', `${OUT}/f-tr.copy`);
+  copyIn('fulfillment', 'print_errors', 'order_code, batch_code, print_type, printer_id, error_message, occurred_at', `${OUT}/f-perr.copy`);
+  copyIn('fulfillment', 'webhook_events', 'source, external_id, payload, status, fulfill_code, received_at, processed_at', `${OUT}/f-wh.copy`);
+  copyIn('fulfillment', 'service_employees', 'employee_code, full_name, title_code, payment_account, is_active, created_at, updated_at', `${OUT}/f-emp.copy`);
+  copyIn('fulfillment', 'service_employee_regions', 'employee_code, region_code', `${OUT}/f-empreg.copy`);
 } else {
   console.log('[seed-history] SKIP_FULFILLMENT_COPY=1 — bỏ qua COPY fulfillment (đã load)');
 }
@@ -331,6 +390,11 @@ SELECT setval('delivery_orders_id_seq', (SELECT max(id) FROM delivery_orders));
 SELECT setval('cod_confirmations_id_seq', (SELECT max(id) FROM cod_confirmations));
 SELECT setval('activity_log_id_seq', (SELECT max(id) FROM activity_log));
 SELECT setval('notification_log_id_seq', (SELECT max(id) FROM notification_log));
+SELECT setval('transfer_tickets_id_seq', (SELECT max(id) FROM transfer_tickets));
+SELECT setval('print_errors_id_seq', (SELECT max(id) FROM print_errors));
+SELECT setval('webhook_events_id_seq', (SELECT max(id) FROM webhook_events));
+SELECT setval('service_employees_id_seq', (SELECT max(id) FROM service_employees));
+SELECT setval('service_employee_regions_id_seq', (SELECT max(id) FROM service_employee_regions));
 CREATE INDEX IF NOT EXISTS idx_orders_created_time ON orders (created_time);
 CREATE INDEX IF NOT EXISTS idx_orders_shop_status ON orders (shop_code, status_code);
 CREATE INDEX IF NOT EXISTS idx_orders_batch_code ON orders (batch_code) WHERE batch_code IS NOT NULL;
@@ -339,7 +403,7 @@ CREATE INDEX IF NOT EXISTS idx_d2c_created ON d2c_orders (created_at);
 CREATE INDEX IF NOT EXISTS idx_cod_completed ON cod_confirmations (completed_at);
 `);
 psqlIn('batching', `
-SELECT setval('batches_code_seq', (SELECT COALESCE(NULLIF(regexp_replace(max(batch_code),'\\D','','g'),'')::bigint, 0) FROM batches));
+SELECT setval('batches_code_seq', GREATEST((SELECT COALESCE(NULLIF(regexp_replace(max(batch_code),'\\D','','g'),'')::bigint, 0) FROM batches), 1000000), true);
 SELECT setval('shipment_plannings_id_seq', (SELECT max(id) FROM shipment_plannings));
 SELECT setval('bookings_id_seq', (SELECT max(id) FROM bookings));
 CREATE INDEX IF NOT EXISTS idx_batches_created ON batches (created_at);
