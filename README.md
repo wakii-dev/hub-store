@@ -391,3 +391,11 @@ User tạo tay qua Admin Console (`http://localhost:8081`, admin/$KEYCLOAK_ADMIN
 ## Forgot password (DEV-ONLY)
 
 Trang "Quên mật khẩu" trên shell + endpoint `POST /auth/reset-password` đặt lại password trực tiếp qua Keycloak Admin API — **KHÔNG có bước xác minh danh tính** (không email, không OTP). Endpoint chỉ mount khi env `ENABLE_DEV_RESET_PASSWORD=1` tường minh (fail-safe: prod không set → 404). Chỉ dùng cho dev/local; production bắt buộc thay bằng OTP email hoặc Keycloak built-in forgot-password flow.
+
+## Contributors
+
+- **HoiVu** — tác giả / product owner
+- **Claude** (Anthropic) — AI coding agent
+- **Kiro** (AWS) — AI coding agent
+
+Dự án được xây dựng bằng sự cộng tác người — AI agents.
