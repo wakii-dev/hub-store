@@ -22,8 +22,10 @@ jobs:
     runs-on: ubuntu-latest
     env:
       # Root .env gitignored → không có trên runner; OIDC_ISSUER là env duy
-      # nhất loadConfig bắt buộc (xem comment chi tiết ở ci.yml job unit).
+      # nhất loadConfig bắt buộc. TZ: test encode business rule giờ VN (+07)
+      # (xem comment chi tiết ở ci.yml job unit).
       OIDC_ISSUER: http://localhost:8081/realms/hubstore
+      TZ: Asia/Ho_Chi_Minh
     steps:
       - uses: actions/checkout@v4
 
