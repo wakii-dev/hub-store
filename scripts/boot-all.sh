@@ -35,6 +35,9 @@ wait_port() {
     sleep 2
   done
   echo "[boot-all] TIMEOUT chờ $name :$port — log: $LOG_DIR" >&2
+  # Tự chẩn đoán: log service chỉ ghi vào $LOG_DIR/*.log (không ra console) —
+  # xả đuôi log ra stderr để thấy nguyên nhân ngay trong output CI/webServer.
+  tail -n 40 "$LOG_DIR/e2e-$name.log" 2>/dev/null >&2 || true
   return 1
 }
 
@@ -121,7 +124,8 @@ echo "[boot-all] boot BFF (:8080)..."
 # seam runners (sf-11/sf-25 private stacks boot riêng DB). BFF host-run cần
 # các var này cho avatar pool (503 "Avatar storage is unavailable" khi thiếu
 # — baseline FI-281 04/09).
-(cd "$ROOT/services/bff-gateway" && . "$ROOT/.env" && \
+(cd "$ROOT/services/bff-gateway" && \
+  { if [ -f "$ROOT/.env" ]; then . "$ROOT/.env"; fi; } && \
   FULFILLMENT_DB_HOST=127.0.0.1 FULFILLMENT_DB_PORT=5432 \
   FULFILLMENT_DB_NAME=fulfillment FULFILLMENT_DB_USER="${POSTGRES_USER:-hubstore}" \
   FULFILLMENT_DB_PASSWORD="$POSTGRES_PASSWORD" \
