@@ -134,3 +134,20 @@
 - **P2 code (từ code-reviewer round 3, OPEN):** `openapi-bundle.ts` dùng `key in`
   (prototype chain) khi check duplicate paths/components — nil risk hôm nay;
   `Object.hasOwn` chặt hơn nếu sửa sau.
+
+## 2026-09-06 — SF-5 (FI-331): domain schemas chưa có chỗ chuẩn trong layout multi-file (P6 flag)
+
+- **What:** bundler (openapi-bundle.ts) chỉ merge `doc.paths` của file domain —
+  domain schemas (DeliveryOrder, InstallationOrder, ServiceEmployee…) không có
+  chỗ chuẩn; SF-5 phải đặt ở top-level extension `x-schemas` + YAML anchors
+  (`&`/`*`) để tái sử dụng (InstallationOrder dùng ở 6 nơi). SF-2..8 chạy song
+  song có thể chọn pattern khác (vd inline per-op) → SF-9 convergence sẽ thấy
+  2+ style trong cùng UI bundle.
+- **Where:** services/bff-gateway/src/plugins/openapi-bundle.ts (thiết kế SF-1,
+  READ-ONLY với SF-5) + services/bff-gateway/openapi/paths/tech.yaml (pattern
+  SF-5 đã chọn).
+- **Suggested change:** coordinator/SF-9 quyết: (a) bundler hỗ trợ merge
+  `components.schemas` từ file domain (prefix/namespace tên chống collision với
+  duplicate-throw hiện có), hoặc (b) pin convention "x-schemas + YAML anchors"
+  vào context packs cho SF-6..8 + checklist SF-9. refDepth-cap 32 của bundler
+  đã an toàn nếu sau này chuyển sang self-ref.
