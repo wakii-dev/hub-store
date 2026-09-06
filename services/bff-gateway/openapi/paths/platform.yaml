@@ -26,7 +26,8 @@ paths:
         REST, map role theo KNOWN_ROLES (claim `realm_access.roles`). Hiện
         KHÔNG phân trang server-side — `page` luôn 1 và `pageSize` = tổng số
         items (quirk route thật, `routes/users.ts:42`) — số lượng user dev
-        nhỏ, chỉ cần đủ shape Paginated cho FE tái dùng.
+        nhỏ, chỉ cần đủ shape Paginated cho FE tái dùng. Keycloak Admin API
+        lỗi → 503 (`UPSTREAM_UNAVAILABLE`/`KC_ADMIN_NOT_CONFIGURED`).
       responses:
         '200':
           description: Danh sách users (mỗi item kèm roles theo KNOWN_ROLES).
@@ -68,11 +69,7 @@ paths:
         '403':
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '503':
-          description: >
-            Keycloak Admin API lỗi — code `UPSTREAM_UNAVAILABLE` hoặc
-            `KC_ADMIN_NOT_CONFIGURED` (thiếu env admin credential).
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
     post:
       tags: [Administration]
       operationId: createUser
@@ -83,7 +80,12 @@ paths:
         Validation CHẠY TẠI BFF (routes/users.ts, không Ajv) — mỗi field vi
         phạm một entry `details[]`: `username` khớp pattern
         `^[a-zA-Z0-9._-]{3,64}$`; `password` tối thiểu 8 ký tự; `role` ∈
-        KNOWN_ROLES. Trùng username → 409 `USERNAME_EXISTS`.
+        KNOWN_ROLES. **Trùng username KHÔNG lỗi 409** — KC trả 409 → BFF heal
+        idempotent: set-password account TỒN TẠI + trả về id cũ → vẫn `201`
+        (`kc-admin.ts:384-391`) — lưu ý gọi lại với username cũ sẽ GHI ĐÈ mật
+        khẩu account đó (hành vi security-relevant, FE dựa `id` để phân biệt).
+        422 `USERNAME_EXISTS` chỉ khi race (KC 409 mà không tra được user).
+        Keycloak Admin API lỗi → 503.
       requestBody:
         required: true
         content:
@@ -133,22 +135,10 @@ paths:
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '403':
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
-        '409':
-          description: Username đã tồn tại trên Keycloak (code `USERNAME_EXISTS`).
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
         '422':
-          description: >
-            Validation BFF fail — `details[]` từng field (username pattern /
-            password min 8 / role không thuộc KNOWN_ROLES).
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '503':
-          description: >
-            Keycloak Admin API lỗi — code `UPSTREAM_UNAVAILABLE` hoặc
-            `KC_ADMIN_NOT_CONFIGURED`.
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
   /users/{userId}/set-password:
     parameters:
@@ -160,7 +150,8 @@ paths:
       description: >
         Role gate **canManageUsers = Manager ∨ Admin**. Set password mới cho
         user (Keycloak Admin `reset-password`, `temporary: false` — user đăng
-        nhập ngay không bị ép đổi). `password` tối thiểu 8 ký tự → 422.
+        nhập ngay không bị ép đổi). `password` tối thiểu 8 ký tự → 422;
+        404 khi user không tồn tại; Keycloak Admin API lỗi → 503.
       requestBody:
         required: true
         content:
@@ -192,17 +183,11 @@ paths:
         '403':
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '404':
-          description: Không tìm thấy user (code `NOT_FOUND`).
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
-          description: '`password` thiếu hoặc dưới 8 ký tự.'
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '503':
-          description: Keycloak Admin API lỗi.
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
   /users/{userId}/enabled:
     parameters:
@@ -215,7 +200,8 @@ paths:
         Role gate **canManageUsers = Manager ∨ Admin**. Toggle `enabled` trên
         Keycloak. **Self-lock**: không thể tự khóa tài khoản CỦA CHÍNH MÌNH →
         422 `SELF_LOCK_DENIED` (route so username của target với actor
-        `sub` — `routes/users.ts:114-124`).
+        `sub` — `routes/users.ts:114-124`); 404 khi user không tồn tại;
+        Keycloak Admin API lỗi → 503.
       requestBody:
         required: true
         content:
@@ -245,19 +231,11 @@ paths:
         '403':
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '404':
-          description: Không tìm thấy user (code `NOT_FOUND`).
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
-          description: >
-            `enabled` không phải boolean, hoặc tự khóa chính mình (code
-            `SELF_LOCK_DENIED`).
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '503':
-          description: Keycloak Admin API lỗi.
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
   /users/{userId}:
     parameters:
@@ -270,7 +248,8 @@ paths:
         Role gate **canManageUsers = Manager ∨ Admin**. Xóa user khỏi
         Keycloak. **Self-delete**: không thể tự xóa chính mình → 422
         `SELF_DELETE_DENIED` (so username target với actor `sub` — cùng cơ chế
-        self-lock của PUT /users/{userId}/enabled).
+        self-lock của PUT /users/{userId}/enabled); 404 khi user không tồn
+        tại; Keycloak Admin API lỗi → 503.
       responses:
         '200':
           description: Đã xóa user.
@@ -288,17 +267,11 @@ paths:
         '403':
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '404':
-          description: Không tìm thấy user (code `NOT_FOUND`).
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
-          description: Tự xóa tài khoản của chính mình (code `SELF_DELETE_DENIED`).
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '503':
-          description: Keycloak Admin API lỗi.
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
   /avatar:
     post:
@@ -310,8 +283,8 @@ paths:
         token `sub`, KHÔNG nhận từ client). **multipart/form-data** field
         `file` bắt buộc; tối đa **5MB**; chỉ nhận `image/jpeg` / `image/png` —
         verify MAGIC BYTES phía server (JPEG `FF D8 FF`, PNG `89 50 4E 47`),
-        không tin filename hay Content-Type header client gửi
-        (`routes/avatar.ts:47-60`). Ghi đè avatar cũ (UPSERT bảng
+        không tin filename; mimetype client BẮT BUỘC khớp magic bytes (lệch →
+        400 — `routes/avatar.ts:47-60`). Ghi đè avatar cũ (UPSERT bảng
         `user_avatars` trên DB fulfillment).
       requestBody:
         required: true
@@ -341,11 +314,7 @@ paths:
                     description: Thời điểm lưu (ISO 8601); null khi DB không trả.
                     example: '2026-09-06T10:00:00.000Z'
         '400':
-          description: >
-            Thiếu field `file`, file vượt 5MB, hoặc bytes không phải
-            JPEG/PNG (magic bytes fail) — code `BAD_REQUEST`.
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
+          $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '503':
@@ -374,7 +343,7 @@ paths:
         D3). Trả bytes ảnh + content-type ĐÃ LƯU trong DB (`image/jpeg` |
         `image/png`), kèm `X-Content-Type-Options: nosniff` (chống content
         sniffing) + `Cache-Control: private, max-age=300` (avatar per-user,
-        auth-required).
+        auth-required); 404 khi user chưa có avatar.
       responses:
         '200':
           description: Bytes ảnh (content-type thật theo ảnh đã upload).
@@ -399,15 +368,11 @@ paths:
                 type: string
                 format: binary
         '400':
-          description: '`userId` rỗng hoặc vượt 255 ký tự — code `BAD_REQUEST`.'
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
+          $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '404':
-          description: User chưa có avatar (hoặc content-type lưu không hợp lệ).
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '503':
           description: Avatar storage không khả dụng (code `UNAVAILABLE`).
           content:
@@ -434,6 +399,7 @@ paths:
         email hoặc Keycloak built-in forgot-password flow. Lưu ý `newPassword`
         tối thiểu **6** ký tự — khác rule min 8 của `POST /users` (validate
         ngay BFF, trả 400 `BAD_REQUEST` không phải 422 — `routes/auth.ts`).
+        Keycloak admin API fail (lấy admin token / reset) → 500 `INTERNAL`.
       requestBody:
         required: true
         content:
@@ -465,23 +431,11 @@ paths:
                     type: boolean
                     example: true
         '400':
-          description: >
-            Thiếu `username` (rỗng) hoặc `newPassword` dưới 6 ký tự — code
-            `BAD_REQUEST`.
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
+          $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
         '404':
-          description: >
-            Username không tồn tại trong realm (code `NOT_FOUND`) — không
-            chống user-enumeration vì dev-only.
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '500':
-          description: >
-            Keycloak admin API lỗi (lấy admin token / reset fail) — handler
-            throw → 500 `INTERNAL`.
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
 
   /notifications:
     get:
@@ -613,11 +567,14 @@ paths:
       operationId: streamRealtimeEvents
       summary: SSE stream event realtime
       security:
+        - bearerAuth: []
         - accessTokenQuery: []
       description: >
         Server-Sent Events — EventSource KHÔNG set được Authorization header →
         token truyền qua query `access_token` (verify JWKS y như Bearer —
-        guard `plugins/auth.ts`). Stream bypass serialization (`reply.hijack`
+        guard `plugins/auth.ts`). Bearer header VẪN ĐƯỢC NHẬN (guard thử
+        header trước, query token là nhánh fallback — curl/tools dùng được
+        cả hai). Stream bypass serialization (`reply.hijack`
         + raw write): `text/event-stream`, KHÔNG JSON envelope. Frame event:
         `data: {"type":…,"payload":…,"ts":…}\n\n`; heartbeat comment `: ping`
         mỗi 15s; BFF chủ động đóng sau 30 phút (FE EventSource tự reconnect
@@ -681,9 +638,10 @@ paths:
         các kho (hub) cho đơn fulfillment — upstream `TransferService`
         (hubstore.transfer.v1). `toHub` bắt buộc (thiếu → 422 ngay tại BFF);
         upstream kiểm **tách nợ** — INVALID_ARGUMENT → 422; đơn đã có ticket
-        PENDING → ALREADY_EXISTS → 409 `CONFLICT`. Ghi audit
-        `order.transfer_ticket_create` (fire-and-forget — không fail mutation
-        khi DB thiếu).
+        PENDING → ALREADY_EXISTS → 409 `CONFLICT`; response thiếu `ticket`
+        (bug upstream) → 500 `INTERNAL` (`routes/transfer.ts:57-61`). Ghi
+        audit `order.transfer_ticket_create` (fire-and-forget — không fail
+        mutation khi DB thiếu).
       requestBody:
         required: true
         content:
@@ -775,21 +733,11 @@ paths:
         '403':
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '409':
-          description: Đơn đã có ticket PENDING (upstream ALREADY_EXISTS).
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
         '422':
-          description: >
-            `toHub` thiếu, hoặc upstream từ chối (tách nợ fail —
-            INVALID_ARGUMENT) — `details[]` kèm field.
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '500':
-          description: >
-            Upstream trả response thiếu `ticket` (bug upstream) — code
-            `INTERNAL` (`routes/transfer.ts:57-61`).
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
         '503':
           $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
@@ -840,15 +788,9 @@ paths:
         '403':
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '422':
-          description: >
-            `codes` rỗng hoặc vượt 100 mã, `status` ngoài whitelist — code
-            `VALIDATION_ERROR` + details[].
-          allOf:
-            $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '500':
-          description: Lỗi không phân loại upstream — code `INTERNAL`.
-          allOf:
-            - $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
         '503':
           $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
