@@ -10,6 +10,7 @@ import type { FastifyError, FastifyInstance } from 'fastify';
 import type { ErrorEnvelope } from '@hub-store/shared';
 import type { BffConfig } from './config.js';
 import { registerJwtGuard } from './plugins/auth.js';
+import { registerApiDocs } from './plugins/api-docs.js';
 import { errorEnvelope } from './lib/envelope.js';
 import { getAuditPool } from './lib/audit.js';
 import {
@@ -51,6 +52,10 @@ export function buildApp(config: BffConfig): FastifyInstance {
 
   // multipart cho POST /orders/import/preview (SF-13) — request.file() stream.
   void app.register(multipart);
+
+  // FI-326 SF-1 — Swagger UI /documentation (DEV-ONLY): tự no-op khi
+  // BFF_ENABLE_API_DOCS unset (fail-safe prod — không mount, không route).
+  void registerApiDocs(app);
 
   // OIDC guard (SF-4) — mọi route trừ /healthz + /auth/reset-password (public).
   registerJwtGuard(app, { oidc: config.oidc });
