@@ -221,7 +221,8 @@ paths:
                           type: integer
                           description: >
                             Số dòng 1-based bỏ qua header; `0` = lỗi
-                            file/header (cột lạ, thiếu cột, file rỗng).
+                            file/header (cột lạ, thiếu cột, file rỗng,
+                            extension không hỗ trợ — column `file`).
                           example: 3
                         column:
                           type: string
@@ -340,7 +341,17 @@ paths:
 
   /orders/{code}/fail:
     parameters:
-      - $ref: '../components/parameters.yaml#/components/parameters/OrderCodePath'
+      # Inline `name: code` — OpenAPI 3.0.3 BẮT BUỘC param name khớp template
+      # {code}; $ref OrderCodePath (name orderCode) sẽ invalid + try-it-out
+      # không fill được {code} (review SF-4 round 1). Route find-my-way là :code
+      # → không được đổi template sang {orderCode} (drift-guard so exact).
+      - name: code
+        in: path
+        required: true
+        description: Mã đơn intake (ORD-####).
+        schema:
+          type: string
+          example: ORD-000123
     post:
       tags: [Intake]
       operationId: markOrderFailed
@@ -400,7 +411,17 @@ paths:
 
   /orders/{code}/redeliver:
     parameters:
-      - $ref: '../components/parameters.yaml#/components/parameters/OrderCodePath'
+      # Inline `name: code` — OpenAPI 3.0.3 BẮT BUỘC param name khớp template
+      # {code}; $ref OrderCodePath (name orderCode) sẽ invalid + try-it-out
+      # không fill được {code} (review SF-4 round 1). Route find-my-way là :code
+      # → không được đổi template sang {orderCode} (drift-guard so exact).
+      - name: code
+        in: path
+        required: true
+        description: Mã đơn intake (ORD-####).
+        schema:
+          type: string
+          example: ORD-000123
     post:
       tags: [Intake]
       operationId: redeliverOrder
@@ -436,7 +457,17 @@ paths:
 
   /orders/{code}/audit:
     parameters:
-      - $ref: '../components/parameters.yaml#/components/parameters/OrderCodePath'
+      # Inline `name: code` — OpenAPI 3.0.3 BẮT BUỘC param name khớp template
+      # {code}; $ref OrderCodePath (name orderCode) sẽ invalid + try-it-out
+      # không fill được {code} (review SF-4 round 1). Route find-my-way là :code
+      # → không được đổi template sang {orderCode} (drift-guard so exact).
+      - name: code
+        in: path
+        required: true
+        description: Mã đơn intake (ORD-####).
+        schema:
+          type: string
+          example: ORD-000123
     get:
       tags: [Intake]
       operationId: getOrderAudit
