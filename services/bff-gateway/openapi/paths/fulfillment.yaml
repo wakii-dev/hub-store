@@ -100,10 +100,12 @@ components:
           $ref: './fulfillment.yaml#/components/schemas/ShopAssignment'
         originalTime:
           description: Thời gian KH mong muốn.
-          $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
         deliveryTime:
           description: Thời gian dự kiến giao.
-          $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
         orderStatus:
           type: integer
           description: >
@@ -243,13 +245,16 @@ components:
           example: []
         deliveryTime:
           description: Thời gian dự kiến giao — datetime range.
-          $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
         createdAt:
           description: Thời gian tạo đơn — date range.
-          $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
         originalTime:
           description: Thời gian KH mong muốn — datetime range.
-          $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
         excludeFulfillCodes:
           type: array
           description: >
