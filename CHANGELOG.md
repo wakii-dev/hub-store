@@ -4,6 +4,91 @@ Các thay đổi đáng chú ý theo format [Keep a Changelog](https://keepachan
 version theo [Semver](https://semver.org/). Sinh tự động từ conventional commits
 bởi git-cliff — chạy tay qua workflow release khi push tag `v*.*.*`.
 
+## [v0.2.0] - 2026-09-06
+### Bug Fixes
+- **orders:** App.test thêm afterEach(cleanup) — timer debounce sống sót qua teardown ([`6dcf847`](https://github.com/wakii-dev/hub-store/commit/6dcf847109bc3a5b542c1765e5d3b4590100e2db))
+- **e2e:** Boot-all source .env có điều kiện — runner không có .env, bff không boot ([`6809ddb`](https://github.com/wakii-dev/hub-store/commit/6809ddb1ee92eaeb3ce1e147760925eb247cb180))
+- **e2e:** Kcadm wrapper đặt global options SAU subcommand — usage error bị nuốt ([`ac30a2a`](https://github.com/wakii-dev/hub-store/commit/ac30a2ae6ad35f0c51631fd38bf83db3d9637d8c))
+- **e2e:** Rotate username ktv-001 lowercase — KC 26 import lowercase username ([`eaf6850`](https://github.com/wakii-dev/hub-store/commit/eaf685090237a96ae07f559874fbb921cd642feb))
+- **bff:** Review fixes — bundler unit tests (P1) + root-path merge bug + refDepth-only cap + drift helpers module + /documentation boundary ([`445b05f`](https://github.com/wakii-dev/hub-store/commit/445b05faca254f189658ed5af3d5241fa68f3e98))
+- **bff:** Review round-2 — pointer trailing-miss throw + component dup throw + pin tests root+file coexist ([`3bbfa0d`](https://github.com/wakii-dev/hub-store/commit/3bbfa0dc9ec08091421f93a86bf32ef3e9604aea))
+- **bff:** SF-4 review round-1 — inline param name:code cho 3 path {code} (P1) + row-0 thêm case extension (P2) ([`c1db23c`](https://github.com/wakii-dev/hub-store/commit/c1db23cb9974f3ac68932087da86f6f399b5b661))
+- **bff:** Review SF-3 round-1 — 3 P2 doc-fidelity (filter bỏ 422 không xảy ra, orderType example=1, packing-suggest minItems) ([`ebd03ad`](https://github.com/wakii-dev/hub-store/commit/ebd03adfee54839b7c114160d2481a81e72c0aa8))
+- **bff:** SF-2 — wrap ref-with-description nodes in allOf (bundler resolves solo-key refs only) ([`db4e7de`](https://github.com/wakii-dev/hub-store/commit/db4e7deaf147cea44ece5859dc392fa8608e5001))
+- **bff:** SF-2 review — delivery-time 409 Conflict409 + de-gate dashboard summary + auth notes ([`6cffa21`](https://github.com/wakii-dev/hub-store/commit/6cffa21ad1cf818d38c67e8c5dff0c9bde69c02f))
+- **bff:** SF-8 review pre-empt — allOf wrap 24 response $ref sibling description (bundler bỏ sibling, pattern fi328/SF-2) + tick plan T1-T8 ([`5107667`](https://github.com/wakii-dev/hub-store/commit/5107667be44c7d4c4c0bc49c995dcb6a0c4eebff))
+- **bff:** SF-8 review round-1 — P0 POST /users bỏ 409 (KC 409 → idempotent-heal 201, kc-admin.ts:384-391, USERNAME_EXISTS chỉ 422 race) + P1 24 response sibling description → ref-only thuần (allOf ở Response Object sai OAS 3.0.3, context chuyển vào op description) + P2 /events security cả bearerAuth+accessTokenQuery, avatar wording mimetype-phải-khớp-magic-bytes ([`dea7643`](https://github.com/wakii-dev/hub-store/commit/dea7643d8777cc994ec59d089828d5ef5b7e3ae1))
+- **bff:** SF-7 review round-1 — printers 422 (upstream validate type) + bỏ anchors thừa (P1/P2) ([`f5b14d1`](https://github.com/wakii-dev/hub-store/commit/f5b14d10be8e6b705f685e7a8e3ba51e8e1f4448))
+- **bff:** SF-5 review — 409 duplicate employeeCode + 422 malformed dates trên filters + P2 wording (MOCK, body {}, BFF-drop statuses) ([`4295d40`](https://github.com/wakii-dev/hub-store/commit/4295d40d94c5555c7f5e67a53ece76fd9b0960d2))
+
+### Chores
+- **bff:** T1 compat verdict FALLBACK — deps yaml + swagger-ui-dist + @fastify/static ([`e9a644b`](https://github.com/wakii-dev/hub-store/commit/e9a644b9d9ff6b91cdc868b9d41c5d0a95a47494))
+
+### Documentation
+- **readme:** Architecture SVG (dark/light) + README trang trí — badges, alerts, emoji headings ([`f892cf5`](https://github.com/wakii-dev/hub-store/commit/f892cf52a60357c83ac194d7207dec49f37637af))
+- **readme:** Repo layout map SVG — 4 nhóm color-coded, dark/light auto ([`0276e8b`](https://github.com/wakii-dev/hub-store/commit/0276e8bdc18ce4d0b48f1f29b33b032b37fb4fd0))
+- **story:** FI-326 API docs swagger — bracket + spec + plan + 9 context packs ([`aa93e22`](https://github.com/wakii-dev/hub-store/commit/aa93e222ae4a95b6c86496a05f8b1ddfec712023))
+- **story:** FI-326 bracket remap — linear: FI-327..FI-335 (APPROVE) ([`1c8ed4d`](https://github.com/wakii-dev/hub-store/commit/1c8ed4db30d425ba9cff58006e9a5278e7752e25))
+- **sf1:** FI-327 foundation plan — 11 tasks + plan-critic fixes (P0×2, P1×2, P2×3) ([`6b7349a`](https://github.com/wakii-dev/hub-store/commit/6b7349a596c4f58ac8b0959b8a396cb2202c171f))
+- **story:** Improvements-log — B2 collision recurrence + mtime fix + P2 open ([`6260534`](https://github.com/wakii-dev/hub-store/commit/6260534bf9d42be2c36e9b5bd598065f44dab375))
+- **bff:** SF-4 intake.yaml — Intake 8 ops + Webhooks op (integrator HMAC docs) ([`1a2c434`](https://github.com/wakii-dev/hub-store/commit/1a2c434a7740bf9d17548c301dd2fe79de5a1944))
+- **bff:** SF-4 webhook op — thêm 500 Internal500 (retry matrix tự-consistent, quan sát upstream thật) ([`4e2a1b1`](https://github.com/wakii-dev/hub-store/commit/4e2a1b17dd041c826a2bf64ffc62cbacba77facb))
+- **bff:** SF-2 orders-domain spec — fulfillment.yaml 16 ops (Orders 13 + Master Data 3) + scoped drift test ([`6b39314`](https://github.com/wakii-dev/hub-store/commit/6b393140d88c2fa23f59e179ac95a82273555581))
+- **story:** SF-2 improvements-log — envelopes note pointer shorthand + screenshot CDP + mint KC_PORT ([`2c1ffa8`](https://github.com/wakii-dev/hub-store/commit/2c1ffa864bd539d16525aa7eea4d5306aa68963a))
+- **bff:** SF-6 delivery.yaml 9 ops tag Delivery — quotes/planning/booking NVC, 2 cancels, searchbookingdetail, d2c filter/note/export CSV BOM + drift scoped test (FI-332) ([`6934848`](https://github.com/wakii-dev/hub-store/commit/693484864353486e7b80678c103fdec7e3be6b80))
+- **bff:** SF-6 thêm 404 NOT_FOUND cho 4 ops delivery-batch có entity lookup (quan sát thật: batch/planning lạ → upstream NOT_FOUND) (FI-332) ([`f4e6a75`](https://github.com/wakii-dev/hub-store/commit/f4e6a75c429b314371f7c7ba69fcf20cdc998ae1))
+- **bff:** SF-6 review round-1 — examples theo mock-observable (SGCN/500KG fleet, DRIVER_FOUND, MOCK-<seq>, meta.mock:true, seed shop 30201, d2c status pushed, timeline enum mock) + P2 wording quotes-422/export-400 (FI-332) ([`2344cf5`](https://github.com/wakii-dev/hub-store/commit/2344cf53fd76f3c5ca81587bebffbd039aa7ddb9))
+- **bff:** SF-6 review round-2 — searchbookingdetail shape đúng server (booking CANCELLED bị loại, cancelledAt/cancelReason luôn rỗng) + carrier/deliveryId prefix khớp + quote-2 đủ 4 addon (FI-332) ([`48cf4d3`](https://github.com/wakii-dev/hub-store/commit/48cf4d34bafee8aaf6b1576efc868f52519c8239))
+- **bff:** SF-8 platform/admin — 13 ops / 2 tags (users 5, avatar 2, reset-password dev-only, notifications alias 2, SSE events, transfer 2) + drift-guard scoped ([`6948534`](https://github.com/wakii-dev/hub-store/commit/694853443a5d0506a5a17f3d1594ab4a49d939a7))
+- **story:** SF-5 P6 flag — domain schemas layout (x-schemas+anchors) cần convention chung ([`d518ea5`](https://github.com/wakii-dev/hub-store/commit/d518ea55363a3bdde1aeda51cd49794920f660cf))
+- **readme:** Section API docs Swagger UI — bật flag, mint token try-it-out, spec YAML source, convention sửa route = sửa spec cùng PR (drift-guard) (FI-335) ([`f20b24d`](https://github.com/wakii-dev/hub-store/commit/f20b24ddc647dfebb1ca602c53a4cb9d4a3565aa))
+- **readme:** SF-9 review P1 — drift-guard bullet: route THÊM MỚI chỉ bắt được bằng DRIFT_FULL=1 (reverse check, không wire vào default test/CI); default test chỉ bắt rename/remove (FI-335) ([`a10ad2b`](https://github.com/wakii-dev/hub-store/commit/a10ad2b276944023ad295bcf8bb678f978e9a7f7))
+
+### Features
+- **bff:** T2 openapi root — 12 tags pin + securitySchemes + pre-wire 8 paths ([`5d2245a`](https://github.com/wakii-dev/hub-store/commit/5d2245a3304d9e658a6777db3ddf1614c9319f1b))
+- **bff:** T3 envelope components — ErrorEnvelope/Paginated + 9 response templates (409+422-PRECONDITION per plan-critic P1) ([`6e1de88`](https://github.com/wakii-dev/hub-store/commit/6e1de88e3fde56cacacab6e0dff64afdf6552fd9))
+- **bff:** T4 enum components — KnownRoles (7) duy nhất đủ điều kiện ≥2 domains ([`83d15d2`](https://github.com/wakii-dev/hub-store/commit/83d15d221e23cb75f81ca33e11b746dd81a12862))
+- **bff:** T5 shared parameter components — page/pageSize + 7 path params (probe routes) ([`5e89598`](https://github.com/wakii-dev/hub-store/commit/5e89598a73032339692470b3040c89f172c90f43))
+- **bff:** T6 system pilot paths (3 ops shapes thật) + 7 tier-1 stub paths:{} ([`d88a99e`](https://github.com/wakii-dev/hub-store/commit/d88a99ed44b5460c99d67bf90d97fe8da11f53d7))
+- **bff:** T8 auth skip-list prefix /documentation (UI assets + spec json + oauth2-redirect) ([`7a1776d`](https://github.com/wakii-dev/hub-store/commit/7a1776d82089d628925a1d4b4b1ba89a529902db))
+- **bff:** T7 api-docs plugin flag-gated + sync-queue fix (avvio ready deadlock trap) + app wiring ([`e655955`](https://github.com/wakii-dev/hub-store/commit/e6559556a6fe02fe645b5eb7254e72b9ff79e369))
+- **bff:** SF-3 batches.yaml — tag Batches 9 ops + scoped drift test ([`c6c51b2`](https://github.com/wakii-dev/hub-store/commit/c6c51b27f591b3a9a4a06ed1de0bd7a1d2e93272))
+- **bff:** SF-7 author cod-print.yaml — 12 ops COD Settlement (6) + Print (6) + scoped drift test ([`00f609e`](https://github.com/wakii-dev/hub-store/commit/00f609ed6b957d76d54752ee70d5c6d130783cee))
+- **bff:** SF-5 field-service docs — tech.yaml 13 ops (role gates per-endpoint) + drift scoped 13/13 ([`fe7127f`](https://github.com/wakii-dev/hub-store/commit/fe7127f23a7d30901f2440219d809cd036c00623))
+
+### Other
+- **fi330:** SF-4 intake+webhook docs — plan + phase-0 impact ([`4c47e22`](https://github.com/wakii-dev/hub-store/commit/4c47e220914567fff49428a984ecd414e2c7410f))
+- Merge branch 'story/fi326-api-docs-swagger' into wakii-dev/sf-3-batching-docs ([`bb439c0`](https://github.com/wakii-dev/hub-store/commit/bb439c038784acb63bed7cb9621d7a639587e53b))
+- Merge branch 'story/fi326-api-docs-swagger' into wakii-dev/sf-4-intake-webhook-docs ([`7f2dc46`](https://github.com/wakii-dev/hub-store/commit/7f2dc466171758ba449e4ce1d7cca2176b167afa))
+- **fi330:** Tick T9 + acceptance checklist (merge 7f2dc46) ([`1549e9d`](https://github.com/wakii-dev/hub-store/commit/1549e9de83620744f027b823ed16a396cc5f6247))
+- **fi333:** SF-7 tasks ticked + acceptance checklist ([`b245b73`](https://github.com/wakii-dev/hub-store/commit/b245b73fdc42aac1037d572e6aced478ad4a0d73))
+- **fi331:** SF-5 field-service docs plan — post-hoc documented, evidence-linked ([`07839fc`](https://github.com/wakii-dev/hub-store/commit/07839fca09bf2c6e8095a31bc7905aafe6c6a8d5))
+- Merge branch 'story/fi326-api-docs-swagger' into wakii-dev/sf-5-field-service-docs ([`26c4167`](https://github.com/wakii-dev/hub-store/commit/26c4167cf9fa6e3378a1ed90acdc07e0d458abe3))
+- **fi334:** Tick T9 (verify evidence — try-it-out + SSE curl thật) ([`757d4d6`](https://github.com/wakii-dev/hub-store/commit/757d4d6e1a85edae3dee7b2de1a03dcfa9c17b30))
+- **fi334:** Tick T10 + acceptance checklist (merge a66070e, reviewer round-2 APPROVED) ([`5e653b8`](https://github.com/wakii-dev/hub-store/commit/5e653b8d465bfc7c7a13e5931cad3af8c25c5450))
+- Merge branch 'story/fi326-api-docs-swagger' into wakii-dev/sf-8-platformadmin-docs ([`e48bfc5`](https://github.com/wakii-dev/hub-store/commit/e48bfc55c8e4a3ac8a70bc68628b97053295a284))
+- Merge branch 'story/fi326-api-docs-swagger' into wakii-dev/sf-6-delivery-last-mile-d2c-docs ([`48ccba4`](https://github.com/wakii-dev/hub-store/commit/48ccba40699262b9eeafbcbd8f6eb6347246d704))
+- **fi332:** Tick T9 + acceptance checklist (merge a0a41cb) ([`419533a`](https://github.com/wakii-dev/hub-store/commit/419533afba5dfc08e8eeba4648cf502ddcb9d1bb))
+- Merge branch 'story/fi326-api-docs-swagger' into wakii-dev/sf-6-delivery-last-mile-d2c-docs ([`3973411`](https://github.com/wakii-dev/hub-store/commit/39734115e5c33df1ca27c77db57ff21cb29d0f8c))
+- **fi335:** SF-9 tasks tick + acceptance evidence + trả lời flag SF-5 (pin x-schemas+anchors) — e2e 104 passed, 20 fail 100% wrong-runner (FI-335) ([`bb382be`](https://github.com/wakii-dev/hub-store/commit/bb382bed09707868ac34fc4d016b6e8ac4e16d3a))
+- Merge pull request #1 from wakii-dev/story/fi326-api-docs-swagger ([`0144d80`](https://github.com/wakii-dev/hub-store/commit/0144d8018c1c26bc66bc79009e1e121741adef5f))
+
+### Story Merges
+- SF-1 foundation (FI-327) into story/fi326-api-docs-swagger ([`3688abb`](https://github.com/wakii-dev/hub-store/commit/3688abb74242f1489c9fe1675abceda782b116c6))
+- SF-2 orders-domain-docs (FI-328) into story/fi326-api-docs-swagger ([`720d557`](https://github.com/wakii-dev/hub-store/commit/720d55734f7c080900e8ab1e493269a094b6bc6c))
+- SF-3 batching docs (FI-329) into story/fi326-api-docs-swagger ([`bd52a7a`](https://github.com/wakii-dev/hub-store/commit/bd52a7a7d7b5c4028edd2c2d5dff45928526848e))
+- Story/fi326-api-docs-swagger (SF-5 tech.yaml) into sf-7 — sync base trước merge-back ([`bfb89b9`](https://github.com/wakii-dev/hub-store/commit/bfb89b99517b802d947193ebb0df976d14085613))
+- Story/fi326-api-docs-swagger (wave-1 + SF-5) into wakii-dev/sf-8-platformadmin-docs ([`4509306`](https://github.com/wakii-dev/hub-store/commit/4509306c00db23993ac5e838a40f46b2fbf0e618))
+- SF-8 platform/admin docs (FI-334) into story/fi326-api-docs-swagger ([`a66070e`](https://github.com/wakii-dev/hub-store/commit/a66070ece92b9cbe29b814f731772f84e64009d8))
+- SF-8 plan tick (FI-334) into story/fi326-api-docs-swagger ([`9417dfb`](https://github.com/wakii-dev/hub-store/commit/9417dfbce1c7b87ff34703ce7c0465dfef2ea6ad))
+- SF-6 delivery last-mile + D2C docs (FI-332) into story/fi326-api-docs-swagger ([`a0a41cb`](https://github.com/wakii-dev/hub-store/commit/a0a41cbb927a60cbc5444aa012a2c06e438029dd))
+- SF-6 plan tick (FI-332) into story/fi326-api-docs-swagger ([`db3bfd5`](https://github.com/wakii-dev/hub-store/commit/db3bfd5e95c4e8ff9717bc2a43150d0d6229d5be))
+
+### Tests
+- **bff:** T9 openapi drift-guard — per-file hasRoute + DRIFT_FULL reverse + describeOpenApiDrift helper + harness devResetPassword ([`682dae7`](https://github.com/wakii-dev/hub-store/commit/682dae796565ce1941f83159a1d68d827fc8af8e))
+- **bff:** SF-4 drift-guard scoped intake.yaml — 9/9 ops pin ([`fdd0334`](https://github.com/wakii-dev/hub-store/commit/fdd03340d5edfc9cee3b52be08a0783cdaed09f9))
+- **bff:** SF-9 fix drift-guard reverse-check — alternation con bị truncate thành phantom + so skeleton shape bỏ tên param (find-my-way gộp :a|:b, OPTIONS * CORS skip) (FI-335) ([`d3dfa91`](https://github.com/wakii-dev/hub-store/commit/d3dfa918233104abe6f1145754e05dc11ae90380))
+
 ## [v0.1.1] - 2026-09-05
 ### Bug Fixes
 - **bff:** Thiếu import type Pool trong bff.contract.test.ts — TS2304 fail CI typecheck ([`de9b15e`](https://github.com/wakii-dev/hub-store/commit/de9b15eb6d55f471150f7fe2c383efd9741f06c3))
