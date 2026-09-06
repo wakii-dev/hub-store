@@ -42,19 +42,20 @@
 
 ## Tasks
 
-- [ ] T1: author delivery.yaml — POST /delivery-batch/quotes + planning/confirm + booking (3 ops NVC)
-- [ ] T2: author delivery.yaml — cancel-delivery-order + cancel-batch (2 cancels)
-- [ ] T3: author delivery.yaml — GET searchbookingdetail (query planningIds + booking/timeline shapes)
-- [ ] T4: author delivery.yaml — POST /d2c-orders/filter (D2cFilterBody + Paginated<D2cOrderDto> + role gate 4 roles)
-- [ ] T5: author delivery.yaml — PUT /d2c-orders/{orderCode}/note + GET /d2c-orders/export (CSV BOM format: binary)
-- [ ] T6: cross-check shapes vs api-contracts/delivery-batch.ts + routes (READ-ONLY probe)
-- [ ] T7: drift-guard scoped — test/openapi.drift.delivery.test.ts (9/9) + vitest BFF xanh
-- [ ] T8: verify — try-it-out quotes + export CSV qua browser Rule 0 (tầng DOM+FLOW) + code-reviewer độc lập
+- [x] T1: author delivery.yaml — POST /delivery-batch/quotes + planning/confirm + booking (3 ops NVC)
+- [x] T2: author delivery.yaml — cancel-delivery-order + cancel-batch (2 cancels)
+- [x] T3: author delivery.yaml — GET searchbookingdetail (query planningIds + booking/timeline shapes)
+- [x] T4: author delivery.yaml — POST /d2c-orders/filter (D2cFilterBody + Paginated<D2cOrderDto> + role gate 4 roles)
+- [x] T5: author delivery.yaml — PUT /d2c-orders/{orderCode}/note + GET /d2c-orders/export (CSV BOM format: binary)
+- [x] T6: cross-check shapes vs api-contracts/delivery-batch.ts + routes (READ-ONLY probe) — live smoke bắt thêm gap: 4 ops delivery-batch thiếu 404 NOT_FOUND (batch/planning lạ) → fix f4e6a75; searchbookingdetail id lạ = 200 (KHÔNG thêm 404 suy đoán)
+- [x] T7: drift-guard scoped — test/openapi.drift.delivery.test.ts (9/9) + vitest BFF xanh (409 passed / 1 skipped DRIFT_FULL)
+- [x] T8: verify — try-it-out quotes + export CSV qua browser Rule 0 (tầng DOM+FLOW PASS: quotes 200 render đúng schema, export 200 + headers filename/content-length 979772 + Download link; tầng VISUAL: screenshot CDP timeout 3/3 — nhờ user xác nhận theo precedent SF-1/SF-2) + code-reviewer độc lập
 - [ ] T9: merge no-ff vào story/fi326-api-docs-swagger + story-verify sf-6 + Linear audit
 
 ## Verify (Phase 5) — ACCEPTANCE checklist (từ context pack sf-6.md)
 
-- [ ] `/documentation`: tag **Delivery** đủ 9 ops render
-- [ ] Try-it-out token manager: `POST /delivery-batch/quotes` body example → response khớp schema
-- [ ] Try-it-out: `GET /d2c-orders/export?from=…&to=…` → tải CSV (evidence browser)
-- [ ] Drift-guard scoped 9/9; BFF vitest toàn xanh
+- [x] `/documentation`: tag **Delivery** đủ 9 ops render (DOM đếm 9 opblock id `operations-Delivery-*`)
+- [x] Try-it-out token manager: `POST /delivery-batch/quotes` body example → response khớp schema (live 200, `serviceId SGCN / fee 28600 / meta.mock`)
+- [x] Try-it-out: `GET /d2c-orders/export?from=…&to=…` → tải CSV (evidence browser: live 200 + `content-disposition: attachment; filename="D2C_Order_2026-09-05_2026-09-05.csv"` + content-length 979772 + nút Download file; CLI: 167.454 dòng BOM ef-bb-bf 18 cột khớp spec)
+- [x] Drift-guard scoped 9/9; BFF vitest toàn xanh (409 passed / 1 skipped = DRIFT_FULL SF-9)
+- [ ] VISUAL screenshot: CDP timeout 3/3 — CHỜ user/coordinator xác nhận bằng mắt (Rule 0 nói thật)

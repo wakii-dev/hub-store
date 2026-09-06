@@ -35,8 +35,8 @@ paths:
               properties:
                 shopCode:
                   type: string
-                  description: Mã shop/kho xuất hàng.
-                  example: SHOP-001
+                  description: Mã shop/kho xuất hàng (seed dev 30201..30205 — fee-limit seed theo shop).
+                  example: '30201'
                 stopOrders:
                   type: array
                   description: Các điểm giao cần báo giá (≥1) — thứ tự = stopOrder dự kiến.
@@ -61,7 +61,7 @@ paths:
                         example: 550000
                   minItems: 1
             example:
-              shopCode: SHOP-001
+              shopCode: '30201'
               stopOrders:
                 - address: '123 Nguyễn Huệ, P. Bến Nghé, Q.1, TP.HCM'
                   distance: 6.2
@@ -89,27 +89,27 @@ paths:
                       properties:
                         serviceId:
                           type: string
-                          description: ID dịch vụ NVC — nhúng lại vào confirm/booking.
+                          description: ID dịch vụ NVC — nhúng lại vào confirm/booking (mock fleet SGCN/500KG/1T/2T/3.5T/8T).
                           example: SGCN
                         name:
                           type: string
-                          example: 'Giao hàng tiêu chuẩn'
+                          example: 'Xe máy'
                         vehicleType:
                           type: string
                           description: Mức tải trọng của quote này.
-                          example: '1T'
+                          example: SGCN
                         fee:
                           type: number
                           description: Tổng phí (VND) = baseFee + per-km × distance.
-                          example: 42000
+                          example: 28600
                         baseFee:
                           type: number
                           description: Phí nền (VND).
-                          example: 20000
+                          example: 10000
                         etaMinutes:
                           type: integer
                           description: ETA dự kiến (phút).
-                          example: 90
+                          example: 20
                         isExceedFeeLimit:
                           type: boolean
                           description: fee > limit (strict >) — true thì BE chặn confirm/booking.
@@ -123,10 +123,10 @@ paths:
                             properties:
                               code:
                                 type: string
-                                example: COD
+                                example: ROUTE_MULTI
                               name:
                                 type: string
-                                example: 'Thu tiền hộ'
+                                example: 'Giao nhiều điểm'
                               grp:
                                 type: string
                                 description: >
@@ -136,46 +136,59 @@ paths:
                               fee:
                                 type: number
                                 description: Phí addon (VND).
-                                example: 5000
+                                example: 15000
                   meta: &metaDto
                     type: object
-                    description: Meta chung mọi response /delivery-batch/* — mock=true → mock mode.
+                    description: Meta chung mọi response /delivery-batch/* — mock=true → mock mode (mock dev luôn true).
                     required: [mock]
                     properties:
                       mock:
                         type: boolean
-                        example: false
+                        example: true
               example:
                 quotes:
                   - serviceId: SGCN
-                    name: 'Giao hàng tiêu chuẩn'
-                    vehicleType: '1T'
-                    fee: 42000
-                    baseFee: 20000
-                    etaMinutes: 90
+                    name: 'Xe máy'
+                    vehicleType: SGCN
+                    fee: 28600
+                    baseFee: 10000
+                    etaMinutes: 20
                     isExceedFeeLimit: false
                     addonServices:
-                      - code: COD
-                        name: 'Thu tiền hộ'
+                      - code: ROUTE_MULTI
+                        name: 'Giao nhiều điểm'
                         grp: ROUTE
-                        fee: 5000
-                  - serviceId: SGHoaToc
-                    name: 'Giao hàng hoả tốc'
-                    vehicleType: '500Kg'
-                    fee: 68000
-                    baseFee: 30000
-                    etaMinutes: 45
+                        fee: 15000
+                      - code: LOADING_MAN
+                        name: 'Bốc xếp hàng'
+                        grp: LOADING
+                        fee: 20000
+                      - code: DOCUMENT
+                        name: 'Chứng từ kèm theo'
+                        grp: DOCUMENT
+                        fee: 0
+                      - code: ROUND_TRIP
+                        name: 'Giao rồi về'
+                        grp: ROUND_TRIP
+                        fee: 30000
+                  - serviceId: 500KG
+                    name: 'Xe tải 500kg'
+                    vehicleType: 500KG
+                    fee: 52900
+                    baseFee: 25000
+                    etaMinutes: 35
                     isExceedFeeLimit: false
                     addonServices: []
                 meta:
-                  mock: false
+                  mock: true
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '422':
           description: >
-            Upstream INVALID_ARGUMENT → VALIDATION_ERROR (details per-field) hoặc
-            FAILED_PRECONDITION → PRECONDITION_FAILED (delivery-batch map
-            preconditionAs422 — vd vượt fee limit).
+            Upstream INVALID_ARGUMENT → VALIDATION_ERROR (details per-field —
+            vd stopOrders rỗng/sai shape). Mapping FAILED_PRECONDITION →
+            PRECONDITION_FAILED áp cho family delivery-batch (fee-limit chặn
+            ở confirm/booking, không ở quotes).
           content:
             application/json:
               schema:
@@ -222,7 +235,7 @@ paths:
                       vehicleType:
                         type: string
                         description: Mức tải trọng đã chọn.
-                        example: '1T'
+                        example: SGCN
                       serviceId:
                         type: string
                         description: Dịch vụ đã chọn từ quotes.
@@ -232,19 +245,19 @@ paths:
                         description: Mã addon đã chọn (DeliveryAddonDto.code).
                         items:
                           type: string
-                        example: [COD]
+                        example: [ROUTE_MULTI]
                   minItems: 1
             example:
               batchCode: BATCH-000045
               plannings:
                 - stopOrder: 1
                   orderCode: ORD-000123
-                  vehicleType: '1T'
+                  vehicleType: SGCN
                   serviceId: SGCN
-                  addons: [COD]
+                  addons: [ROUTE_MULTI]
                 - stopOrder: 2
                   orderCode: ORD-000124
-                  vehicleType: '1T'
+                  vehicleType: SGCN
                   serviceId: SGCN
                   addons: []
       responses:
@@ -278,7 +291,7 @@ paths:
                           example: ORD-000123
                         vehicleType:
                           type: string
-                          example: '1T'
+                          example: SGCN
                         serviceId:
                           type: string
                           example: SGCN
@@ -286,7 +299,7 @@ paths:
                           type: array
                           items:
                             type: string
-                          example: [COD]
+                          example: [ROUTE_MULTI]
                         status:
                           type: string
                           description: DRAFT / CONFIRMED / BOOKED / CANCELLED.
@@ -303,7 +316,7 @@ paths:
                         fee:
                           type: number
                           description: Phí server-persisted tại thời điểm confirm (VND).
-                          example: 47000
+                          example: 28600
                   meta: *metaDto
               example:
                 plannings:
@@ -311,15 +324,15 @@ paths:
                     batchCode: BATCH-000045
                     stopOrder: 1
                     orderCode: ORD-000123
-                    vehicleType: '1T'
+                    vehicleType: SGCN
                     serviceId: SGCN
-                    addons: [COD]
+                    addons: [ROUTE_MULTI]
                     status: CONFIRMED
                     codAmount: 350000
                     totalBill: 550000
-                    fee: 47000
+                    fee: 28600
                 meta:
-                  mock: false
+                  mock: true
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '404':
@@ -406,29 +419,29 @@ paths:
                           example: '101'
                         carrierBookingId:
                           type: string
-                          description: Mã booking phía NVC.
-                          example: NVC-BK-000123
+                          description: Mã booking phía NVC (mock dev pattern MOCK-<seq>).
+                          example: MOCK-000123
                         driver:
                           type: string
                           description: '"<driverName> - <driverPhone>" — join 2 field proto.'
-                          example: 'Nguyen Van A - 0901234567'
+                          example: 'Nguyễn Văn A - 0901234501'
                         licensePlate:
                           type: string
                           example: 51A-123.45
                         status:
                           type: string
-                          description: Trạng thái booking phía NVC (ACTIVE sau book thành công).
-                          example: ACTIVE
+                          description: Trạng thái booking phía NVC (DRIVER_FOUND sau book thành công ở mock).
+                          example: DRIVER_FOUND
                   meta: *metaDto
               example:
                 bookings:
                   - planningId: '101'
-                    carrierBookingId: NVC-BK-000123
-                    driver: 'Nguyen Van A - 0901234567'
+                    carrierBookingId: MOCK-000123
+                    driver: 'Nguyễn Văn A - 0901234501'
                     licensePlate: 51A-123.45
-                    status: ACTIVE
+                    status: DRIVER_FOUND
                 meta:
-                  mock: false
+                  mock: true
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '404':
@@ -496,7 +509,7 @@ paths:
                 planningId: '101'
                 status: CANCELLED
                 meta:
-                  mock: false
+                  mock: true
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '404':
@@ -576,7 +589,7 @@ paths:
                     status: DRAFT
                 cancelledCount: 1
                 meta:
-                  mock: false
+                  mock: true
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '404':
@@ -639,19 +652,19 @@ paths:
                           properties:
                             carrierBookingId:
                               type: string
-                              example: NVC-BK-000123
+                              example: MOCK-000123
                             driverName:
                               type: string
-                              example: 'Nguyen Van A'
+                              example: 'Nguyễn Văn A'
                             driverPhone:
                               type: string
-                              example: '0901234567'
+                              example: '0901234501'
                             licensePlate:
                               type: string
                               example: 51A-123.45
                             status:
                               type: string
-                              example: ACTIVE
+                              example: DRIVER_FOUND
                             bookedAt:
                               type: string
                               format: date-time
@@ -674,8 +687,8 @@ paths:
                             properties:
                               status:
                                 type: string
-                                description: Mã trạng thái tracking phía NVC.
-                                example: PICKED_UP
+                                description: Mã trạng thái tracking (mock ORDER_CREATED/DRIVER_FOUND/DELIVERING/COMPLETED/FAILED/CANCELLED).
+                                example: DRIVER_FOUND
                               source:
                                 type: string
                                 description: Nguồn mốc — BE | PARTNER.
@@ -693,24 +706,32 @@ paths:
                 bookings:
                   - planningId: '101'
                     booking:
-                      carrierBookingId: NVC-BK-000123
-                      driverName: 'Nguyen Van A'
-                      driverPhone: '0901234567'
+                      carrierBookingId: MOCK-000123
+                      driverName: 'Nguyễn Văn A'
+                      driverPhone: '0901234501'
                       licensePlate: 51A-123.45
-                      status: ACTIVE
+                      status: CANCELLED
                       bookedAt: '2026-09-06T03:30:00.000Z'
                       cancelledAt: '2026-09-06T05:00:00.000Z'
                       cancelReason: 'Khách hủy đơn'
                     timeline:
-                      - status: PICKED_UP
+                      - status: ORDER_CREATED
+                        source: BE
+                        occurredAt: '2026-09-06T03:30:00.000Z'
+                        note: 'Đã tạo booking'
+                      - status: DRIVER_FOUND
                         source: PARTNER
-                        occurredAt: '2026-09-06T04:00:00.000Z'
-                        note: 'Tài xế đã lấy hàng'
+                        occurredAt: '2026-09-06T03:45:00.000Z'
+                        note: 'Đã gán tài xế'
+                      - status: CANCELLED
+                        source: PARTNER
+                        occurredAt: '2026-09-06T05:00:00.000Z'
+                        note: 'Khách hủy đơn'
                   - planningId: '102'
                     booking: null
                     timeline: []
                 meta:
-                  mock: false
+                  mock: true
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '422':
@@ -857,42 +878,42 @@ paths:
                               example: GHTK
                             shop:
                               type: string
-                              example: SHOP-001
+                              example: 'Shop Thời Trang ABC'
                             exportEmployee:
                               type: string
                               description: Người xuất hàng.
-                              example: 'warehouse01'
+                              example: 'Nguyễn Văn Hùng'
                             exportTime:
                               type: string
                               format: date-time
                               description: ISO-8601 — có mặt khi đã xuất.
-                              example: '2026-09-06T02:30:00.000Z'
+                              example: '2026-08-07T08:26:00.000Z'
                             pushTime:
                               type: string
                               format: date-time
                               description: ISO-8601 — có mặt khi đã đẩy sang NVC.
-                              example: '2026-09-06T03:00:00.000Z'
+                              example: '2026-08-07T08:26:00.000Z'
                             receiverName:
                               type: string
-                              example: 'Tran Thi B'
+                              example: 'Lý Tuấn Kiệt'
                             receiverPhone:
                               type: string
-                              example: '0912345678'
+                              example: '0957484314'
                             receiverAddress:
                               type: string
-                              example: '45 Lê Lợi, Q.1, TP.HCM'
+                              example: 'Số 149, đường Phạm Văn Đồng, Hà Nội'
                             serviceType:
                               type: string
                               description: Loại dịch vụ vận chuyển.
-                              example: 'Tiêu chuẩn'
+                              example: 'Giao tiết kiệm'
                             productCategory:
                               type: string
                               description: Ngành hàng.
-                              example: 'Thời trang'
+                              example: 'Giày dép'
                             productType:
                               type: string
                               description: Loại sản phẩm.
-                              example: 'Áo'
+                              example: 'Sneaker'
                             isDebtSplitting:
                               type: boolean
                               description: Có tách nợ (COD split) hay không.
@@ -902,38 +923,38 @@ paths:
                               example: 'Giao giờ hành chính'
                             status:
                               type: string
-                              description: Trạng thái D2C.
-                              example: NEW
+                              description: Trạng thái D2C — pending | pushed | exported | cancelled.
+                              example: pushed
                             createdAt:
                               type: string
                               format: date-time
                               description: ISO-8601 — có mặt khi order có created_at.
-                              example: '2026-09-06T01:00:00.000Z'
+                              example: '2026-08-07T01:15:00.000Z'
                             id:
                               type: number
                               description: DB id (number).
-                              example: 1001
+                              example: 934527
               example:
                 items:
-                  - orderCode: ORD-000123
-                    orderIdInter: 'NVC-INT-000456'
-                    deliveryId: 'VDN.000123'
+                  - orderCode: D2C-934527
+                    orderIdInter: 'INT-1814527'
+                    deliveryId: 'VTP99D934527'
                     carrier: GHTK
-                    shop: SHOP-001
-                    exportEmployee: 'warehouse01'
-                    exportTime: '2026-09-06T02:30:00.000Z'
-                    pushTime: '2026-09-06T03:00:00.000Z'
-                    receiverName: 'Tran Thi B'
-                    receiverPhone: '0912345678'
-                    receiverAddress: '45 Lê Lợi, Q.1, TP.HCM'
-                    serviceType: 'Tiêu chuẩn'
-                    productCategory: 'Thời trang'
-                    productType: 'Áo'
+                    shop: 'Shop Thời Trang ABC'
+                    exportEmployee: 'Nguyễn Văn Hùng'
+                    exportTime: '2026-08-07T08:26:00.000Z'
+                    pushTime: '2026-08-07T08:26:00.000Z'
+                    receiverName: 'Lý Tuấn Kiệt'
+                    receiverPhone: '0957484314'
+                    receiverAddress: 'Số 149, đường Phạm Văn Đồng, Hà Nội'
+                    serviceType: 'Giao tiết kiệm'
+                    productCategory: 'Giày dép'
+                    productType: 'Sneaker'
                     isDebtSplitting: false
-                    note: 'Giao giờ hành chính'
-                    status: NEW
-                    createdAt: '2026-09-06T01:00:00.000Z'
-                    id: 1001
+                    note: ''
+                    status: pushed
+                    createdAt: '2026-08-07T01:15:00.000Z'
+                    id: 934527
                 total: 42
                 page: 1
                 pageSize: 20
@@ -969,7 +990,7 @@ paths:
           description: Mã đơn D2C.
           schema:
             type: string
-            example: ORD-000123
+            example: D2C-934527
       requestBody:
         required: true
         content:
@@ -1001,25 +1022,25 @@ paths:
                       - *d2cOrder
               example:
                 item:
-                  orderCode: ORD-000123
-                  orderIdInter: 'NVC-INT-000456'
-                  deliveryId: 'VDN.000123'
+                  orderCode: D2C-934527
+                  orderIdInter: 'INT-1814527'
+                  deliveryId: 'VTP99D934527'
                   carrier: GHTK
-                  shop: SHOP-001
-                  exportEmployee: 'warehouse01'
-                  exportTime: '2026-09-06T02:30:00.000Z'
-                  pushTime: '2026-09-06T03:00:00.000Z'
-                  receiverName: 'Tran Thi B'
-                  receiverPhone: '0912345678'
-                  receiverAddress: '45 Lê Lợi, Q.1, TP.HCM'
-                  serviceType: 'Tiêu chuẩn'
-                  productCategory: 'Thời trang'
-                  productType: 'Áo'
+                  shop: 'Shop Thời Trang ABC'
+                  exportEmployee: 'Nguyễn Văn Hùng'
+                  exportTime: '2026-08-07T08:26:00.000Z'
+                  pushTime: '2026-08-07T08:26:00.000Z'
+                  receiverName: 'Lý Tuấn Kiệt'
+                  receiverPhone: '0957484314'
+                  receiverAddress: 'Số 149, đường Phạm Văn Đồng, Hà Nội'
+                  serviceType: 'Giao tiết kiệm'
+                  productCategory: 'Giày dép'
+                  productType: 'Sneaker'
                   isDebtSplitting: false
                   note: 'Giao giờ hành chính'
-                  status: NEW
-                  createdAt: '2026-09-06T01:00:00.000Z'
-                  id: 1001
+                  status: pushed
+                  createdAt: '2026-08-07T01:15:00.000Z'
+                  id: 934527
         '400':
           description: note thiếu/không phải chuỗi/ > 500 ký tự — BAD_REQUEST (validate BFF-side).
           content:
@@ -1053,7 +1074,7 @@ paths:
         CHỈ theo `from`/`to` — khoảng NGÀY TẠO (created_at) bounds full-day giờ
         VN (`T00:00:00+07:00` → `T23:59:59+07:00`), KHÔNG mang filter khác.
         Guard date-only `YYYY-MM-DD` + from ≤ to + (to-from) ≤ 31 ngày — vi phạm
-        → 400 ('Khoảng thời gian export tối đa 31 ngày.'). File Excel-safe:
+        → 400 ('Khoảng thời gian export tối đa 31 ngày'). File Excel-safe:
         mở đầu BOM `﻿` (UTF-8 Excel nhận diện tiếng Việt), 18 cột CSV_HEADER
         (Mã đơn → Ngày tạo), CSV escape RFC (bọc `"` khi chứa , " newline) +
         formula-guard prefix `'` cho giá trị bắt đầu = + - @ \t \r (OWASP).
@@ -1097,7 +1118,7 @@ paths:
         '400':
           description: >-
             from/to thiếu, sai format YYYY-MM-DD, from > to, hoặc khoảng > 31
-            ngày — BAD_REQUEST ('Khoảng thời gian export tối đa 31 ngày.').
+            ngày — BAD_REQUEST ('Khoảng thời gian export tối đa 31 ngày').
           content:
             application/json:
               schema:
