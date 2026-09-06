@@ -34,24 +34,24 @@
 
 ## Tasks
 
-- [ ] T1: author platform.yaml — GET /users + POST /users (pattern
+- [x] T1: author platform.yaml — GET /users + POST /users (pattern
       `^[a-zA-Z0-9._-]{3,64}$`, password min 8, role ∈ KnownRoles; 422 details[]
       từng field; 409 USERNAME_EXISTS)
-- [ ] T2: author platform.yaml — POST /users/{userId}/set-password +
+- [x] T2: author platform.yaml — POST /users/{userId}/set-password +
       PUT /users/{userId}/enabled (self-lock note) + DELETE /users/{userId}
-- [ ] T3: author platform.yaml — POST /avatar (multipart ≤5MB, magic bytes
+- [x] T3: author platform.yaml — POST /avatar (multipart ≤5MB, magic bytes
       jpeg/png) + GET /avatar/{userId} (image binary, content-type thật)
-- [ ] T4: author platform.yaml — POST /auth/reset-password (x-dev-only, public,
+- [x] T4: author platform.yaml — POST /auth/reset-password (x-dev-only, public,
       min 6, 400 BAD_REQUEST)
-- [ ] T5: author platform.yaml — GET /notifications + GET /api/notifications
+- [x] T5: author platform.yaml — GET /notifications + GET /api/notifications
       (2 alias paths, response {items,total} schema riêng NotificationItem)
-- [ ] T6: author platform.yaml — GET /events SSE (security accessTokenQuery,
+- [x] T6: author platform.yaml — GET /events SSE (security accessTokenQuery,
       text/event-stream, frame {type,payload,ts}, 9 event types + stream.degraded,
       cap 5/user, lifetime 30m, heartbeat 15s) + transfer 2 ops (create 201
       {ticket}, list {items}, 422/409 shapes)
-- [ ] T7: cross-check vs mappers/staffArea.ts + mappers/transfer.ts +
+- [x] T7: cross-check vs mappers/staffArea.ts + mappers/transfer.ts +
       lib/{realtime-events,notifications}.ts (READ-ONLY probe)
-- [ ] T8: drift-guard scoped — test/openapi.drift.platform.test.ts (13/13) +
+- [x] T8: drift-guard scoped — test/openapi.drift.platform.test.ts (13/13) +
       vitest BFF xanh
 - [ ] T9: verify — try-it-out GET /notifications + GET /users (manager token) +
       SSE curl thật ?access_token nhận event-stream (bằng chứng terminal)

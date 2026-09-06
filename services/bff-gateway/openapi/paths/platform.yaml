@@ -71,7 +71,8 @@ paths:
           description: >
             Keycloak Admin API lỗi — code `UPSTREAM_UNAVAILABLE` hoặc
             `KC_ADMIN_NOT_CONFIGURED` (thiếu env admin credential).
-          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
     post:
       tags: [Administration]
       operationId: createUser
@@ -134,17 +135,20 @@ paths:
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '409':
           description: Username đã tồn tại trên Keycloak (code `USERNAME_EXISTS`).
-          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
         '422':
           description: >
             Validation BFF fail — `details[]` từng field (username pattern /
             password min 8 / role không thuộc KNOWN_ROLES).
-          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '503':
           description: >
             Keycloak Admin API lỗi — code `UPSTREAM_UNAVAILABLE` hoặc
             `KC_ADMIN_NOT_CONFIGURED`.
-          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
   /users/{userId}/set-password:
     parameters:
@@ -189,13 +193,16 @@ paths:
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '404':
           description: Không tìm thấy user (code `NOT_FOUND`).
-          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
           description: '`password` thiếu hoặc dưới 8 ký tự.'
-          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '503':
           description: Keycloak Admin API lỗi.
-          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
   /users/{userId}/enabled:
     parameters:
@@ -239,15 +246,18 @@ paths:
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '404':
           description: Không tìm thấy user (code `NOT_FOUND`).
-          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
           description: >
             `enabled` không phải boolean, hoặc tự khóa chính mình (code
             `SELF_LOCK_DENIED`).
-          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '503':
           description: Keycloak Admin API lỗi.
-          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
   /users/{userId}:
     parameters:
@@ -279,13 +289,16 @@ paths:
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '404':
           description: Không tìm thấy user (code `NOT_FOUND`).
-          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
           description: Tự xóa tài khoản của chính mình (code `SELF_DELETE_DENIED`).
-          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '503':
           description: Keycloak Admin API lỗi.
-          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
   /avatar:
     post:
@@ -331,7 +344,8 @@ paths:
           description: >
             Thiếu field `file`, file vượt 5MB, hoặc bytes không phải
             JPEG/PNG (magic bytes fail) — code `BAD_REQUEST`.
-          $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '503':
@@ -386,12 +400,14 @@ paths:
                 format: binary
         '400':
           description: '`userId` rỗng hoặc vượt 255 ký tự — code `BAD_REQUEST`.'
-          $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '404':
           description: User chưa có avatar (hoặc content-type lưu không hợp lệ).
-          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '503':
           description: Avatar storage không khả dụng (code `UNAVAILABLE`).
           content:
@@ -452,17 +468,20 @@ paths:
           description: >
             Thiếu `username` (rỗng) hoặc `newPassword` dưới 6 ký tự — code
             `BAD_REQUEST`.
-          $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
         '404':
           description: >
             Username không tồn tại trong realm (code `NOT_FOUND`) — không
             chống user-enumeration vì dev-only.
-          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '500':
           description: >
             Keycloak admin API lỗi (lấy admin token / reset fail) — handler
             throw → 500 `INTERNAL`.
-          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/Internal500'
 
   /notifications:
     get:
@@ -757,17 +776,20 @@ paths:
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '409':
           description: Đơn đã có ticket PENDING (upstream ALREADY_EXISTS).
-          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
         '422':
           description: >
             `toHub` thiếu, hoặc upstream từ chối (tách nợ fail —
             INVALID_ARGUMENT) — `details[]` kèm field.
-          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '500':
           description: >
             Upstream trả response thiếu `ticket` (bug upstream) — code
             `INTERNAL` (`routes/transfer.ts:57-61`).
-          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/Internal500'
         '503':
           $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
@@ -821,10 +843,12 @@ paths:
           description: >
             `codes` rỗng hoặc vượt 100 mã, `status` ngoài whitelist — code
             `VALIDATION_ERROR` + details[].
-          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+          allOf:
+            $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '500':
           description: Lỗi không phân loại upstream — code `INTERNAL`.
-          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+          allOf:
+            - $ref: '../components/envelopes.yaml#/components/responses/Internal500'
         '503':
           $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
