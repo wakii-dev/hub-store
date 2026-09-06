@@ -1,0 +1,92 @@
+# Hub Store BFF API — root OpenAPI spec (SSOT của API docs).
+#
+# Multi-file layout (SF-1 foundation, story FI-326):
+#   paths/*.yaml        — 1 file/domain, SF domain tự sở hữu (tier-1 KHÔNG chạm root)
+#   components/*.yaml   — shapes dùng chung (envelopes/enums/parameters) — SF-1-owned
+#
+# Root KHÔNG liệt kê từng path-item: `x-path-files` liệt kê 8 file domain và
+# bundler (src/plugins/openapi-bundle.ts) merge `paths` map của từng file vào
+# spec cuối tại runtime — thêm route mới = sửa ĐÚNG file domain của nó,
+# drift-guard (test/openapi.drift.test.ts) chặn lệch code ↔ spec.
+openapi: 3.0.3
+info:
+  title: Hub Store BFF API
+  version: 0.1.0
+  description: >
+    REST surface của BFF gateway (Fastify 5, :8080) — lớp duy nhất browser nói
+    chuyện với backend (services nội bộ nói gRPC, proto là SSOT riêng).
+    Spec tiếng Anh, thuật ngữ nghiệp vụ giữ nguyên (fulfillCode, batch, COD).
+servers:
+  - url: http://localhost:8080
+    description: dev — URL canonical (spec là tài liệu, không parametrize PORT_BFF)
+security:
+  # Mặc định mọi endpoint cần JWT; public endpoints (System, webhook) override
+  # bằng `security: []` hoặc scheme riêng trong paths file.
+  - bearerAuth: []
+tags:
+  - name: System
+    description: Liveness/readiness/version — public, không JWT (3 ops — pilot SF-1)
+  - name: Orders
+    description: Fulfillment orders — filter/detail/audit/mutations/export/dashboard (13 ops)
+  - name: Master Data
+    description: Regions/delivery-staff/shops — public read cho form FE (3 ops)
+  - name: Batches
+    description: Batching — packing-suggest/create/filter/criteria/presets (9 ops)
+  - name: Intake
+    description: Nhận đơn lẻ + import template CSV/preview/confirm bulk (8 ops)
+  - name: Webhooks
+    description: Webhook nhận đơn từ sàn TMĐT — máy-máy, auth HMAC X-Signature (1 op)
+  - name: Field Service
+    description: Delivery/service orders lifecycle + technicians + service employees (13 ops)
+  - name: Delivery
+    description: Last-mile quotes/planning/booking NVC + D2C orders (9 ops)
+  - name: COD Settlement
+    description: Đối soát COD — confirm per-order/batch, pending, settlement (6 ops)
+  - name: Print
+    description: In PDF + registry máy in (6 ops)
+  - name: Administration
+    description: Users KC + avatar + reset-password (dev-only) (8 ops)
+  - name: Realtime & Transfers
+    description: Notifications feed + SSE events + transfer tickets (5 ops)
+paths:
+  # Pre-wire tier-1 (SF-1): bundler merge map `paths` của TỪNG file — tier-1 chỉ
+  # fill stub của mình, KHÔNG BAO GIỜ chạm root (tránh merge-conflict 7-way).
+  x-path-files:
+    - ./paths/system.yaml # SF-1 — System (pilot)
+    - ./paths/fulfillment.yaml # SF-2 — Orders + Master Data
+    - ./paths/batches.yaml # SF-3 — Batches
+    - ./paths/intake.yaml # SF-4 — Intake + Webhooks
+    - ./paths/tech.yaml # SF-5 — Field Service
+    - ./paths/delivery.yaml # SF-6 — Delivery + D2C
+    - ./paths/cod-print.yaml # SF-7 — COD Settlement + Print
+    - ./paths/platform.yaml # SF-8 — Administration + Realtime & Transfers
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: >
+        Keycloak JWT (realm hubstore, RS256) — `Authorization: Bearer <token>`.
+        Role lấy từ claim `realm_access.roles` ∩ KNOWN_ROLES; role gates
+        per-endpoint ghi trong description từng op.
+    webhookHmac:
+      type: apiKey
+      in: header
+      name: X-Signature
+      description: >
+        HMAC-SHA256 của raw body bằng shared secret (env WEBHOOK_HMAC_SECRET)
+        — máy-máy từ sàn TMĐT, không JWT. Header `X-Source` nhận diện sàn.
+    accessTokenQuery:
+      type: apiKey
+      in: query
+      name: access_token
+      description: >
+        SSE EventSource KHÔNG set được Authorization header — chỉ endpoint
+        /events chấp nhận token qua query (verify JWKS y như Bearer).
+  # Components dùng chung tách file (SF-1-owned) — bundler merge schemas/
+  # responses/parameters từ các file dưới đây.
+  x-component-files:
+    - ./components/envelopes.yaml
+    - ./components/enums.yaml
+    - ./components/parameters.yaml
