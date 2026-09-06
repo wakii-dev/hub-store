@@ -1,3 +1,931 @@
-# STUB — tier-1 SF fill (SF-1 pre-wire). Domain KHÔNG chạm root openapi.yaml;
-# chỉ thêm path-items vào file này. Bundle merge map `paths` vào root tại runtime.
-paths: {}
+# COD Settlement + Print + Printers — 12 ops (FI-326 SF-7). Shapes THẬT từ code
+# (READ-ONLY nguồn):
+#   routes/cod.ts                   — 6 ops /cod/* (role gates COD_CONFIRM_ROLES /
+#                                     COD_SETTLEMENT_ROLES, kỳ [from, to) +07:00)
+#   routes/print.ts                 — POST /fulfillment/print (PDF binary) +
+#                                     GET print/printers + GET print-errors/counts
+#   routes/printers.ts              — registry CRUD /fulfillment/printers (Admin write)
+#   api-contracts/settlement.ts     — SettlementShopRow / SettlementDetailItem /
+#                                     CodPendingDto / ConfirmCod* DTO camelCase
+#   api-contracts/print.ts          — PrinterDto / PrintErrorCounts / PrintResponseMeta
+#   mappers/print.ts                — printType string ↔ proto enum (5 loại phiếu)
+#   lib/grpc-error.ts               — map gRPC → HTTP envelope chung (422/404/409/503)
+#   lib/csv.ts                      — csvRow RFC 4180 \r\n + formula-guard (CSV Excel-safe)
+# Kỳ đối soát (SF-14 D9): from/to date-only `YYYY-MM-DD` NGÀY VIỆT NAM — BFF wrap
+# [from 00:00 +07:00, to+1 00:00 +07:00) — from INCLUSIVE, to EXCLUSIVE (khác d2c
+# inclusive 23:59:59) để khớp aggregate SQL bên Java. Sai lịch/khoảng → 400.
+# Schema domain inline trong file này (bundler chỉ merge `paths` — không contribute
+# components); shape lặp dùng YAML anchor (*settlementRow, *printerDto…).
+paths:
+  /cod/confirm:
+    post:
+      tags: [COD Settlement]
+      operationId: confirmCod
+      summary: Xác nhận thu COD per-order (D3)
+      description: >
+        Ghi nhận thu tiền COD của 1 đơn — màn ops (D2/D3). Role gate
+        Coordinator | WarehouseOps | Manager | Admin. `collectedAmount` BỎ TRỐNG
+        = thu đủ theo `expectedAmount`; gửi `0` = thu thật 0 đồng (phân biệt
+        presence — D3); phải là số nguyên ≥ 0 (int64 — vượt MAX_SAFE_INTEGER →
+        400). Actor ghi audit từ `preferred_username` (x-user-name). gRPC
+        ConfirmCod (hubstore.fulfillment.v1) — per-code result giữ nguyên
+        success/message để FE toast từng đơn.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [fulfillCode]
+              properties:
+                fulfillCode:
+                  type: string
+                  description: Mã đơn cần xác nhận thu.
+                  example: ORD-000123
+                collectedAmount:
+                  type: integer
+                  format: int64
+                  minimum: 0
+                  description: >
+                    Số tiền thực thu (VND) — bỏ trống = lấy expected; 0 = thu
+                    thật 0 đồng.
+                  example: 350000
+            example:
+              fulfillCode: ORD-000123
+              collectedAmount: 350000
+      responses:
+        '200':
+          description: Kết quả xác nhận per-code (mảng 1 phần tử — FE toast từng đơn).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results]
+                properties:
+                  results:
+                    type: array
+                    items: &confirmCodResult
+                      type: object
+                      description: Per-code result — mirror proto ConfirmCodResult.
+                      required: [fulfillCode, success, message]
+                      properties:
+                        fulfillCode:
+                          type: string
+                          example: ORD-000123
+                        success:
+                          type: boolean
+                          example: true
+                        message:
+                          type: string
+                          description: Thông báo kết quả (FE hiển thị toast).
+                          example: 'Đã xác nhận thu COD.'
+              example:
+                results:
+                  - fulfillCode: ORD-000123
+                    success: true
+                    message: 'Đã xác nhận thu COD.'
+        '400':
+          description: >
+            `fulfillCode` rỗng/thiếu, hoặc `collectedAmount` không nguyên/không
+            âm — raise ngay tại BFF (BAD_REQUEST).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: 'fulfillCode bắt buộc.'
+                code: BAD_REQUEST
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /cod/confirm-batch:
+    post:
+      tags: [COD Settlement]
+      operationId: confirmBatchCod
+      summary: Xác nhận thu COD theo phiếu — mọi đơn PENDING (D3)
+      description: >
+        Bulk confirm toàn bộ đơn COD PENDING của phiếu với collected = expected.
+        Role gate Coordinator | WarehouseOps | Manager | Admin. gRPC
+        ConfirmBatchCod (hubstore.fulfillment.v1).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [batchCode]
+              properties:
+                batchCode:
+                  type: string
+                  description: Mã phiếu cần thu COD toàn bộ đơn PENDING.
+                  example: BATCH-000045
+            example:
+              batchCode: BATCH-000045
+      responses:
+        '200':
+          description: Số đơn đã xác nhận + tổng tiền thu được của phiếu.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [confirmedCount, totalAmount]
+                properties:
+                  confirmedCount:
+                    type: integer
+                    description: Số đơn COD vừa chuyển sang CONFIRMED.
+                    example: 12
+                  totalAmount:
+                    type: integer
+                    format: int64
+                    description: Tổng tiền thu theo phiếu (VND).
+                    example: 4200000
+              example:
+                confirmedCount: 12
+                totalAmount: 4200000
+        '400':
+          description: 'batchCode rỗng/thiếu — raise ngay tại BFF (BAD_REQUEST).'
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: 'batchCode bắt buộc.'
+                code: BAD_REQUEST
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /cod/pending:
+    get:
+      tags: [COD Settlement]
+      operationId: getCodPending
+      summary: Badge COD chờ thu của phiếu (D2)
+      description: >
+        Số đơn COD PENDING + tổng tiền chờ thu theo phiếu — badge "COD chờ thu
+        (n)" trên màn phiếu (D2). Role gate Coordinator | WarehouseOps |
+        Manager | Admin. gRPC GetCodPending (hubstore.fulfillment.v1).
+      parameters:
+        - name: batchCode
+          in: query
+          required: true
+          description: Mã phiếu cần đếm đơn COD chờ thu.
+          schema:
+            type: string
+            example: BATCH-000045
+      responses:
+        '200':
+          description: Badge count + tổng tiền chờ thu.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: CodPendingDto (api-contracts/settlement.ts).
+                required: [pendingCount, totalAmount]
+                properties:
+                  pendingCount:
+                    type: integer
+                    description: Số đơn COD PENDING trong phiếu.
+                    example: 3
+                  totalAmount:
+                    type: integer
+                    format: int64
+                    description: Tổng tiền chờ thu (VND).
+                    example: 1050000
+              example:
+                pendingCount: 3
+                totalAmount: 1050000
+        '400':
+          description: 'batchCode thiếu/rỗng — raise ngay tại BFF (BAD_REQUEST).'
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: 'batchCode bắt buộc.'
+                code: BAD_REQUEST
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /cod/settlement:
+    get:
+      tags: [COD Settlement]
+      operationId: getSettlement
+      summary: Đối soát COD theo shop theo kỳ (D5 — Manager)
+      description: >
+        Aggregate đối soát per-shop trong kỳ [from, to) NGÀY VIỆT NAM — màn
+        Settlement Manager (D5/D6). Role gate Manager | Admin. Kỳ from/to
+        date-only `YYYY-MM-DD`: from INCLUSIVE 00:00 +07:00, to EXCLUSIVE
+        (00:00 ngày kế +07:00 — +07 không DST); sai lịch (2026-02-31) hoặc
+        from > to → 400 BAD_REQUEST. Upstream không phân trang — BFF slice
+        trên rows (total = số shop). gRPC GetSettlement (hubstore.fulfillment.v1).
+      parameters:
+        - &codFromQuery
+          name: from
+          in: query
+          required: true
+          description: >
+            Đầu kỳ (YYYY-MM-DD, ngày VN) — INCLUSIVE 00:00 +07:00.
+          schema:
+            type: string
+            format: date
+            example: '2026-09-01'
+        - &codToQuery
+          name: to
+          in: query
+          required: true
+          description: >
+            Cuối kỳ (YYYY-MM-DD, ngày VN) — EXCLUSIVE (không tính within ngày này).
+          schema:
+            type: string
+            format: date
+            example: '2026-09-06'
+        - $ref: '../components/parameters.yaml#/components/parameters/PageQuery'
+        - $ref: '../components/parameters.yaml#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Aggregate đối soát per-shop — phân trang chuẩn.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: &settlementRow
+                          type: object
+                          description: >
+                            SettlementShopRow — 1 dòng aggregate per-shop
+                            (api-contracts/settlement.ts, int64 Number hoá).
+                          required: [shopCode, shopName, totalOrders, totalExpected, totalCollected, diffAmount, pendingCount, mismatchCount]
+                          properties:
+                            shopCode:
+                              type: string
+                              example: SHOP-001
+                            shopName:
+                              type: string
+                              example: 'Shop Trung tâm'
+                            totalOrders:
+                              type: integer
+                              description: Tổng đơn COD trong kỳ.
+                              example: 42
+                            totalExpected:
+                              type: integer
+                              format: int64
+                              description: Tổng tiền COD phải thu (VND).
+                              example: 14700000
+                            totalCollected:
+                              type: integer
+                              format: int64
+                              description: Tổng tiền đã thu (VND).
+                              example: 13000000
+                            diffAmount:
+                              type: integer
+                              format: int64
+                              description: >
+                                Chênh lệch expected − collected (VND; âm = thu
+                                dư, dương = thiếu).
+                              example: 1700000
+                            pendingCount:
+                              type: integer
+                              description: Số đơn còn COD_PENDING trong kỳ.
+                              example: 3
+                            mismatchCount:
+                              type: integer
+                              description: >
+                                Số đơn CONFIRMED nhưng collected ≠ expected.
+                              example: 2
+              example:
+                items:
+                  - shopCode: SHOP-001
+                    shopName: 'Shop Trung tâm'
+                    totalOrders: 42
+                    totalExpected: 14700000
+                    totalCollected: 13000000
+                    diffAmount: 1700000
+                    pendingCount: 3
+                    mismatchCount: 2
+                total: 1
+                page: 1
+                pageSize: 20
+        '400': &codPeriodBadRequest
+          description: >
+            from/to thiếu, sai format YYYY-MM-DD, không tồn tại trong lịch, hoặc
+            from > to — BAD_REQUEST (message route: 'Kỳ đối soát yêu cầu
+            from/to là ngày hợp lệ dạng YYYY-MM-DD và from ≤ to.').
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: 'Kỳ đối soát yêu cầu from/to là ngày hợp lệ dạng YYYY-MM-DD và from ≤ to.'
+                code: BAD_REQUEST
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /cod/settlement.csv:
+    get:
+      tags: [COD Settlement]
+      operationId: exportSettlementCsv
+      summary: Export CSV kỳ đối soát (Manager)
+      description: >
+        Export toàn bộ aggregate per-shop của kỳ [from, to) (không phân trang)
+        — mirror màn D5. Role gate Manager | Admin. CSV Excel-safe (RFC 4180,
+        \r\n, formula-guard, lib/csv.ts) mở đầu BOM UTF-8 để Excel mở tiếng
+        Việt đúng, header 8 cột khớp màn hình: shop_code, shop_name,
+        total_orders, total_expected, total_collected, diff_amount,
+        pending_count, mismatch_count; kèm section `# Drilled mismatch orders`
+        (5 cột fulfill_code, batch_code, expected, collected, status) khi có
+        shop còn PENDING/lệch tiền. Content-Disposition attachment
+        `settlement_<from>_<to>.csv`. Buffer-then-send: mọi lỗi gRPC (aggregate
+        lẫn drill) trả error envelope TRƯỚC khi send — không bao giờ trả CSV đứt.
+      parameters:
+        - *codFromQuery
+        - *codToQuery
+      responses:
+        '200':
+          description: >
+            File CSV (BOM + \r\n) — 8 cột aggregate + section drill khi có đơn
+            cần xử lý.
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '400':
+          *codPeriodBadRequest
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /cod/settlement/detail:
+    get:
+      tags: [COD Settlement]
+      operationId: getSettlementDetail
+      summary: Drill-down xác nhận thu per-shop (D5 — Manager)
+      description: >
+        Danh sách confirmation (per-order) của 1 shop trong kỳ [from, to) —
+        drill-down từ row aggregate D5. Role gate Manager | Admin. Kỳ như
+        GET /cod/settlement (from INCLUSIVE / to EXCLUSIVE, ngày VN, sai → 400).
+        Upstream không phân trang — BFF slice (total = số confirmation).
+        gRPC GetSettlementDetail (hubstore.fulfillment.v1).
+      parameters:
+        - name: shopCode
+          in: query
+          required: true
+          description: Mã shop cần drill-down (không truyền → 400).
+          schema:
+            type: string
+            example: SHOP-001
+        - *codFromQuery
+        - *codToQuery
+        - $ref: '../components/parameters.yaml#/components/parameters/PageQuery'
+        - $ref: '../components/parameters.yaml#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Trang confirmation per-order của shop trong kỳ.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: &settlementDetailItem
+                          type: object
+                          description: >
+                            SettlementDetailItem — 1 confirmation (mirror proto
+                            CodConfirmation; dates ISO string, collectedAmount
+                            optional presence — absence = PENDING).
+                          required: [fulfillCode, batchCode, shopCode, shopName, expectedAmount, collectedBy, status]
+                          properties:
+                            fulfillCode:
+                              type: string
+                              example: ORD-000123
+                            batchCode:
+                              type: string
+                              example: BATCH-000045
+                            shopCode:
+                              type: string
+                              example: SHOP-001
+                            shopName:
+                              type: string
+                              example: 'Shop Trung tâm'
+                            expectedAmount:
+                              type: integer
+                              format: int64
+                              description: Tiền COD phải thu (VND).
+                              example: 350000
+                            collectedAmount:
+                              type: integer
+                              format: int64
+                              description: >
+                                Tiền thực thu (VND) — KHÔNG xuất hiện khi đơn
+                                còn PENDING; 0 = thu thật 0 đồng (D3).
+                              example: 350000
+                            collectedBy:
+                              type: string
+                              description: Username xác nhận thu.
+                              example: warehouse-op-01
+                            collectedAt:
+                              type: string
+                              format: date-time
+                              description: Mốc xác nhận thu (ISO).
+                              example: '2026-09-02T08:30:00.000Z'
+                            completedAt:
+                              type: string
+                              format: date-time
+                              description: Mốc hoàn tất đơn (ISO).
+                              example: '2026-09-02T09:00:00.000Z'
+                            status:
+                              type: integer
+                              description: >
+                                CodCollectionStatus — 0 COD_PENDING (chờ thu) ·
+                                1 COD_CONFIRMED (đã thu).
+                              enum: [0, 1]
+                              example: 1
+              example:
+                items:
+                  - fulfillCode: ORD-000123
+                    batchCode: BATCH-000045
+                    shopCode: SHOP-001
+                    shopName: 'Shop Trung tâm'
+                    expectedAmount: 350000
+                    collectedAmount: 350000
+                    collectedBy: warehouse-op-01
+                    collectedAt: '2026-09-02T08:30:00.000Z'
+                    completedAt: '2026-09-02T09:00:00.000Z'
+                    status: 1
+                total: 1
+                page: 1
+                pageSize: 20
+        '400':
+          description: >
+            `shopCode` thiếu/rỗng, hoặc kỳ from/to sai — BAD_REQUEST.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: 'shopCode bắt buộc.'
+                code: BAD_REQUEST
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/print:
+    post:
+      tags: [Print]
+      operationId: printBatch
+      summary: In phiếu PDF cho 1 lô đơn (D3 Print Shipment)
+      description: >
+        In 1 loại phiếu cho cả phiếu soạn hàng — FE gọi 5 lần cho "In tất cả"
+        (KHÔNG có printAll endpoint — pin §3.7). Flow: BFF hydrate batch từ Go
+        (GetBatchDetail) → serialize canonical JSON → push fat payload sang
+        print-service → stream PDF về. RESPONSE KHÔNG PHẢI JSON ENVELOPE —
+        trả thẳng `application/pdf` bytes (FE react-pdf render blob,
+        Content-Disposition inline `batchCode-printType.pdf`).
+        `printerId` rỗng `""` = PREVIEW — pass-through, không validate printer,
+        không record lỗi. In THẬT: BFF validate printerId thuộc registry trước
+        khi proxy (không có → 400 + record print-error), batch không tồn tại →
+        404; print-service fail trên lệnh in thật → record 1 lỗi per đơn.
+        Role: mọi user đã đăng nhập.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [batchCode, printType, printerId]
+              properties:
+                batchCode:
+                  type: string
+                  description: Phiếu cần in — BFF hydrate payload từ Go.
+                  example: BATCH-000045
+                printType:
+                  type: string
+                  description: >
+                    1 trong 5 loại phiếu (tab D3) — sai giá trị → 422.
+                  enum: [bill, delivery, handover_receipt, goods_handover, installation_acceptance]
+                  example: delivery
+                printerId:
+                  type: string
+                  description: >
+                    Máy in nhận lệnh — rỗng `""` = PREVIEW (không in thật).
+                  example: PRN-30201-01
+            example:
+              batchCode: BATCH-000045
+              printType: delivery
+              printerId: PRN-30201-01
+      responses:
+        '200':
+          description: >
+            PDF bytes TRỰC TIẾP (không JSON envelope) — content-type
+            application/pdf, tải về mở được bằng PDF reader.
+          content:
+            application/pdf:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: >
+            In thật với `printerId` không tồn tại trong registry — BAD_REQUEST
+            + record 1 print-error (D2).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: 'printerId "PRN-KHONG-TON-TAI" does not exist.'
+                code: BAD_REQUEST
+                details:
+                  - field: printerId
+                    message: 'printerId "PRN-KHONG-TON-TAI" does not exist.'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          description: Batch không tồn tại — upstream NOT_FOUND từ batching-service.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 404
+                message: 'Batch BATCH-999999 not found.'
+                code: NOT_FOUND
+        '422':
+          description: >
+            `printType` không thuộc 5 loại — raise ngay tại BFF
+            (VALIDATION_ERROR, details field printType).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Request validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: printType
+                    message: 'printType must be one of: bill, delivery, handover_receipt, goods_handover, installation_acceptance (got "invoice").'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/print/printers:
+    get:
+      tags: [Print]
+      operationId: listPrintJobPrinters
+      summary: Danh sách máy in cho màn in (D3 Print Shipment)
+      description: >
+        Registry máy in (DB-backed qua fulfillment-service — SF-21 D1) phục vụ
+        modal chọn máy in + label "HP LaserJet M404 — Khu soạn A" (D9). Cùng
+        nguồn GET /fulfillment/printers — endpoint này là surface của màn IN
+        (mọi user đã đăng nhập), không phải màn quản lý. Filter `shopCode`
+        trống = tất cả.
+      parameters:
+        - name: shopCode
+          in: query
+          required: false
+          description: Lọc theo kho — trống = tất cả.
+          schema:
+            type: string
+            example: '30201'
+      responses:
+        '200':
+          description: Danh sách máy in (PrinterDto).
+          content:
+            application/json:
+              schema:
+                type: object
+                description: PrintersResponse (api-contracts/print.ts) — envelope `{ items }`.
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: &printerDto
+                      type: object
+                      description: >
+                        PrinterDto — máy in registry (api-contracts/print.ts;
+                        location/printerIp/mac/type optional — absent khi rỗng).
+                      required: [printerId, name, shopCode]
+                      properties:
+                        printerId:
+                          type: string
+                          example: PRN-30201-01
+                        name:
+                          type: string
+                          example: 'HP LaserJet M404'
+                        shopCode:
+                          type: string
+                          description: Kho gán máy in.
+                          example: '30201'
+                        location:
+                          type: string
+                          description: Vị trí vật lý (label màn in D9).
+                          example: 'Khu soạn A'
+                        printerIp:
+                          type: string
+                          description: IP máy in (SF-21 T1 additive).
+                          example: '192.168.30.21'
+                        mac:
+                          type: string
+                          description: Địa chỉ MAC (SF-21 T1 additive).
+                          example: 'AA:BB:CC:DD:EE:01'
+                        type:
+                          type: string
+                          description: Nhóm máy in — bill (tem/nhãn) hoặc a4 (A4).
+                          enum: [bill, a4]
+                          example: a4
+              example:
+                items:
+                  - printerId: PRN-30201-01
+                    name: 'HP LaserJet M404'
+                    shopCode: '30201'
+                    location: 'Khu soạn A'
+                    printerIp: '192.168.30.21'
+                    mac: 'AA:BB:CC:DD:EE:01'
+                    type: a4
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/print-errors/counts:
+    get:
+      tags: [Print]
+      operationId: getPrintErrorCounts
+      summary: Số lỗi in per đơn theo phiếu (D3 badge + sort)
+      description: >
+        Aggregate số lần in lỗi per đơn trong phiếu — badge cảnh báo + sort D3
+        (SF-21 D2, ghi nhận qua fulfillment-service). Role: mọi user đã đăng
+        nhập. gRPC GetPrintErrorCounts (hubstore.fulfillment.v1).
+      parameters:
+        - name: batchCode
+          in: query
+          required: true
+          description: Mã phiếu cần đếm lỗi in.
+          schema:
+            type: string
+            example: BATCH-000045
+      responses:
+        '200':
+          description: Số lỗi in per đơn.
+          content:
+            application/json:
+              schema:
+                type: object
+                description: PrintErrorCountsResponse (api-contracts/print.ts) — envelope `{ items }`.
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      description: PrintErrorCountDto — 1 dòng per đơn.
+                      required: [orderCode, count]
+                      properties:
+                        orderCode:
+                          type: string
+                          example: ORD-000123
+                        count:
+                          type: integer
+                          description: Số lần in lỗi của đơn.
+                          example: 2
+              example:
+                items:
+                  - orderCode: ORD-000123
+                    count: 2
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/printers:
+    get:
+      tags: [Print]
+      operationId: listPrinters
+      summary: Danh sách máy in (registry — quản lý)
+      description: >
+        Registry máy in DB-backed (fulfillment-service — SF-21 D1) phục vụ màn
+        quản lý máy in. Role: mọi user đã đăng nhập (ai cần in cũng đọc được
+        list — spec Permissions). Filter `shopCode` trống = tất cả (Admin page
+        xem toàn hệ thống). Cùng nguồn GET /fulfillment/print/printers —
+        endpoint kia là surface màn in.
+      parameters:
+        - name: shopCode
+          in: query
+          required: false
+          description: Lọc theo kho — trống = tất cả.
+          schema:
+            type: string
+            example: '30201'
+      responses:
+        '200':
+          description: Danh sách máy in (PrinterDto).
+          content:
+            application/json:
+              schema:
+                type: object
+                description: PrintersResponse (api-contracts/print.ts) — envelope `{ items }`.
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: *printerDto
+              example:
+                items:
+                  - printerId: PRN-30201-01
+                    name: 'HP LaserJet M404'
+                    shopCode: '30201'
+                    location: 'Khu soạn A'
+                    printerIp: '192.168.30.21'
+                    mac: 'AA:BB:CC:DD:EE:01'
+                    type: a4
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+    post:
+      tags: [Print]
+      operationId: createPrinter
+      summary: Đăng ký máy in mới — ADMIN ONLY
+      security:
+        - bearerAuth: []
+      description: >
+        Thêm 1 máy in vào registry theo kho. Role gate cứng server-side
+        `requireRole('Admin')` — không chỉ ẩn nút FE (spec §4 non-functional).
+        Identity (shopCode, printerId) KHÔNG sửa sau tạo — trùng cặp identity
+        → upstream ALREADY_EXISTS → 409 CONFLICT. Validate `type` bill|a4 ở
+        BFF (422 trước khi gRPC).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: PrinterBody — identity (shopCode+printerId) immutable sau tạo.
+              required: [shopCode, printerId, name]
+              properties:
+                shopCode:
+                  type: string
+                  description: Kho gán máy in.
+                  example: '30201'
+                printerId:
+                  type: string
+                  description: ID máy in (duy nhất theo cặp shopCode+printerId).
+                  example: PRN-30201-02
+                name:
+                  type: string
+                  example: 'HP LaserJet M404 — Tầng 3'
+                location:
+                  type: string
+                  description: Vị trí vật lý (hiển thị label màn in).
+                  example: 'Khu soạn B'
+                printerIp:
+                  type: string
+                  description: IP máy in (SF-21 T1 additive).
+                  example: '192.168.30.22'
+                mac:
+                  type: string
+                  description: Địa chỉ MAC (SF-21 T1 additive).
+                  example: 'AA:BB:CC:DD:EE:02'
+                type:
+                  type: string
+                  description: Nhóm máy in — bill (tem/nhãn) hoặc a4 (A4).
+                  enum: [bill, a4]
+                  example: bill
+            example:
+              shopCode: '30201'
+              printerId: PRN-30201-02
+              name: 'HP LaserJet M404 — Tầng 3'
+              location: 'Khu soạn B'
+              printerIp: '192.168.30.22'
+              mac: 'AA:BB:CC:DD:EE:02'
+              type: bill
+      responses:
+        '200':
+          description: Máy in vừa tạo (PrinterDto).
+          content:
+            application/json:
+              schema: *printerDto
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '409':
+          description: >
+            Trùng identity (shopCode+printerId) — upstream ALREADY_EXISTS →
+            CONFLICT.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 409
+                message: 'Already exists.'
+                code: CONFLICT
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/printers/{shopCode}/{printerId}:
+    put:
+      tags: [Print]
+      operationId: updatePrinter
+      summary: Cập nhật máy in — ADMIN ONLY
+      security:
+        - bearerAuth: []
+      description: >
+        Sửa thông tin máy in — identity lấy từ PATH (shopCode, printerId),
+        body identity bị bỏ qua (immutable — D9). Role gate cứng server-side
+        `requireRole('Admin')`. PUT là full-replace: field không gửi sẽ bị set
+        rỗng (route pass `?? ''`) — FE gửi đủ các field muốn giữ. Không tìm
+        thấy → upstream NOT_FOUND → 404.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/ShopCodePath'
+        - $ref: '../components/parameters.yaml#/components/parameters/PrinterIdPath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              description: PrinterBody — CHỈ name/location/printerIp/mac/type có hiệu lực (identity từ path).
+              required: [name]
+              properties:
+                name:
+                  type: string
+                  example: 'HP LaserJet M404 — Tầng 3 (đã dời)'
+                location:
+                  type: string
+                  example: 'Khu soạn B'
+                printerIp:
+                  type: string
+                  example: '192.168.30.22'
+                mac:
+                  type: string
+                  example: 'AA:BB:CC:DD:EE:02'
+                type:
+                  type: string
+                  description: Nhóm máy in — bill (tem/nhãn) hoặc a4 (A4).
+                  enum: [bill, a4]
+                  example: a4
+            example:
+              name: 'HP LaserJet M404 — Tầng 3 (đã dời)'
+              location: 'Khu soạn B'
+              printerIp: '192.168.30.22'
+              mac: 'AA:BB:CC:DD:EE:02'
+              type: a4
+      responses:
+        '200':
+          description: Máy in sau khi cập nhật (PrinterDto).
+          content:
+            application/json:
+              schema: *printerDto
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          description: Không tìm thấy máy in theo identity path — NOT_FOUND.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 404
+                message: 'Printer not found.'
+                code: NOT_FOUND
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
