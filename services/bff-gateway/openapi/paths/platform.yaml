@@ -1,3 +1,830 @@
-# STUB — tier-1 SF fill (SF-1 pre-wire). Domain KHÔNG chạm root openapi.yaml;
-# chỉ thêm path-items vào file này. Bundle merge map `paths` vào root tại runtime.
-paths: {}
+# Platform/Admin — 13 ops (SF-8, story FI-326). 2 tags: Administration (8) +
+# Realtime & Transfers (5). Shapes THẬT từ code:
+#   routes/users.ts          — GET/POST /users + set-password/enabled/delete
+#                              (KC Admin REST qua kc-admin.ts; role gate
+#                              canManageUsers = Manager ∨ Admin — lib/authz.ts)
+#   routes/avatar.ts         — POST /avatar (multipart ≤5MB magic bytes) +
+#                              GET /avatar/:userId (image binary từ DB)
+#   routes/auth.ts           — POST /auth/reset-password (DEV-ONLY, public,
+#                              mount khi ENABLE_DEV_RESET_PASSWORD=1)
+#   routes/notifications.ts  — GET /notifications + /api/notifications (2 paths
+#                              ALIAS cùng handler — nginx strip `/api` compose)
+#   routes/events.ts         — GET /events SSE (hijack raw, token qua query)
+#   routes/transfer.ts       — 2 ops transfer-tickets (TransferService gRPC)
+# NOTE bundler: node `components:` trong file này bị bỏ qua IM LẶNG (bundler
+# chỉ merge map `paths`) — schema dùng-chung 2 ops viết YAML anchor, không
+# khai components (pattern batches.yaml *batchDto).
+paths:
+  /users:
+    get:
+      tags: [Administration]
+      operationId: getUsers
+      summary: Danh sách users + roles
+      description: >
+        Role gate **canManageUsers = Manager ∨ Admin** (users.manage — khớp FE
+        PERMISSION_MATRIX; Admin có nav-users). Đọc users từ Keycloak Admin
+        REST, map role theo KNOWN_ROLES (claim `realm_access.roles`). Hiện
+        KHÔNG phân trang server-side — `page` luôn 1 và `pageSize` = tổng số
+        items (quirk route thật, `routes/users.ts:42`) — số lượng user dev
+        nhỏ, chỉ cần đủ shape Paginated cho FE tái dùng.
+      responses:
+        '200':
+          description: Danh sách users (mỗi item kèm roles theo KNOWN_ROLES).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+                  - type: object
+                    required: [items]
+                    properties:
+                      items:
+                        type: array
+                        items:
+                          type: object
+                          required: [id, username, enabled, roles]
+                          properties:
+                            id:
+                              type: string
+                              description: User ID Keycloak (sub).
+                              example: 3f6c2a44-0a1b-4c5d-8e9f-10293a4b5c6d
+                            username:
+                              type: string
+                              example: Warehouse.User1
+                            enabled:
+                              type: boolean
+                              description: Trạng thái enable trên Keycloak.
+                              example: true
+                            roles:
+                              type: array
+                              description: >
+                                Roles của user KHÔNG chỉ role chính trên JWT —
+                                mapped từ KNOWN_ROLES (1 user có thể mang
+                                nhiều role).
+                              items:
+                                $ref: '../components/enums.yaml#/components/schemas/KnownRoles'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '503':
+          description: >
+            Keycloak Admin API lỗi — code `UPSTREAM_UNAVAILABLE` hoặc
+            `KC_ADMIN_NOT_CONFIGURED` (thiếu env admin credential).
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+    post:
+      tags: [Administration]
+      operationId: createUser
+      summary: Tạo user mới (+1 role)
+      description: >
+        Role gate **canManageUsers = Manager ∨ Admin**. Tạo user trên Keycloak
+        (enabled mặc định `true`) rồi gán ĐÚNG 1 role trong KNOWN_ROLES.
+        Validation CHẠY TẠI BFF (routes/users.ts, không Ajv) — mỗi field vi
+        phạm một entry `details[]`: `username` khớp pattern
+        `^[a-zA-Z0-9._-]{3,64}$`; `password` tối thiểu 8 ký tự; `role` ∈
+        KNOWN_ROLES. Trùng username → 409 `USERNAME_EXISTS`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, password, role]
+              properties:
+                username:
+                  type: string
+                  pattern: '^[a-zA-Z0-9._-]{3,64}$'
+                  description: 3–64 ký tự [a-zA-Z0-9._-].
+                  example: Warehouse.User1
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  description: Tối thiểu 8 ký tự.
+                  example: '••••••••'
+                role:
+                  $ref: '../components/enums.yaml#/components/schemas/KnownRoles'
+      responses:
+        '201':
+          description: User đã tạo + gán role.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [id, username, enabled, roles]
+                properties:
+                  id:
+                    type: string
+                    description: User ID Keycloak của user mới.
+                    example: 3f6c2a44-0a1b-4c5d-8e9f-10293a4b5c6d
+                  username:
+                    type: string
+                    example: Warehouse.User1
+                  enabled:
+                    type: boolean
+                    example: true
+                  roles:
+                    type: array
+                    items:
+                      $ref: '../components/enums.yaml#/components/schemas/KnownRoles'
+                    example: [WarehouseEmployee]
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '409':
+          description: Username đã tồn tại trên Keycloak (code `USERNAME_EXISTS`).
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '422':
+          description: >
+            Validation BFF fail — `details[]` từng field (username pattern /
+            password min 8 / role không thuộc KNOWN_ROLES).
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '503':
+          description: >
+            Keycloak Admin API lỗi — code `UPSTREAM_UNAVAILABLE` hoặc
+            `KC_ADMIN_NOT_CONFIGURED`.
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /users/{userId}/set-password:
+    parameters:
+      - $ref: '../components/parameters.yaml#/components/parameters/UserIdPath'
+    post:
+      tags: [Administration]
+      operationId: setUserPassword
+      summary: Đặt lại mật khẩu user
+      description: >
+        Role gate **canManageUsers = Manager ∨ Admin**. Set password mới cho
+        user (Keycloak Admin `reset-password`, `temporary: false` — user đăng
+        nhập ngay không bị ép đổi). `password` tối thiểu 8 ký tự → 422.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [password]
+              properties:
+                password:
+                  type: string
+                  format: password
+                  minLength: 8
+                  description: Tối thiểu 8 ký tự.
+                  example: '••••••••'
+      responses:
+        '200':
+          description: Đã đặt lại mật khẩu.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          description: Không tìm thấy user (code `NOT_FOUND`).
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          description: '`password` thiếu hoặc dưới 8 ký tự.'
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '503':
+          description: Keycloak Admin API lỗi.
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /users/{userId}/enabled:
+    parameters:
+      - $ref: '../components/parameters.yaml#/components/parameters/UserIdPath'
+    put:
+      tags: [Administration]
+      operationId: setUserEnabled
+      summary: Kích hoạt / khóa tài khoản user
+      description: >
+        Role gate **canManageUsers = Manager ∨ Admin**. Toggle `enabled` trên
+        Keycloak. **Self-lock**: không thể tự khóa tài khoản CỦA CHÍNH MÌNH →
+        422 `SELF_LOCK_DENIED` (route so username của target với actor
+        `sub` — `routes/users.ts:114-124`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [enabled]
+              properties:
+                enabled:
+                  type: boolean
+                  description: '`true` = kích hoạt, `false` = khóa.'
+                  example: false
+      responses:
+        '200':
+          description: Đã cập nhật trạng thái.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          description: Không tìm thấy user (code `NOT_FOUND`).
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          description: >
+            `enabled` không phải boolean, hoặc tự khóa chính mình (code
+            `SELF_LOCK_DENIED`).
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '503':
+          description: Keycloak Admin API lỗi.
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /users/{userId}:
+    parameters:
+      - $ref: '../components/parameters.yaml#/components/parameters/UserIdPath'
+    delete:
+      tags: [Administration]
+      operationId: deleteUser
+      summary: Xóa user
+      description: >
+        Role gate **canManageUsers = Manager ∨ Admin**. Xóa user khỏi
+        Keycloak. **Self-delete**: không thể tự xóa chính mình → 422
+        `SELF_DELETE_DENIED` (so username target với actor `sub` — cùng cơ chế
+        self-lock của PUT /users/{userId}/enabled).
+      responses:
+        '200':
+          description: Đã xóa user.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          description: Không tìm thấy user (code `NOT_FOUND`).
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          description: Tự xóa tài khoản của chính mình (code `SELF_DELETE_DENIED`).
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '503':
+          description: Keycloak Admin API lỗi.
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /avatar:
+    post:
+      tags: [Administration]
+      operationId: uploadAvatar
+      summary: Upload avatar của chính mình (multipart)
+      description: >
+        Mọi user đã đăng nhập — upload avatar CHO CHÍNH MÌNH (user-id lấy từ
+        token `sub`, KHÔNG nhận từ client). **multipart/form-data** field
+        `file` bắt buộc; tối đa **5MB**; chỉ nhận `image/jpeg` / `image/png` —
+        verify MAGIC BYTES phía server (JPEG `FF D8 FF`, PNG `89 50 4E 47`),
+        không tin filename hay Content-Type header client gửi
+        (`routes/avatar.ts:47-60`). Ghi đè avatar cũ (UPSERT bảng
+        `user_avatars` trên DB fulfillment).
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: Ảnh JPEG/PNG tối đa 5MB (verify magic bytes).
+      responses:
+        '200':
+          description: Đã lưu avatar (UPSERT).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [updatedAt]
+                properties:
+                  updatedAt:
+                    type: string
+                    format: date-time
+                    nullable: true
+                    description: Thời điểm lưu (ISO 8601); null khi DB không trả.
+                    example: '2026-09-06T10:00:00.000Z'
+        '400':
+          description: >
+            Thiếu field `file`, file vượt 5MB, hoặc bytes không phải
+            JPEG/PNG (magic bytes fail) — code `BAD_REQUEST`.
+          $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          description: >
+            Avatar storage không khả dụng — DB fulfillment down hoặc thiếu env
+            `FULFILLMENT_DB_*` (code `UNAVAILABLE`, KHÔNG phải
+            `UPSTREAM_UNAVAILABLE` — lỗi DB trực tiếp, không qua gRPC).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 503
+                message: 'Avatar storage is unavailable.'
+                code: UNAVAILABLE
+
+  /avatar/{userId}:
+    parameters:
+      - $ref: '../components/parameters.yaml#/components/parameters/UserIdPath'
+    get:
+      tags: [Administration]
+      operationId: getAvatar
+      summary: Đọc avatar một user (image binary)
+      description: >
+        Mọi user đã đăng nhập đọc được (avatar không nhạy cảm — spec epic §2
+        D3). Trả bytes ảnh + content-type ĐÃ LƯU trong DB (`image/jpeg` |
+        `image/png`), kèm `X-Content-Type-Options: nosniff` (chống content
+        sniffing) + `Cache-Control: private, max-age=300` (avatar per-user,
+        auth-required).
+      responses:
+        '200':
+          description: Bytes ảnh (content-type thật theo ảnh đã upload).
+          headers:
+            X-Content-Type-Options:
+              description: Luôn `nosniff`.
+              schema:
+                type: string
+                example: nosniff
+            Cache-Control:
+              description: Private cache 5 phút.
+              schema:
+                type: string
+                example: 'private, max-age=300'
+          content:
+            image/jpeg:
+              schema:
+                type: string
+                format: binary
+            image/png:
+              schema:
+                type: string
+                format: binary
+        '400':
+          description: '`userId` rỗng hoặc vượt 255 ký tự — code `BAD_REQUEST`.'
+          $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          description: User chưa có avatar (hoặc content-type lưu không hợp lệ).
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '503':
+          description: Avatar storage không khả dụng (code `UNAVAILABLE`).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 503
+                message: 'Avatar storage is unavailable.'
+                code: UNAVAILABLE
+
+  /auth/reset-password:
+    post:
+      tags: [Administration]
+      operationId: resetPasswordDevOnly
+      x-dev-only: true
+      summary: Reset mật khẩu theo username (DEV-ONLY)
+      security: []
+      description: >
+        ⚠️ **DEV-ONLY** — chỉ mount khi env `ENABLE_DEV_RESET_PASSWORD=1`
+        (không flag → route không tồn tại, 404). KHÔNG JWT (`security: []` —
+        endpoint này chính nó cấp lại password, không có bước xác minh danh
+        tính: không email, không OTP). Production BẮT BUỘC thay bằng OTP
+        email hoặc Keycloak built-in forgot-password flow. Lưu ý `newPassword`
+        tối thiểu **6** ký tự — khác rule min 8 của `POST /users` (validate
+        ngay BFF, trả 400 `BAD_REQUEST` không phải 422 — `routes/auth.ts`).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [username, newPassword]
+              properties:
+                username:
+                  type: string
+                  description: Username cần reset (exact match trên realm).
+                  example: Warehouse.User1
+                newPassword:
+                  type: string
+                  format: password
+                  minLength: 6
+                  description: Mật khẩu mới — tối thiểu 6 ký tự.
+                  example: '••••••'
+      responses:
+        '200':
+          description: Đã đặt lại mật khẩu.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+        '400':
+          description: >
+            Thiếu `username` (rỗng) hoặc `newPassword` dưới 6 ký tự — code
+            `BAD_REQUEST`.
+          $ref: '../components/envelopes.yaml#/components/responses/BadRequest400'
+        '404':
+          description: >
+            Username không tồn tại trong realm (code `NOT_FOUND`) — không
+            chống user-enumeration vì dev-only.
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '500':
+          description: >
+            Keycloak admin API lỗi (lấy admin token / reset fail) — handler
+            throw → 500 `INTERNAL`.
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+
+  /notifications:
+    get:
+      tags: [Realtime & Transfers]
+      operationId: getNotifications
+      summary: Notification feed (polling)
+      description: >
+        Mọi user đã đăng nhập (JWT) — feed BROADCAST-BY-DESIGN, KHÔNG lọc theo
+        user (Kafka envelope không mang targeting — spec SF-23 §4.2). FE poll
+        endpoint này (T6 notificationPoller) song song với SSE `/events`.
+        Phân trang query `page`/`pageSize` (default 20, cap 100, page cap
+        10000 — chống OFFSET overflow). Response **KHÔNG echo
+        `page`/`pageSize`** — chỉ `{items, total}`, KHÁC envelope Paginated
+        chuẩn (schema riêng `NotificationItem` + total). Pool DB disabled
+        (thiếu env `FULFILLMENT_DB_*`) → fail-open `{items: [], total: 0}`.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/PageQuery'
+        - $ref: '../components/parameters.yaml#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Feed mới-nhất-trước (ORDER BY created_at DESC) + tổng số log.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: &notificationItem
+                      type: object
+                      description: >
+                        Một bản ghi notification_log (SF-23) — camelCase map
+                        từ row snake_case (`lib/notifications.ts:98-107`).
+                      required: [id, type, title, body, payload, createdAt]
+                      properties:
+                        id:
+                          type: integer
+                          description: Row id trong notification_log.
+                          example: 123
+                        type:
+                          type: string
+                          description: Event type (order.* / batch.* — SF-27 contract).
+                          example: order.assigned
+                        title:
+                          type: string
+                          example: 'Đơn ORD-000123 đã được gán'
+                        body:
+                          type: string
+                          example: 'Đơn được gán cho technician tech1'
+                        payload:
+                          type: object
+                          nullable: true
+                          description: >
+                            Payload envelope Kafka gốc (tùy từng event type —
+                            không cố định).
+                          example:
+                            fulfillCode: ORD-000123
+                        createdAt:
+                          type: string
+                          format: date-time
+                          description: Thời điểm ghi log (ISO 8601).
+                          example: '2026-09-06T10:00:00.000Z'
+                  total:
+                    type: integer
+                    description: Tổng số notification trong log (trước phân trang).
+                    example: 42
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          description: >
+            Đọc log DB fail (pool có sẵn nhưng query lỗi) — code
+            `NOTIFICATIONS_UNAVAILABLE`; KHÔNG xảy ra khi pool disabled
+            (fail-open 200, xem description).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 503
+                message: 'Notification feed tạm thời không khả dụng.'
+                code: NOTIFICATIONS_UNAVAILABLE
+
+  /api/notifications:
+    get:
+      tags: [Realtime & Transfers]
+      operationId: getApiNotifications
+      summary: Notification feed (alias `/api` prefix)
+      description: >
+        ALIAS của `GET /notifications` — CÙNG handler
+        (`routes/notifications.ts:46-47`). Compose nginx strip prefix `/api`
+        trước khi proxy vào BFF; dev/e2e gọi thẳng BFF nên giữ path
+        `/api/notifications`. Drift-guard đếm 2 paths RIÊNG (không gộp).
+        Query/response/fail-open/y nghĩa 503 giống hệt path chính.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/PageQuery'
+        - $ref: '../components/parameters.yaml#/components/parameters/PageSizeQuery'
+      responses:
+        '200':
+          description: Giống `GET /notifications` — `{items, total}`.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items, total]
+                properties:
+                  items:
+                    type: array
+                    items: *notificationItem
+                  total:
+                    type: integer
+                    example: 42
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          description: Giống `GET /notifications` — code `NOTIFICATIONS_UNAVAILABLE`.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 503
+                message: 'Notification feed tạm thời không khả dụng.'
+                code: NOTIFICATIONS_UNAVAILABLE
+
+  /events:
+    get:
+      tags: [Realtime & Transfers]
+      operationId: streamRealtimeEvents
+      summary: SSE stream event realtime
+      security:
+        - accessTokenQuery: []
+      description: >
+        Server-Sent Events — EventSource KHÔNG set được Authorization header →
+        token truyền qua query `access_token` (verify JWKS y như Bearer —
+        guard `plugins/auth.ts`). Stream bypass serialization (`reply.hijack`
+        + raw write): `text/event-stream`, KHÔNG JSON envelope. Frame event:
+        `data: {"type":…,"payload":…,"ts":…}\n\n`; heartbeat comment `: ping`
+        mỗi 15s; BFF chủ động đóng sau 30 phút (FE EventSource tự reconnect
+        với token mới). **Cap 5 connection/user** — vượt → 429
+        `TOO_MANY_CONNECTIONS`. `type` lọc theo allow-list
+        (`lib/realtime-events.ts`): `order.assigned`, `order.cancelled`,
+        `order.completed`, `order.failed`, `order.redelivered`,
+        `batch.created`, `batch.cancelled`, `batch.completed`,
+        `batch.transitioned` + `stream.degraded` (synthetic ngoài allow-list —
+        FE nhận → chuyển polling). `payload` là payload envelope Kafka (SF-27
+        contract READ-ONLY — shape tùy từng event type).
+      responses:
+        '200':
+          description: >
+            Stream mở lâu dài — mỗi event một frame `data:` + heartbeat `:`
+            comment; kết thúc khi client ngắt hoặc hết max lifetime.
+          content:
+            text/event-stream:
+              schema:
+                type: string
+                description: |-
+                  Chuỗi frames SSE. Frame = `data: <json>\n\n`; heartbeat =
+                  `: ping\n\n` mỗi 15s.
+                example: |-
+                  data: {"type":"order.assigned","payload":{"fulfillCode":"ORD-000123","assignee":"tech1"},"ts":"2026-09-06T10:00:00.000Z"}
+
+                  : ping
+
+                  data: {"type":"stream.degraded","payload":null,"ts":"2026-09-06T10:01:00.000Z"}
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '429':
+          description: Vượt cap 5 connection `/events` đồng thời mỗi user.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 429
+                message: 'Too many concurrent /events connections.'
+                code: TOO_MANY_CONNECTIONS
+
+  /fulfillment/{code}/transfer-tickets:
+    parameters:
+      # Inline `name: code` — param name BẮT BUỘC khớp template {code}
+      # (review SF-4 round 1: $ref đặt tên khác sẽ invalid + try-it-out
+      # không fill được; find-my-way route là :code — không đổi template).
+      - name: code
+        in: path
+        required: true
+        description: Mã đơn fulfillment cần tạo phiếu chuyển kho (ORD-####).
+        schema:
+          type: string
+          example: ORD-000123
+    post:
+      tags: [Realtime & Transfers]
+      operationId: createTransferTicket
+      summary: Tạo phiếu chuyển kho cho đơn
+      description: >
+        Role **Coordinator ∨ Manager ∨ Admin**. Tạo ticket chuyển hàng giữa
+        các kho (hub) cho đơn fulfillment — upstream `TransferService`
+        (hubstore.transfer.v1). `toHub` bắt buộc (thiếu → 422 ngay tại BFF);
+        upstream kiểm **tách nợ** — INVALID_ARGUMENT → 422; đơn đã có ticket
+        PENDING → ALREADY_EXISTS → 409 `CONFLICT`. Ghi audit
+        `order.transfer_ticket_create` (fire-and-forget — không fail mutation
+        khi DB thiếu).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toHub]
+              properties:
+                toHub:
+                  type: string
+                  description: Kho đích (bắt buộc).
+                  example: HUB-HCM-01
+                fromHub:
+                  type: string
+                  description: Kho nguồn (tuỳ chọn — upstream tự suy khi trống).
+                  example: HUB-HN-01
+                reason:
+                  type: string
+                  description: Lý do chuyển kho (tuỳ chọn).
+                  example: 'Chuyển gần điểm giao hơn'
+      responses:
+        '201':
+          description: Ticket đã tạo.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ticket]
+                properties:
+                  ticket: &transferTicket
+                    type: object
+                    description: >
+                      TransferTicketDto — map 1:1 proto
+                      hubstore.transfer.v1.TransferTicket (`mappers/transfer.ts`),
+                      camelCase trùng tên proto.
+                    required:
+                      - ticketCode
+                      - orderFulfillCode
+                      - fromHub
+                      - toHub
+                      - reason
+                      - status
+                      - createdBy
+                      - createdAt
+                      - confirmedBy
+                      - confirmedAt
+                    properties:
+                      ticketCode:
+                        type: string
+                        example: TT-000001
+                      orderFulfillCode:
+                        type: string
+                        description: Mã đơn được chuyển.
+                        example: ORD-000123
+                      fromHub:
+                        type: string
+                        description: Kho nguồn ('' khi upstream tự suy).
+                        example: HUB-HN-01
+                      toHub:
+                        type: string
+                        description: Kho đích.
+                        example: HUB-HCM-01
+                      reason:
+                        type: string
+                        example: 'Chuyển gần điểm giao hơn'
+                      status:
+                        type: string
+                        enum: [PENDING, APPROVED, REJECTED]
+                        example: PENDING
+                      createdBy:
+                        type: string
+                        description: Username người tạo ticket.
+                        example: Warehouse.User1
+                      createdAt:
+                        type: string
+                        format: date-time
+                        example: '2026-09-06T10:00:00.000Z'
+                      confirmedBy:
+                        type: string
+                        description: Username người confirm ('' khi chưa confirm).
+                        example: ''
+                      confirmedAt:
+                        type: string
+                        format: date-time
+                        description: Thời điểm confirm ('' khi chưa confirm).
+                        example: ''
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '409':
+          description: Đơn đã có ticket PENDING (upstream ALREADY_EXISTS).
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '422':
+          description: >
+            `toHub` thiếu, hoặc upstream từ chối (tách nợ fail —
+            INVALID_ARGUMENT) — `details[]` kèm field.
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '500':
+          description: >
+            Upstream trả response thiếu `ticket` (bug upstream) — code
+            `INTERNAL` (`routes/transfer.ts:57-61`).
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/transfer-tickets:
+    get:
+      tags: [Realtime & Transfers]
+      operationId: listTransferTickets
+      summary: Lịch sử phiếu chuyển kho theo mã đơn
+      description: >
+        Role **Coordinator ∨ Manager ∨ Admin** (read — không ghi audit).
+        `codes` truyền `?codes=ORD-1,ORD-2` HOẶC repeated
+        `?codes=ORD-1&codes=ORD-2` — tối đa **100** mã mỗi lần (quá → 422);
+        `status` tuỳ chọn ∈ `PENDING`/`APPROVED`/`REJECTED` (sai → 422).
+        Upstream LIMIT 500 ticket. Response `{items}` mảng thường — KHÔNG có
+        `total`/`page` (khác Paginated).
+      parameters:
+        - name: codes
+          in: query
+          required: true
+          description: >
+            Danh sách mã đơn — comma-separated hoặc repeated query param
+            (tối đa 100).
+          schema:
+            type: string
+            example: 'ORD-000123,ORD-000124'
+        - name: status
+          in: query
+          required: false
+          description: Lọc theo trạng thái ticket.
+          schema:
+            type: string
+            enum: [PENDING, APPROVED, REJECTED]
+            example: PENDING
+      responses:
+        '200':
+          description: Tickets khớp codes (thứ tự upstream trả).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: *transferTicket
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '422':
+          description: >
+            `codes` rỗng hoặc vượt 100 mã, `status` ngoài whitelist — code
+            `VALIDATION_ERROR` + details[].
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '500':
+          description: Lỗi không phân loại upstream — code `INTERNAL`.
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
