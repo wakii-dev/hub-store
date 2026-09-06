@@ -593,6 +593,7 @@ paths:
       operationId: exportOrdersCsv
       summary: Export CSV các đơn khớp filter (mirror body /filter qua querystring)
       description: >
+        User bất kỳ đã đăng nhập (requireUser — không role gate).
         Querystring MIRROR body POST /fulfillment/filter nhưng giá trị runtime
         là string: lists comma-separated (`batchStatus=0,1`, `orderStatus=0`),
         createdAt là NGÀY đơn `YYYY-MM-DD` (BFF wrap full-day UTC). Trả CSV
@@ -744,7 +745,8 @@ paths:
       operationId: getOrderDetail
       summary: Chi tiết 1 đơn (superset row D1 + note + history)
       description: >
-        BFF owns aggregation (spec §3.3): GetOrderDetail + GetAssignHistory song
+        User bất kỳ đã đăng nhập (requireUser — không role gate). BFF owns
+        aggregation (spec §3.3): GetOrderDetail + GetAssignHistory song
         song. Đơn không tồn tại (`order` rỗng) → 404. `orderCode` hiện luôn rỗng
         (proto GAP documented — mapOrderDetail). FE waive tường minh nhưng
         endpoint implement đầy đủ.
@@ -918,6 +920,8 @@ paths:
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
         '404':
           $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
         '422':
           description: >
             BFF inline validate (2 code, KHÔNG details[]): VALIDATION_ERROR —
@@ -949,7 +953,8 @@ paths:
       operationId: completePicking
       summary: Hoàn tất soạn 1 phiếu
       description: >
-        Body `{batchCode}`. Upstream là batching-service (Go owns batch
+        User bất kỳ đã đăng nhập (requireUser — không role gate). Body
+        `{batchCode}`. Upstream là batching-service (Go owns batch
         transitions, spec §3.3) dù path nằm dưới /fulfillment (path production
         giữ nguyên). Chuỗi mutation: batch entity ACTIVE(0)→COMPLETED(1), mọi
         order trong phiếu đổi batchStatus order-level Đang soạn(1)→Đã soạn(2)
@@ -989,11 +994,12 @@ paths:
     get:
       tags: [Orders]
       operationId: getDashboardStats
-      summary: Aggregation dashboard Manager (SF-9)
+      summary: Aggregation dashboard stats (SF-9)
       description: >
-        BFF owns aggregation (pattern GetOrderDetail): GetDashboardStats
-        (fulfillment) + FilterBatches hôm nay +07 (status/shipper per phiếu —
-        batching READ-ONLY, chỉ gọi) + ListDeliveryStaff (id→name).
+        User bất kỳ đã đăng nhập (requireUser — không role gate). BFF owns
+        aggregation (pattern GetOrderDetail): GetDashboardStats (fulfillment)
+        + FilterBatches hôm nay +07 (status/shipper per phiếu — batching
+        READ-ONLY, chỉ gọi) + ListDeliveryStaff (id→name).
         completionRate/cancelRate = round trên decided; shipper không khớp
         delivery_staff gộp bucket "Chưa gán".
       responses:
