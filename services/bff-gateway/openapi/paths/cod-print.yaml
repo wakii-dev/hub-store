@@ -15,7 +15,7 @@
 # [from 00:00 +07:00, to+1 00:00 +07:00) — from INCLUSIVE, to EXCLUSIVE (khác d2c
 # inclusive 23:59:59) để khớp aggregate SQL bên Java. Sai lịch/khoảng → 400.
 # Schema domain inline trong file này (bundler chỉ merge `paths` — không contribute
-# components); shape lặp dùng YAML anchor (*settlementRow, *printerDto…).
+# components); shape lặp dùng YAML anchor (*printerDto, *codFromQuery…).
 paths:
   /cod/confirm:
     post:
@@ -64,7 +64,7 @@ paths:
                 properties:
                   results:
                     type: array
-                    items: &confirmCodResult
+                    items:
                       type: object
                       description: Per-code result — mirror proto ConfirmCodResult.
                       required: [fulfillCode, success, message]
@@ -267,7 +267,7 @@ paths:
                     properties:
                       items:
                         type: array
-                        items: &settlementRow
+                        items:
                           type: object
                           description: >
                             SettlementShopRow — 1 dòng aggregate per-shop
@@ -418,7 +418,7 @@ paths:
                     properties:
                       items:
                         type: array
-                        items: &settlementDetailItem
+                        items:
                           type: object
                           description: >
                             SettlementDetailItem — 1 confirmation (mirror proto
@@ -695,7 +695,9 @@ paths:
         - name: batchCode
           in: query
           required: true
-          description: Mã phiếu cần đếm lỗi in.
+          description: >
+            Mã phiếu cần đếm lỗi in. LƯU Ý: server hiện chấp nhận giá trị
+            rỗng → 200 `{items: []}` (không 400).
           schema:
             type: string
             example: BATCH-000045
@@ -787,8 +789,9 @@ paths:
         Thêm 1 máy in vào registry theo kho. Role gate cứng server-side
         `requireRole('Admin')` — không chỉ ẩn nút FE (spec §4 non-functional).
         Identity (shopCode, printerId) KHÔNG sửa sau tạo — trùng cặp identity
-        → upstream ALREADY_EXISTS → 409 CONFLICT. Validate `type` bill|a4 ở
-        BFF (422 trước khi gRPC).
+        → upstream ALREADY_EXISTS → 409 CONFLICT. Upstream validate:
+        shopCode/printerId bắt buộc + `type` phải bill|a4 — vi phạm →
+        INVALID_ARGUMENT → 422 VALIDATION_ERROR (details[] field tương ứng).
       requestBody:
         required: true
         content:
@@ -856,6 +859,8 @@ paths:
                 statusCode: 409
                 message: 'Already exists.'
                 code: CONFLICT
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
         '503':
           $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
@@ -869,9 +874,11 @@ paths:
       description: >
         Sửa thông tin máy in — identity lấy từ PATH (shopCode, printerId),
         body identity bị bỏ qua (immutable — D9). Role gate cứng server-side
-        `requireRole('Admin')`. PUT là full-replace: field không gửi sẽ bị set
-        rỗng (route pass `?? ''`) — FE gửi đủ các field muốn giữ. Không tìm
-        thấy → upstream NOT_FOUND → 404.
+        `requireRole('Admin')`. PUT là full-replace cho name/location/
+        printerIp/mac — field không gửi sẽ bị set rỗng (route pass `?? ''`),
+        FE gửi đủ các field muốn giữ; RIÊNG `type` bắt buộc hợp lệ bill|a4
+        ở cả update — thiếu/sai → upstream INVALID_ARGUMENT → 422 (không bị
+        set rỗng). Không tìm thấy → upstream NOT_FOUND → 404.
       parameters:
         - $ref: '../components/parameters.yaml#/components/parameters/ShopCodePath'
         - $ref: '../components/parameters.yaml#/components/parameters/PrinterIdPath'
@@ -927,5 +934,20 @@ paths:
                 statusCode: 404
                 message: 'Printer not found.'
                 code: NOT_FOUND
+        '422':
+          description: >
+            `type` thiếu hoặc không phải bill|a4 — upstream INVALID_ARGUMENT
+            → VALIDATION_ERROR (details field `type`).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Request validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: type
+                    message: "type phải là 'bill' hoặc 'a4'."
         '503':
           $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
