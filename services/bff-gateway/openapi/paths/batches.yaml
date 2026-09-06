@@ -1,3 +1,638 @@
-# STUB — tier-1 SF fill (SF-1 pre-wire). Domain KHÔNG chạm root openapi.yaml;
-# chỉ thêm path-items vào file này. Bundle merge map `paths` vào root tại runtime.
-paths: {}
+# Batches — 9 ops (FI-326 SF-3). Shapes THẬT từ code (READ-ONLY nguồn):
+#   routes/batches.ts              — 7 ops /fulfillment/batches/*
+#   routes/batching-presets.ts     — 2 ops /batching/* (static BFF-side)
+#   api-contracts/batching.ts      — DTO camelCase (BatchDto=Batch §3.4, PackingGroup…)
+#   mappers/batching.ts            — proto → REST (fulfillCodes→orderCodes, totalDistanceKm→totalDistance)
+#   batching_server.go             — error semantics (rule 1 → 422, missing → 404, rule 4 → 409)
+#   lib/grpc-error.ts              — map gRPC → HTTP envelope chung (components envelopes.yaml)
+# gRPC gốc (D4): api/proto/hubstore/batching/v1/batching.proto — presets KHÔNG có
+# gRPC (static const CRITERIA_PRESETS trong BFF).
+# Schema domain inline trong file này (bundler chỉ merge `paths` từ paths file —
+# không contribute components); shape lặp dùng YAML anchor (*batchDto, *batchingItem…)
+# — bundler/drift parse qua `yaml` nên anchor đã resolve trước khi bundle.
+paths:
+  /fulfillment/batches/packing-suggest:
+    post:
+      tags: [Batches]
+      operationId: packingSuggest
+      summary: Gợi ý nhóm đơn theo khoảng cách (D1b)
+      description: >
+        Gom các đơn đang chọn trong modal thành các nhóm giao cùng — mỗi nhóm
+        kèm tổng km (thứ tự orderCodes trong nhóm = suggested stopOrder).
+        gRPC PackingSuggest (hubstore.batching.v1). BFF luôn gửi shopCode trống
+        → Go tự derive kho từ orders (hydration, spec §3.3).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderCodes]
+              properties:
+                orderCodes:
+                  type: array
+                  description: Đơn đang có trong modal (cùng kho — rule 1 §3.6).
+                  items:
+                    type: string
+                  example: [ORD-000123, ORD-000124]
+            example:
+              orderCodes: [ORD-000123, ORD-000124]
+      responses:
+        '200':
+          description: Các nhóm gợi ý — rỗng khi không gom được nhóm nào.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [groups]
+                properties:
+                  groups:
+                    type: array
+                    items: &packingGroup
+                      type: object
+                      required: [orderCodes, totalDistance]
+                      properties:
+                        orderCodes:
+                          type: array
+                          description: Đơn trong 1 nhóm giao cùng — thứ tự = suggested stopOrder.
+                          items:
+                            type: string
+                        totalDistance:
+                          type: number
+                          description: Tổng km của nhóm.
+                          example: 12.4
+              example:
+                groups:
+                  - orderCodes: [ORD-000123, ORD-000124]
+                    totalDistance: 12.4
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/batches/create:
+    post:
+      tags: [Batches]
+      operationId: createBatch
+      summary: Tạo phiếu soạn hàng từ các đơn đã chọn (D1b)
+      description: >
+        Tạo phiếu gom đơn — cross-service mutation: Go batching gọi Java
+        MutateOrderStatus chuyển batchStatus của từng đơn 0 → 1 (đang trong
+        phiếu). Server validate rule 1 §3.6 qua Java GetOrdersByCodes (mọi đơn
+        tồn tại, cùng kho, batchStatus=0; vi phạm → 422). BFF luôn gửi shopCode
+        trống → Go derive. Audit `batch.create` + event `batch.created`
+        fire-and-forget sau khi gRPC thành công.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderCodes, shipperId, deliveryTime]
+              properties:
+                orderCodes:
+                  type: array
+                  description: Đơn tạo phiếu — cùng kho, tất cả batchStatus=0 (server validate).
+                  items:
+                    type: string
+                  minItems: 1
+                  example: [ORD-000123, ORD-000124]
+                shipperId:
+                  type: string
+                  description: Shipper nhận phiếu (DeliveryStaffDto.staffId).
+                  example: staff-hcm-01
+                deliveryTime:
+                  &timeRange
+                  type: object
+                  description: Khung giao dự kiến của phiếu.
+                  required: [from, to]
+                  properties:
+                    from:
+                      type: string
+                      format: date-time
+                      example: '2026-09-06T01:00:00.000Z'
+                    to:
+                      type: string
+                      format: date-time
+                      example: '2026-09-06T04:00:00.000Z'
+            example:
+              orderCodes: [ORD-000123, ORD-000124]
+              shipperId: staff-hcm-01
+              deliveryTime:
+                from: '2026-09-06T01:00:00.000Z'
+                to: '2026-09-06T04:00:00.000Z'
+      responses:
+        '200':
+          description: Phiếu vừa tạo (BatchDto).
+          content:
+            application/json:
+              schema: &batchDto
+                type: object
+                description: BatchDto — phiếu soạn hàng (spec §3.4; alias của Batch entity).
+                required: [batchCode, shopCode, shipperId, deliveryTime, status, items, createdAt]
+                properties:
+                  batchCode:
+                    type: string
+                    example: BATCH-000045
+                  shopCode:
+                    type: string
+                    description: Kho CN của phiếu.
+                    example: SHOP-001
+                  shipperId:
+                    type: string
+                    example: staff-hcm-01
+                  deliveryTime: *timeRange
+                  status:
+                    type: integer
+                    description: >
+                      Trạng thái PHIẾU (BatchEntityStatus, shared enums) —
+                      0 ACTIVE (đang soạn) · 1 COMPLETED (hoàn tất) ·
+                      2 CANCELLED (đã hủy).
+                    enum: [0, 1, 2]
+                    example: 0
+                  items:
+                    type: array
+                    description: Các đơn trong phiếu — row hiển thị trên D2.
+                    items: &batchingItem
+                      type: object
+                      required: [batchCode, stopOrder, orderCode, customerAddress, distance, fromDeliveryTime, toDeliveryTime, orderStatus, orderType, items, totalQuantity, codAmount]
+                      properties:
+                        batchCode:
+                          type: string
+                          description: Mã phiếu soạn.
+                          example: BATCH-000045
+                        stopOrder:
+                          type: integer
+                          description: Thứ tự giao trong phiếu.
+                          example: 1
+                        orderCode:
+                          type: string
+                          example: ORD-000123
+                        customerAddress:
+                          type: string
+                          example: '123 Nguyễn Huệ, P. Bến Nghé, Q.1, TP.HCM'
+                        distance:
+                          type: number
+                          description: Km từ kho tới điểm giao.
+                          example: 6.2
+                        fromDeliveryTime:
+                          type: string
+                          format: date-time
+                          example: '2026-09-06T01:00:00.000Z'
+                        toDeliveryTime:
+                          type: string
+                          format: date-time
+                          example: '2026-09-06T04:00:00.000Z'
+                        orderStatus:
+                          type: integer
+                          description: Trạng thái đơn (OrderStatus, shared enums).
+                          example: 1
+                        orderType:
+                          type: integer
+                          example: 0
+                        items:
+                          type: array
+                          description: Dòng sản phẩm trong đơn (expand D1).
+                          items:
+                            type: object
+                            required: [productCode, productName, quantity]
+                            properties:
+                              productCode:
+                                type: string
+                                example: SKU-0001
+                              productName:
+                                type: string
+                                example: 'Áo thun nam'
+                              quantity:
+                                type: integer
+                                example: 2
+                        totalQuantity:
+                          type: integer
+                          example: 3
+                        codAmount:
+                          type: number
+                          description: Số tiền thu COD (VND).
+                          example: 350000
+                  createdAt:
+                    type: string
+                    format: date-time
+                    example: '2026-09-06T02:30:00.000Z'
+              example:
+                batchCode: BATCH-000045
+                shopCode: SHOP-001
+                shipperId: staff-hcm-01
+                deliveryTime:
+                  from: '2026-09-06T01:00:00.000Z'
+                  to: '2026-09-06T04:00:00.000Z'
+                status: 0
+                items:
+                  - batchCode: BATCH-000045
+                    stopOrder: 1
+                    orderCode: ORD-000123
+                    customerAddress: '123 Nguyễn Huệ, P. Bến Nghé, Q.1, TP.HCM'
+                    distance: 6.2
+                    fromDeliveryTime: '2026-09-06T01:00:00.000Z'
+                    toDeliveryTime: '2026-09-06T04:00:00.000Z'
+                    orderStatus: 1
+                    orderType: 0
+                    items:
+                      - productCode: SKU-0001
+                        productName: 'Áo thun nam'
+                        quantity: 2
+                    totalQuantity: 3
+                    codAmount: 350000
+                createdAt: '2026-09-06T02:30:00.000Z'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '422':
+          description: >
+            Vi phạm rule 1 §3.6 (đơn không tồn tại / khác kho / batchStatus≠0)
+            hoặc orderCodes rỗng — upstream InvalidArgument.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/batches/filter:
+    post:
+      tags: [Batches]
+      operationId: filterBatches
+      summary: Danh sách phiếu soạn hàng (D2 list, phân trang)
+      description: >
+        Filter phiếu — POST body (không query) vì status là multi-select.
+        gRPC FilterBatches (hubstore.batching.v1). Envelope phân trang chuẩn
+        `Paginated` (lib/envelope.ts).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [page, pageSize]
+              properties:
+                searchText:
+                  type: string
+                  description: Text search theo số phiếu HOẶC số đơn.
+                  example: BATCH-000045
+                status:
+                  type: array
+                  description: Trạng thái phiếu — multi-select.
+                  items:
+                    type: integer
+                    enum: [0, 1, 2]
+                  example: [0]
+                createdAt:
+                  type: string
+                  format: date
+                  description: >
+                    Ngày tạo phiếu (YYYY-MM-DD) — BFF wrap thành full-day range
+                    UTC [T00:00:00.000Z, T23:59:59.999Z] trước khi gọi gRPC.
+                  example: '2026-09-06'
+                page:
+                  type: integer
+                  minimum: 1
+                  example: 1
+                pageSize:
+                  type: integer
+                  minimum: 1
+                  example: 20
+            example:
+              searchText: ''
+              status: [0]
+              page: 1
+              pageSize: 20
+      responses:
+        '200':
+          description: Trang phiếu khớp filter.
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: *batchDto
+              example:
+                items:
+                  - batchCode: BATCH-000045
+                    shopCode: SHOP-001
+                    shipperId: staff-hcm-01
+                    deliveryTime:
+                      from: '2026-09-06T01:00:00.000Z'
+                      to: '2026-09-06T04:00:00.000Z'
+                    status: 0
+                    items: []
+                    createdAt: '2026-09-06T02:30:00.000Z'
+                total: 42
+                page: 1
+                pageSize: 20
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/batches/criteria:
+    get:
+      tags: [Batches]
+      operationId: getBatchCriteria
+      summary: Cấu hình trạng thái cho phép hủy phiếu
+      description: >
+        Criteria cho màn tạo phiếu/hủy — hiện trả `cancellableStatuses: [0]`
+        (chỉ ACTIVE được hủy, rule 4 §3.6). Static phía Go (không đọc DB).
+        Route static ĐẶT TRƯỚC /{code} — find-my-way ưu tiên static nên thứ tự
+        khai chỉ để dễ đọc.
+      responses:
+        '200':
+          description: Trạng thái phiếu cho phép hủy.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [cancellableStatuses]
+                properties:
+                  cancellableStatuses:
+                    type: array
+                    description: BatchEntityStatus cho phép hủy — hiện [0] (ACTIVE).
+                    items:
+                      type: integer
+                      enum: [0, 1, 2]
+                    example: [0]
+              example:
+                cancellableStatuses: [0]
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/batches/{code}:
+    get:
+      tags: [Batches]
+      operationId: getBatchByCode
+      summary: Chi tiết phiếu (D2 detail/expand)
+      description: >
+        BatchDto đầy đủ kèm items[] (BatchingItem — row D2). gRPC
+        GetBatchDetail — batch không tồn tại → 404 NOT_FOUND (KHÔNG trả 200
+        null — Go raise NotFound trước khi map).
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: Mã phiếu soạn hàng.
+          schema:
+            type: string
+            example: BATCH-000045
+      responses:
+        '200':
+          description: Chi tiết phiếu.
+          content:
+            application/json:
+              schema: *batchDto
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/batches/{code}/cancel:
+    put:
+      tags: [Batches]
+      operationId: cancelBatch
+      summary: Hủy phiếu — đơn revert về batchStatus=0 (D2)
+      description: >
+        Rule 4 §3.6 — chỉ phiếu ACTIVE (0) được hủy. Cross-service mutation:
+        Go CAS Transition ACTIVE→CANCELLED (chặn double-cancel/cancel-vs-
+        complete race) rồi gọi Java MutateOrderStatus revert batchStatus của
+        từng đơn về 0. Sai trạng thái → 409 CONFLICT (FailedPrecondition);
+        phiếu không tồn tại → 404. Audit `batch.cancel` + event
+        `batch.transitioned` (active→cancelled) fire-and-forget.
+      parameters:
+        - name: code
+          in: path
+          required: true
+          description: Mã phiếu cần hủy.
+          schema:
+            type: string
+            example: BATCH-000045
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: string
+                  description: Lý do hủy — từ confirm modal D2.
+                  example: 'Đơn đổi địa chỉ giao'
+            example:
+              reason: 'Đơn đổi địa chỉ giao'
+      responses:
+        '200':
+          description: Phiếu sau khi hủy (status=2 CANCELLED, items giữ nguyên).
+          content:
+            application/json:
+              schema: *batchDto
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          description: Phiếu không tồn tại (upstream NOT_FOUND).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '409':
+          description: >
+            Phiếu không ở trạng thái ACTIVE (rule 4) — upstream
+            FailedPrecondition → CONFLICT.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /fulfillment/batches/recalculate-distance:
+    post:
+      tags: [Batches]
+      operationId: recalculateBatchDistance
+      summary: Tính lại km cho các đơn (D1b)
+      description: >
+        Tính lại khoảng cách per-order (sau khi seed/địa chỉ đổi) — trả
+        OrderDistance[] theo cùng thứ tự orderCodes. gRPC
+        RecalculateDistance; shopCode trống → Go derive từ orders.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orderCodes]
+              properties:
+                orderCodes:
+                  type: array
+                  items:
+                    type: string
+                  minItems: 1
+                  example: [ORD-000123, ORD-000124]
+            example:
+              orderCodes: [ORD-000123, ORD-000124]
+      responses:
+        '200':
+          description: Km mới per-order.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: &orderDistance
+                      type: object
+                      required: [orderCode, distance]
+                      properties:
+                        orderCode:
+                          type: string
+                          example: ORD-000123
+                        distance:
+                          type: number
+                          description: Km sau tính lại.
+                          example: 6.2
+              example:
+                items:
+                  - orderCode: ORD-000123
+                    distance: 6.2
+                  - orderCode: ORD-000124
+                    distance: 3.8
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /batching/criteria-presets:
+    get:
+      tags: [Batches]
+      operationId: getBatchingCriteriaPresets
+      summary: Danh sách preset tiêu chí gợi ý nhóm (static BFF-side)
+      description: >
+        4 preset cố định (shortest / cod_priority / fewest_stops / balanced)
+        — KHÔNG gọi batching service (static const CRITERIA_PRESETS trong BFF,
+        nên không có 503). Role gate: Coordinator | Manager | Admin — role
+        khác → 403 PERMISSION_DENIED.
+      responses:
+        '200':
+          description: Danh sách preset (hiện 4 — cố định trong code).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: &criteriaPreset
+                      type: object
+                      required: [id, name, description]
+                      properties:
+                        id:
+                          type: string
+                          enum: [shortest, cod_priority, fewest_stops, balanced]
+                          example: shortest
+                        name:
+                          type: string
+                          example: 'Ngắn nhất'
+                        description:
+                          type: string
+                          example: 'Ưu tiên tổng quãng đường di chuyển ít nhất giữa các điểm giao.'
+              example:
+                items:
+                  - id: shortest
+                    name: 'Ngắn nhất'
+                    description: 'Ưu tiên tổng quãng đường di chuyển ít nhất giữa các điểm giao.'
+                  - id: cod_priority
+                    name: 'Ưu tiên COD'
+                    description: 'Giao các đơn COD giá trị cao trước để thu tiền sớm trong ngày.'
+                  - id: fewest_stops
+                    name: 'Ưu tiên số dừng'
+                    description: 'Giảm số điểm dừng mỗi chuyến — hợp đơn rải nhiều tòa, cùng tòa gộp trước.'
+                  - id: balanced
+                    name: 'Cân bằng'
+                    description: 'Cân đối quãng đường, COD và số dừng — preset mặc định được đề xuất.'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+
+  /batching/criteria-preset-select:
+    post:
+      tags: [Batches]
+      operationId: selectBatchingCriteriaPreset
+      summary: Chọn preset tiêu chí cho lần gợi ý nhóm
+      description: >
+        Validate presetId ∈ 4 preset (sai → 422 VALIDATION_ERROR, details
+        `[{field: 'presetId', …}]` — raise ngay tại BFF, không gọi upstream).
+        Audit `batching.criteria_preset_select` fire-and-forget. Role gate
+        giống GET presets: Coordinator | Manager | Admin.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [presetId]
+              properties:
+                presetId:
+                  type: string
+                  description: ID preset — phải thuộc danh sách GET /batching/criteria-presets.
+                  enum: [shortest, cod_priority, fewest_stops, balanced]
+                  example: shortest
+                orderCount:
+                  type: integer
+                  description: Tuỳ chọn — số đơn sẽ gợi ý (chỉ để audit context).
+                  example: 12
+            example:
+              presetId: shortest
+              orderCount: 12
+      responses:
+        '200':
+          description: Đã ghi nhận lựa chọn.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [ok]
+                properties:
+                  ok:
+                    type: boolean
+                    example: true
+              example:
+                ok: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '422':
+          description: presetId không thuộc 4 preset — details chỉ rõ field `presetId`.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Request validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: presetId
+                    message: 'presetId phải là một trong: shortest, cod_priority, fewest_stops, balanced.'
