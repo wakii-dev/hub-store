@@ -135,6 +135,10 @@
   (prototype chain) khi check duplicate paths/components — nil risk hôm nay;
   `Object.hasOwn` chặt hơn nếu sửa sau.
 
+## 2026-09-06 — SF-2 FI-328 (orders-domain docs)
+- **P2 (docs, SF-1-owned — flag không tự sửa):** note trong `services/bff-gateway/openapi/components/envelopes.yaml` ghi ref nguồn dạng `../components/envelopes.yaml#/ErrorEnvelope` — shorthand pointer SAI so với cấu trúc file thật (`#/components/schemas/ErrorEnvelope`); bundler throw trailing-miss tường minh nên không nguy hiểm, nhưng note gây nhầm cho SF author tiếp theo. Suggested change: sửa note thành pointer đầy đủ `#/components/schemas/…` + `#/components/responses/…`.
+- **Env pattern (lặp từ SF-1):** `orca screenshot` CDP timeout dù tab switch + app activate — cả 2 SF phải fallback DOM+flow-clicks và nhờ user confirm visual. Đề xuất: orca thêm fallback headless screenshot hoặc khuyến nghị `orca computer` window-level screenshot cho embedded browser.
+- **Env pattern:** mint_sf11.py hardcode `KC_PORT=8082` (seam sf-11) nhưng compose keycloak chuẩn ở `:8081` — mỗi SF phải copy/sed ra /tmp. Đề xuất: script nhận env `KC_PORT` override (1 dòng).
 ## 2026-09-06 — SF-5 (FI-331): domain schemas chưa có chỗ chuẩn trong layout multi-file (P6 flag)
 
 - **What:** bundler (openapi-bundle.ts) chỉ merge `doc.paths` của file domain —

@@ -1,3 +1,872 @@
-# STUB — tier-1 SF fill (SF-1 pre-wire). Domain KHÔNG chạm root openapi.yaml;
-# chỉ thêm path-items vào file này. Bundle merge map `paths` vào root tại runtime.
-paths: {}
+# Intake + Webhooks — 9 ops (SF-4, FI-330). Shapes THẬT từ code (nguồn READ-ONLY):
+#   src/routes/intake.ts        — 8 ops intake (role gates, status codes, envelope)
+#   src/routes/webhooks.ts      — POST /webhooks/orders (nested scope raw-body, HMAC)
+#   src/lib/hmac.ts             — HMAC-SHA256 hex, prefix `sha256=` optional (case-insensitive)
+#   src/lib/webhook-mapping.ts  — payload map, PHONE_RE, quantity = Σ items[].quantity
+#   src/lib/parseOrdersFile.ts  — templateCsv 7 cột (KHÔNG BOM, CRLF), parse .csv/.xlsx/.xls
+#   src/mappers/intake.ts       — ImportErrorDto / AuditEntryDto
+#   src/mappers/fulfillment.ts  — mapOrderItem → HubStoreOrderFilterItem (by-batch)
+#   packages/shared/src/api-contracts/intake.ts — IntakeOrderDto / ImportErrorDto / AuditEntryDto
+#   packages/shared/src/types/order.ts + enums.ts — OrderFilterItem + status codes
+#   services/fulfillment-service .../IntakeValidator.java — rules 422 upstream
+#
+# LƯU Ý bundler (openapi-bundle.ts): chỉ merge map `paths` của file này —
+# `components:` đặt ở đây sẽ bị BỎ QUA. Schema dùng ≥2 op viết INLINE; shape
+# dùng-chúng toàn hệ thống $ref external sang ../components/*.yaml với $ref là
+# KEY DUY NHẤT của node (bundler không resolve $ref kèm sibling keys).
+paths:
+  /orders:
+    post:
+      tags: [Intake]
+      operationId: createManualOrder
+      summary: Tạo đơn lẻ (nhập tay)
+      description: >
+        Role **Coordinator**. Upstream validate (IntakeValidator): customerPhone
+        đúng SĐT VN `^(\\+84|0)\\d{9}$`, `quantity` PHẢI bằng tổng
+        `items[].quantity`, `codAmount ≥ 0`, `shopHint` (nếu gửi) phải là mã kho
+        CN tồn tại — vi phạm → 422 `details[]` per-field (mỗi rule một detail).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [customerName, customerPhone, customerAddress, items, quantity, codAmount]
+              properties:
+                customerName:
+                  type: string
+                  description: Tên khách hàng (bắt buộc, không được rỗng).
+                  example: Nguyễn Văn A
+                customerPhone:
+                  type: string
+                  description: SĐT VN — `0xxxxxxxxx` hoặc `+84xxxxxxxxx`.
+                  pattern: '^(\+84|0)\d{9}$'
+                  example: '0901234567'
+                customerAddress:
+                  type: string
+                  description: Địa chỉ giao hàng (bắt buộc).
+                  example: 12 Nguyễn Huệ, Q1, TP.HCM
+                items:
+                  type: array
+                  description: Danh sách sản phẩm — ít nhất 1 item.
+                  minItems: 1
+                  items:
+                    type: object
+                    required: [productCode, productName, quantity]
+                    properties:
+                      productCode:
+                        type: string
+                        example: SKU-001
+                      productName:
+                        type: string
+                        example: Sản phẩm A
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        example: 2
+                quantity:
+                  type: integer
+                  minimum: 1
+                  description: >
+                    Tổng số lượng — PHẢI bằng Σ items[].quantity (validator
+                    upstream từ chối 422 nếu lệch).
+                  example: 2
+                codAmount:
+                  type: number
+                  minimum: 0
+                  description: Tiền thu COD (VND) — không được âm.
+                  example: 250000
+                shopHint:
+                  type: string
+                  description: >
+                    Hint mã kho CN cho shopAssignment lúc confirm (tùy chọn) —
+                    mã không tồn tại → 422.
+                  example: SHOP-001
+      responses:
+        '201':
+          description: Đơn đã tạo — mã đơn fulfillment mới.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fulfillCode]
+                properties:
+                  fulfillCode:
+                    type: string
+                    example: ORD-000123
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /orders/import/template:
+    get:
+      tags: [Intake]
+      operationId: getImportTemplate
+      summary: Tải file CSV template nhập đơn
+      description: >
+        Role **Coordinator**. Trả file CSV 7 cột
+        `customerName,customerPhone,customerAddress,items,quantity,codAmount,shopHint`
+        (UTF-8 **không BOM**, dòng `\r\n`) — nội dung sinh tại BFF
+        (`templateCsv()`), không gọi upstream. Điền cột `items` theo format
+        `SKU:Tên:Số lượng;SKU2:Tên2:Số lượng2`. File này là đầu vào của
+        `POST /orders/import/preview`.
+      responses:
+        '200':
+          description: CSV template — tải về dạng attachment.
+          headers:
+            Content-Disposition:
+              description: 'attachment; filename="order-import-template.csv".'
+              schema:
+                type: string
+                example: 'attachment; filename="order-import-template.csv"'
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+              example: |
+                customerName,customerPhone,customerAddress,items,quantity,codAmount,shopHint
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+
+  /orders/import/preview:
+    post:
+      tags: [Intake]
+      operationId: previewImportOrders
+      summary: Preview file import — parse + validate, chưa tạo đơn
+      description: >
+        Role **Coordinator**. Nhận file qua **multipart/form-data** (field
+        `file`, bắt buộc) — chấp nhận `.csv` / `.xlsx` / `.xls` (phân loại theo
+        extension). BFF parse từng dòng, đẩy qua upstream
+        `validateImportOrders`, trả `valid` (đơn hợp lệ — dùng lại cho
+        confirm) + `errors` (mỗi lỗi một row: parse-fail tại BFF hoặc
+        validate-fail upstream). Row đánh số 1-based **bỏ qua dòng header**;
+        `row: 0` = lỗi cấu trúc file/header. Dòng lỗi KHÔNG nằm trong `valid`.
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required: [file]
+              properties:
+                file:
+                  type: string
+                  format: binary
+                  description: File import (.csv / .xlsx / .xls) theo template 7 cột.
+      responses:
+        '200':
+          description: >
+            Kết quả preview — `valid` là mảng IntakeOrder đã sạch lỗi (truyền
+            thẳng sang confirm), `errors` rỗng khi file hợp lệ hoàn toàn.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [valid, errors]
+                properties:
+                  valid:
+                    type: array
+                    items:
+                      type: object
+                      required: [customerName, customerPhone, customerAddress, items, quantity, codAmount]
+                      properties:
+                        customerName:
+                          type: string
+                          example: Nguyễn Văn A
+                        customerPhone:
+                          type: string
+                          example: '0901234567'
+                        customerAddress:
+                          type: string
+                          example: 12 Nguyễn Huệ, Q1, TP.HCM
+                        items:
+                          type: array
+                          items:
+                            type: object
+                            required: [productCode, productName, quantity]
+                            properties:
+                              productCode:
+                                type: string
+                                example: SKU-001
+                              productName:
+                                type: string
+                                example: Sản phẩm A
+                              quantity:
+                                type: integer
+                                example: 2
+                        quantity:
+                          type: integer
+                          example: 2
+                        codAmount:
+                          type: number
+                          example: 250000
+                        shopHint:
+                          type: string
+                          example: SHOP-001
+                  errors:
+                    type: array
+                    items:
+                      type: object
+                      required: [row, column, message]
+                      properties:
+                        row:
+                          type: integer
+                          description: >
+                            Số dòng 1-based bỏ qua header; `0` = lỗi
+                            file/header (cột lạ, thiếu cột, file rỗng,
+                            extension không hỗ trợ — column `file`).
+                          example: 3
+                        column:
+                          type: string
+                          description: Tên cột vi phạm (tên header template).
+                          example: items
+                        message:
+                          type: string
+                          example: 'Sản phẩm không hợp lệ (định dạng SKU:Tên:Số lượng;...).'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '422':
+          description: >
+            Thiếu file (multipart không có field `file`) hoặc file không đọc
+            được — 422 `VALIDATION_ERROR` với `details[{field: "file"}]`.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Thiếu file import (multipart field "file").'
+                code: VALIDATION_ERROR
+                details:
+                  - field: file
+                    message: 'File import là bắt buộc.'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /orders/import/confirm:
+    post:
+      tags: [Intake]
+      operationId: confirmImportOrders
+      summary: Xác nhận import — tạo đơn hàng loạt
+      description: >
+        Role **Coordinator**. Nhận mảng `orders` (thường lấy từ `valid` của
+        preview) và tạo đơn thật. Mảng thiếu/rỗng → 422 (không confirm im
+        lặng). Upstream re-validate trước khi tạo — dòng lệch rule → 422
+        `details[]` per-field, KHÔNG đơn nào được tạo.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [orders]
+              properties:
+                orders:
+                  type: array
+                  minItems: 1
+                  description: Đơn cần tạo — shape `IntakeOrderDto` y như POST /orders.
+                  items:
+                    type: object
+                    required: [customerName, customerPhone, customerAddress, items, quantity, codAmount]
+                    properties:
+                      customerName:
+                        type: string
+                        example: Nguyễn Văn A
+                      customerPhone:
+                        type: string
+                        example: '0901234567'
+                      customerAddress:
+                        type: string
+                        example: 12 Nguyễn Huệ, Q1, TP.HCM
+                      items:
+                        type: array
+                        minItems: 1
+                        items:
+                          type: object
+                          required: [productCode, productName, quantity]
+                          properties:
+                            productCode:
+                              type: string
+                              example: SKU-001
+                            productName:
+                              type: string
+                              example: Sản phẩm A
+                            quantity:
+                              type: integer
+                              minimum: 1
+                              example: 2
+                      quantity:
+                        type: integer
+                        description: PHẢI bằng Σ items[].quantity.
+                        example: 2
+                      codAmount:
+                        type: number
+                        minimum: 0
+                        example: 250000
+                      shopHint:
+                        type: string
+                        example: SHOP-001
+      responses:
+        '200':
+          description: Đã tạo — mảng mã đơn mới, thứ tự khớp mảng `orders` gửi lên.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fulfillCodes]
+                properties:
+                  fulfillCodes:
+                    type: array
+                    items:
+                      type: string
+                    example: [ORD-000123, ORD-000124]
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /orders/{code}/fail:
+    parameters:
+      # Inline `name: code` — OpenAPI 3.0.3 BẮT BUỘC param name khớp template
+      # {code}; $ref OrderCodePath (name orderCode) sẽ invalid + try-it-out
+      # không fill được {code} (review SF-4 round 1). Route find-my-way là :code
+      # → không được đổi template sang {orderCode} (drift-guard so exact).
+      - name: code
+        in: path
+        required: true
+        description: Mã đơn intake (ORD-####).
+        schema:
+          type: string
+          example: ORD-000123
+    post:
+      tags: [Intake]
+      operationId: markOrderFailed
+      summary: Đánh dấu đơn giao thất bại
+      description: >
+        Role **WarehouseOps**. Ghi nhận lý do giao thất bại + ghi audit (BFF
+        đồng thời phát event realtime `order.failed`). `reason` validate ngay
+        tại BFF — thiếu/không phải số nguyên 0-3 → 422. Sai trạng thái đơn
+        (upstream FAILED_PRECONDITION) → 409 `CONFLICT`.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [reason]
+              properties:
+                reason:
+                  type: integer
+                  minimum: 0
+                  maximum: 3
+                  description: >
+                    Lý do giao thất bại (mirror
+                    `hubstore.intake.v1.DeliveryFailReason`): `0` KHÁCH VẮNG ·
+                    `1` SAI ĐỊA CHỈ · `2` KHÁCH TỪ CHỐI · `3` KHÁC.
+                  example: 0
+                note:
+                  type: string
+                  description: Ghi chú bổ sung (tùy chọn).
+                  example: 'Khách hẹn giao lại sáng mai'
+      responses:
+        '204':
+          description: Đã ghi nhận thất bại (không body).
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          description: '`reason` không phải số nguyên 0-3 — chặn tại BFF trước khi forward.'
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Request validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: reason
+                    message: 'reason là số nguyên 0-3 (lý do giao thất bại).'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /orders/{code}/redeliver:
+    parameters:
+      # Inline `name: code` — OpenAPI 3.0.3 BẮT BUỘC param name khớp template
+      # {code}; $ref OrderCodePath (name orderCode) sẽ invalid + try-it-out
+      # không fill được {code} (review SF-4 round 1). Route find-my-way là :code
+      # → không được đổi template sang {orderCode} (drift-guard so exact).
+      - name: code
+        in: path
+        required: true
+        description: Mã đơn intake (ORD-####).
+        schema:
+          type: string
+          example: ORD-000123
+    post:
+      tags: [Intake]
+      operationId: redeliverOrder
+      summary: Tạo đơn giao lại
+      description: >
+        Role **WarehouseOps**. Tạo đơn fulfillment MỚI thay thế đơn thất bại —
+        đơn mới mang `oldFulfillCode` trỏ về đơn gốc (thấy qua filter Orders).
+        BFF phát event realtime `order.redelivered` + mirror audit phía
+        upstream. Sai trạng thái (đơn không ở trạng thái cho giao lại) → 409.
+      responses:
+        '201':
+          description: Đơn giao lại đã tạo — trả mã đơn mới.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fulfillCode]
+                properties:
+                  fulfillCode:
+                    type: string
+                    description: Mã đơn giao lại (đơn mới).
+                    example: ORD-000456
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /orders/{code}/audit:
+    parameters:
+      # Inline `name: code` — OpenAPI 3.0.3 BẮT BUỘC param name khớp template
+      # {code}; $ref OrderCodePath (name orderCode) sẽ invalid + try-it-out
+      # không fill được {code} (review SF-4 round 1). Route find-my-way là :code
+      # → không được đổi template sang {orderCode} (drift-guard so exact).
+      - name: code
+        in: path
+        required: true
+        description: Mã đơn intake (ORD-####).
+        schema:
+          type: string
+          example: ORD-000123
+    get:
+      tags: [Intake]
+      operationId: getOrderAudit
+      summary: Activity log của một đơn
+      description: >
+        Mọi role đã xác thực (không gate vai). Trả nhật ký thao tác trên đơn —
+        entry do intake upstream ghi (actor `webhook:<source>` cho đơn từ
+        webhook) theo thứ tự upstream trả.
+      responses:
+        '200':
+          description: Danh sách audit entries (không phân trang).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      type: object
+                      required: [actor, action, target, detail, createdAt]
+                      properties:
+                        actor:
+                          type: string
+                          description: Ai/cái gì thực hiện (user id hoặc `webhook:<source>`).
+                          example: webhook:shopee
+                        action:
+                          type: string
+                          description: Hành động (vd `order.created`, `order.failed`).
+                          example: order.created
+                        target:
+                          type: string
+                          description: Đối tượng bị tác động (mã đơn).
+                          example: ORD-000123
+                        detail:
+                          type: object
+                          nullable: true
+                          description: >
+                            Chi tiết JSONB upstream đã parse thành object;
+                            `null` khi upstream không gửi / JSON không parse
+                            được (audit không crash).
+                          example:
+                            source: shopee
+                            externalId: TIKTOK-889001
+                        createdAt:
+                          type: string
+                          description: Thời điểm ghi (chuỗi timestamp upstream).
+                          example: '2026-09-06T10:15:00Z'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /orders/by-batch/{batchCode}:
+    parameters:
+      - $ref: '../components/parameters.yaml#/components/parameters/BatchCodePath'
+    get:
+      tags: [Intake]
+      operationId: getOrdersByBatch
+      summary: Đơn hàng thuộc một phiếu soạn
+      description: >
+        Mọi role đã xác thực. BFF tự aggregate (không pass-through): lấy
+        chi tiết phiếu soạn từ batching-service → gọi fulfillment-service
+        `getOrdersByCodes` → trả mảng đơn. Batch không tồn tại → 404.
+      responses:
+        '200':
+          description: >
+            Mảng đơn (KHÔNG bọc Paginated — aggregation BFF trả trực tiếp).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  type: object
+                  required: [fulfillCode, statusCode, batchStatus, shopAssignment, originalTime, deliveryTime, orderStatus, items, codAmount, totalQuantity, isDebtSplittingOrder, customerAddress]
+                  properties:
+                    fulfillCode:
+                      type: string
+                      example: ORD-000123
+                    statusCode:
+                      type: integer
+                      description: Trạng thái điều phối (code thô upstream).
+                      example: 0
+                    batchStatus:
+                      type: integer
+                      description: >
+                        Trạng thái soạn hàng của đơn: `0` Chưa soạn · `1` Đang
+                        soạn · `2` Đã soạn · `3` Lỗi vượt trọng lượng.
+                      example: 2
+                    batchCode:
+                      type: string
+                      description: Mã phiếu soạn (nếu đơn đã vào batch).
+                      example: BATCH-000045
+                    shopAssignment:
+                      type: object
+                      required: [shopCode, shopName, address]
+                      properties:
+                        shopCode:
+                          type: string
+                          example: SHOP-001
+                        shopName:
+                          type: string
+                          example: Kho CN Quận 1
+                        address:
+                          type: string
+                          example: '12 Nguyễn Huệ, Q1, TP.HCM'
+                    originalTime:
+                      type: object
+                      description: Khung giờ khách mong muốn.
+                      required: [from, to]
+                      properties:
+                        from:
+                          type: string
+                          example: '2026-09-06T08:00:00Z'
+                        to:
+                          type: string
+                          example: '2026-09-06T10:00:00Z'
+                    deliveryTime:
+                      type: object
+                      description: Khung giờ dự kiến giao.
+                      required: [from, to]
+                      properties:
+                        from:
+                          type: string
+                          example: '2026-09-06T13:00:00Z'
+                        to:
+                          type: string
+                          example: '2026-09-06T15:00:00Z'
+                    orderStatus:
+                      type: integer
+                      description: >
+                        Trạng thái đơn: `0` Chờ duyệt · `1` Đã duyệt · `2` Từ
+                        chối duyệt.
+                      example: 1
+                    items:
+                      type: array
+                      items:
+                        type: object
+                        required: [productCode, productName, quantity]
+                        properties:
+                          productCode:
+                            type: string
+                            example: SKU-001
+                          productName:
+                            type: string
+                            example: Sản phẩm A
+                          quantity:
+                            type: integer
+                            example: 2
+                    codAmount:
+                      type: number
+                      description: Tiền COD (VND).
+                      example: 250000
+                    totalQuantity:
+                      type: integer
+                      description: Tổng số lượng sản phẩm của đơn.
+                      example: 2
+                    isDebtSplittingOrder:
+                      type: boolean
+                      description: Đơn chia nợ — không được chuyển kho.
+                      example: false
+                    customerAddress:
+                      type: string
+                      example: 12 Nguyễn Huệ, Q1, TP.HCM
+                    distance:
+                      type: number
+                      description: Khoảng cách giao (km) — có thể thiếu.
+                      example: 3.5
+                    customerName:
+                      type: string
+                      description: Có thể thiếu (đơn seed cũ).
+                      example: Nguyễn Văn A
+                    customerPhone:
+                      type: string
+                      description: Có thể thiếu (đơn seed cũ).
+                      example: '0901234567'
+                    failReason:
+                      type: string
+                      description: >
+                        Lý do giao thất bại (tên enum: KHACH_VANG /
+                        SAI_DIA_CHI / KHACH_TU_CHOI / KHAC); rỗng = không fail.
+                      example: KHACH_VANG
+                    failNote:
+                      type: string
+                      description: Ghi chú thất bại (từ op fail).
+                      example: 'Khách hẹn giao lại sáng mai'
+                    oldFulfillCode:
+                      type: string
+                      description: Mã đơn gốc — chỉ đơn giao lại có giá trị.
+                      example: ORD-000123
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /webhooks/orders:
+    post:
+      tags: [Webhooks]
+      operationId: createWebhookOrder
+      summary: Nhận đơn từ sàn TMĐT (webhook máy-máy)
+      security:
+        - webhookHmac: []
+      description: >
+        **Endpoint cho integrator/sàn TMĐT** — đẩy đơn vào Hub Store khi khách
+        đặt hàng. KHÔNG dùng JWT: xác thực bằng chữ ký HMAC trong header
+        `X-Signature` + định danh sàn trong header `X-Source`.
+
+        ### 1. Chữ ký (X-Signature)
+
+        - Thuật toán: **HMAC-SHA256**, key là shared secret Hub Store cấp qua
+          kênh an toàn (phía nhận cấu hình `WEBHOOK_HMAC_SECRET`).
+        - Ký trên **raw request body** — đúng byte payload bạn gửi, KHÔNG
+          re-serialize/pretty-print sau khi ký (re-serialize làm lệch byte → 401).
+        - Format: hex lowercase. Chấp nhận cả hai dạng `sha256=<hex>` và
+          `<hex>` (prefix `sha256=` case-insensitive, bị bỏ qua khi verify).
+
+        Ví dụ tính + gửi (openssl / Node.js):
+
+        ```bash
+        BODY='{"externalId":"TIKTOK-889001","customerName":"Nguyễn Văn A","customerPhone":"0901234567","customerAddress":"12 Nguyễn Huệ, Q1, TP.HCM","items":[{"productCode":"SKU-001","productName":"Sản phẩm A","quantity":2}],"codAmount":250000}'
+        SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_HMAC_SECRET" -hex | awk '{print $NF}')
+        curl -X POST http://localhost:8080/webhooks/orders \
+          -H 'Content-Type: application/json' \
+          -H 'X-Source: tiktokshop' \
+          -H "X-Signature: sha256=$SIG" \
+          -d "$BODY"
+        ```
+
+        ```js
+        // Node.js
+        import { createHmac } from 'node:crypto';
+        const sig = createHmac('sha256', SECRET).update(rawBody).digest('hex');
+        // → header X-Signature: `sha256=${sig}` (hoặc chỉ `${sig}`)
+        ```
+
+        ### 2. Header X-Source
+
+        Định danh sàn gửi (vd `shopee`, `tiktokshop`, `lazada.vn`) — ký tự cho
+        phép `A-Z a-z 0-9 . _ -` (ASCII, phân biệt hoa-thường, khuyến nghị
+        lowercase). Dùng làm một nửa dedupe key + ghi audit với actor
+        `webhook:<source>`. Thiếu/sai format → 422.
+
+        ### 3. Idempotency (dedupe)
+
+        Đơn dedupe theo cặp **(X-Source, externalId)**: gửi lại cùng
+        `externalId` từ cùng sàn → KHÔNG tạo đơn mới, trả `200` với cùng
+        `fulfillCode` và `replayed: true`.
+
+        ### 4. Retry semantics
+
+        - `200` (kể cả `replayed: true`) → đã nhận, dừng retry.
+        - `401` → chữ ký sai/thiếu hoặc body rỗng — KIỂM TRA lại việc ký raw
+          bytes + secret rồi mới gửi lại (retry mù sẽ 401 mãi).
+        - `422` → payload lỗi (thiếu field, SĐT sai format, quantity lệch…) —
+          SỬA payload rồi gửi lại **giữ nguyên `externalId`**: lượt 422 đã được
+          ghi nhận là FAILED, lượt gửi sau (payload hợp lệ) sẽ được xử lý bình
+          thường với externalId đó.
+        - `5xx` / `503` → lỗi phía Hub Store (503 + code
+          `SERVICE_UNAVAILABLE` = secret chưa cấu hình phía nhận) — retry với
+          exponential backoff; an toàn nhờ dedupe.
+        - `400` → body không parse được JSON — kiểm tra encoding (UTF-8) trước
+          khi ký.
+      parameters:
+        - name: X-Source
+          in: header
+          required: true
+          description: Định danh sàn gửi — ASCII `A-Z a-z 0-9 . _ -`.
+          schema:
+            type: string
+            pattern: '^[A-Za-z0-9._-]+$'
+          example: tiktokshop
+      requestBody:
+        required: true
+        content:
+          application/json:
+            description: >
+              Payload đơn — tên field mặc định khớp template import (override
+              được qua cấu hình `WEBHOOK_MAPPING` phía Hub Store). KHÔNG gửi
+              `quantity` tổng: server tự tính = Σ items[].quantity.
+            schema:
+              type: object
+              required: [externalId, customerName, customerPhone, customerAddress, items]
+              properties:
+                externalId:
+                  type: string
+                  description: Mã đơn phía sàn — dedupe key (bắt buộc, khác rỗng).
+                  example: TIKTOK-889001
+                customerName:
+                  type: string
+                  description: Tên khách (bắt buộc).
+                  example: Nguyễn Văn A
+                customerPhone:
+                  type: string
+                  description: SĐT VN — `0xxxxxxxxx` hoặc `+84xxxxxxxxx`.
+                  example: '0901234567'
+                customerAddress:
+                  type: string
+                  description: Địa chỉ giao (bắt buộc).
+                  example: 12 Nguyễn Huệ, Q1, TP.HCM
+                items:
+                  type: array
+                  minItems: 1
+                  description: Sản phẩm — mỗi item cần code/tên/quantity ≥ 1.
+                  items:
+                    type: object
+                    required: [productCode, productName, quantity]
+                    properties:
+                      productCode:
+                        type: string
+                        example: SKU-001
+                      productName:
+                        type: string
+                        example: Sản phẩm A
+                      quantity:
+                        type: integer
+                        minimum: 1
+                        example: 2
+                codAmount:
+                  type: number
+                  description: Tiền thu COD (VND); chuỗi số cũng chấp nhận; mặc định 0.
+                  example: 250000
+                shopHint:
+                  type: string
+                  description: Hint mã kho CN (tùy chọn).
+                  example: SHOP-001
+      responses:
+        '200':
+          description: >
+            Đơn đã nhận. `replayed: false` = tạo mới; `replayed: true` = đơn
+            đã tồn tại (dedupe trùng externalId) — không tạo lại.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [fulfillCode, replayed]
+                properties:
+                  fulfillCode:
+                    type: string
+                    example: ORD-000123
+                  replayed:
+                    type: boolean
+                    example: false
+        '400':
+          description: Body không parse được JSON (scope webhook có error handler riêng).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: Malformed JSON body
+        '401':
+          description: >
+            Chữ ký sai/thiếu (`invalid signature` / `missing X-Signature`) hoặc
+            body rỗng. Lưu ý code riêng `UNAUTHORIZED` (webhook không dùng
+            UNAUTHENTICATED của JWT flow).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 401
+                message: invalid signature
+                code: UNAUTHORIZED
+        '422':
+          description: >
+            Payload/X-Source lỗi — `details[]` per-field gom MỌI lỗi của payload
+            (không fail-fast), hoặc X-Source thiếu/chứa ký tự ngoài
+            `A-Z a-z 0-9 . _ -`.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: Dữ liệu đơn không hợp lệ
+                code: VALIDATION_ERROR
+                details:
+                  - field: customerPhone
+                    message: 'customerPhone phải là SĐT VN hợp lệ (0XXXXXXXXX hoặc +84XXXXXXXXX).'
+                  - field: items
+                    message: 'items phải là mảng không rỗng [{productCode, productName, quantity}].'
+        '503':
+          description: >
+            Fail-closed khi phía Hub Store chưa cấu hình `WEBHOOK_HMAC_SECRET`
+            (code `SERVICE_UNAVAILABLE` — khác 401 auth-reject: caller NÊN
+            retry).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 503
+                message: webhook auth unavailable
+                code: SERVICE_UNAVAILABLE
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
