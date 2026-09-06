@@ -50,7 +50,7 @@
 - [x] T6: cross-check shapes vs api-contracts/delivery-batch.ts + routes (READ-ONLY probe) — live smoke bắt thêm gap: 4 ops delivery-batch thiếu 404 NOT_FOUND (batch/planning lạ) → fix f4e6a75; searchbookingdetail id lạ = 200 (KHÔNG thêm 404 suy đoán)
 - [x] T7: drift-guard scoped — test/openapi.drift.delivery.test.ts (9/9) + vitest BFF xanh (409 passed / 1 skipped DRIFT_FULL)
 - [x] T8: verify — try-it-out quotes + export CSV qua browser Rule 0 (tầng DOM+FLOW PASS: quotes 200 render đúng schema, export 200 + headers filename/content-length 979772 + Download link; tầng VISUAL: screenshot CDP timeout 3/3 — nhờ user xác nhận theo precedent SF-1/SF-2) + code-reviewer độc lập
-- [ ] T9: merge no-ff vào story/fi326-api-docs-swagger + story-verify sf-6 + Linear audit
+- [x] T9: merge no-ff vào story/fi326-api-docs-swagger (parent-merge `48ccba4` → dest merge `a0a41cb`, 2 ancestor guards PASS, vitest merged tree 413 passed) + story-verify sf-6 + Linear audit (4 comments milestone)
 
 ## Verify (Phase 5) — ACCEPTANCE checklist (từ context pack sf-6.md)
 
@@ -58,4 +58,4 @@
 - [x] Try-it-out token manager: `POST /delivery-batch/quotes` body example → response khớp schema (live 200, `serviceId SGCN / fee 28600 / meta.mock`)
 - [x] Try-it-out: `GET /d2c-orders/export?from=…&to=…` → tải CSV (evidence browser: live 200 + `content-disposition: attachment; filename="D2C_Order_2026-09-05_2026-09-05.csv"` + content-length 979772 + nút Download file; CLI: 167.454 dòng BOM ef-bb-bf 18 cột khớp spec)
 - [x] Drift-guard scoped 9/9; BFF vitest toàn xanh (409 passed / 1 skipped = DRIFT_FULL SF-9)
-- [ ] VISUAL screenshot: CDP timeout 3/3 — CHỜ user/coordinator xác nhận bằng mắt (Rule 0 nói thật)
+Tầng VISUAL (không tick — KHÔNG tuyên bố "đã xác nhận"): screenshot CDP timeout 3/3 (tab Orca không focus — precedent SF-1/SF-2/SF-5). Bằng chứng thay thế: DOM đo thật + flow click thật qua UI Swagger (:8080 canonical) cho mọi ACCEPTANCE; visual xác nhận bằng mắt để coordinator/user xem tab (Rule 0 nói thật).
