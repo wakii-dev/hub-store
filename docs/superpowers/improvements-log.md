@@ -139,3 +139,19 @@
 - **P2 (docs, SF-1-owned — flag không tự sửa):** note trong `services/bff-gateway/openapi/components/envelopes.yaml` ghi ref nguồn dạng `../components/envelopes.yaml#/ErrorEnvelope` — shorthand pointer SAI so với cấu trúc file thật (`#/components/schemas/ErrorEnvelope`); bundler throw trailing-miss tường minh nên không nguy hiểm, nhưng note gây nhầm cho SF author tiếp theo. Suggested change: sửa note thành pointer đầy đủ `#/components/schemas/…` + `#/components/responses/…`.
 - **Env pattern (lặp từ SF-1):** `orca screenshot` CDP timeout dù tab switch + app activate — cả 2 SF phải fallback DOM+flow-clicks và nhờ user confirm visual. Đề xuất: orca thêm fallback headless screenshot hoặc khuyến nghị `orca computer` window-level screenshot cho embedded browser.
 - **Env pattern:** mint_sf11.py hardcode `KC_PORT=8082` (seam sf-11) nhưng compose keycloak chuẩn ở `:8081` — mỗi SF phải copy/sed ra /tmp. Đề xuất: script nhận env `KC_PORT` override (1 dòng).
+## 2026-09-06 — SF-5 (FI-331): domain schemas chưa có chỗ chuẩn trong layout multi-file (P6 flag)
+
+- **What:** bundler (openapi-bundle.ts) chỉ merge `doc.paths` của file domain —
+  domain schemas (DeliveryOrder, InstallationOrder, ServiceEmployee…) không có
+  chỗ chuẩn; SF-5 phải đặt ở top-level extension `x-schemas` + YAML anchors
+  (`&`/`*`) để tái sử dụng (InstallationOrder dùng ở 6 nơi). SF-2..8 chạy song
+  song có thể chọn pattern khác (vd inline per-op) → SF-9 convergence sẽ thấy
+  2+ style trong cùng UI bundle.
+- **Where:** services/bff-gateway/src/plugins/openapi-bundle.ts (thiết kế SF-1,
+  READ-ONLY với SF-5) + services/bff-gateway/openapi/paths/tech.yaml (pattern
+  SF-5 đã chọn).
+- **Suggested change:** coordinator/SF-9 quyết: (a) bundler hỗ trợ merge
+  `components.schemas` từ file domain (prefix/namespace tên chống collision với
+  duplicate-throw hiện có), hoặc (b) pin convention "x-schemas + YAML anchors"
+  vào context packs cho SF-6..8 + checklist SF-9. refDepth-cap 32 của bundler
+  đã an toàn nếu sau này chuyển sang self-ref.
