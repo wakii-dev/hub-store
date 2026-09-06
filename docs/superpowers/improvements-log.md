@@ -155,3 +155,10 @@
   duplicate-throw hiện có), hoặc (b) pin convention "x-schemas + YAML anchors"
   vào context packs cho SF-6..8 + checklist SF-9. refDepth-cap 32 của bundler
   đã an toàn nếu sau này chuyển sang self-ref.
+
+## 2026-09-06 — SF-9 (FI-335) trả lời flag của SF-5: pattern schemas cross-file
+
+- **What:** SF-5 hỏi quyết định convergence: (a) bundler merge `components.schemas` từ file domain (prefix/namespace + duplicate-throw), hay (b) pin convention `x-schemas` + YAML anchors vào context packs + checklist SF-9.
+- **Verdict SF-9: (b) — pin convention, KHÔNG đổi bundler.** Bằng chứng run: bundle 84 ops/12 tags resolve sạch qua anchors (spot-audit 8/8 file paths, 0 UNRESOLVED_REF, 0 collision), duplicate-path throw của bundler vẫn là guard hoạt động. Đổi bundler = đụng runtime spec-domain ngoài boundary SF-9; anchors đã đủ cho cả 7 SF tier-1.
+- **Where:** docs/superpowers/improvements-log.md (mục này) + context packs epic FI-326 kế thừa.
+- **Suggested change:** context pack SF domain sau (epic khác) ghi: "schemas dùng chung trong 1 file paths → YAML anchors; cross-file → x-schemas top-level extension; KHÔNG tự ý thêm components/*.yaml mới khi chưa sync SF-1".
