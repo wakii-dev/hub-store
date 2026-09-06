@@ -1,3 +1,1000 @@
-# STUB — tier-1 SF fill (SF-1 pre-wire). Domain KHÔNG chạm root openapi.yaml;
-# chỉ thêm path-items vào file này. Bundle merge map `paths` vào root tại runtime.
-paths: {}
+# Field Service — 13 ops (SF-5, story FI-326). Shapes THẬT từ code (spec-only,
+# domain KHÔNG có DTO trong api-contracts — hand-write 1:1 từ mappers):
+#   POST /delivery-orders/filter            → src/routes/tech.ts (SF-25 override)
+#   POST /service-orders/filter             → src/routes/tech.ts
+#   POST /service-orders/{code}/assign      → src/routes/tech.ts (staff roles)
+#   POST /service-orders/{code}/accept      → src/routes/tech.ts (SF-25, KTV/CTV)
+#   POST /service-orders/{code}/complete    → src/routes/tech.ts (SF-25, KTV/CTV)
+#   POST /service-orders/{code}/reschedule  → src/routes/tech.ts (SF-25, KTV/CTV)
+#   GET  /technicians/suggest               → src/routes/tech.ts
+#   GET|POST /service-employees             → src/routes/serviceEmployees.ts (SF-17)
+#   GET|PUT  /service-employees/{code}      → src/routes/serviceEmployees.ts
+#   PUT  /service-employees/{code}/active   → src/routes/serviceEmployees.ts
+#   POST /service-employees/payment-account/verify → src/routes/serviceEmployees.ts
+#
+# ROLE GATES (đọc từ requireRole/requireUser từng route — ghi đủ trong
+# description từng op):
+#   filters + suggest + service-employees GETs     → mọi role đã đăng nhập (JWT)
+#   assign                                          → Coordinator/Manager/
+#                                                     WarehouseOps/Admin
+#   accept/complete/reschedule                      → InsideTechnician/
+#                                                     OutsideTechnician (KTV/CTV)
+#   service-employees POST/PUT/active/verify        → Admin
+#
+# Bố cục file: schemas domain đặt ở top-level extension `x-schemas` (bundler
+# CHỈ merge `paths` của file domain — extension này không lọt vào spec cuối,
+# drift-guard cũng chỉ đọc `paths`) + YAML anchors (`&`/`*`) tái sử dụng trong
+# ops — InstallationOrder dùng ở 6 nơi, MutatedOrderResponse ở 4 lifecycle ops.
+x-schemas:
+  # ---- Trạng thái đơn (string thường, KHÔNG proto enum — convention §4) ----
+  DeliveryStatusString: &DeliveryStatusString
+    type: string
+    description: >
+      Trạng thái dạng string thường — BFF map proto enum
+      DELIVERY_STATUS_* ↔ string 2 chiều; body gửi string lạ bị upstream
+      bỏ qua (không lỗi).
+    enum:
+      - NEW
+      - CONFIRMED
+      - PROCESSING
+      - SHIPPING
+      - DELIVERED
+      - FAILED
+      - REDELIVERY
+      - RESCHEDULED
+      - CANCELLED
+      - RETURNED
+  # ---- Khối chung (mappers/tech.ts) ----
+  TechItem: &TechItem
+    type: object
+    required: [code, name, quantity, categoryL1, categoryL2]
+    properties:
+      code:
+        type: string
+        example: PRD-001
+      name:
+        type: string
+        example: Modem WiFi 6 FPT
+      quantity:
+        type: integer
+        example: 1
+      categoryL1:
+        type: string
+        example: Internet
+      categoryL2:
+        type: string
+        example: Modem
+  TechContactLocation: &TechContactLocation
+    type: object
+    required: [lat, long]
+    properties:
+      lat:
+        type: number
+        format: double
+        example: 10.77
+      long:
+        type: number
+        format: double
+        example: 106.69
+  TechContact: &TechContact
+    type: object
+    description: Liên hệ (người nhận/người gửi) — location null khi không có tọa độ.
+    required: [name, phone, location]
+    properties:
+      name:
+        type: string
+        example: Nguyễn Văn A
+      phone:
+        type: string
+        example: '0902000001'
+      location:
+        nullable: true
+        allOf:
+          - *TechContactLocation
+  TechButtons: &TechButtons
+    type: object
+    description: >
+      Buttons BE-authoritative — upstream tính sẵn cho role hiện tại; FE chỉ
+      render theo flag, không tự suy.
+    required:
+      [allowCancel, allowAssign, allowReassign, allowAccept, allowReschedule, allowComplete]
+    properties:
+      allowCancel:
+        type: boolean
+        example: true
+      allowAssign:
+        type: boolean
+        example: false
+      allowReassign:
+        type: boolean
+        example: true
+      allowAccept:
+        type: boolean
+        example: true
+      allowReschedule:
+        type: boolean
+        example: true
+      allowComplete:
+        type: boolean
+        example: false
+  DeliveryOrder: &DeliveryOrder
+    type: object
+    description: Đơn giao hàng (TechService) — timeline/coordination là JSONB passthrough.
+    required:
+      [code, status, driverName, driverPhone, receiver, sender, fee, tip, items,
+       regionCode, province, coordination, deliveryDate, createdAt, buttons]
+    properties:
+      code:
+        type: string
+        example: TD-0001
+      status:
+        type: string
+        example: SHIPPING
+      driverName:
+        type: string
+        example: Trần Giao Hàng
+      driverPhone:
+        type: string
+        example: '0901000001'
+      receiver:
+        *TechContact
+      sender:
+        *TechContact
+      fee:
+        type: number
+        format: double
+        example: 25000
+      tip:
+        type: number
+        format: double
+        example: 5000
+      items:
+        type: array
+        items: *TechItem
+      regionCode:
+        type: string
+        example: R1
+      province:
+        type: string
+        example: TP.HCM
+      coordination:
+        description: >
+          Passthrough JSONB coordination (object khi JSON hợp lệ; fallback raw
+          string khi parse lỗi — parseJsonGuarded).
+        nullable: true
+      deliveryDate:
+        type: string
+        description: Ngày giao (thành phần date của expected delivery).
+        example: '2026-09-02'
+      createdAt:
+        type: string
+        example: '2026-09-01T09:00:00+07:00'
+      buttons:
+        *TechButtons
+  InstallationOrder: &InstallationOrder
+    type: object
+    description: Đơn lắp đặt/dịch vụ (TechService) — timeline là JSONB passthrough.
+    required:
+      [serviceOrderCode, deliveryOrderCode, technicianCode, status, expectedTime,
+       timeline, serviceFee, feeAdjust, items, regionCode, province, createdAt, buttons]
+    properties:
+      serviceOrderCode:
+        type: string
+        example: SO-0001
+      deliveryOrderCode:
+        type: string
+        example: TD-0001
+      technicianCode:
+        type: string
+        description: Mã KTV phụ trách (rỗng khi chưa assign).
+        example: KTV-001
+      status:
+        type: string
+        example: CONFIRMED
+      expectedTime:
+        type: string
+        description: Thời gian hẹn lắp đặt (ISO-8601).
+        example: '2026-09-03T08:00:00+07:00'
+      timeline:
+        description: >
+          Passthrough JSONB timeline — mảng event {at, status, note, actor}
+          (object khi JSON hợp lệ; fallback raw string khi parse lỗi).
+        nullable: true
+      serviceFee:
+        type: number
+        format: double
+        example: 150000
+      feeAdjust:
+        type: number
+        format: double
+        example: 0
+      items:
+        type: array
+        items: *TechItem
+      regionCode:
+        type: string
+        example: R1
+      province:
+        type: string
+        example: TP.HCM
+      createdAt:
+        type: string
+        example: '2026-09-01T09:00:00+07:00'
+      buttons:
+        *TechButtons
+  SuggestedTechnician: &SuggestedTechnician
+    type: object
+    description: KTV/CTV gợi ý theo vùng — sắp theo workload (activeCount) tăng dần.
+    required: [code, name, type, activeCount]
+    properties:
+      code:
+        type: string
+        example: KTV-001
+      name:
+        type: string
+        example: Lê Kỹ Thuật
+      type:
+        type: string
+        description: Loại kỹ thuật viên (KTV/CTV).
+        example: KTV
+      activeCount:
+        type: integer
+        description: Số đơn đang phụ trách — gợi ý ưu tiên ít việc trước.
+        example: 1
+  ServiceEmployee: &ServiceEmployee
+    type: object
+    description: Nhân viên kỹ thuật (StaffArea) — camelCase trùng proto.
+    required:
+      [employeeCode, fullName, titleCode, paymentAccount, isActive, regionCodes,
+       createdAt, updatedAt]
+    properties:
+      employeeCode:
+        type: string
+        pattern: '^[A-Z0-9_-]{3,32}$'
+        example: KTV-001
+      fullName:
+        type: string
+        example: Lê Kỹ Thuật
+      titleCode:
+        type: string
+        example: KTV
+      paymentAccount:
+        type: string
+        description: Số TK nhận tiền.
+        example: '0901000001'
+      isActive:
+        type: boolean
+        description: false = đã nghỉ (list vẫn trả kèm — FE dim client-side).
+        example: true
+      regionCodes:
+        type: array
+        description: Các vùng KTV phụ trách.
+        items:
+          type: string
+        example: [R1]
+      createdAt:
+        type: string
+        example: '2026-09-01T09:00:00+07:00'
+      updatedAt:
+        type: string
+        example: '2026-09-05T15:30:00+07:00'
+  PaymentAccountVerifyResult: &PaymentAccountVerifyResult
+    type: object
+    description: >
+      Kết quả verify TK nhận tiền — dual-mode upstream (MOCK mặc định, ZALOPAY
+      khi cấu hình env); `source` cho biết kết quả đến từ chế độ nào.
+    required: [valid, source, message]
+    properties:
+      valid:
+        type: boolean
+        example: true
+      source:
+        type: string
+        description: Chế độ verify đang chạy (mock/zalopay...).
+        example: mock
+      message:
+        type: string
+        example: 'Tài khoản hợp lệ.'
+  # ---- Composite responses ----
+  PaginatedDeliveryOrders: &PaginatedDeliveryOrders
+    allOf:
+      - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: *DeliveryOrder
+  PaginatedInstallationOrders: &PaginatedInstallationOrders
+    allOf:
+      - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: *InstallationOrder
+  PaginatedServiceEmployees: &PaginatedServiceEmployees
+    allOf:
+      - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+      - type: object
+        properties:
+          items:
+            type: array
+            items: *ServiceEmployee
+  MutatedOrderResponse: &MutatedOrderResponse
+    type: object
+    description: >
+      Kết quả mutation trên đơn lắp đặt — `order` null khi upstream không trả
+      order về.
+    required: [order]
+    properties:
+      order:
+        nullable: true
+        allOf:
+          - *InstallationOrder
+  # ---- Request bodies ----
+  DeliveryFilterBody: &DeliveryFilterBody
+    type: object
+    properties:
+      statuses:
+        type: array
+        items: *DeliveryStatusString
+      driverName:
+        type: string
+        description: >
+          Lọc theo tên tài xế. LƯU Ý với KTV/CTV: BFF BỎ giá trị này và ép từ
+          claim `name` của token (read-side override — không tự filter hộ
+          người khác).
+        example: Trần Giao Hàng
+      categoryL1:
+        type: array
+        items:
+          type: string
+        example: [Internet]
+      categoryL2:
+        type: array
+        items:
+          type: string
+        example: [Modem]
+      regionCode:
+        type: string
+        example: R1
+      province:
+        type: string
+        example: TP.HCM
+      dateFrom:
+        type: string
+        format: date
+        description: Lọc từ ngày (thành phần date) — cùng dateTo bỏ trống → default hôm nay.
+        example: '2026-09-01'
+      dateTo:
+        type: string
+        format: date
+        example: '2026-09-05'
+      page:
+        type: integer
+        minimum: 0
+        description: Trang (0 = default upstream).
+        example: 1
+      pageSize:
+        type: integer
+        minimum: 0
+        description: Số items mỗi trang (0 = default upstream).
+        example: 20
+  InstallationFilterBody: &InstallationFilterBody
+    type: object
+    description: Giống DeliveryFilterBody nhưng lọc theo technicianCode (KHÔNG today default).
+    properties:
+      statuses:
+        type: array
+        items: *DeliveryStatusString
+      technicianCode:
+        type: string
+        description: >
+          Lọc theo mã KTV. LƯU Ý với KTV/CTV: BFF BỎ giá trị này và ép = token
+          sub (BE authorization decision — chỉ thấy đơn của chính mình).
+        example: KTV-001
+      categoryL1:
+        type: array
+        items:
+          type: string
+        example: [Internet]
+      categoryL2:
+        type: array
+        items:
+          type: string
+        example: [Modem]
+      regionCode:
+        type: string
+        example: R1
+      province:
+        type: string
+        example: TP.HCM
+      dateFrom:
+        type: string
+        format: date
+        description: Lọc từ ngày (thành phần date của expectedTime) — KHÔNG có today default.
+        example: '2026-09-01'
+      dateTo:
+        type: string
+        format: date
+        example: '2026-09-05'
+      page:
+        type: integer
+        minimum: 0
+        example: 1
+      pageSize:
+        type: integer
+        minimum: 0
+        example: 20
+  AssignTechnicianBody: &AssignTechnicianBody
+    type: object
+    required: [technicianCode]
+    properties:
+      technicianCode:
+        type: string
+        description: Mã KTV được assign (blank → 422 BFF-side).
+        example: KTV-001
+  TechnicianActionBody: &TechnicianActionBody
+    type: object
+    description: >
+      Body chỉ là hint — BFF ÉP technicianCode = token sub (SF-25 security-audit
+      P0-1: không trust body; mọi KTV/CTV chỉ mutate được đơn của chính mình).
+      Có thể gửi body rỗng `{}`.
+    properties:
+      technicianCode:
+        type: string
+        description: BỊ BỎ — giá trị thật lấy từ token sub.
+        example: KTV-001
+  RescheduleBody: &RescheduleBody
+    type: object
+    required: [expectedTime]
+    properties:
+      expectedTime:
+        type: string
+        description: >
+          Thời gian hẹn mới (ISO-8601). Blank → 422 BFF-side; quá khứ →
+          upstream từ chối (422).
+        example: '2026-09-10T08:00:00+07:00'
+      note:
+        type: string
+        description: Ghi chú của KTV khi dời lịch.
+        example: 'Khách xin dời sang sáng thứ 2.'
+      technicianCode:
+        type: string
+        description: BỊ BỎ — giá trị thật lấy từ token sub.
+        example: KTV-001
+  ServiceEmployeeBody: &ServiceEmployeeBody
+    type: object
+    description: >
+      Body create/update nhân viên kỹ thuật — validation format code/account +
+      cap 100 ở upstream (BFF pass-through → 422). Update là FULL-REPLACE.
+    properties:
+      employeeCode:
+        type: string
+        pattern: '^[A-Z0-9_-]{3,32}$'
+        description: >
+          Mã NV (immutable khi update — route param là nguồn sự thật, giá trị
+          body bị bỏ qua).
+        example: KTV-001
+      fullName:
+        type: string
+        example: Lê Kỹ Thuật
+      titleCode:
+        type: string
+        example: KTV
+      paymentAccount:
+        type: string
+        description: Số TK nhận tiền (validation format ở upstream).
+        example: '0901000001'
+      isActive:
+        type: boolean
+        description: >
+          Create: BFF luôn tạo với isActive=true (giá trị body bị bỏ qua — bật/
+          tắt dùng riêng PUT .../active). Update: dùng giá trị này (default true).
+        example: true
+      regionCodes:
+        type: array
+        items:
+          type: string
+        example: [R1]
+  SetActiveBody: &SetActiveBody
+    type: object
+    properties:
+      active:
+        type: boolean
+        default: true
+        description: false = nghỉ việc (off-switch duy nhất — không có delete API).
+        example: false
+  VerifyPaymentAccountBody: &VerifyPaymentAccountBody
+    type: object
+    properties:
+      paymentAccount:
+        type: string
+        description: Số TK cần verify.
+        example: '0901000001'
+
+paths:
+  # ================= 1. Đơn giao hàng — filter =================
+  /delivery-orders/filter:
+    post:
+      tags: [Field Service]
+      operationId: filterDeliveryOrders
+      summary: Lọc đơn giao hàng (phân trang)
+      description: >
+        Role: mọi role đã đăng nhập (JWT). KTV/CTV (InsideTechnician/
+        OutsideTechnician): `driverName` trong body BỊ BỎ — BFF ép từ claim
+        `name` của token (read-side override SF-25); token thiếu claim `name`
+        → 403 fail-closed. Cả `dateFrom` + `dateTo` bỏ trống → upstream áp
+        default hôm nay (riêng đơn giao). `statuses` nhận string thường
+        ("SHIPPING"…), string lạ bị bỏ qua.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: *DeliveryFilterBody
+      responses:
+        '200':
+          description: Trang đơn giao khớp filter (buttons đã tính sẵn theo role).
+          content:
+            application/json:
+              schema: *PaginatedDeliveryOrders
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          description: >
+            KTV/CTV có token thiếu claim `name` (fail-closed — không lọc hộ
+            được ai).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 403
+                message: 'Technician token missing name claim.'
+                code: PERMISSION_DENIED
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  # ================= 2. Đơn lắp đặt — filter =================
+  /service-orders/filter:
+    post:
+      tags: [Field Service]
+      operationId: filterServiceOrders
+      summary: Lọc đơn lắp đặt (phân trang)
+      description: >
+        Role: mọi role đã đăng nhập (JWT). KTV/CTV: `technicianCode` trong body
+        BỊ BỎ — BFF ép = token sub (chỉ thấy đơn của chính mình); role khác
+        (Coordinator/Manager/…) lọc theo body như thường. KHÔNG có today
+        default khi thiếu dateFrom/dateTo (khác filter đơn giao).
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: *InstallationFilterBody
+      responses:
+        '200':
+          description: Trang đơn lắp đặt khớp filter (buttons đã tính sẵn theo role).
+          content:
+            application/json:
+              schema: *PaginatedInstallationOrders
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  # ================= 3-6. Lifecycle đơn lắp đặt =================
+  /service-orders/{code}/assign:
+    post:
+      tags: [Field Service]
+      operationId: assignServiceOrder
+      summary: Assign/re-assign KTV cho đơn lắp đặt
+      description: >
+        Role: Coordinator/Manager/WarehouseOps/Admin — KTV/CTV KHÔNG được
+        reassign đơn (403). `technicianCode` bắt buộc (blank → 422 BFF-side).
+        Server ENFORCE precondition: sai trạng thái đơn → 409 CONFLICT
+        (FAILED_PRECONDITION); đơn không tồn tại → 404.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: *AssignTechnicianBody
+      responses:
+        '200':
+          description: Đơn sau khi assign (buttons re-computed).
+          content:
+            application/json:
+              schema: *MutatedOrderResponse
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '422':
+          description: >
+            `technicianCode` blank (BFF-side) hoặc upstream từ chối giá trị
+            (INVALID_ARGUMENT).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Request validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: technicianCode
+                    message: 'technicianCode is required.'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /service-orders/{code}/accept:
+    post:
+      tags: [Field Service]
+      operationId: acceptServiceOrder
+      summary: KTV nhận đơn lắp đặt
+      description: >
+        Role: InsideTechnician/OutsideTechnician (KTV/CTV) — role khác → 403.
+        technicianCode ÉP = token sub (body nếu có bị bỏ qua — mọi KTV chỉ
+        nhận được đơn của chính mình). Sai trạng thái / không phải chủ đơn →
+        409; đơn không tồn tại → 404.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: *TechnicianActionBody
+      responses:
+        '200':
+          description: Đơn ở trạng thái đã nhận (buttons re-computed).
+          content:
+            application/json:
+              schema: *MutatedOrderResponse
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /service-orders/{code}/complete:
+    post:
+      tags: [Field Service]
+      operationId: completeServiceOrder
+      summary: KTV hoàn thành đơn lắp đặt
+      description: >
+        Role: InsideTechnician/OutsideTechnician (KTV/CTV) — role khác → 403.
+        technicianCode ÉP = token sub (body nếu có bị bỏ qua). Sai trạng thái
+        (chưa accept, đã complete…) / không phải chủ đơn → 409; đơn không tồn
+        tại → 404.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: *TechnicianActionBody
+      responses:
+        '200':
+          description: Đơn ở trạng thái hoàn thành (buttons re-computed).
+          content:
+            application/json:
+              schema: *MutatedOrderResponse
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /service-orders/{code}/reschedule:
+    post:
+      tags: [Field Service]
+      operationId: rescheduleServiceOrder
+      summary: KTV dời lịch hẹn đơn lắp đặt
+      description: >
+        Role: InsideTechnician/OutsideTechnician (KTV/CTV) — role khác → 403.
+        `expectedTime` bắt buộc (blank → 422 BFF-side; quá khứ → upstream từ
+        chối 422); `note` tùy chọn. technicianCode ÉP = token sub. Sai trạng
+        thái / không phải chủ đơn → 409; đơn không tồn tại → 404.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: *RescheduleBody
+      responses:
+        '200':
+          description: Đơn với expectedTime mới (buttons re-computed).
+          content:
+            application/json:
+              schema: *MutatedOrderResponse
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '422':
+          description: >
+            `expectedTime` blank (BFF-side) hoặc thời gian hẹn mới ở quá khứ
+            (upstream INVALID_ARGUMENT).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Request validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: expectedTime
+                    message: 'expectedTime is required.'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  # ================= 7. Suggest KTV =================
+  /technicians/suggest:
+    get:
+      tags: [Field Service]
+      operationId: suggestTechnicians
+      summary: Gợi ý KTV/CTV theo vùng (workload tăng dần)
+      description: >
+        Role: mọi role đã đăng nhập (JWT). Trả danh sách KTV/CTV của
+        `regionCode` sắp theo số đơn đang phụ trách (activeCount) tăng dần —
+        FE dùng khi assign đơn. `regionCode` bắt buộc (blank → 422 BFF-side).
+      parameters:
+        - name: regionCode
+          in: query
+          required: true
+          description: Vùng cần gợi ý KTV.
+          schema:
+            type: string
+            example: R1
+      responses:
+        '200':
+          description: Danh sách gợi ý (KHÔNG paginated — thường ngắn).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items: *SuggestedTechnician
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '422':
+          description: Thiếu `regionCode` (blank → 422 BFF-side).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Request validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: regionCode
+                    message: 'regionCode is required.'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  # ================= 8-13. Nhân viên kỹ thuật (StaffArea) =================
+  /service-employees:
+    get:
+      tags: [Field Service]
+      operationId: listServiceEmployees
+      summary: Danh sách nhân viên kỹ thuật
+      description: >
+        Role: mọi role đã đăng nhập (JWT). LUÔN gồm cả nhân viên đã nghỉ
+        (isActive=false) — FE tự dim client-side; không có phân trang thật
+        (trả về 1 trang duy nhất, page=1, pageSize=số items). Filters:
+        titleCode/query/regionCode — blank = bỏ qua; `query` khớp contains
+        trên employeeCode hoặc fullName.
+      parameters:
+        - name: titleCode
+          in: query
+          required: false
+          description: Lọc theo chức danh (titleCode).
+          schema:
+            type: string
+            example: KTV
+        - name: query
+          in: query
+          required: false
+          description: Tìm contains trên employeeCode/fullName.
+          schema:
+            type: string
+            example: KTV-00
+        - name: regionCode
+          in: query
+          required: false
+          description: Lọc theo vùng phụ trách.
+          schema:
+            type: string
+            example: R1
+      responses:
+        '200':
+          description: Danh sách nhân viên kỹ thuật (1 trang duy nhất).
+          content:
+            application/json:
+              schema: *PaginatedServiceEmployees
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+    post:
+      tags: [Field Service]
+      operationId: createServiceEmployee
+      summary: Tạo nhân viên kỹ thuật
+      description: >
+        Role: Admin (role khác → 403 — gate server-side, không chỉ ẩn nút FE).
+        Validation format employeeCode (`^[A-Z0-9_-]{3,32}$`) + paymentAccount
+        (`^\d{9,16}$`) + cap 100 nhân viên ở upstream → 422. BFF luôn tạo với
+        isActive=true (bật/tắt dùng PUT .../active riêng).
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: *ServiceEmployeeBody
+      responses:
+        '200':
+          description: Nhân viên vừa tạo.
+          content:
+            application/json:
+              schema: *ServiceEmployee
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '422':
+          description: >
+            Upstream từ chối — employeeCode/paymentAccount sai format, trùng
+            mã, hoặc vượt cap 100 (INVALID_ARGUMENT).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: employeeCode
+                    message: 'employeeCode must match ^[A-Z0-9_-]{3,32}$.'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /service-employees/{code}:
+    get:
+      tags: [Field Service]
+      operationId: getServiceEmployee
+      summary: Chi tiết nhân viên kỹ thuật
+      description: 'Role: mọi role đã đăng nhập (JWT). Không thấy → 404.'
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      responses:
+        '200':
+          description: Nhân viên kỹ thuật.
+          content:
+            application/json:
+              schema: *ServiceEmployee
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+    put:
+      tags: [Field Service]
+      operationId: updateServiceEmployee
+      summary: Cập nhật nhân viên kỹ thuật (full-replace)
+      description: >
+        Role: Admin (role khác → 403). FULL-REPLACE: mọi field phải gửi đủ;
+        employeeCode IMMUTABLE — lấy từ path, giá trị trong body bị bỏ qua.
+        Không thấy → 404; sai format → 422 (upstream).
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: *ServiceEmployeeBody
+      responses:
+        '200':
+          description: Nhân viên sau khi cập nhật.
+          content:
+            application/json:
+              schema: *ServiceEmployee
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          description: Upstream từ chối (sai format paymentAccount… — INVALID_ARGUMENT).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: paymentAccount
+                    message: 'paymentAccount must match ^\d{9,16}$.'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /service-employees/{code}/active:
+    put:
+      tags: [Field Service]
+      operationId: setServiceEmployeeActive
+      summary: Bật/tắt hoạt động nhân viên kỹ thuật
+      description: >
+        Role: Admin (role khác → 403). Off-switch duy nhất — KHÔNG có delete
+        API (đơn vị đã có dữ liệu chấm công/KCOD gắn mã). `active` default
+        true khi body rỗng. Không thấy → 404.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: *SetActiveBody
+      responses:
+        '200':
+          description: Nhân viên với trạng thái active mới.
+          content:
+            application/json:
+              schema: *ServiceEmployee
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /service-employees/payment-account/verify:
+    post:
+      tags: [Field Service]
+      operationId: verifyServiceEmployeePaymentAccount
+      summary: Verify tài khoản nhận tiền
+      description: >
+        Role: Admin (role khác → 403). Verify TK nhận tiền trước khi lưu —
+        dual-mode upstream: MOCK mặc định (dev/không cấu hình) hoặc ZALOPAY
+        khi cấu hình env; field `source` trong response cho biết kết quả đến
+        từ chế độ nào.
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema: *VerifyPaymentAccountBody
+      responses:
+        '200':
+          description: Kết quả verify (valid/message + source chế độ).
+          content:
+            application/json:
+              schema: *PaymentAccountVerifyResult
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
