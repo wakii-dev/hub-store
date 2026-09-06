@@ -53,7 +53,7 @@
       lib/{realtime-events,notifications}.ts (READ-ONLY probe)
 - [x] T8: drift-guard scoped — test/openapi.drift.platform.test.ts (13/13) +
       vitest BFF xanh
-- [ ] T9: verify — try-it-out GET /notifications + GET /users (manager token) +
+- [x] T9: verify — try-it-out GET /notifications + GET /users (manager token) +
       SSE curl thật ?access_token nhận event-stream (bằng chứng terminal)
 - [ ] T10: browser walkthrough /documentation (Rule 0) + code-reviewer độc lập
       + merge + story-verify
