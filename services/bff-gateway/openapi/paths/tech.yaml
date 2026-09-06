@@ -24,7 +24,8 @@
 # Bố cục file: schemas domain đặt ở top-level extension `x-schemas` (bundler
 # CHỈ merge `paths` của file domain — extension này không lọt vào spec cuối,
 # drift-guard cũng chỉ đọc `paths`) + YAML anchors (`&`/`*`) tái sử dụng trong
-# ops — InstallationOrder dùng ở 6 nơi, MutatedOrderResponse ở 4 lifecycle ops.
+# ops — InstallationOrder reach 5 response ops (filter + 4 lifecycle) qua 2
+# alias sites (PaginatedInstallationOrders, MutatedOrderResponse).
 x-schemas:
   # ---- Trạng thái đơn (string thường, KHÔNG proto enum — convention §4) ----
   DeliveryStatusString: &DeliveryStatusString
@@ -290,8 +291,8 @@ x-schemas:
         example: true
       source:
         type: string
-        description: Chế độ verify đang chạy (mock/zalopay...).
-        example: mock
+        description: Chế độ verify đang chạy — "MOCK" | "ZALOPAY".
+        example: MOCK
       message:
         type: string
         example: 'Tài khoản hợp lệ.'
@@ -526,7 +527,8 @@ paths:
         `name` của token (read-side override SF-25); token thiếu claim `name`
         → 403 fail-closed. Cả `dateFrom` + `dateTo` bỏ trống → upstream áp
         default hôm nay (riêng đơn giao). `statuses` nhận string thường
-        ("SHIPPING"…), string lạ bị bỏ qua.
+        ("SHIPPING"…) — string lạ được BFF drop sẵn (statusStringsToProto)
+        trước khi gọi upstream, không lỗi.
       requestBody:
         required: false
         content:
@@ -552,6 +554,21 @@ paths:
                 statusCode: 403
                 message: 'Technician token missing name claim.'
                 code: PERMISSION_DENIED
+        '422':
+          description: >
+            `dateFrom`/`dateTo` sai định dạng — upstream yêu cầu ISO
+            yyyy-MM-dd (INVALID_ARGUMENT).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: dateFrom
+                    message: 'dateFrom phải là ISO yyyy-MM-dd: 01-09-2026'
         '503':
           $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
@@ -579,6 +596,21 @@ paths:
               schema: *PaginatedInstallationOrders
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '422':
+          description: >
+            `dateFrom`/`dateTo` sai định dạng — upstream yêu cầu ISO
+            yyyy-MM-dd (INVALID_ARGUMENT).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 422
+                message: 'Validation failed.'
+                code: VALIDATION_ERROR
+                details:
+                  - field: dateTo
+                    message: 'dateTo phải là ISO yyyy-MM-dd: 05/09'
         '503':
           $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
 
@@ -862,10 +894,25 @@ paths:
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
         '403':
           $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '409':
+          description: >
+            `employeeCode` đã tồn tại (upstream ALREADY_EXISTS — duplicate mã
+            NV).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 409
+                message: 'employee_code đã tồn tại.'
+                code: CONFLICT
+                details:
+                  - field: employeeCode
+                    message: 'employee_code đã tồn tại.'
         '422':
           description: >
-            Upstream từ chối — employeeCode/paymentAccount sai format, trùng
-            mã, hoặc vượt cap 100 (INVALID_ARGUMENT).
+            Upstream từ chối — employeeCode/paymentAccount sai format, hoặc
+            vượt cap 100 (INVALID_ARGUMENT).
           content:
             application/json:
               schema:
@@ -949,7 +996,7 @@ paths:
       description: >
         Role: Admin (role khác → 403). Off-switch duy nhất — KHÔNG có delete
         API (đơn vị đã có dữ liệu chấm công/KCOD gắn mã). `active` default
-        true khi body rỗng. Không thấy → 404.
+        true khi gửi body `{}` (bỏ qua field). Không thấy → 404.
       parameters:
         - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
       requestBody:
