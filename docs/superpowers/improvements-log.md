@@ -117,3 +117,20 @@
 - **Fix:** thêm Pass 0 ưu tiên plan file chứa Linear issue-id lowercase (vd "fi288") trong
   tên — issue-id unique toàn workspace, luôn thắng slug matching. Slug loop giữ làm fallback.
 - **Convention đề xuất:** đặt tên plan file kèm issue-id (vd `2026-09-04-fi288-...-plan.md`).
+
+## 2026-09-06 — FI-327 (SF-1 fi326): story-verify B2 collision tái phát + mtime fix (FIXED)
+
+- **What:** B2 plan matcher khớp nhầm `2026-09-02-fi245-sf13-order-intake-plan.md` cho
+  `sf-1` (substring "sf1" ⊂ "sf13", break alphabet-first) → B2 FAIL ảo `plan:32 open`
+  dù plan thật `2026-09-06-fi327-sf1-foundation-plan.md` có 0 checkbox mở. Fix Pass-0
+  issue-id của FI-288 (2026-09-05) KHÔNG còn trong script hiện tại — có vẻ bị mất/không
+  được apply lên bản ~/.claude/bin dùng chung. Cần coordinator rà lại.
+- **Where:** ~/.claude/bin/story-verify — verify_sf() B2.
+- **Fix (2026-09-06):** (1) token sf KHÔNG được theo sau bởi chữ số (`*"$p1"[!0-9]*`
+  + bare tail) — chặn sf13/sf10/sf11/sf-10…; (2) bỏ break-first, lấy match có mtime
+  MỚI NHẤT (plan của run hiện tại thắng plan story cũ trùng slug).
+- **Convention:** giữ nguyên đề xuất FI-288 — tên plan file nên kèm issue-id
+  (`fi327-...`) — plan SF-1 này đã theo convention đó.
+- **P2 code (từ code-reviewer round 3, OPEN):** `openapi-bundle.ts` dùng `key in`
+  (prototype chain) khi check duplicate paths/components — nil risk hôm nay;
+  `Object.hasOwn` chặt hơn nếu sửa sau.
