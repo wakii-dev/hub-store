@@ -46,38 +46,43 @@ function loadYaml(absPath: string): Record<string, unknown> {
 
 /** JSON-pointer lookup theo RFC 6901 (`~1` → `/`, `~0` → `~`). */
 function pointerLookup(doc: unknown, pointer: string): unknown {
-  return pointer
-    .split('/')
-    .filter(Boolean)
-    .reduce<unknown>((acc, segment) => {
-      if (acc === null || typeof acc !== 'object') {
-        throw new Error(`openapi-bundle: cannot resolve pointer '${pointer}' (walk hit non-object).`);
-      }
-      const key = segment.replace(/~1/g, '/').replace(/~0/g, '~');
-      return (acc as Record<string, unknown>)[key];
-    }, doc);
+  if (pointer === '') return doc;
+  // strip CHỈ '/' đầu (pointer luôn '/a/b'); segment rỗng GIỮ NGUYÊN — lookup
+  // miss → lỗi tường minh thay vì âm thầm bỏ qua (code-review P2).
+  const segments = pointer.replace(/^\//, '').split('/');
+  return segments.reduce<unknown>((acc, segment) => {
+    if (acc === null || typeof acc !== 'object') {
+      throw new Error(`openapi-bundle: cannot resolve pointer '${pointer}' (walk hit non-object).`);
+    }
+    const key = segment.replace(/~1/g, '/').replace(/~0/g, '~');
+    return (acc as Record<string, unknown>)[key];
+  }, doc);
 }
 
-/** Resolve $ref external đệ quy; depth cap chống vòng lặp $ref (spec lỗi → fail fast). */
-function resolveNode(node: unknown, baseDir: string, depth: number): unknown {
-  if (depth > 32) {
-    throw new Error('openapi-bundle: $ref depth > 32 — nghi vấn vòng lặp $ref trong spec.');
+/**
+ * Resolve $ref external đệ quy. `refDepth` đếm CHỈ SỐ HẸP $ref (không phải
+ * chiều sâu nest — schema nest sâu hợp lệ không bị false-positive,
+ * code-review P2) — cap 32 chống vòng lặp $ref (spec lỗi → fail fast).
+ */
+function resolveNode(node: unknown, baseDir: string, refDepth: number): unknown {
+  if (refDepth > 32) {
+    throw new Error('openapi-bundle: chuỗi $ref > 32 hop — nghi vấn vòng lặp $ref trong spec.');
   }
   if (Array.isArray(node)) {
-    return node.map((item) => resolveNode(item, baseDir, depth + 1));
+    return node.map((item) => resolveNode(item, baseDir, refDepth));
   }
   if (isExternalRef(node)) {
     const [filePart, pointer = ''] = node.$ref.split('#');
     const abs = path.resolve(baseDir, filePart);
     const doc = loadYaml(abs);
     const target = pointer === '' ? doc : pointerLookup(doc, pointer);
-    return resolveNode(target, path.dirname(abs), depth + 1);
+    return resolveNode(target, path.dirname(abs), refDepth + 1);
   }
   if (node !== null && typeof node === 'object') {
     return Object.fromEntries(
       Object.entries(node as Record<string, unknown>).map(([key, value]) => [
         key,
-        resolveNode(value, baseDir, depth + 1),
+        resolveNode(value, baseDir, refDepth),
       ]),
     );
   }
@@ -96,7 +101,13 @@ export function bundleOpenApiSpec(rootPath: string = DEFAULT_ROOT): Record<strin
   // 1. paths.x-path-files — merge map `paths` của từng file domain.
   const pathsNode = root.paths as Record<string, unknown> | undefined;
   const pathFiles = pathsNode?.['x-path-files'];
+  // Path khai trực tiếp trong root (hiếm — nhưng không được âm thầm mất khi
+  // merge, bug do unit test bắt 2026-09-06) — seed trước, dup với file = lỗi.
   const mergedPaths: Record<string, unknown> = {};
+  for (const [key, value] of Object.entries(pathsNode ?? {})) {
+    if (key === 'x-path-files') continue;
+    mergedPaths[key] = resolveNode(value, baseDir, 0);
+  }
   if (Array.isArray(pathFiles)) {
     for (const rel of pathFiles) {
       const abs = path.resolve(baseDir, String(rel));

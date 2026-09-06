@@ -83,12 +83,15 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
     if (request.url === '/webhooks/orders' || request.url.startsWith('/webhooks/orders?')) {
       return;
     }
-    // FI-326 SF-1 — Swagger UI + spec JSON khi BFF_ENABLE_API_DOCS=1. PREFIX
-    // (không exact) để phủ UI assets, /documentation/spec.json,
-    // oauth2-redirect.html + query strings. Pattern prefix là MỚI trong file
-    // này — chỉ dành cho docs surface; plugin api-docs tự fail-safe khi flag
-    // unset (không route nào tồn tại dưới prefix → 404 sau guard, không leak).
-    if (request.url.startsWith('/documentation')) {
+    // FI-326 SF-1 — Swagger UI + spec JSON khi BFF_ENABLE_API_DOCS=1. Khớp
+    // exact + query + prefix '/documentation/' — phủ UI assets,
+    // spec.json, oauth2-redirect.html; KHÔNG ăn trúng '/documentation-xyz'
+    // (code-review P2: boundary prefix chặt như các skip còn lại).
+    if (
+      request.url === '/documentation' ||
+      request.url.startsWith('/documentation?') ||
+      request.url.startsWith('/documentation/')
+    ) {
       return;
     }
     // SF-10 — EventSource (SSE) KHÔNG set được Authorization header → CHỈ url

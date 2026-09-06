@@ -5,6 +5,9 @@
 #   src/app.ts setErrorHandler                       — BAD_REQUEST / INTERNAL
 # Domain specs REF các schema này (`../components/envelopes.yaml#/ErrorEnvelope`
 # trong file nguồn, `#/components/schemas/...` sau bundle) — KHÔNG định nghĩa lại.
+# LƯU Ý bundler: external $ref PHẢI là key duy nhất của node (không kèm sibling
+# keys — JSON Schema draft cũ bỏ qua sibling, bundler này không resolve trường
+# hợp đó; ref dạng summary+ref sẽ lọt nguyên tử vào bundle).
 components:
   schemas:
     ErrorDetail:
