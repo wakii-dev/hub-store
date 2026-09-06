@@ -55,15 +55,15 @@
       vitest BFF xanh
 - [x] T9: verify — try-it-out GET /notifications + GET /users (manager token) +
       SSE curl thật ?access_token nhận event-stream (bằng chứng terminal)
-- [ ] T10: browser walkthrough /documentation (Rule 0) + code-reviewer độc lập
+- [x] T10: browser walkthrough /documentation (Rule 0) + code-reviewer độc lập
       + merge + story-verify
 
 ## Verify (Phase 5) — ACCEPTANCE checklist
 
-- [ ] /documentation: tag Administration 8 ops + Realtime & Transfers 5 ops
+- [x] /documentation: tag Administration 8 ops + Realtime & Transfers 5 ops
       render (notifications đếm 2 paths riêng) — browser evidence
-- [ ] Try-it-out manager token: GET /notifications → 200 {items,total} shape
+- [x] Try-it-out manager token: GET /notifications → 200 {items,total} shape
       khớp; GET /users → 200 (evidence browser)
-- [ ] SSE thật: curl http://localhost:8080/events?access_token=<dev token> →
+- [x] SSE thật: curl http://localhost:8080/events?access_token=<dev token> →
       nhận text/event-stream khớp spec frame (evidence terminal)
-- [ ] Drift-guard scoped 13/13; BFF vitest toàn xanh
+- [x] Drift-guard scoped 13/13; BFF vitest toàn xanh
