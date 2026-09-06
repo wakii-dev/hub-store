@@ -1,0 +1,182 @@
+# Shared envelope shapes + error response templates.
+# Nguồn truth (READ-ONLY, khớp 1:1 — KHÔNG tự chế field):
+#   packages/shared/src/api-contracts/envelopes.ts  — Paginated / ErrorDetail / ErrorEnvelope
+#   src/lib/grpc-error.ts                            — mapping gRPC status → HTTP code
+#   src/app.ts setErrorHandler                       — BAD_REQUEST / INTERNAL
+# Domain specs REF các schema này (`../components/envelopes.yaml#/ErrorEnvelope`
+# trong file nguồn, `#/components/schemas/...` sau bundle) — KHÔNG định nghĩa lại.
+# LƯU Ý bundler: external $ref PHẢI là key duy nhất của node (không kèm sibling
+# keys — JSON Schema draft cũ bỏ qua sibling, bundler này không resolve trường
+# hợp đó; ref dạng summary+ref sẽ lọt nguyên tử vào bundle).
+components:
+  schemas:
+    ErrorDetail:
+      type: object
+      description: Chi tiết lỗi per-field (gRPC InvalidArgument details → BFF map 422).
+      required: [field, message]
+      properties:
+        field:
+          type: string
+          description: Tên field vi phạm.
+          example: orderCodes
+        message:
+          type: string
+          example: 'orderCodes must contain at least 1 item.'
+    ErrorEnvelope:
+      type: object
+      description: >
+        Error envelope chuẩn của toàn bộ BFF (`{statusCode, message, code?,
+        details?}`) — một chỗ duy nhất qua errorEnvelope()/sendGrpcError().
+      required: [statusCode, message]
+      properties:
+        statusCode:
+          type: integer
+          description: HTTP status code do BFF set.
+          example: 422
+        message:
+          type: string
+          example: 'Request validation failed.'
+        code:
+          type: string
+          description: >
+            Machine-readable code — UNAUTHENTICATED (401) · PERMISSION_DENIED
+            (403) · NOT_FOUND (404) · VALIDATION_ERROR (422) ·
+            PRECONDITION_FAILED (422, delivery-batch ngữ nghĩa riêng) ·
+            CONFLICT (409) · UPSTREAM_UNAVAILABLE (503) · BAD_REQUEST (400,
+            malformed JSON/handler throw <500) · INTERNAL (500).
+          example: VALIDATION_ERROR
+        details:
+          type: array
+          description: Có mặt ở 422 (VALIDATION_ERROR / PRECONDITION_FAILED) + 409 CONFLICT.
+          items:
+            $ref: '#/components/schemas/ErrorDetail'
+    Paginated:
+      type: object
+      description: >
+        Base pagination envelope — MỌI list response đi qua lib/envelope.ts
+        paginated(). Domain specs compose items type hoá qua allOf, ví dụ
+        `allOf: [{$ref: Paginated}] + properties.items.items: $ref ItemType`.
+      required: [items, total, page, pageSize]
+      properties:
+        items:
+          type: array
+          description: Items của trang hiện tại (domain specs ép kiểu).
+          items: {}
+        total:
+          type: integer
+          description: Tổng số items TRƯỚC khi phân trang.
+          example: 42
+        page:
+          type: integer
+          example: 1
+        pageSize:
+          type: integer
+          example: 20
+  responses:
+    Unauthorized401:
+      description: Thiếu/sai JWT hoặc token không mang role hợp lệ.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 401
+            message: 'Missing Authorization: Bearer <token> header.'
+            code: UNAUTHENTICATED
+    Forbidden403:
+      description: Role của user không được phép thao tác này (role gate per-route).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 403
+            message: 'Role WarehouseEmployee is not allowed for this operation.'
+            code: PERMISSION_DENIED
+    NotFound404:
+      description: Không tìm thấy resource (gRPC NOT_FOUND hoặc route không tồn tại).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 404
+            message: 'Order ORD-000123 not found.'
+            code: NOT_FOUND
+    BadRequest400:
+      description: >
+        Malformed JSON body hoặc handler throw lỗi client-side (<500) —
+        app.ts setErrorHandler.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 400
+            message: 'Malformed JSON body.'
+            code: BAD_REQUEST
+    ValidationError422:
+      description: >
+        Upstream INVALID_ARGUMENT → 422 + details[] per-field (metadata
+        `x-error-details`, contract SF-2).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 422
+            message: 'Validation failed.'
+            code: VALIDATION_ERROR
+            details:
+              - field: toShopCode
+                message: 'Shop SHOP-999 does not exist.'
+    PreconditionFailed422:
+      description: >
+        Upstream FAILED_PRECONDITION với ngữ nghĩa riêng delivery-batch (vượt
+        fee limit → chặn 422) — chỉ các route truyền preconditionAs422.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 422
+            message: 'Precondition failed.'
+            code: PRECONDITION_FAILED
+            details:
+              - field: request
+                message: 'Delivery fee exceeds limit.'
+    Conflict409:
+      description: >
+        Trạng thái xung đột — gRPC ALREADY_EXISTS (trùng printer/transfer
+        PENDING) hoặc FAILED_PRECONDITION (assign sai trạng thái đơn).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 409
+            message: 'Already exists.'
+            code: CONFLICT
+    UpstreamUnavailable503:
+      description: >
+        Upstream gRPC chết/timeout (DEADLINE_EXCEEDED / UNAVAILABLE / UNKNOWN)
+        — resilience policy: 503 + code UPSTREAM_UNAVAILABLE, message kèm tên
+        service. FE degraded mode vẫn render.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 503
+            message: 'fulfillment-service is unavailable: no response within deadline.'
+            code: UPSTREAM_UNAVAILABLE
+    Internal500:
+      description: Lỗi không phân loại (upstream INTERNAL hoặc handler throw ≥500).
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/ErrorEnvelope'
+          example:
+            statusCode: 500
+            message: 'Internal error.'
+            code: INTERNAL

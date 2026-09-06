@@ -1,0 +1,1155 @@
+# Delivery — 9 ops (FI-326 SF-6): last-mile qua carrier NVC + D2C/dropship.
+# Shapes THẬT từ code (READ-ONLY nguồn):
+#   routes/deliverybatch.ts          — 6 ops /delivery-batch/* (gRPC batching-service)
+#   routes/d2c.ts                    — 3 ops /d2c-orders/* (gRPC fulfillment-service)
+#   api-contracts/delivery-batch.ts  — DTO camelCase §3.6 (DeliveryQuoteDto, meta.mock…)
+#   lib/grpc-error.ts                — map gRPC → HTTP; mọi route delivery-batch truyền
+#                                      preconditionAs422 → FAILED_PRECONDITION = 422
+#                                      PRECONDITION_FAILED (KHÔNG phải 409 mapping chung).
+#   proto delivery_batch.proto       — Quote/ShipmentPlanning/BookingResult (BFF map gần passthrough;
+#                                      khác biệt có chủ đích: REST `distance` → proto distanceKm,
+#                                      REST `driver` = "name - phone" join 2 field proto).
+# Schema domain inline trong file này (bundler chỉ merge `paths` — không contribute
+# components); shape lặp dùng YAML anchor (*metaDto, *quote, *d2cItem…) — bundler/
+# drift parse qua `yaml` nên anchor đã resolve trước khi bundle.
+paths:
+  /delivery-batch/quotes:
+    post:
+      tags: [Delivery]
+      operationId: getDeliveryQuotes
+      summary: Báo giá giao last-mile theo tải trọng (NVC step 1)
+      description: >
+        Gửi danh sách điểm giao (stopOrders) kèm km + tiền thu hộ — trả quotes
+        theo từng MỨC TẢI TRỌNG (mock dev: 6 mức SGCN→8T). gRPC GetQuotes
+        (hubstore.batching.v1, service batching-service). `fee` BE-authoritative
+        (base + per-km × distance); `isExceedFeeLimit` true (strict >) chặn
+        confirm/booking ở bước sau. Mọi response /delivery-batch/* kèm
+        `meta.mock` (mock mode của service). Role: mọi user đã đăng nhập.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [shopCode, stopOrders]
+              properties:
+                shopCode:
+                  type: string
+                  description: Mã shop/kho xuất hàng (seed dev 30201..30205 — fee-limit seed theo shop).
+                  example: '30201'
+                stopOrders:
+                  type: array
+                  description: Các điểm giao cần báo giá (≥1) — thứ tự = stopOrder dự kiến.
+                  items: &stopOrderInput
+                    type: object
+                    required: [address, distance, codAmount, totalBill]
+                    properties:
+                      address:
+                        type: string
+                        example: '123 Nguyễn Huệ, P. Bến Nghé, Q.1, TP.HCM'
+                      distance:
+                        type: number
+                        description: Km từ kho tới điểm giao (REST dùng `distance` — proto `distanceKm`).
+                        example: 6.2
+                      codAmount:
+                        type: number
+                        description: Số tiền thu COD (VND).
+                        example: 350000
+                      totalBill:
+                        type: number
+                        description: Tổng tiền đơn (VND).
+                        example: 550000
+                  minItems: 1
+            example:
+              shopCode: '30201'
+              stopOrders:
+                - address: '123 Nguyễn Huệ, P. Bến Nghé, Q.1, TP.HCM'
+                  distance: 6.2
+                  codAmount: 350000
+                  totalBill: 550000
+                - address: '45 Lê Lợi, Q.1, TP.HCM'
+                  distance: 3.8
+                  codAmount: 0
+                  totalBill: 290000
+      responses:
+        '200':
+          description: Quotes theo từng mức tải trọng — chọn 1 mức rồi confirm ở bước kế.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [quotes, meta]
+                properties:
+                  quotes:
+                    type: array
+                    items: &deliveryQuote
+                      type: object
+                      description: 1 mức tải trọng — fee BE-authoritative.
+                      required: [serviceId, name, vehicleType, fee, baseFee, etaMinutes, isExceedFeeLimit, addonServices]
+                      properties:
+                        serviceId:
+                          type: string
+                          description: ID dịch vụ NVC — nhúng lại vào confirm/booking (mock fleet SGCN/500KG/1T/2T/3.5T/8T).
+                          example: SGCN
+                        name:
+                          type: string
+                          example: 'Xe máy'
+                        vehicleType:
+                          type: string
+                          description: Mức tải trọng của quote này.
+                          example: SGCN
+                        fee:
+                          type: number
+                          description: Tổng phí (VND) = baseFee + per-km × distance.
+                          example: 28600
+                        baseFee:
+                          type: number
+                          description: Phí nền (VND).
+                          example: 10000
+                        etaMinutes:
+                          type: integer
+                          description: ETA dự kiến (phút).
+                          example: 20
+                        isExceedFeeLimit:
+                          type: boolean
+                          description: fee > limit (strict >) — true thì BE chặn confirm/booking.
+                          example: false
+                        addonServices:
+                          type: array
+                          description: Dịch vụ gia tăng đi kèm (radio/checkbox FE — grp phân nhóm).
+                          items: &deliveryAddon
+                            type: object
+                            required: [code, name, grp, fee]
+                            properties:
+                              code:
+                                type: string
+                                example: ROUTE_MULTI
+                              name:
+                                type: string
+                                example: 'Giao nhiều điểm'
+                              grp:
+                                type: string
+                                description: >
+                                  Nhóm addon — ROUTE / LOADING (radio) /
+                                  DOCUMENT (checkbox) / ROUND_TRIP.
+                                example: ROUTE
+                              fee:
+                                type: number
+                                description: Phí addon (VND).
+                                example: 15000
+                  meta: &metaDto
+                    type: object
+                    description: Meta chung mọi response /delivery-batch/* — mock=true → mock mode (mock dev luôn true).
+                    required: [mock]
+                    properties:
+                      mock:
+                        type: boolean
+                        example: true
+              example:
+                quotes:
+                  - serviceId: SGCN
+                    name: 'Xe máy'
+                    vehicleType: SGCN
+                    fee: 28600
+                    baseFee: 10000
+                    etaMinutes: 20
+                    isExceedFeeLimit: false
+                    addonServices:
+                      - code: ROUTE_MULTI
+                        name: 'Giao nhiều điểm'
+                        grp: ROUTE
+                        fee: 15000
+                      - code: LOADING_MAN
+                        name: 'Bốc xếp hàng'
+                        grp: LOADING
+                        fee: 20000
+                      - code: DOCUMENT
+                        name: 'Chứng từ kèm theo'
+                        grp: DOCUMENT
+                        fee: 0
+                      - code: ROUND_TRIP
+                        name: 'Giao rồi về'
+                        grp: ROUND_TRIP
+                        fee: 30000
+                  - serviceId: 500KG
+                    name: 'Xe tải 500kg'
+                    vehicleType: 500KG
+                    fee: 52900
+                    baseFee: 25000
+                    etaMinutes: 35
+                    isExceedFeeLimit: false
+                    addonServices:
+                      - code: ROUTE_MULTI
+                        name: 'Giao nhiều điểm'
+                        grp: ROUTE
+                        fee: 15000
+                      - code: LOADING_MAN
+                        name: 'Bốc xếp hàng'
+                        grp: LOADING
+                        fee: 20000
+                      - code: DOCUMENT
+                        name: 'Chứng từ kèm theo'
+                        grp: DOCUMENT
+                        fee: 0
+                      - code: ROUND_TRIP
+                        name: 'Giao rồi về'
+                        grp: ROUND_TRIP
+                        fee: 30000
+                meta:
+                  mock: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '422':
+          description: >
+            Upstream INVALID_ARGUMENT → VALIDATION_ERROR (details per-field —
+            vd stopOrders rỗng/sai shape). Mapping FAILED_PRECONDITION →
+            PRECONDITION_FAILED áp cho family delivery-batch (fee-limit chặn
+            ở confirm/booking, không ở quotes).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /delivery-batch/planning/confirm:
+    post:
+      tags: [Delivery]
+      operationId: confirmDeliveryPlanning
+      summary: Chốt giá — tạo shipment planning cho từng điểm giao (NVC step 2)
+      description: >
+        Persist fee do server quyết (KHÔNG tin fee client gửi lên) — trả
+        plannings kèm `planningId` (decimal DB id dạng string) dùng cho booking.
+        gRPC ConfirmPlanning (batching-service). Response trạng thái planning:
+        DRAFT / CONFIRMED / BOOKED / CANCELLED. Role: mọi user đã đăng nhập.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [batchCode, plannings]
+              properties:
+                batchCode:
+                  type: string
+                  description: Mã batch gom đơn đang giao.
+                  example: BATCH-000045
+                plannings:
+                  type: array
+                  description: Từng điểm giao + mức giá đã chọn (serviceId/vehicleType từ quotes).
+                  items: &planningInput
+                    type: object
+                    required: [stopOrder, orderCode, vehicleType, serviceId, addons]
+                    properties:
+                      stopOrder:
+                        type: integer
+                        description: Thứ tự điểm giao.
+                        example: 1
+                      orderCode:
+                        type: string
+                        example: ORD-000123
+                      vehicleType:
+                        type: string
+                        description: Mức tải trọng đã chọn.
+                        example: SGCN
+                      serviceId:
+                        type: string
+                        description: Dịch vụ đã chọn từ quotes.
+                        example: SGCN
+                      addons:
+                        type: array
+                        description: Mã addon đã chọn (DeliveryAddonDto.code).
+                        items:
+                          type: string
+                        example: [ROUTE_MULTI]
+                  minItems: 1
+            example:
+              batchCode: BATCH-000045
+              plannings:
+                - stopOrder: 1
+                  orderCode: ORD-000123
+                  vehicleType: SGCN
+                  serviceId: SGCN
+                  addons: [ROUTE_MULTI]
+                - stopOrder: 2
+                  orderCode: ORD-000124
+                  vehicleType: SGCN
+                  serviceId: SGCN
+                  addons: []
+      responses:
+        '200':
+          description: Plannings đã chốt giá — planningId (string decimal DB id) mang đi booking.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [plannings, meta]
+                properties:
+                  plannings:
+                    type: array
+                    items: &deliveryPlanning
+                      type: object
+                      description: Row shipment_plannings sau confirm.
+                      required: [planningId, batchCode, stopOrder, orderCode, vehicleType, serviceId, addons, status, codAmount, totalBill, fee]
+                      properties:
+                        planningId:
+                          type: string
+                          description: Decimal DB id dạng string (không part của shape gốc — BFF map).
+                          example: '101'
+                        batchCode:
+                          type: string
+                          example: BATCH-000045
+                        stopOrder:
+                          type: integer
+                          example: 1
+                        orderCode:
+                          type: string
+                          example: ORD-000123
+                        vehicleType:
+                          type: string
+                          example: SGCN
+                        serviceId:
+                          type: string
+                          example: SGCN
+                        addons:
+                          type: array
+                          items:
+                            type: string
+                          example: [ROUTE_MULTI]
+                        status:
+                          type: string
+                          description: DRAFT / CONFIRMED / BOOKED / CANCELLED.
+                          enum: [DRAFT, CONFIRMED, BOOKED, CANCELLED]
+                          example: CONFIRMED
+                        codAmount:
+                          type: number
+                          description: Tiền thu hộ (VND).
+                          example: 350000
+                        totalBill:
+                          type: number
+                          description: Tổng tiền đơn (VND).
+                          example: 550000
+                        fee:
+                          type: number
+                          description: Phí server-persisted tại thời điểm confirm (VND).
+                          example: 28600
+                  meta: *metaDto
+              example:
+                plannings:
+                  - planningId: '101'
+                    batchCode: BATCH-000045
+                    stopOrder: 1
+                    orderCode: ORD-000123
+                    vehicleType: SGCN
+                    serviceId: SGCN
+                    addons: [ROUTE_MULTI]
+                    status: CONFIRMED
+                    codAmount: 350000
+                    totalBill: 550000
+                    fee: 28600
+                meta:
+                  mock: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          description: >
+            Upstream INVALID_ARGUMENT → VALIDATION_ERROR hoặc FAILED_PRECONDITION
+            → PRECONDITION_FAILED (delivery-batch preconditionAs422 — vd isExceedFeeLimit).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /delivery-batch/booking:
+    post:
+      tags: [Delivery]
+      operationId: createDeliveryBooking
+      summary: Book carrier — gán tài xế + biển số (NVC step 3)
+      description: >
+        Book shipment theo planningId đã confirm — NVC gán tài xế + biển số
+        (mock dev: driver pool). gRPC CreateBooking (batching-service). REST
+        `driver` là MỘT string "name - phone" (BFF join 2 field proto
+        driver_name/driver_phone — shape §3.6 app gốc). KHÔNG book trực tiếp
+        trên planning CANCELLED — book-lại = confirm rồi booking. Role: mọi
+        user đã đăng nhập.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [batchCode]
+              properties:
+                batchCode:
+                  type: string
+                  example: BATCH-000045
+                shipmentPlannings:
+                  type: array
+                  description: Plannings cần book (bỏ trống = rỗng) — codAmount/totalBill theo planning.
+                  items: &bookingInput
+                    type: object
+                    required: [planningId, codAmount, totalBill, stopOrder]
+                    properties:
+                      planningId:
+                        type: string
+                        description: planningId từ response confirm.
+                        example: '101'
+                      codAmount:
+                        type: number
+                        description: Money-to-collect (VND).
+                        example: 350000
+                      totalBill:
+                        type: number
+                        example: 550000
+                      stopOrder:
+                        type: integer
+                        example: 1
+            example:
+              batchCode: BATCH-000045
+              shipmentPlannings:
+                - planningId: '101'
+                  codAmount: 350000
+                  totalBill: 550000
+                  stopOrder: 1
+      responses:
+        '200':
+          description: Booking theo từng planning — driver "name - phone", biển số.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bookings, meta]
+                properties:
+                  bookings:
+                    type: array
+                    items: &deliveryBooking
+                      type: object
+                      required: [planningId, carrierBookingId, driver, licensePlate, status]
+                      properties:
+                        planningId:
+                          type: string
+                          example: '101'
+                        carrierBookingId:
+                          type: string
+                          description: Mã booking phía NVC (mock dev pattern MOCK-<seq>).
+                          example: MOCK-000123
+                        driver:
+                          type: string
+                          description: '"<driverName> - <driverPhone>" — join 2 field proto.'
+                          example: 'Nguyễn Văn A - 0901234501'
+                        licensePlate:
+                          type: string
+                          example: 51A-123.45
+                        status:
+                          type: string
+                          description: Trạng thái booking phía NVC (DRIVER_FOUND sau book thành công ở mock).
+                          example: DRIVER_FOUND
+                  meta: *metaDto
+              example:
+                bookings:
+                  - planningId: '101'
+                    carrierBookingId: MOCK-000123
+                    driver: 'Nguyễn Văn A - 0901234501'
+                    licensePlate: 51A-123.45
+                    status: DRIVER_FOUND
+                meta:
+                  mock: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          description: >
+            Upstream INVALID_ARGUMENT → VALIDATION_ERROR hoặc FAILED_PRECONDITION
+            → PRECONDITION_FAILED (delivery-batch preconditionAs422 — vd planning
+            không ở trạng thái CONFIRMED/BOOKED, vượt fee limit).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /delivery-batch/cancel-delivery-order:
+    post:
+      tags: [Delivery]
+      operationId: cancelDeliveryOrder
+      summary: Hủy 1 đơn đã book/chốt
+      description: >
+        Hủy theo planningId — planning CANCELLED (booking ACTIVE đi kèm cũng
+        hủy theo). Sau hủy muốn book-lại = confirm lại rồi booking (KHÔNG book
+        trực tiếp trên planning CANCELLED — Go reject FailedPrecondition →
+        422 PRECONDITION_FAILED). gRPC CancelDeliveryOrder (batching-service).
+        Role: mọi user đã đăng nhập.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [planningId, reason]
+              properties:
+                planningId:
+                  type: string
+                  description: Planning cần hủy (decimal DB id dạng string).
+                  example: '101'
+                reason:
+                  type: string
+                  description: Lý do hủy — từ confirm modal FE.
+                  example: 'Khách hủy đơn'
+            example:
+              planningId: '101'
+              reason: 'Khách hủy đơn'
+      responses:
+        '200':
+          description: Planning sau khi hủy.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [planningId, status, meta]
+                properties:
+                  planningId:
+                    type: string
+                    example: '101'
+                  status:
+                    type: string
+                    description: Sau hủy luôn CANCELLED.
+                    example: CANCELLED
+                  meta: *metaDto
+              example:
+                planningId: '101'
+                status: CANCELLED
+                meta:
+                  mock: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          description: >
+            Upstream INVALID_ARGUMENT → VALIDATION_ERROR hoặc FAILED_PRECONDITION
+            → PRECONDITION_FAILED (delivery-batch preconditionAs422 — vd planning
+            đã CANCELLED/booked-giao xong, hủy lại).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /delivery-batch/cancel-batch:
+    post:
+      tags: [Delivery]
+      operationId: cancelDeliveryBatch
+      summary: Hủy theo lô cả batch giao hàng
+      description: >
+        Hủy hàng loạt theo batchCode — booking ACTIVE → CANCELLED; planning
+        CONFIRMED chưa book → về DRAFT. Trả kết quả per-planning + số dòng hủy
+        được. gRPC CancelDeliveryBatch (batching-service). Role: mọi user đã
+        đăng nhập.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [batchCode, reason]
+              properties:
+                batchCode:
+                  type: string
+                  example: BATCH-000045
+                reason:
+                  type: string
+                  description: Lý do hủy áp cho cả lô.
+                  example: 'Xe sự cố giữa đường'
+            example:
+              batchCode: BATCH-000045
+              reason: 'Xe sự cố giữa đường'
+      responses:
+        '200':
+          description: Kết quả hủy per-planning + tổng số hủy được.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [results, cancelledCount, meta]
+                properties:
+                  results:
+                    type: array
+                    items: &cancelBatchResult
+                      type: object
+                      required: [planningId, status]
+                      properties:
+                        planningId:
+                          type: string
+                          example: '101'
+                        status:
+                          type: string
+                          description: CANCELLED (booking hủy) / DRAFT (confirm chưa book).
+                          example: CANCELLED
+                  cancelledCount:
+                    type: integer
+                    description: Số planning thực sự hủy được.
+                    example: 2
+                  meta: *metaDto
+              example:
+                results:
+                  - planningId: '101'
+                    status: CANCELLED
+                  - planningId: '102'
+                    status: DRAFT
+                cancelledCount: 1
+                meta:
+                  mock: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          description: >
+            Upstream INVALID_ARGUMENT → VALIDATION_ERROR hoặc FAILED_PRECONDITION
+            → PRECONDITION_FAILED (delivery-batch preconditionAs422).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /delivery-batch/searchbookingdetail:
+    get:
+      tags: [Delivery]
+      operationId: searchBookingDetail
+      summary: Tracking detail booking theo planningIds
+      description: >
+        Tra chi tiết booking + timeline vận chuyển theo danh sách planningId —
+        `planningIds` comma-separated (convention app gốc, KHÔNG repeated query).
+        Planning chưa book HOẶC đã hủy (booking CANCELLED bị loại khỏi search)
+        → `booking: null`, `timeline: []`. Booking present thì `cancelledAt`/
+        `cancelReason` luôn rỗng (server chỉ giữ booking hiện hành, §3.4).
+        Timeline source: BE | PARTNER.
+        gRPC SearchBookingDetail (batching-service). Role: mọi user đã đăng nhập.
+      parameters:
+        - name: planningIds
+          in: query
+          required: false
+          description: >-
+            Danh sách planningId comma-separated, vd `101,102` (trim + bỏ rỗng
+            ở BFF — rỗng → tra không ra booking nào).
+          schema:
+            type: string
+            example: '101,102'
+      responses:
+        '200':
+          description: Booking entry per-planning (booking + timeline).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [bookings, meta]
+                properties:
+                  bookings:
+                    type: array
+                    items: &bookingEntry
+                      type: object
+                      required: [planningId, booking, timeline]
+                      properties:
+                        planningId:
+                          type: string
+                          example: '101'
+                        booking:
+                          description: Thông tin tài xế/biển số — null khi planning chưa book.
+                          nullable: true
+                          type: object
+                          required: [carrierBookingId, driverName, driverPhone, licensePlate, status, bookedAt, cancelledAt, cancelReason]
+                          properties:
+                            carrierBookingId:
+                              type: string
+                              example: MOCK-000123
+                            driverName:
+                              type: string
+                              example: 'Nguyễn Văn A'
+                            driverPhone:
+                              type: string
+                              example: '0901234501'
+                            licensePlate:
+                              type: string
+                              example: 51A-123.45
+                            status:
+                              type: string
+                              example: DRIVER_FOUND
+                            bookedAt:
+                              type: string
+                              format: date-time
+                              description: ISO-8601 thời điểm book.
+                              example: '2026-09-06T03:30:00.000Z'
+                            cancelledAt:
+                              type: string
+                              format: date-time
+                              description: ISO-8601 — server hiện luôn trả rỗng (search chỉ giữ booking hiện hành, §3.4).
+                              example: ''
+                            cancelReason:
+                              type: string
+                              description: Luôn rỗng ở hiện tại (booking CANCELLED bị loại khỏi search).
+                              example: ''
+                        timeline:
+                          type: array
+                          description: Các mốc vận chuyển (rỗng khi chưa book).
+                          items: &trackEvent
+                            type: object
+                            required: [status, source, occurredAt, note]
+                            properties:
+                              status:
+                                type: string
+                                description: Mã trạng thái tracking (mock ORDER_CREATED/DRIVER_FOUND/DELIVERING/COMPLETED/FAILED/CANCELLED).
+                                example: DRIVER_FOUND
+                              source:
+                                type: string
+                                description: Nguồn mốc — BE | PARTNER.
+                                example: PARTNER
+                              occurredAt:
+                                type: string
+                                format: date-time
+                                description: ISO-8601.
+                                example: '2026-09-06T04:00:00.000Z'
+                              note:
+                                type: string
+                                example: 'Tài xế đã lấy hàng'
+                  meta: *metaDto
+              example:
+                bookings:
+                  - planningId: '101'
+                    booking:
+                      carrierBookingId: MOCK-000123
+                      driverName: 'Nguyễn Văn A'
+                      driverPhone: '0901234501'
+                      licensePlate: 51A-123.45
+                      status: DRIVER_FOUND
+                      bookedAt: '2026-09-06T03:30:00.000Z'
+                      cancelledAt: ''
+                      cancelReason: ''
+                    timeline:
+                      - status: ORDER_CREATED
+                        source: BE
+                        occurredAt: '2026-09-06T03:30:00.000Z'
+                        note: 'Đã tạo booking'
+                      - status: DRIVER_FOUND
+                        source: PARTNER
+                        occurredAt: '2026-09-06T03:45:00.000Z'
+                        note: 'Đã gán tài xế'
+                  # planning chưa book hoặc đã hủy (booking CANCELLED bị loại) — entry rỗng:
+                  - planningId: '102'
+                    booking: null
+                    timeline: []
+                meta:
+                  mock: true
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '422':
+          description: >
+            Upstream INVALID_ARGUMENT → VALIDATION_ERROR hoặc FAILED_PRECONDITION
+            → PRECONDITION_FAILED (delivery-batch preconditionAs422).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /d2c-orders/filter:
+    post:
+      tags: [Delivery]
+      operationId: filterD2cOrders
+      summary: Danh sách đơn D2C/dropship — filter đa chiều + phân trang
+      description: >
+        Filter đơn D2C (body POST, không query) — mọi field optional, BFF fill
+        default (page 1 / pageSize 20, khoảng trống ''). gRPC FilterD2cOrders
+        (fulfillment-service); envelope phân trang chuẩn `Paginated`.
+        **Role gate D2C_ROLES**: WarehouseEmployee | WarehouseOps | Manager |
+        Admin (Coordinator KHÔNG có) — role khác → 403 PERMISSION_DENIED
+        ('Role của bạn không có quyền truy cập D2C.').
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              type: object
+              description: D2cFilterBody — mọi field optional.
+              properties:
+                search:
+                  type: string
+                  description: Text search tự do (orderCode/receiver/phone…).
+                  example: ''
+                statuses:
+                  type: array
+                  description: Lọc theo trạng thái D2C (multi-select).
+                  items:
+                    type: string
+                  example: [NEW]
+                carriers:
+                  type: array
+                  description: Lọc theo hãng vận chuyển.
+                  items:
+                    type: string
+                  example: [GHTK]
+                shops:
+                  type: array
+                  description: Lọc theo shop.
+                  items:
+                    type: string
+                exportEmployees:
+                  type: array
+                  description: Lọc theo người xuất hàng.
+                  items:
+                    type: string
+                productCategory:
+                  type: string
+                  description: Ngành hàng.
+                  example: ''
+                productType:
+                  type: string
+                  description: Loại sản phẩm.
+                  example: ''
+                createdFrom:
+                  type: string
+                  format: date-time
+                  description: Từ ngày tạo (ISO-8601 — BFF `new Date()`).
+                  example: '2026-09-01T00:00:00.000Z'
+                createdTo:
+                  type: string
+                  format: date-time
+                  description: Đến ngày tạo (ISO-8601).
+                  example: '2026-09-06T23:59:59.000Z'
+                pushFrom:
+                  type: string
+                  format: date-time
+                  description: Từ thời gian đẩy sang NVC (ISO-8601).
+                pushTo:
+                  type: string
+                  format: date-time
+                  description: Đến thời gian đẩy sang NVC (ISO-8601).
+                pushSlotFrom:
+                  type: string
+                  description: Slot đẩy từ (code slot, KHÔNG phải datetime).
+                  example: ''
+                pushSlotTo:
+                  type: string
+                  description: Slot đẩy đến (code slot).
+                  example: ''
+                page:
+                  type: integer
+                  description: Số trang (1-based) — default 1.
+                  minimum: 1
+                  example: 1
+                pageSize:
+                  type: integer
+                  description: Số items/trang — default 20.
+                  minimum: 1
+                  example: 20
+            example:
+              search: ''
+              statuses: []
+              carriers: []
+              shops: []
+              exportEmployees: []
+              productCategory: ''
+              productType: ''
+              page: 1
+              pageSize: 20
+      responses:
+        '200':
+          description: Trang đơn D2C khớp filter (envelope Paginated).
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+                  - type: object
+                    properties:
+                      items:
+                        type: array
+                        items: &d2cOrder
+                          type: object
+                          description: D2cOrderDto — dates ISO string (không leak shape proto).
+                          required: [orderCode, orderIdInter, deliveryId, carrier, shop, exportEmployee, receiverName, receiverPhone, receiverAddress, serviceType, productCategory, productType, isDebtSplitting, note, status, id]
+                          properties:
+                            orderCode:
+                              type: string
+                              example: ORD-000123
+                            orderIdInter:
+                              type: string
+                              description: Mã nội bộ phía NVC.
+                              example: 'NVC-INT-000456'
+                            deliveryId:
+                              type: string
+                              description: Mã vận đơn.
+                              example: 'VDN.000123'
+                            carrier:
+                              type: string
+                              example: GHTK
+                            shop:
+                              type: string
+                              example: 'Shop Thời Trang ABC'
+                            exportEmployee:
+                              type: string
+                              description: Người xuất hàng.
+                              example: 'Nguyễn Văn Hùng'
+                            exportTime:
+                              type: string
+                              format: date-time
+                              description: ISO-8601 — có mặt khi đã xuất.
+                              example: '2026-08-07T08:26:00.000Z'
+                            pushTime:
+                              type: string
+                              format: date-time
+                              description: ISO-8601 — có mặt khi đã đẩy sang NVC.
+                              example: '2026-08-07T08:26:00.000Z'
+                            receiverName:
+                              type: string
+                              example: 'Lý Tuấn Kiệt'
+                            receiverPhone:
+                              type: string
+                              example: '0957484314'
+                            receiverAddress:
+                              type: string
+                              example: 'Số 149, đường Phạm Văn Đồng, Hà Nội'
+                            serviceType:
+                              type: string
+                              description: Loại dịch vụ vận chuyển.
+                              example: 'Giao tiết kiệm'
+                            productCategory:
+                              type: string
+                              description: Ngành hàng.
+                              example: 'Giày dép'
+                            productType:
+                              type: string
+                              description: Loại sản phẩm.
+                              example: 'Sneaker'
+                            isDebtSplitting:
+                              type: boolean
+                              description: Có tách nợ (COD split) hay không.
+                              example: false
+                            note:
+                              type: string
+                              example: 'Giao giờ hành chính'
+                            status:
+                              type: string
+                              description: Trạng thái D2C — pending | pushed | exported | cancelled.
+                              example: pushed
+                            createdAt:
+                              type: string
+                              format: date-time
+                              description: ISO-8601 — có mặt khi order có created_at.
+                              example: '2026-08-07T01:15:00.000Z'
+                            id:
+                              type: number
+                              description: DB id (number).
+                              example: 934527
+              example:
+                items:
+                  - orderCode: D2C-934527
+                    orderIdInter: 'INT-1814527'
+                    deliveryId: 'VTP99D934527'
+                    carrier: ViettelPost
+                    shop: 'Shop Thời Trang ABC'
+                    exportEmployee: 'Nguyễn Văn Hùng'
+                    exportTime: '2026-08-07T08:26:00.000Z'
+                    pushTime: '2026-08-07T08:26:00.000Z'
+                    receiverName: 'Lý Tuấn Kiệt'
+                    receiverPhone: '0957484314'
+                    receiverAddress: 'Số 149, đường Phạm Văn Đồng, Hà Nội'
+                    serviceType: 'Giao tiết kiệm'
+                    productCategory: 'Giày dép'
+                    productType: 'Sneaker'
+                    isDebtSplitting: false
+                    note: ''
+                    status: pushed
+                    createdAt: '2026-08-07T01:15:00.000Z'
+                    id: 934527
+                total: 42
+                page: 1
+                pageSize: 20
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          description: Role ngoài D2C_ROLES (WarehouseEmployee/WarehouseOps/Manager/Admin) — PERMISSION_DENIED.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 403
+                message: 'Role của bạn không có quyền truy cập D2C.'
+                code: PERMISSION_DENIED
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /d2c-orders/{orderCode}/note:
+    put:
+      tags: [Delivery]
+      operationId: updateD2cOrderNote
+      summary: Ghi chú đơn D2C — khóa nghiệp vụ order_code
+      description: >
+        Update note theo orderCode (precedent UpdateNote khóa fulfill_code).
+        Validate BFF-side: note bắt buộc là chuỗi ≤ 500 ký tự — vi phạm → 400
+        BAD_REQUEST ('Ghi chú bắt buộc là chuỗi ≤ 500 ký tự.'). Upstream không
+        tìm thấy order → 404. Role gate D2C_ROLES giống filter.
+      parameters:
+        - name: orderCode
+          in: path
+          required: true
+          description: Mã đơn D2C.
+          schema:
+            type: string
+            example: D2C-934527
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note:
+                  type: string
+                  maxLength: 500
+                  description: Ghi chú mới (≤ 500 ký tự).
+                  example: 'Giao giờ hành chính'
+            example:
+              note: 'Giao giờ hành chính'
+      responses:
+        '200':
+          description: Đơn D2C sau khi ghi chú (item null nếu upstream không trả order).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [item]
+                properties:
+                  item:
+                    description: D2cOrderDto sau update — null khi upstream không trả order.
+                    nullable: true
+                    allOf:
+                      - *d2cOrder
+              example:
+                item:
+                  orderCode: D2C-934527
+                  orderIdInter: 'INT-1814527'
+                  deliveryId: 'VTP99D934527'
+                  carrier: ViettelPost
+                  shop: 'Shop Thời Trang ABC'
+                  exportEmployee: 'Nguyễn Văn Hùng'
+                  exportTime: '2026-08-07T08:26:00.000Z'
+                  pushTime: '2026-08-07T08:26:00.000Z'
+                  receiverName: 'Lý Tuấn Kiệt'
+                  receiverPhone: '0957484314'
+                  receiverAddress: 'Số 149, đường Phạm Văn Đồng, Hà Nội'
+                  serviceType: 'Giao tiết kiệm'
+                  productCategory: 'Giày dép'
+                  productType: 'Sneaker'
+                  isDebtSplitting: false
+                  note: 'Giao giờ hành chính'
+                  status: pushed
+                  createdAt: '2026-08-07T01:15:00.000Z'
+                  id: 934527
+        '400':
+          description: note thiếu/không phải chuỗi/ > 500 ký tự — BAD_REQUEST (validate BFF-side).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: 'Ghi chú bắt buộc là chuỗi ≤ 500 ký tự.'
+                code: BAD_REQUEST
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          description: Role ngoài D2C_ROLES — PERMISSION_DENIED (giống filter).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+
+  /d2c-orders/export:
+    get:
+      tags: [Delivery]
+      operationId: exportD2cOrdersCsv
+      summary: Export CSV đơn D2C theo khoảng ngày tạo (≤ 31 ngày)
+      description: >
+        Export CSV BFF-assemble (loop FilterD2cOrders pageSize 500 theo total),
+        CHỈ theo `from`/`to` — khoảng NGÀY TẠO (created_at) bounds full-day giờ
+        VN (`T00:00:00+07:00` → `T23:59:59+07:00`), KHÔNG mang filter khác.
+        Guard date-only `YYYY-MM-DD` + from ≤ to + (to-from) ≤ 31 ngày — vi phạm
+        → 400 ('Khoảng thời gian export tối đa 31 ngày'). File Excel-safe:
+        mở đầu BOM `﻿` (UTF-8 Excel nhận diện tiếng Việt), 18 cột CSV_HEADER
+        (Mã đơn → Ngày tạo), CSV escape RFC (bọc `"` khi chứa , " newline) +
+        formula-guard prefix `'` cho giá trị bắt đầu = + - @ \t \r (OWASP).
+        Header: `Content-Disposition: attachment;
+        filename="D2C_Order_<from>_<to>.csv"`. Role gate D2C_ROLES giống filter.
+      parameters:
+        - name: from
+          in: query
+          required: true
+          description: Ngày bắt đầu (YYYY-MM-DD) — mốc 00:00 +07:00.
+          schema:
+            type: string
+            format: date
+            example: '2026-09-01'
+        - name: to
+          in: query
+          required: true
+          description: Ngày kết thúc (YYYY-MM-DD, ≥ from, ≤ from+31 ngày) — mốc 23:59:59 +07:00.
+          schema:
+            type: string
+            format: date
+            example: '2026-09-06'
+      responses:
+        '200':
+          description: >
+            File CSV (BOM + 18 cột tiếng Việt) — Mã đơn, Mã nội bộ, Mã vận đơn,
+            Hãng vận chuyển, Shop, Người xuất, Thời gian xuất, Thời gian đẩy,
+            Người nhận, Điện thoại, Địa chỉ, Loại dịch vụ, Ngành hàng, Loại sản
+            phẩm, Tách nợ, Ghi chú, Trạng thái, Ngày tạo.
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+          headers:
+            Content-Disposition:
+              description: 'attachment; filename="D2C_Order_2026-09-01_2026-09-06.csv"'
+              schema:
+                type: string
+                example: 'attachment; filename="D2C_Order_2026-09-01_2026-09-06.csv"'
+        '400':
+          description: >-
+            from/to thiếu, sai format YYYY-MM-DD, from > to, hoặc khoảng > 31
+            ngày — BAD_REQUEST ('Khoảng thời gian export tối đa 31 ngày').
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 400
+                message: 'Khoảng thời gian export tối đa 31 ngày'
+                code: BAD_REQUEST
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          description: Role ngoài D2C_ROLES — PERMISSION_DENIED (giống filter).
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'

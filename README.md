@@ -267,6 +267,8 @@ cd e2e && pnpm exec playwright test
 | `BFF_CORS_ORIGINS`   | BFF              | `:3000, :3001, :3002`   | CORS allow-list |
 | `KAFKA_ENABLED`      | `.env`           | `false`                 | Opt-in event side-channel (`'true'` only when on) |
 | `ENABLE_DEV_RESET_PASSWORD` | `.env`    | unset                   | Mounts dev-only `/auth/reset-password` (fail-safe: unset in prod → 404) |
+| `BFF_ENABLE_API_DOCS` | BFF shell env   | unset                   | `'1'` = serve Swagger UI at `/documentation` (fail-safe: unset → 404, no UI routes) |
+| `DRIFT_FULL`          | test env        | unset                   | `'1'` = drift-guard reverse check: every BFF route must belong to SOME spec file |
 
 ## 🧪 Testing
 
@@ -285,6 +287,56 @@ cd e2e && pnpm exec playwright test                # full e2e (boot-all first)
 - `E2E=1 bash scripts/boot-all.sh` resets both databases and the keycloak
   volume **before** booting, for a clean seeded state (`auth.setup.ts` logs 3
   users in through the hosted UI and stores storageState under `.auth/`).
+
+## 📚 API docs (Swagger UI)
+
+The BFF ships an interactive OpenAPI spec — **84 operations / 12 tags** —
+covering every route the gateway exposes (System, Orders, Master Data,
+Batches, Intake, Webhooks, Field Service, Delivery/D2C, COD Settlement,
+Print, Administration, Realtime & Transfers).
+
+```bash
+# 1. Enable the docs plugin (fail-safe: unset = 404, nothing mounts)
+BFF_ENABLE_API_DOCS=1 pnpm --filter @hub-store/bff-gateway dev
+
+# 2. Open the UI
+open http://localhost:8080/documentation
+
+# 3. Mint a dev token and authorize ("Authorize" button → bearerAuth)
+python3 e2e/scripts/mint_sf11.py manager /tmp/auth.json
+#    → paste the token into Swagger UI Authorize (scheme: bearerAuth)
+```
+
+- **Spec source of truth**: `services/bff-gateway/openapi/` — a multi-file
+  tree (`openapi.yaml` + `paths/*.yaml` + `components/*.yaml`) bundled
+  in-memory at boot; the UI reads it from `GET /documentation/spec.json`.
+  Read the YAML files directly to review request/response shapes and
+  examples.
+- **Try-it-out needs auth** for everything except `GET /healthz`,
+  `GET /health`, `GET /version`: mint a token as above (role
+  `manager|coordinator|admin`), click **Authorize**, paste the token.
+- **Flag off = docs gone**: `BFF_ENABLE_API_DOCS` unset means no
+  `/documentation` route, no spec JSON, no UI assets — safe for prod.
+
+### Convention: route changed → spec changed, same PR
+
+Every BFF route is guarded by a drift-guard vitest suite
+(`services/bff-gateway/test/openapi.drift.*.test.ts`):
+
+- each domain spec file (`paths/*.yaml`) is checked against the real
+  Fastify route table — renaming/removing a route without updating its
+  spec file **fails the default test** (`pnpm --filter
+  @hub-store/bff-gateway test`);
+- the other direction (a route **added** with no spec entry at all) is
+  caught by the reverse check — run it manually at convergence time with
+  `DRIFT_FULL=1 pnpm --filter @hub-store/bff-gateway test` (it is not
+  wired into the default test script or CI, so run it before merging
+  route changes);
+- so: when you touch `src/routes/*`, update the matching
+  `openapi/paths/*.yaml` **in the same PR**. If you only changed a
+  response shape, update the schema/examples too — the spot-check that
+  keeps docs honest is review, the drift-guard only catches the route
+  surface.
 
 ## 👮 Roles and permissions
 

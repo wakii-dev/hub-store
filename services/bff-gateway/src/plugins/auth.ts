@@ -83,6 +83,17 @@ export function registerJwtGuard(app: FastifyInstance, opts: { oidc: BffOidcConf
     if (request.url === '/webhooks/orders' || request.url.startsWith('/webhooks/orders?')) {
       return;
     }
+    // FI-326 SF-1 — Swagger UI + spec JSON khi BFF_ENABLE_API_DOCS=1. Khớp
+    // exact + query + prefix '/documentation/' — phủ UI assets,
+    // spec.json, oauth2-redirect.html; KHÔNG ăn trúng '/documentation-xyz'
+    // (code-review P2: boundary prefix chặt như các skip còn lại).
+    if (
+      request.url === '/documentation' ||
+      request.url.startsWith('/documentation?') ||
+      request.url.startsWith('/documentation/')
+    ) {
+      return;
+    }
     // SF-10 — EventSource (SSE) KHÔNG set được Authorization header → CHỈ url
     // /events (kể cả query) cho phép token từ query `access_token` thay Bearer.
     // Verify JWKS y như Bearer; MỌI route khác vẫn bắt buộc header (không hồi quy).

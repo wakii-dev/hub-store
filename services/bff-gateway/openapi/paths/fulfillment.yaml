@@ -1,0 +1,1265 @@
+# Orders domain (SF-2, story FI-326) — 16 ops, 2 tags: Orders (13) + Master Data (3).
+#
+# Nguồn shapes (READ-ONLY — spec KHÔNG tự chế field):
+#   src/routes/fulfillment.ts        — paths, role gates, error paths
+#   src/mappers/fulfillment.ts       — DTO camelCase emit thật (mapOrderItem/mapOrderDetail/…)
+#   packages/shared/src/types/*.ts   — TimeRange / HubStoreOrderFilterItem / Batch §4
+#   packages/shared/src/enums.ts     — BatchStatus 0-3 · OrderStatus 0-2 · BatchEntityStatus 0-2
+#   src/lib/audit.ts                 — AuditQuery + AuditEntry runtime (GET /fulfillment/audit)
+#   src/lib/csv.ts                   — 9 cột EXPORT_COLUMNS (export.csv)
+#   src/lib/grpc-error.ts            — mapping 422/404/409/503/500 dùng chung mọi op gRPC
+#
+# Bundler (src/plugins/openapi-bundle.ts): external $ref phải là KEY DUY NHẤT
+# của node (không kèm sibling). Schemas domain đặt components.schemas của file
+# này và được ref qua self-external `./fulfillment.yaml#/components/schemas/…`
+# (bundler inline khi bundle — components của paths file KHÔNG merge vào root).
+# Tái sử dụng dùng chung: ../components/{envelopes,parameters}.yaml.
+components:
+  schemas:
+    TimeRange:
+      type: object
+      description: Khoảng thời gian — ISO datetime string qua wire (shared types/common.ts).
+      required: [from, to]
+      properties:
+        from:
+          type: string
+          format: date-time
+          example: '2026-09-06T08:00:00+07:00'
+        to:
+          type: string
+          format: date-time
+          example: '2026-09-06T10:00:00+07:00'
+    OrderProduct:
+      type: object
+      description: Dòng sản phẩm trong items[] (shared types/product.ts Product).
+      required: [productCode, productName, quantity]
+      properties:
+        productCode:
+          type: string
+          example: SKU-001
+        productName:
+          type: string
+          example: 'Quạt đứng Senko'
+        quantity:
+          type: integer
+          example: 2
+    ShopAssignment:
+      type: object
+      description: Kho CN xuất hàng (shared types/order.ts).
+      required: [shopCode, shopName, address]
+      properties:
+        shopCode:
+          type: string
+          example: SHOP-001
+        shopName:
+          type: string
+          example: 'Kho Q1'
+        address:
+          type: string
+          example: '12 Nguyễn Huệ, Q.1, TP.HCM'
+    HubStoreOrderFilterItem:
+      type: object
+      description: >
+        1 row trên D1 (shared types/order.ts — field names GIỮ NGUYÊN). Mapper
+        src/mappers/fulfillment.ts mapOrderItem luôn emit mọi field bắt buộc;
+        các field SF-13 (customerName…) seed NULL → undefined → omitted.
+      required:
+        - fulfillCode
+        - statusCode
+        - batchStatus
+        - shopAssignment
+        - originalTime
+        - deliveryTime
+        - orderStatus
+        - items
+        - codAmount
+        - totalQuantity
+        - isDebtSplittingOrder
+        - customerAddress
+      properties:
+        fulfillCode:
+          type: string
+          description: Số đơn hàng (ORD-####).
+          example: ORD-000123
+        statusCode:
+          type: integer
+          description: Trạng thái điều phối (code thô — không có enum trong REQUIREMENTS).
+          example: 0
+        batchStatus:
+          type: integer
+          description: >
+            Trạng thái soạn hàng (order-level, shared enums BATCH_STATUS):
+            0=Chưa soạn · 1=Đang soạn · 2=Đã soạn · 3=Lỗi vượt trọng lượng.
+          enum: [0, 1, 2, 3]
+          example: 0
+        batchCode:
+          type: string
+          description: Mã phiếu soạn (không có khi đơn chưa vào phiếu).
+          example: BATCH-000045
+        shopAssignment:
+          $ref: './fulfillment.yaml#/components/schemas/ShopAssignment'
+        originalTime:
+          description: Thời gian KH mong muốn.
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+        deliveryTime:
+          description: Thời gian dự kiến giao.
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+        orderStatus:
+          type: integer
+          description: >
+            Trạng thái đơn (shared enums ORDER_STATUS): 0=Chờ duyệt ·
+            1=Đã duyệt · 2=Từ chối duyệt.
+          enum: [0, 1, 2]
+          example: 1
+        items:
+          type: array
+          items:
+            $ref: './fulfillment.yaml#/components/schemas/OrderProduct'
+        codAmount:
+          type: integer
+          description: Tiền COD (VND).
+          example: 250000
+        totalQuantity:
+          type: integer
+          example: 5
+        isDebtSplittingOrder:
+          type: boolean
+          description: Đơn chia nợ — không được chuyển kho (§9).
+          example: false
+        customerAddress:
+          type: string
+          example: '45 Lê Lợi, Q.1, TP.HCM'
+        distance:
+          type: number
+          format: double
+          description: Khoảng cách (km).
+          example: 3.2
+        customerName:
+          type: string
+          description: SF-13 — omitted khi seed NULL.
+          example: 'Nguyễn Văn A'
+        customerPhone:
+          type: string
+          description: SF-13 — omitted khi seed NULL.
+          example: '0901234567'
+        failReason:
+          type: string
+          description: Lý do giao thất bại (string enum name; rỗng/omitted = không fail).
+          example: KHACH_VANG
+        failNote:
+          type: string
+          description: Ghi chú giao thất bại — omitted khi seed NULL.
+        oldFulfillCode:
+          type: string
+          description: Đơn gốc của đơn retry — omitted khi seed NULL.
+          example: ORD-000122
+    OrderHistoryEntry:
+      type: object
+      description: 1 entry lịch sử chuyển kho (shared api-contracts OrderHistoryEntry — mapHistoryEntry).
+      required: [timestamp, action]
+      properties:
+        timestamp:
+          type: string
+          format: date-time
+          description: Thời điểm thay đổi (proto changedAt).
+          example: '2026-09-06T03:20:00.000Z'
+        action:
+          type: string
+          description: Hành động — hiện chỉ có ASSIGN_SHOP_HUB.
+          example: ASSIGN_SHOP_HUB
+        fromShopCode:
+          type: string
+          description: Kho nguồn (undefined khi lần đầu gán).
+          example: SHOP-001
+        toShopCode:
+          type: string
+          example: SHOP-002
+        actor:
+          type: string
+          description: User thực hiện (sub Keycloak).
+          example: 3f6c2a44-0a1b-4c5d-8e9f-10293a4b5c6d
+        note:
+          type: string
+    OrderDetail:
+      allOf:
+        - $ref: './fulfillment.yaml#/components/schemas/HubStoreOrderFilterItem'
+        - type: object
+          description: >
+            Superset của row D1 (shared api-contracts OrderDetail — mapOrderDetail).
+            GAP documented: proto GetOrderDetailResponse không mang orderCode →
+            BFF emit chuỗi rỗng, KHÔNG fallback fulfillCode.
+          required: [orderCode, note, history]
+          properties:
+            orderCode:
+              type: string
+              description: Mã đơn RSA — hiện luôn rỗng (proto GAP documented).
+              example: ''
+            note:
+              type: string
+              description: Ghi chú — mutate qua PUT /fulfillment/{code}/note.
+              example: 'Giao giờ hành chính'
+            history:
+              type: array
+              description: BFF aggregate thêm từ GetAssignHistory (spec §3.3).
+              items:
+                $ref: './fulfillment.yaml#/components/schemas/OrderHistoryEntry'
+    FilterOrdersRequest:
+      type: object
+      description: >
+        Body POST /fulfillment/filter — 8 filter field D1 + pagination +
+        excludeFulfillCodes (shared api-contracts FilterOrdersRequest).
+        Lists rỗng = bỏ filter đó.
+      required: [page, pageSize]
+      properties:
+        fulfillCode:
+          type: string
+          description: Text search số đơn hàng (fulfillCode).
+          example: ''
+        batchStatus:
+          type: array
+          description: Trạng thái soạn hàng — multi-select (0-3, xem HubStoreOrderFilterItem.batchStatus).
+          items:
+            type: integer
+            enum: [0, 1, 2, 3]
+          example: [0, 1]
+        orderStatus:
+          type: array
+          description: Trạng thái đơn — multi-select (0-2).
+          items:
+            type: integer
+            enum: [0, 1, 2]
+          example: []
+        shopCodes:
+          type: array
+          description: Kho CN xuất hàng — multi-select shopCode.
+          items:
+            type: string
+          example: []
+        regionCodes:
+          type: array
+          description: Địa chỉ — multi-select region codes (tỉnh/phường).
+          items:
+            type: string
+          example: []
+        deliveryTime:
+          description: Thời gian dự kiến giao — datetime range.
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+        createdAt:
+          description: Thời gian tạo đơn — date range.
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+        originalTime:
+          description: Thời gian KH mong muốn — datetime range.
+          allOf:
+            - $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+        excludeFulfillCodes:
+          type: array
+          description: >
+            Loại trừ các đơn đã chọn (pin v1) — search "thêm đơn" ở D1b ẩn
+            đơn đã nằm trong modal.
+          items:
+            type: string
+          example: []
+        page:
+          type: integer
+          minimum: 1
+          example: 1
+        pageSize:
+          type: integer
+          minimum: 1
+          example: 20
+    PaginatedOrderItems:
+      allOf:
+        - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: './fulfillment.yaml#/components/schemas/HubStoreOrderFilterItem'
+    AuditEntry:
+      type: object
+      description: >
+        1 row activity_log (route GET /fulfillment/audit map trực tiếp —
+        src/lib/audit.ts logActivity ghi; src/lib/audit.ts AuditQuery đọc).
+      required: [id, actor, action, targetType, targetId, createdAt]
+      properties:
+        id:
+          type: integer
+          example: 42
+        actor:
+          type: string
+          description: User thực hiện (sub Keycloak).
+          example: manager-user-id
+        action:
+          type: string
+          example: order.assign_shop
+        targetType:
+          type: string
+          example: order
+        targetId:
+          type: string
+          example: ORD-000123
+        detail:
+          description: Payload bổ sung (JSONB) — null khi mutation không kèm detail.
+          nullable: true
+          type: object
+          example:
+            toShopCode: SHOP-002
+        createdAt:
+          type: string
+          format: date-time
+          example: '2026-09-06T03:20:00.000Z'
+    PaginatedAuditEntries:
+      allOf:
+        - $ref: '../components/envelopes.yaml#/components/schemas/Paginated'
+        - type: object
+          properties:
+            items:
+              type: array
+              items:
+                $ref: './fulfillment.yaml#/components/schemas/AuditEntry'
+    BatchItem:
+      type: object
+      description: 1 đơn trong phiếu (shared types/batching.ts BatchingItem — row D2).
+      required:
+        - batchCode
+        - stopOrder
+        - orderCode
+        - customerAddress
+        - distance
+        - fromDeliveryTime
+        - toDeliveryTime
+        - orderStatus
+        - orderType
+        - items
+        - totalQuantity
+        - codAmount
+      properties:
+        batchCode:
+          type: string
+          example: BATCH-000045
+        stopOrder:
+          type: integer
+          description: Thứ tự giao.
+          example: 1
+        orderCode:
+          type: string
+          description: Mã đơn RSA.
+          example: ORD-000123
+        customerAddress:
+          type: string
+        distance:
+          type: number
+          description: Km.
+          example: 3.2
+        fromDeliveryTime:
+          type: string
+        toDeliveryTime:
+          type: string
+        orderStatus:
+          type: integer
+          description: Trạng thái đơn 0-2 (xem HubStoreOrderFilterItem.orderStatus).
+          enum: [0, 1, 2]
+        orderType:
+          type: integer
+        items:
+          type: array
+          items:
+            $ref: './fulfillment.yaml#/components/schemas/OrderProduct'
+        totalQuantity:
+          type: integer
+        codAmount:
+          type: integer
+          description: VND.
+    Batch:
+      type: object
+      description: Phiếu soạn hàng (shared types/product.ts Batch — mapBatch).
+      required: [batchCode, shopCode, shipperId, deliveryTime, status, items, createdAt]
+      properties:
+        batchCode:
+          type: string
+          example: BATCH-000045
+        shopCode:
+          type: string
+          example: SHOP-001
+        shipperId:
+          type: string
+          example: staff-01
+        deliveryTime:
+          $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+        status:
+          type: integer
+          description: >
+            Trạng thái PHIẾU (shared enums BATCH_ENTITY_STATUS — khác
+            batchStatus order-level): 0=ACTIVE · 1=COMPLETED · 2=CANCELLED.
+          enum: [0, 1, 2]
+          example: 1
+        items:
+          type: array
+          items:
+            $ref: './fulfillment.yaml#/components/schemas/BatchItem'
+        createdAt:
+          type: string
+          format: date-time
+    DashboardStats:
+      type: object
+      description: >
+        GET /fulfillment/dashboard-stats (shared api-contracts DashboardStats —
+        BFF owns aggregation: GetDashboardStats + FilterBatches + ListDeliveryStaff).
+      required:
+        - ordersPerDay
+        - totalToday
+        - pendingApproval
+        - delivering
+        - completed
+        - cancelled
+        - completionRate
+        - cancelRate
+        - totalBatches
+        - workload
+      properties:
+        ordersPerDay:
+          type: array
+          description: Đủ 30 ô cũ→mới (ngày thiếu = 0) — nhóm theo original_time_from, TZ +07.
+          items:
+            type: object
+            required: [date, count]
+            properties:
+              date:
+                type: string
+                format: date
+                example: '2026-09-06'
+              count:
+                type: integer
+                example: 12
+        totalToday:
+          type: integer
+          example: 34
+        pendingApproval:
+          type: integer
+          example: 3
+        delivering:
+          type: integer
+          description: Đơn thuộc phiếu ACTIVE.
+          example: 20
+        completed:
+          type: integer
+          description: Đơn thuộc phiếu COMPLETED.
+          example: 8
+        cancelled:
+          type: integer
+          description: Đơn thuộc phiếu CANCELLED.
+          example: 2
+        completionRate:
+          type: integer
+          description: round(completed/(completed+cancelled)*100) — 0 khi decided=0.
+          example: 80
+        cancelRate:
+          type: integer
+          example: 20
+        totalBatches:
+          type: integer
+          description: Tổng phiếu trong window hôm nay (+07).
+          example: 15
+        workload:
+          type: array
+          description: >
+            Load theo shipper; shipper không khớp delivery_staff gộp bucket
+            "Chưa gán".
+          items:
+            type: object
+            required: [staffId, name, orderCount]
+            properties:
+              staffId:
+                type: string
+                example: staff-01
+              name:
+                type: string
+                example: 'Nguyễn Văn B'
+              orderCount:
+                type: integer
+                example: 6
+    TimeSlot:
+      type: object
+      description: Slot giao 2h synthesized bởi BFF (DELIVERY_SLOTS — không gọi upstream).
+      required: [id, from, to]
+      properties:
+        id:
+          type: string
+          description: '${from-hh}-${to-hh}.'
+          example: '08-10'
+        from:
+          type: string
+          description: Giờ VN (UTC+7) HH:mm.
+          example: '08:00'
+        to:
+          type: string
+          example: '10:00'
+    RegionDto:
+      type: object
+      description: Tỉnh/phường hierarchi D6 (shared RegionDto — mapRegion).
+      required: [code, name, type]
+      properties:
+        code:
+          type: string
+          example: '01'
+        name:
+          type: string
+          example: 'Hà Nội'
+        type:
+          type: string
+          description: REGION_TYPE_PROVINCE=0 → 'province' · REGION_TYPE_WARD=1 → 'ward'.
+          enum: [province, ward]
+          example: province
+        parentCode:
+          type: string
+          description: Chỉ có ở ward (tỉnh cha).
+          example: '01'
+    DeliveryStaffDto:
+      type: object
+      description: Nhân viên giao (shared DeliveryStaffDto — mapDeliveryStaff; proto không có phone).
+      required: [staffId, name, shopCode]
+      properties:
+        staffId:
+          type: string
+          example: staff-01
+        name:
+          type: string
+          example: 'Nguyễn Văn B'
+        shopCode:
+          type: string
+          example: SHOP-001
+    ShopDto:
+      type: object
+      description: Kho CN (shared ShopDto — mapShop; shape trùng ShopAssignment).
+      required: [shopCode, shopName, address]
+      properties:
+        shopCode:
+          type: string
+          example: SHOP-001
+        shopName:
+          type: string
+          example: 'Kho Q1'
+        address:
+          type: string
+paths:
+  /fulfillment/filter:
+    post:
+      tags: [Orders]
+      operationId: filterOrders
+      summary: D1 — filter + phân trang đơn fulfillment
+      description: >
+        Đích đến chính của màn D1. User bất kỳ đã đăng nhập (requireUser —
+        không role gate). Lists rỗng = bỏ filter. Pagination qua envelope
+        Paginated (total = tổng trước phân trang). excludeFulfillCodes pin v1
+        cho modal "thêm đơn". Lỗi upstream map chung sendGrpcError.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: './fulfillment.yaml#/components/schemas/FilterOrdersRequest'
+            example:
+              fulfillCode: ''
+              batchStatus: [0, 1]
+              orderStatus: []
+              shopCodes: []
+              regionCodes: []
+              excludeFulfillCodes: []
+              page: 1
+              pageSize: 20
+      responses:
+        '200':
+          description: Trang items khớp filter — Paginated[HubStoreOrderFilterItem].
+          content:
+            application/json:
+              schema:
+                $ref: './fulfillment.yaml#/components/schemas/PaginatedOrderItems'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/orders/export.csv:
+    get:
+      tags: [Orders]
+      operationId: exportOrdersCsv
+      summary: Export CSV các đơn khớp filter (mirror body /filter qua querystring)
+      description: >
+        User bất kỳ đã đăng nhập (requireUser — không role gate).
+        Querystring MIRROR body POST /fulfillment/filter nhưng giá trị runtime
+        là string: lists comma-separated (`batchStatus=0,1`, `orderStatus=0`),
+        createdAt là NGÀY đơn `YYYY-MM-DD` (BFF wrap full-day UTC). Trả CSV
+        Excel-safe (RFC 4180, \r\n, formula-guard) 9 cột EXPORT_COLUMNS, mở đầu
+        BOM `﻿` (UTF-8 Excel nhận diện unicode), `Content-Disposition:
+        attachment; filename="orders-export-<yyyyMMdd-HHmmss UTC>.csv"`.
+        BFF loop FilterOrders pageSize 500 theo total page đầu; lỗi gRPC BẤT KỲ
+        page → error envelope TRƯỚC khi send (không bao giờ trả CSV đứt).
+      parameters:
+        - name: fulfillCode
+          in: query
+          required: false
+          description: Text search số đơn hàng.
+          schema:
+            type: string
+            example: ''
+        - name: batchStatus
+          in: query
+          required: false
+          description: Trạng thái soạn hàng — comma-separated ints "0,1".
+          schema:
+            type: string
+            example: '0,1'
+        - name: regionCodes
+          in: query
+          required: false
+          description: Comma-separated region codes.
+          schema:
+            type: string
+        - name: shopCodes
+          in: query
+          required: false
+          description: Comma-separated shopCodes.
+          schema:
+            type: string
+        - name: orderStatus
+          in: query
+          required: false
+          description: Trạng thái đơn — comma-separated ints "0".
+          schema:
+            type: string
+        - name: createdAt
+          in: query
+          required: false
+          description: Ngày tạo đơn YYYY-MM-DD — wrap full-day UTC.
+          schema:
+            type: string
+            format: date
+            example: '2026-09-06'
+      responses:
+        '200':
+          description: >
+            File CSV (BOM + \r\n) — cột fulfillCode,orderCode,batchStatus,
+            shopCode,shopName,shopAddress,deliveryFrom,deliveryTo,note. LƯU Ý:
+            cột orderCode hiện luôn rỗng (proto GAP documented — item được map
+            từ RAW proto, không có orderCode).
+          content:
+            text/csv:
+              schema:
+                type: string
+                format: binary
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/audit:
+    get:
+      tags: [Orders]
+      operationId: listAuditEntries
+      summary: Audit trail mutation orders — MANAGER-ONLY
+      security:
+        - bearerAuth: []
+      description: >
+        Role gate cứng trong route: `caller.role !== 'Manager'` → 403
+        PERMISSION_DENIED ('Manager only.'). Đọc trực tiếp activity_log trên DB
+        fulfillment (pool BFF sở hữu) — thiếu env DB → 503 ('Audit store
+        unavailable.'). Filter LIKE case-insensitive cho actor/action/targetId
+        (wildcard user bị escape); dateFrom/dateTo bare `YYYY-MM-DD` = UTC day
+        bounds (from inclusive, to exclusive ngày kế). Sắp xếp created_at DESC.
+      parameters:
+        - name: actor
+          in: query
+          required: false
+          description: LIKE %actor% case-insensitive.
+          schema:
+            type: string
+        - name: action
+          in: query
+          required: false
+          description: LIKE %action% case-insensitive (vd `order.assign_shop`).
+          schema:
+            type: string
+        - name: targetType
+          in: query
+          required: false
+          description: Equals (vd `order`, `batch`).
+          schema:
+            type: string
+        - name: targetId
+          in: query
+          required: false
+          description: LIKE %targetId%.
+          schema:
+            type: string
+        - name: dateFrom
+          in: query
+          required: false
+          description: ISO-8601 hoặc bare YYYY-MM-DD (UTC 00:00 inclusive).
+          schema:
+            type: string
+            example: '2026-09-01'
+        - name: dateTo
+          in: query
+          required: false
+          description: ISO-8601 hoặc bare YYYY-MM-DD (UTC 00:00 ngày kế — exclusive).
+          schema:
+            type: string
+            example: '2026-09-06'
+        - $ref: '../components/parameters.yaml#/components/parameters/PageQuery'
+        - name: pageSize
+          in: query
+          required: false
+          description: Số items mỗi trang (cap 100, default 20 — audit lib).
+          schema:
+            type: integer
+            minimum: 1
+            maximum: 100
+            default: 20
+      responses:
+        '200':
+          description: Trang audit entries — Paginated[AuditEntry].
+          content:
+            application/json:
+              schema:
+                $ref: './fulfillment.yaml#/components/schemas/PaginatedAuditEntries'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/{fulfillCode}:
+    get:
+      tags: [Orders]
+      operationId: getOrderDetail
+      summary: Chi tiết 1 đơn (superset row D1 + note + history)
+      description: >
+        User bất kỳ đã đăng nhập (requireUser — không role gate). BFF owns
+        aggregation (spec §3.3): GetOrderDetail + GetAssignHistory song
+        song. Đơn không tồn tại (`order` rỗng) → 404. `orderCode` hiện luôn rỗng
+        (proto GAP documented — mapOrderDetail). FE waive tường minh nhưng
+        endpoint implement đầy đủ.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/FulfillCodePath'
+      responses:
+        '200':
+          description: OrderDetail.
+          content:
+            application/json:
+              schema:
+                $ref: './fulfillment.yaml#/components/schemas/OrderDetail'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/{code}/assign-shop-hub:
+    post:
+      tags: [Orders]
+      operationId: assignShopHub
+      summary: Chuyển kho 1 đơn sang kho khác
+      description: >
+        Đúng 1 đơn/lần (§9). User bất kỳ đã đăng nhập (requireUser). Body chỉ
+        `toShopCode`. Upstream reject FAILED_PRECONDITION khi isDebtSplittingOrder
+        hoặc batchStatus≠0 (§3.6 rule 2) → 409 CONFLICT; shop không tồn tại →
+        422 + details[]. Sau gRPC thành công: audit log `order.assign_shop`
+        (fire-and-forget) + emit local event `order.assigned`. Trả row D1 mới
+        hoặc null khi upstream không trả order.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [toShopCode]
+              properties:
+                toShopCode:
+                  type: string
+                  description: Kho đích.
+                  example: SHOP-002
+      responses:
+        '200':
+          description: Row D1 sau chuyển kho (null khi upstream không trả order).
+          content:
+            application/json:
+              schema:
+                $ref: './fulfillment.yaml#/components/schemas/HubStoreOrderFilterItem'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/{code}/history:
+    post:
+      tags: [Orders]
+      operationId: getOrderHistory
+      summary: Lịch sử chuyển kho của 1 đơn (READ semantics)
+      description: >
+        READ SEMANTICS (spec §3.8): tên POST theo production nhưng KHÔNG
+        mutate — BFF chỉ proxy GetAssignHistory. Trả mảng entry (có thể rỗng
+        với đơn chưa từng chuyển kho).
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      responses:
+        '200':
+          description: Mảng lịch sử (rỗng khi chưa có entry nào).
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: './fulfillment.yaml#/components/schemas/OrderHistoryEntry'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/{code}/note:
+    put:
+      tags: [Orders]
+      operationId: updateOrderNote
+      summary: Cập nhật ghi chú đơn
+      description: >
+        Role gate Coordinator/Manager/Admin (SF-28 — mutation chỉ Coordinator+)
+        → sai role 403. Backend đủ 18/18 nhưng KHÔNG có FE screen (waive có chủ
+        đích). Sau thành công: audit log `order.update_note`. Trả row D1 mới
+        hoặc null.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [note]
+              properties:
+                note:
+                  type: string
+                  example: 'Giao giờ hành chính'
+      responses:
+        '200':
+          description: Row D1 sau cập nhật (null khi upstream không trả order).
+          content:
+            application/json:
+              schema:
+                $ref: './fulfillment.yaml#/components/schemas/HubStoreOrderFilterItem'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/{code}/delivery-time:
+    put:
+      tags: [Orders]
+      operationId: updateOrderDeliveryTime
+      summary: Cập nhật thời gian dự kiến giao
+      description: >
+        Role gate Coordinator/Manager/Admin. Rule 3 §3.6: chỉ khi đơn CHƯA có
+        phiếu (batchStatus=0) — Java reject sai trạng thái. BFF validate TRƯỚC
+        proxy (mutation side): `deliveryTime.from` thiếu/không ISO → 422
+        VALIDATION_ERROR; `from` trong quá khứ (so với 00:00 hôm nay +07) →
+        422 PAST_DATE_NOT_ALLOWED — cả hai KHÔNG có details[]. FE gửi from/to
+        ISO offset +07:00 tường minh từ slot picker. Sau thành công: audit log
+        `order.update_delivery_time`.
+      parameters:
+        - $ref: '../components/parameters.yaml#/components/parameters/CodePath'
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [deliveryTime]
+              properties:
+                deliveryTime:
+                  $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+      responses:
+        '200':
+          description: Row D1 sau cập nhật (null khi upstream không trả order).
+          content:
+            application/json:
+              schema:
+                $ref: './fulfillment.yaml#/components/schemas/HubStoreOrderFilterItem'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '422':
+          description: >
+            BFF inline validate (2 code, KHÔNG details[]): VALIDATION_ERROR —
+            `deliveryTime.from` phải là ISO datetime (offset +07:00);
+            PAST_DATE_NOT_ALLOWED — không thể đặt thời gian giao trong quá khứ.
+            Upstream INVALID_ARGUMENT → 422 VALIDATION_ERROR + details[].
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              examples:
+                invalidFrom:
+                  value:
+                    statusCode: 422
+                    message: 'deliveryTime.from phải là ISO datetime (offset +07:00).'
+                    code: VALIDATION_ERROR
+                pastDate:
+                  value:
+                    statusCode: 422
+                    message: 'Không thể đặt thời gian giao trong quá khứ.'
+                    code: PAST_DATE_NOT_ALLOWED
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/complete-picking:
+    put:
+      tags: [Orders]
+      operationId: completePicking
+      summary: Hoàn tất soạn 1 phiếu
+      description: >
+        User bất kỳ đã đăng nhập (requireUser — không role gate). Body
+        `{batchCode}`. Upstream là batching-service (Go owns batch
+        transitions, spec §3.3) dù path nằm dưới /fulfillment (path production
+        giữ nguyên). Chuỗi mutation: batch entity ACTIVE(0)→COMPLETED(1), mọi
+        order trong phiếu đổi batchStatus order-level Đang soạn(1)→Đã soạn(2)
+        (D11). Sau thành công: audit log `batch.complete` + emit local event
+        `batch.transitioned`. Trả Batch DTO (mapBatch) hoặc null.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [batchCode]
+              properties:
+                batchCode:
+                  type: string
+                  example: BATCH-000045
+      responses:
+        '200':
+          description: Batch sau khi hoàn tất soạn (null khi upstream không trả batch).
+          content:
+            application/json:
+              schema:
+                $ref: './fulfillment.yaml#/components/schemas/Batch'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
+        '409':
+          $ref: '../components/envelopes.yaml#/components/responses/Conflict409'
+        '422':
+          $ref: '../components/envelopes.yaml#/components/responses/ValidationError422'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/dashboard-stats:
+    get:
+      tags: [Orders]
+      operationId: getDashboardStats
+      summary: Aggregation dashboard stats (SF-9)
+      description: >
+        User bất kỳ đã đăng nhập (requireUser — không role gate). BFF owns
+        aggregation (pattern GetOrderDetail): GetDashboardStats (fulfillment)
+        + FilterBatches hôm nay +07 (status/shipper per phiếu — batching
+        READ-ONLY, chỉ gọi) + ListDeliveryStaff (id→name).
+        completionRate/cancelRate = round trên decided; shipper không khớp
+        delivery_staff gộp bucket "Chưa gán".
+      responses:
+        '200':
+          description: DashboardStats.
+          content:
+            application/json:
+              schema:
+                $ref: './fulfillment.yaml#/components/schemas/DashboardStats'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /fulfillment/order-status-stats:
+    get:
+      tags: [Orders]
+      operationId: getOrderStatusStats
+      summary: StatStrip toàn cục — đếm đơn theo batch_status + COD chờ giao
+      description: >
+        Thống kê TOÀN BỘ data (không phải trang hiện tại) bằng 1 GROUP BY trực
+        tiếp DB fulfillment (pattern activity_log — BFF owns aggregation):
+        counts theo batch_status + tổng cod_amount các đơn batch_status=0 (chờ
+        giao). DB unavailable / query lỗi → 503 code STATS_UNAVAILABLE.
+      responses:
+        '200':
+          description: Counts per batch_status + tổng COD chờ giao (VND).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [counts, codPending]
+                properties:
+                  counts:
+                    type: array
+                    items:
+                      type: object
+                      required: [batchStatus, count]
+                      properties:
+                        batchStatus:
+                          type: integer
+                          enum: [0, 1, 2, 3]
+                          example: 0
+                        count:
+                          type: integer
+                          example: 12500
+                  codPending:
+                    type: integer
+                    description: Tổng cod_amount (VND) các đơn batch_status=0.
+                    example: 157500000
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '503':
+          description: DB thống kê unavailable / query lỗi — code STATS_UNAVAILABLE.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              example:
+                statusCode: 503
+                message: 'Order stats unavailable.'
+                code: STATS_UNAVAILABLE
+  /fulfillment/time-slots:
+    get:
+      tags: [Orders]
+      operationId: getTimeSlots
+      summary: Slot giờ giao 2h — BFF synthesized (SF-28)
+      description: >
+        Role gate Coordinator/Manager/Admin. BFF synthesize từ DELIVERY_SLOTS
+        cố định (08-10, 10-12, 14-16, 16-18 — TZ Asia/Ho_Chi_Minh), KHÔNG gọi
+        upstream. date < hôm nay VN → 422 PAST_DATE_NOT_ALLOWED; hôm nay → lọc
+        slot đã qua; hôm nay+8 trở đi → 422 DATE_OUT_OF_RANGE (chỉ 7 ngày tới);
+        date sai format → 422 VALIDATION_ERROR.
+      parameters:
+        - name: date
+          in: query
+          required: true
+          description: Ngày xem slot (YYYY-MM-DD, lịch VN).
+          schema:
+            type: string
+            format: date
+            example: '2026-09-07'
+      responses:
+        '200':
+          description: Slots còn chọn được cho date.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [date, slots]
+                properties:
+                  date:
+                    type: string
+                    format: date
+                    example: '2026-09-07'
+                  slots:
+                    type: array
+                    items:
+                      $ref: './fulfillment.yaml#/components/schemas/TimeSlot'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '403':
+          $ref: '../components/envelopes.yaml#/components/responses/Forbidden403'
+        '422':
+          description: >
+            BFF inline validate (3 code, KHÔNG details[]): VALIDATION_ERROR —
+            date phải có định dạng YYYY-MM-DD; PAST_DATE_NOT_ALLOWED — không
+            thể xem slot của ngày trong quá khứ; DATE_OUT_OF_RANGE — chỉ chọn
+            được slot trong vòng 7 ngày tới.
+          content:
+            application/json:
+              schema:
+                $ref: '../components/envelopes.yaml#/components/schemas/ErrorEnvelope'
+              examples:
+                badFormat:
+                  value:
+                    statusCode: 422
+                    message: 'date phải có định dạng YYYY-MM-DD.'
+                    code: VALIDATION_ERROR
+                pastDate:
+                  value:
+                    statusCode: 422
+                    message: 'Không thể xem slot của ngày trong quá khứ.'
+                    code: PAST_DATE_NOT_ALLOWED
+                outOfRange:
+                  value:
+                    statusCode: 422
+                    message: 'Chỉ chọn được slot trong vòng 7 ngày tới.'
+                    code: DATE_OUT_OF_RANGE
+  /order-promising/time-delivery:
+    get:
+      tags: [Orders]
+      operationId: getTimeDelivery
+      summary: Gợi ý thời gian giao (D4 hint cạnh DatePicker D1b)
+      description: >
+        Proxy GetTimeDelivery (shopCode filter). Trả mảng slot (thường 1) từ
+        suggestedTime upstream — mảng rỗng khi upstream không gợi ý.
+      parameters:
+        - name: shopCode
+          in: query
+          required: false
+          description: Kho gợi ý theo.
+          schema:
+            type: string
+            example: SHOP-001
+      responses:
+        '200':
+          description: Slot gợi ý — TimeDeliveryResponse (shared api-contracts).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [timeSlots]
+                properties:
+                  timeSlots:
+                    type: array
+                    items:
+                      $ref: './fulfillment.yaml#/components/schemas/TimeRange'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /master-data/regions:
+    get:
+      tags: [Master Data]
+      operationId: listRegions
+      summary: Danh sách tỉnh/phường (D6 hierarchical)
+      description: >
+        Proxy ListRegions. Mỗi region có type province|ward; ward mang
+        parentCode của tỉnh cha. Đầu vào cho multi-select regionCodes của
+        filter D1.
+      responses:
+        '200':
+          description: Items — RegionsResponse (shared api-contracts).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: './fulfillment.yaml#/components/schemas/RegionDto'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /master-data/delivery-staff:
+    get:
+      tags: [Master Data]
+      operationId: listDeliveryStaff
+      summary: Danh sách nhân viên giao hàng
+      description: >
+        Proxy ListDeliveryStaff — query `shopCode?` lọc theo kho (route đọc
+        request.query.shopCode). proto không có phone → DTO không mang phone.
+      parameters:
+        - name: shopCode
+          in: query
+          required: false
+          description: Lọc staff theo kho.
+          schema:
+            type: string
+            example: SHOP-001
+      responses:
+        '200':
+          description: Items — DeliveryStaffResponse (shared api-contracts).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: './fulfillment.yaml#/components/schemas/DeliveryStaffDto'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'
+  /master-data/shops:
+    get:
+      tags: [Master Data]
+      operationId: listShops
+      summary: Danh sách kho CN
+      description: >
+        Proxy ListDistinctShops. Query `q?` (SF-28) — in-memory filter code OR
+        name case-insensitive sau khi list. Shape trùng ShopAssignment §4.
+      parameters:
+        - name: q
+          in: query
+          required: false
+          description: Tìm theo shopCode hoặc shopName (contains, case-insensitive).
+          schema:
+            type: string
+            example: Q1
+      responses:
+        '200':
+          description: Items — ShopsResponse (shared api-contracts).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [items]
+                properties:
+                  items:
+                    type: array
+                    items:
+                      $ref: './fulfillment.yaml#/components/schemas/ShopDto'
+        '401':
+          $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
+        '503':
+          $ref: '../components/envelopes.yaml#/components/responses/UpstreamUnavailable503'

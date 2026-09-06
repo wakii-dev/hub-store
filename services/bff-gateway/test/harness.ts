@@ -425,6 +425,13 @@ export interface HarnessOptions {
   deadUpstream?: 'fulfillment' | 'batching' | 'deliverybatch' | 'print' | 'intake';
   /** SF-26 — override secret test (vd rỗng → nhánh fail-closed 503). */
   webhookHmacSecret?: string;
+  /**
+   * FI-326 SF-1 — mount route dev-only /auth/reset-password cho drift-guard
+   * (extract đủ route conditional). Default false — 31 test file cũ không đổi
+   * behavior (contract tests không test reset-password, auth.route.test riêng).
+   * CHỈ SF-1 được chạm harness option này — SF domain READ-ONLY.
+   */
+  devResetPassword?: boolean;
   /** Override handler mặc định lúc boot. */
   fulfillmentHandlers?: Record<string, UnaryHandler>;
   techHandlers?: Record<string, UnaryHandler>;
@@ -533,7 +540,9 @@ export async function startHarness(opts: HarnessOptions = {}): Promise<Harness> 
       intake: addrs.intake,
       deadlineMs: opts.deadlineMs ?? 2000,
     },
-    devResetPassword: false, // contract tests không test reset-password (auth.route.test riêng)
+    // contract tests không test reset-password (auth.route.test riêng) —
+    // drift-guard FI-326 bật qua HarnessOptions.devResetPassword.
+    devResetPassword: opts.devResetPassword ?? false,
     kafka: { enabled: false, bootstrapServers: 'localhost:9092' }, // SF-27 side-channel — off trong test
     // SF-26 — webhook HMAC; secret test để route chạm được nhánh verifyHmac.
     webhookHmacSecret: opts.webhookHmacSecret ?? 'test-webhook-secret',

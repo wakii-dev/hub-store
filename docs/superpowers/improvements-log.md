@@ -117,3 +117,48 @@
 - **Fix:** thêm Pass 0 ưu tiên plan file chứa Linear issue-id lowercase (vd "fi288") trong
   tên — issue-id unique toàn workspace, luôn thắng slug matching. Slug loop giữ làm fallback.
 - **Convention đề xuất:** đặt tên plan file kèm issue-id (vd `2026-09-04-fi288-...-plan.md`).
+
+## 2026-09-06 — FI-327 (SF-1 fi326): story-verify B2 collision tái phát + mtime fix (FIXED)
+
+- **What:** B2 plan matcher khớp nhầm `2026-09-02-fi245-sf13-order-intake-plan.md` cho
+  `sf-1` (substring "sf1" ⊂ "sf13", break alphabet-first) → B2 FAIL ảo `plan:32 open`
+  dù plan thật `2026-09-06-fi327-sf1-foundation-plan.md` có 0 checkbox mở. Fix Pass-0
+  issue-id của FI-288 (2026-09-05) KHÔNG còn trong script hiện tại — có vẻ bị mất/không
+  được apply lên bản ~/.claude/bin dùng chung. Cần coordinator rà lại.
+- **Where:** ~/.claude/bin/story-verify — verify_sf() B2.
+- **Fix (2026-09-06):** (1) token sf KHÔNG được theo sau bởi chữ số (`*"$p1"[!0-9]*`
+  + bare tail) — chặn sf13/sf10/sf11/sf-10…; (2) bỏ break-first, lấy match có mtime
+  MỚI NHẤT (plan của run hiện tại thắng plan story cũ trùng slug).
+- **Convention:** giữ nguyên đề xuất FI-288 — tên plan file nên kèm issue-id
+  (`fi327-...`) — plan SF-1 này đã theo convention đó.
+- **P2 code (từ code-reviewer round 3, OPEN):** `openapi-bundle.ts` dùng `key in`
+  (prototype chain) khi check duplicate paths/components — nil risk hôm nay;
+  `Object.hasOwn` chặt hơn nếu sửa sau.
+
+## 2026-09-06 — SF-2 FI-328 (orders-domain docs)
+- **P2 (docs, SF-1-owned — flag không tự sửa):** note trong `services/bff-gateway/openapi/components/envelopes.yaml` ghi ref nguồn dạng `../components/envelopes.yaml#/ErrorEnvelope` — shorthand pointer SAI so với cấu trúc file thật (`#/components/schemas/ErrorEnvelope`); bundler throw trailing-miss tường minh nên không nguy hiểm, nhưng note gây nhầm cho SF author tiếp theo. Suggested change: sửa note thành pointer đầy đủ `#/components/schemas/…` + `#/components/responses/…`.
+- **Env pattern (lặp từ SF-1):** `orca screenshot` CDP timeout dù tab switch + app activate — cả 2 SF phải fallback DOM+flow-clicks và nhờ user confirm visual. Đề xuất: orca thêm fallback headless screenshot hoặc khuyến nghị `orca computer` window-level screenshot cho embedded browser.
+- **Env pattern:** mint_sf11.py hardcode `KC_PORT=8082` (seam sf-11) nhưng compose keycloak chuẩn ở `:8081` — mỗi SF phải copy/sed ra /tmp. Đề xuất: script nhận env `KC_PORT` override (1 dòng).
+## 2026-09-06 — SF-5 (FI-331): domain schemas chưa có chỗ chuẩn trong layout multi-file (P6 flag)
+
+- **What:** bundler (openapi-bundle.ts) chỉ merge `doc.paths` của file domain —
+  domain schemas (DeliveryOrder, InstallationOrder, ServiceEmployee…) không có
+  chỗ chuẩn; SF-5 phải đặt ở top-level extension `x-schemas` + YAML anchors
+  (`&`/`*`) để tái sử dụng (InstallationOrder dùng ở 6 nơi). SF-2..8 chạy song
+  song có thể chọn pattern khác (vd inline per-op) → SF-9 convergence sẽ thấy
+  2+ style trong cùng UI bundle.
+- **Where:** services/bff-gateway/src/plugins/openapi-bundle.ts (thiết kế SF-1,
+  READ-ONLY với SF-5) + services/bff-gateway/openapi/paths/tech.yaml (pattern
+  SF-5 đã chọn).
+- **Suggested change:** coordinator/SF-9 quyết: (a) bundler hỗ trợ merge
+  `components.schemas` từ file domain (prefix/namespace tên chống collision với
+  duplicate-throw hiện có), hoặc (b) pin convention "x-schemas + YAML anchors"
+  vào context packs cho SF-6..8 + checklist SF-9. refDepth-cap 32 của bundler
+  đã an toàn nếu sau này chuyển sang self-ref.
+
+## 2026-09-06 — SF-9 (FI-335) trả lời flag của SF-5: pattern schemas cross-file
+
+- **What:** SF-5 hỏi quyết định convergence: (a) bundler merge `components.schemas` từ file domain (prefix/namespace + duplicate-throw), hay (b) pin convention `x-schemas` + YAML anchors vào context packs + checklist SF-9.
+- **Verdict SF-9: (b) — pin convention, KHÔNG đổi bundler.** Bằng chứng run: bundle 84 ops/12 tags resolve sạch qua anchors (spot-audit 8/8 file paths, 0 UNRESOLVED_REF, 0 collision), duplicate-path throw của bundler vẫn là guard hoạt động. Đổi bundler = đụng runtime spec-domain ngoài boundary SF-9; anchors đã đủ cho cả 7 SF tier-1.
+- **Where:** docs/superpowers/improvements-log.md (mục này) + context packs epic FI-326 kế thừa.
+- **Suggested change:** context pack SF domain sau (epic khác) ghi: "schemas dùng chung trong 1 file paths → YAML anchors; cross-file → x-schemas top-level extension; KHÔNG tự ý thêm components/*.yaml mới khi chưa sync SF-1".

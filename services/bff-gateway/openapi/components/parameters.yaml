@@ -1,0 +1,83 @@
+# Path/query parameters dùng chung — chuẩn hoá theo pattern thật trong
+# src/routes/*.ts (probe 2026-09-06): :code ×33, :userId ×5, :fulfillCode ×4,
+# :batchCode ×3, :shopCode ×2, :printerId ×2, :orderCode ×1; phân trang
+# DEFAULT_PAGE=1 / DEFAULT_PAGE_SIZE=20 (cod.ts — pattern chung list routes).
+# Domain specs $ref param này thay vì khai lại; param riêng (hiếm) viết inline.
+components:
+  parameters:
+    PageQuery:
+      name: page
+      in: query
+      required: false
+      description: Số trang (1-based).
+      schema:
+        type: integer
+        minimum: 1
+        default: 1
+    PageSizeQuery:
+      name: pageSize
+      in: query
+      required: false
+      description: Số items mỗi trang.
+      schema:
+        type: integer
+        minimum: 1
+        default: 20
+    CodePath:
+      name: code
+      in: path
+      required: true
+      description: >
+        Mã entity chung (order code, service-employee code, ticket code…
+        tùy route) — pattern phổ biến nhất của BFF (33 routes).
+      schema:
+        type: string
+        example: ORD-000123
+    FulfillCodePath:
+      name: fulfillCode
+      in: path
+      required: true
+      description: Mã đơn fulfillment (ORD-####).
+      schema:
+        type: string
+        example: ORD-000123
+    OrderCodePath:
+      name: orderCode
+      in: path
+      required: true
+      description: Mã đơn intake (ORD-####).
+      schema:
+        type: string
+        example: ORD-000123
+    BatchCodePath:
+      name: batchCode
+      in: path
+      required: true
+      description: Mã batch gom đơn.
+      schema:
+        type: string
+        example: BATCH-000045
+    ShopCodePath:
+      name: shopCode
+      in: path
+      required: true
+      description: Mã shop (SHIP-####/SHOP-####) — khóa registry máy in, COD per-shop.
+      schema:
+        type: string
+        example: SHOP-001
+    PrinterIdPath:
+      name: printerId
+      in: path
+      required: true
+      description: ID máy in trong registry của shop (duy nhất theo cặp shopCode+printerId).
+      schema:
+        type: string
+        example: printer-front-desk
+    UserIdPath:
+      name: userId
+      in: path
+      required: true
+      description: User ID Keycloak (sub) — users management.
+      schema:
+        type: string
+        example: 3f6c2a44-0a1b-4c5d-8e9f-10293a4b5c6d
