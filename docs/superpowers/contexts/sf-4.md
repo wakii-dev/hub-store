@@ -1,40 +1,73 @@
-# SF-4 Context Pack — batching-service (Go)
-> Đọc file này THAY VÌ tự tổng hợp. Spec thực thi: docs/superpowers/specs/ict-service-support-polyglot-spec.md (v3 §3). Bracket: docs/superpowers/brackets/fi233-polyglot-grpc-mf.md. Epic: FI-233.
-> Tier 2 (dep SF-2). Chạy SONG SONG với SF-3 (Java) — bạn là gRPC CLIENT của Java: unit test mock Java server; chain THẬT Go→Java được SF-11 verify backend-only.
+# SF-4 Context Pack — Intake + Webhook (intake.ts 8 + webhooks.ts 1 = 9 ops)
 
-## Spec slice (SF-4 chịu trách nhiệm)
-1. **Go gRPC bootstrap** (`services/batching-service/`, Go ≥1.21, :50052). Run script riêng — KHÔNG thêm vào turbo.
-2. **In-memory batches store + Batch entity (spec §3.4)**:
-   ```
-   Batch { batchCode, shopCode, shipperId, deliveryTime {from,to},
-           status: 0 ACTIVE | 1 COMPLETED | 2 CANCELLED,
-           items[]: BatchingItem (REQUIREMENTS §4), createdAt }
-   Transitions: ACTIVE→COMPLETED (complete-picking), ACTIVE→CANCELLED (hủy)
-   ```
-   Load từ `api/seed/canonical-seed.json` lúc boot — KHÔNG tự seed riêng. Validate: phiếu đủ 3 trạng thái, `items[].orderCode` trỏ đúng orders seed.
-3. **Proto server impl** (đúng `batching.proto` SF-2):
-   - `packing-suggest` (nhóm đơn theo khoảng cách) + `recalculate-distance`
-   - `create`: sinh `batchCode` + `stopOrder` theo thứ tự DnD; **validate rule 1 bằng `GetOrdersByCodes` → Java (server-side thật, KHÔNG tin payload FE): mọi đơn CÙNG kho + `batchStatus=0`; reject nếu vi phạm**; rồi `MutateOrderStatus` → Java (batchStatus→1)
-   - `filter` + `detail`
-   - `cancel`: chỉ batch ACTIVE (rule 4) → batch CANCELLED + gRPC revert đơn batchStatus→0
-   - `criteria`: trả states cho phép hủy = `[ACTIVE]`
-   - `complete-picking`: batch COMPLETED + đơn batchStatus→2 (qua Java)
-4. **Unit tests (go test)**: cover lifecycle (create/cancel/complete), rule 1+4 rejects — mock Java server (buf generate + test stub). KHÔNG cần Java thật để test.
-5. gRPC metadata: truyền `x-user-role` từ context BFF (services tin BFF — known-limitation).
+> Đọc file này THAY VÌ tự tổng hợp từ bracket + epic + comments.
+> Epic spec: `docs/superpowers/specs/2026-09-06-bff-api-docs-swagger-design.md` ·
+> Plan: `docs/superpowers/plans/2026-09-06-fi326-api-docs-swagger-plan.md` ·
+> Bracket: `docs/superpowers/brackets/fi326-api-docs-swagger.md`
+> Context chung (components, drift-guard, plugin): `docs/superpowers/contexts/sf-1.md`.
 
-## Touch map (SF-4 sở hữu)
+## Boot/verify môi trường (PIN — không tự quyết)
+
+- **File của bạn đã được SF-1 pre-wire**: `paths/intake.yaml` là stub
+  `paths: {}` đã được root `$ref` — FILL stub, KHÔNG chạm
+  root/components/plugin/harness.
+- **Drift test riêng**: tạo `test/openapi.drift.intake.test.ts` gọi helper
+  từ `test/openapi.drift.test.ts` (SF-1) — KHÔNG sửa file drift chung.
+  Pass = 9/9 (gồm webhook nested-scope).
+- **Bootstrap worktree**: copy `.env` từ main worktree; mặc định try-it-out
+  qua BFF stack `:8080` (token: `python3 e2e/scripts/mint_sf11.py manager
+  /tmp/auth.json`); isolated thì `PORT_BFF=18083`.
+- **Wave 1** (song song SF-2, SF-3, SF-5).
+
+## Spec slice (chỉ phần SF-4 chịu trách nhiệm)
+
+Author `services/bff-gateway/openapi/paths/intake.yaml` — 9 operations,
+2 tags: **Intake (8)** + **Webhooks (1)** (bảng pin spec §4):
+
+1. `POST /orders` — body `IntakeOrderDto` (`api-contracts/intake.ts`) —
+   tạo đơn lẻ; 422 details[] theo validation inline.
+2. Import flow: `GET /orders/import/template` — **text/csv +
+   `Content-Disposition: attachment`** (kiểm `templateCsv()` trong
+   `src/lib/parseOrdersFile.ts` xem có BOM — phản ánh ĐÚNG); response
+   `format: binary` — đây là CSV thứ 4 của hệ thống, đừng doc nhầm JSON;
+   `POST /orders/import/preview` — **multipart/form-data** (field file,
+   `request.file()` stream; xlsx/csv — đọc route lấy mediaTypes thật) →
+   preview result shape; `POST /orders/import/confirm` — body
+   `{orders: IntakeOrderDto[]}` bulk.
+3. `POST /orders/{code}/fail` + `POST /orders/{code}/redeliver` — state
+   mutations (ghi điều kiện state trong description nếu route check).
+4. `GET /orders/{code}/audit` + `GET /orders/by-batch/{batchCode}` — reads.
+5. `POST /webhooks/orders` — tag **Webhooks**: `security: webhookHmac`
+   (scheme từ SF-1 — apiKey header `X-Signature`); headers thật
+   `X-Signature` + `X-Source` (đọc `src/routes/webhooks.ts` +
+   `src/lib/hmac.ts` lấy đúng scheme: thuật toán, format signature,
+   raw-body requirement); public JWT-không (machine-to-machine); raw JSON
+   body mapping qua `lib/webhook-mapping.ts`; response shapes thật
+   (200/4xx); **description external-facing cho integrators**: retry
+   semantics, signature verification quy trình, ví dụ tính signature.
+6. Cross-check vs `api-contracts/intake.ts` + `mappers/intake.ts` +
+   `lib/webhook-mapping.ts` (READ-ONLY) + drift-guard scoped (9/9).
+
+## Touch map (files SF-4 tạo/sở hữu)
+
 ```
-services/batching-service/**
+services/bff-gateway/openapi/paths/intake.yaml   # TẠO — duy nhất file SF-4 sở hữu
 ```
-READ-ONLY: api/proto/**, api/seed/**, packages/shared/**, services/fulfillment-service/** (SF-3), services/print-service/** (SF-5), apps/**.
+READ-ONLY: root/components (SF-1), `src/routes/{intake,webhooks}.ts`,
+`src/lib/{hmac,webhook-mapping,parseOrdersFile}.ts`, `src/mappers/intake.ts`,
+packages/shared/**, test/**, mint script.
 
 ## ACCEPTANCE (user-visible)
-- Service chạy standalone :50052 theo README; smoke gRPC call thành công.
-- Canonical seed loaded: batches filter trả phiếu đủ 3 trạng thái (bằng chứng output).
-- go test pass: create sinh batchCode+stopOrder; cancel revert; validations 1+4 reject đúng; hydration call được mock-verify.
-- Build sạch `go vet` + `go build`.
+
+- `/documentation`: tag **Intake** đủ 8 ops + **Webhooks** đủ 1 op render.
+- Try-it-out token manager: `GET /orders/import/template` → tải CSV thật
+  (evidence browser); webhook example: curl với signature sinh ĐÚNG scheme
+  (`lib/hmac.ts`) gọi dev server → response khớp spec (không phải 401 HMAC).
+- Drift-guard scoped 9/9; BFF vitest toàn xanh.
 
 ## Boundary (KHÔNG làm)
-- KHÔNG sửa proto/seed/BFF; KHÔNG đụng Java/Python code (chỉ gRPC client tới Java).
-- KHÔNG verify chain Go→Java thật (SF-11 backend-only integration — bạn chỉ mock-test).
-- KHÔNG FE; KHÔNG DB thật; thiếu gRPC method → REQUIREMENT-GAP lên epic FI-233.
+
+- KHÔNG sửa root/components/plugin/harness/drift-test (SF-1).
+- KHÔNG đụng paths file SF khác; KHÔNG sửa route/lib code — spec-only
+  (bug thật → flag Linear).
+- KHÔNG README (SF-9).

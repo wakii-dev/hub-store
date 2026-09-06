@@ -1,39 +1,73 @@
-# SF-7 Context Pack — Orders remote: D1 + D1c
-> Đọc file này THAY VÌ tự tổng hợp. Spec thực thi: docs/superpowers/specs/ict-service-support-polyglot-spec.md (v3 §5 SF-7). Bracket: docs/superpowers/brackets/fi233-polyglot-grpc-mf.md. Epic: FI-233.
-> Tier 3 (deps SF-2, SF-3, SF-6). BFF + Java service + Shell đã merge — bạn test trên HỆ THỐNG THẬT.
+# SF-7 Context Pack — COD Settlement + Print + Printers (cod.ts 6 + print.ts 3 + printers.ts 3 = 12 ops)
 
-## Spec slice (SF-7 chịu trách nhiệm)
-1. **Remote scaffold hoàn chỉnh** (`apps/orders/`): exposes `orders/D1Page`, i18n namespace `orders.*`, điền entry orders vào `remotes.config.json` (pre-seed SF-1 — KHÔNG sửa shell code, KHÔNG đụng entry fulfillment).
-2. **RTK Query slices** consume BFF REST (axiosBaseQuery, tags Fulfillment/MasterData, inherit default `refetchOnMount:'always'`).
-3. **D1 Danh sách đơn hàng** (`/hub-store-order/order`, title "Danh sách đơn hàng kho chi nhánh"):
-   - **8 filters** (2 hàng × 4 cột): Số đơn (text) / Trạng thái soạn (multi, BatchStatus) / TG dự kiến giao (datetime range) / Địa chỉ (multi tỉnh→phường — **fetch `GET /master-data/regions`**) / Kho CN (multi — **fetch `GET /master-data/shops`**) / Trạng thái đơn (multi) / TG tạo đơn (date range) / TG KH mong muốn (datetime range) + Reset.
-   - **URL state**: filter ↔ URL query; reload giữ nguyên filter.
-   - **Bảng 8 cột**: fulfillCode (fixed-left 120, link copy) / batchStatus StatusTag (180) / shop name+address (320) / batchCode (150, **link → navigate `/hub-store-order/batch`** — cross-remote nav qua RRD singleton) / originalTime formatPeriodOfTime (220) / deliveryTime (230, **edit chỉ khi đơn batchStatus=0** — rule §9) / thao tác expand+chi tiết / (expand) items[] sản phẩm.
-   - **Selection + BulkActionBar**: tick hiện 2 nút — "Tạo phiếu soạn" (primary, disable nếu selection KHÁC kho; mở CreateBatchingModal — placeholder, SF-8 lắp) + "Chuyển kho CN khác" (secondary, disable nếu ≠1 row) + hint "Lọc đơn theo kho để tạo phiếu soạn".
-   - **Pagination**: "Tổng N mã" + page size + "Đi đến trang thứ".
-4. **D1c HubStoreTransferModal**: select kho đích + confirm; disable nếu `isDebtSplittingOrder=true`; gọi assign-shop-hub; hiển thị history (POST semantics = READ).
-5. i18n keys `orders.*` (VI gốc + EN).
-6. Unit tests (mock api-client): filter logic, bulk enable/disable, COD format, useUrlState.
+> Đọc file này THAY VỊ tự tổng hợp từ bracket + epic + comments.
+> Epic spec: `docs/superpowers/specs/2026-09-06-bff-api-docs-swagger-design.md` ·
+> Plan: `docs/superpowers/plans/2026-09-06-fi326-api-docs-swagger-plan.md` ·
+> Bracket: `docs/superpowers/brackets/fi326-api-docs-swagger.md`
+> Context chung (components, drift-guard, plugin): `docs/superpowers/contexts/sf-1.md`.
 
-## Touch map (SF-7 sở hữu)
+## Boot/verify môi trường (PIN — không tự quyết)
+
+- **File của bạn đã được SF-1 pre-wire**: `paths/cod-print.yaml` là stub
+  `paths: {}` đã được root `$ref` — FILL stub, KHÔNG chạm
+  root/components/plugin/harness.
+- **Drift test riêng**: tạo `test/openapi.drift.cod-print.test.ts` gọi helper
+  từ `test/openapi.drift.test.ts` (SF-1) — KHÔNG sửa file drift chung.
+  Pass = 12/12.
+- **Bootstrap worktree**: copy `.env` từ main worktree; mặc định try-it-out
+  qua BFF stack `:8080` (token: `python3 e2e/scripts/mint_sf11.py manager
+  /tmp/auth.json`); isolated thì `PORT_BFF=18086`.
+- **Wave 2** (song song SF-6, SF-8) — fork từ nhánh đích đã chứa wave-1
+  merges; nhánh đích tiến trước khi start → re-fork/base mới nhất.
+- **PDF evidence bar**: `POST /fulfillment/print` cần print-job context
+  thật (batch/order + printer registered) — thiếu thì seed trước
+  (`scripts/seed-db.sh` / seed JSON); vẫn thiếu → hạ bar: content-type
+  `application/pdf` + magic bytes `%PDF` ở đầu body là đủ PASS.
+
+## Spec slice (chỉ phần SF-7 chịu trách nhiệm)
+
+Author `services/bff-gateway/openapi/paths/cod-print.yaml` — 12 operations,
+2 tags: **COD Settlement (6)** + **Print (6)** (bảng pin spec §4):
+
+1. `POST /cod/confirm` — body `{fulfillCode?, collectedAmount?}` (thu COD
+   per-order; VN date format — đọc validation inline); `POST
+   /cod/confirm-batch` — body `{batchCode?}` thu theo phiếu.
+2. `GET /cod/pending?batchCode?` + `GET /cod/settlement?from&to` —
+   settlement đối soát (bounds [fromIncl, toExcl) theo ngày VN — note
+   description).
+3. `GET /cod/settlement.csv?from&to` — **CSV BOM** (`format: binary`) +
+   `GET /cod/settlement/detail?shopCode&from&to&page&pageSize` — per-shop
+   detail (Paginated).
+4. Print (tag Print): `GET /fulfillment/print/printers` + `POST
+   /fulfillment/print` — **PDF binary response** (`application/pdf`,
+   `format: binary` — request shape từ route: printer id, batch/order
+   codes…); note: response KHÔNG JSON envelope (binary trực tiếp).
+5. `GET /fulfillment/print-errors/counts` — print error aggregation.
+6. Printers CRUD (tag Print): `GET /fulfillment/printers` + `POST
+   /fulfillment/printers` (PrinterBody) + `PUT
+   /fulfillment/printers/{shopCode}/{printerId}` — registry DB-backed
+   (Admin role — đọc guard trong route).
+7. Cross-check vs `api-contracts/settlement.ts` + `api-contracts/print.ts`
+   + `mappers/print.ts` (READ-ONLY) + drift-guard scoped (12/12).
+
+## Touch map (files SF-7 tạo/sở hữu)
+
 ```
-apps/orders/**               (ngoài skeleton SF-1)
-remotes.config.json          (CHỈ entry orders)
-apps/orders/i18n/** (namespace orders.*)
+services/bff-gateway/openapi/paths/cod-print.yaml   # TẠO — duy nhất file SF-7 sở hữu
 ```
-READ-ONLY: apps/shell/**, apps/fulfillment/**, packages/**, services/**, api/**.
+READ-ONLY: root/components (SF-1), `src/routes/{cod,print,printers}.ts`,
+`src/mappers/print.ts`, packages/shared/**, test/**, mint script.
 
-## ACCEPTANCE (user-visible — §8b D1, walkthrough browser Rule 0)
-- Mở `/hub-store-order/order` → bảng + 8 filters; data thật từ Java qua BFF.
-- Filter "Trạng thái soạn hàng"=Chưa soạn → chỉ đơn Chưa soạn; filter Kho=30201 → chỉ đơn 30201.
-- Tick 3 đơn CÙNG kho → "Tạo phiếu soạn" enable; KHÁC kho → disable.
-- Tick 1 đơn + "Chuyển kho" → modal select kho đích.
-- Pagination "Tổng N mã" đúng + page size + goto page.
-- Expand row → items[]; URL state giữ filter sau reload.
-- Gate note: batchCode link chỉ assert navigation attempt (URL change) — D2 render là SF-9.
+## ACCEPTANCE (user-visible)
+
+- `/documentation`: tag **COD Settlement** đủ 6 ops + **Print** đủ 6 ops render.
+- Try-it-out token manager: `GET /cod/pending` → 200 shape khớp; `GET
+  /fulfillment/print/printers` → 200; `POST /fulfillment/print` qua UI →
+  PDF tải về MỞ ĐƯỢC không corrupt (evidence browser — binary thực sự).
+- Drift-guard scoped 12/12; BFF vitest toàn xanh.
 
 ## Boundary (KHÔNG làm)
-- KHÔNG D1b CreateBatchingModal thật (SF-8 — bạn để placeholder modal entry).
-- KHÔNG sửa shell/AppLayout (SF-6); KHÔNG sửa entry fulfillment trong remotes.config.
-- KHÔNG test cross-remote (SF-11); KHÔNG sửa proto/BFF/Java.
-- Detail endpoint `GET /fulfillment/{fulfillCode}`: expand row dùng items[] từ filter — waive FE consumer (pin §3.8).
+
+- KHÔNG sửa root/components/plugin/harness/drift-test (SF-1).
+- KHÔNG đụng paths file SF khác; KHÔNG sửa route/mapper code — spec-only.
+- KHÔNG README (SF-9).

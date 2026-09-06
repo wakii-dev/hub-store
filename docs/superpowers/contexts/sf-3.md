@@ -1,38 +1,67 @@
-# SF-3 Context Pack — fulfillment-service (Java)
-> Đọc file này THAY VÌ tự tổng hợp. Spec thực thi: docs/superpowers/specs/ict-service-support-polyglot-spec.md (v3 §3). Bracket: docs/superpowers/brackets/fi233-polyglot-grpc-mf.md. Epic: FI-233.
-> Tier 2 (dep SF-2). Chạy SONG SONG với SF-4 (Go) — hợp tác chỉ qua gRPC contract SF-2 định nghĩa, không đụng code nhau.
+# SF-3 Context Pack — Batching (batches + presets — 9 ops)
 
-## Spec slice (SF-3 chịu trách nhiệm)
-1. **Spring Boot 3 + gRPC bootstrap** (`services/fulfillment-service/`, Java 17, :50051, grpc-spring-boot-starter hoặc tương đương). Run script riêng (`README` + script) — KHÔNG thêm vào turbo.
-2. **In-memory orders store**: load từ `api/seed/canonical-seed.json` (SF-2 authored) lúc boot — KHÔNG tự seed riêng. Validate seed: 30201 ≥5 đơn Chưa soạn, đủ 4 batchStatus, có `isDebtSplittingOrder`.
-3. **Proto server impl** (đúng `fulfillment.proto` SF-2):
-   - `filter` (+`excludeFulfillCodes`) + pagination
-   - order detail (`GET /fulfillment/{fulfillCode}` backing)
-   - **MutateOrderStatus** (Go gọi khi create/cancel/complete batch)
-   - **GetOrdersByCodes** (hydration — Go gọi để validate rule 1: cùng kho + batchStatus=0)
-   - assign-shop-hub + history (history là POST-ngữ-nhưng-READ — KHÔNG mutate)
-   - delivery-time update + order-promising time-delivery
-   - regions + delivery-staff + distinct-shops (backing 3 GET /master-data/*)
-   - note (backend-only, không FE consumer — vẫn implement đủ)
-4. **Server-side validations (Java reject)**:
-   - Rule 2 chuyển kho: đúng 1 đơn + `isDebtSplittingOrder=false` + `batchStatus=0` (đơn trong phiếu ACTIVE không được chuyển).
-   - Rule 3 edit TG giao: chỉ khi đơn `batchStatus=0`.
-   - Reject = gRPC `InvalidArgument` + details qua metadata (map thành 422 `details[]` ở BFF).
-5. **Unit tests (JUnit)** độc lập FE — cover: filter+exclude, mutate status, hydration, validations reject, history read-semantics.
+> Đọc file này THAY VÌ tự tổng hợp từ bracket + epic + comments.
+> Epic spec: `docs/superpowers/specs/2026-09-06-bff-api-docs-swagger-design.md` ·
+> Plan: `docs/superpowers/plans/2026-09-06-fi326-api-docs-swagger-plan.md` ·
+> Bracket: `docs/superpowers/brackets/fi326-api-docs-swagger.md`
+> Context chung (components, drift-guard, plugin): `docs/superpowers/contexts/sf-1.md`.
 
-## Touch map (SF-3 sở hữu)
+## Boot/verify môi trường (PIN — không tự quyết)
+
+- **File của bạn đã được SF-1 pre-wire**: `paths/batches.yaml` là stub
+  `paths: {}` đã được root `$ref` — FILL stub, KHÔNG chạm
+  root/components/plugin/harness.
+- **Drift test riêng**: tạo `test/openapi.drift.batches.test.ts` gọi helper
+  từ `test/openapi.drift.test.ts` (SF-1) — KHÔNG sửa file drift chung.
+  Pass = 9/9.
+- **Bootstrap worktree**: copy `.env` từ main worktree; mặc định try-it-out
+  qua BFF stack chạy sẵn `:8080` (token: `python3 e2e/scripts/mint_sf11.py
+  manager /tmp/auth.json`); isolated thì `PORT_BFF=18082`.
+- **Wave 1** (song song SF-2, SF-4, SF-5).
+
+## Spec slice (chỉ phần SF-3 chịu trách nhiệm)
+
+Author `services/bff-gateway/openapi/paths/batches.yaml` — 9 operations,
+tag **Batches (9)** (bảng pin spec §4):
+
+1. `POST /fulfillment/batches/packing-suggest` — PackingSuggestRequest →
+   PackingSuggestResponse (PackingGroup[]) — DTO có sẵn trong
+   `packages/shared/src/api-contracts/batching.ts`.
+2. `POST /fulfillment/batches/create` — CreateBatchRequest → BatchDto
+   (note: Go batching gọi Java `MutateOrderStatus` 0→1 — cross-service
+   mutation, ghi 1 dòng description).
+3. `POST /fulfillment/batches/filter` — FilterBatchesRequest →
+   FilterBatchesResponse (Paginated).
+4. `GET /fulfillment/batches/criteria` — BatchCriteriaResponse (criteria
+   cho màn tạo phiếu).
+5. `GET /fulfillment/batches/{code}` — BatchDto detail.
+6. `PUT /fulfillment/batches/{code}/cancel` — CancelBatchRequest; batchStatus
+   revert → 0 (note description); 409/422 nếu route có state check.
+7. `POST /fulfillment/batches/recalculate-distance` —
+   RecalculateDistanceRequest → RecalculateDistanceResponse (OrderDistance[]).
+8. Presets (cùng file, cùng tag Batches): `GET /batching/criteria-presets`
+   + `POST /batching/criteria-preset-select` — static BFF-side (không gọi
+   batching service) — đọc `src/routes/batching-presets.ts` lấy shapes thật.
+9. Cross-check field camelCase vs `api-contracts/batching.ts` +
+   `mappers/batching.ts` (READ-ONLY) + drift-guard scoped (9/9).
+
+## Touch map (files SF-3 tạo/sở hữu)
+
 ```
-services/fulfillment-service/**
+services/bff-gateway/openapi/paths/batches.yaml   # TẠO — duy nhất file SF-3 sở hữu
 ```
-READ-ONLY: api/proto/** (KHÔNG sửa proto — đổi = REQUIREMENT-GAP lên epic), api/seed/**, packages/shared/**, mọi service/app khác.
+READ-ONLY: root spec + components (SF-1), mọi src/**, packages/shared/**,
+test/** (dùng drift helper), mint script.
 
 ## ACCEPTANCE (user-visible)
-- Service chạy standalone :50051 theo README (run script); smoke gRPC call thành công (grpcurl hoặc test client).
-- Canonical seed loaded: filter trả ≥25 đơn; 30201 ≥5 Chưa soạn (bằng chứng output).
-- JUnit suite pass: mutate + hydration + validation rejects + read-semantics history.
-- `pnpm dev` root KHÔNG ảnh hưởng (service tách khỏi turbo).
+
+- `/documentation`: tag **Batches** đủ 9 ops render.
+- Try-it-out token manager: `GET /fulfillment/batches/criteria` → 200 shape
+  khớp schema (evidence browser).
+- Drift-guard scoped 9/9 pass; BFF vitest toàn xanh.
 
 ## Boundary (KHÔNG làm)
-- KHÔNG sửa proto/seed/BFF (SF-2); KHÔNG đụng Go/Python services (SF-4/5); KHÔNG FE.
-- KHÔNG tự thêm gRPC method — thiếu gì → REQUIREMENT-GAP lên epic FI-233.
-- KHÔNG DB thật — in-memory là deliverable (interface sẵn cho DB sau, không thiết kế vượt).
+
+- KHÔNG sửa root/components/plugin/harness/drift-test (SF-1) — thiếu gì flag.
+- KHÔNG đụng paths file SF khác; KHÔNG sửa route/mapper code — spec-only.
+- KHÔNG README (SF-9).

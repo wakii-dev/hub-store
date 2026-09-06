@@ -1,37 +1,69 @@
-# SF-9 Context Pack — Fulfillment remote: D2 Danh sách phiếu soạn
-> Đọc file này THAY VÌ tự tổng hợp. Spec thực thi: docs/superpowers/specs/ict-service-support-polyglot-spec.md (v3 §5 SF-9). Bracket: docs/superpowers/brackets/fi233-polyglot-grpc-mf.md. Epic: FI-233.
-> Tier 3 (deps SF-2, SF-3, SF-4, SF-6). Bạn SỞ HỮU scaffold remote fulfillment — SF-10 thêm PrintPage vào remote này SAU bạn.
+# SF-9 Context Pack — Convergence (verify toàn cục + regression + README + story close)
 
-## Spec slice (SF-9 chịu trách nhiệm)
-1. **Remote scaffold hoàn chỉnh** (`apps/fulfillment/`): exposes `fulfillment/BatchListPage`, i18n namespace `fulfillment.*`, điền entry fulfillment vào `remotes.config.json` (pre-seed SF-1 — KHÔNG sửa shell code, KHÔNG đụng entry orders).
-2. **RTK Query slices batches** (consume BFF REST: batches filter/detail/cancel/criteria/complete-picking; tags Batches; inherit `refetchOnMount:'always'`).
-3. **D2 Danh sách yêu cầu soạn hàng** (`/hub-store-order/batch`, title "Danh sách yêu cầu soạn hàng"):
-   - **3 filters**: Số phiếu/Số đơn (text search) / Trạng thái phiếu (StatusSelect — 3 trạng thái Batch) / Thời gian tạo phiếu (DatePicker) + URL state (reload giữ filter).
-   - **Bảng 8 cột**: Thứ tự giao (stopOrder) / Mã đơn RSA (orderCode) / Địa chỉ KH / Khoảng cách (km) / TG hẹn giao (fromDeliveryTime–toDeliveryTime) / Trạng thái đơn StatusTag / SL sản phẩm (totalQuantity) / **Tiền COD — VND format `15.000.000đ`** (D2).
-   - **Expand detail** → items[] sản phẩm.
-   - **Hủy phiếu**: confirm + reason input; criteria-gated (`GET /fulfillment/batches/criteria` — chỉ ACTIVE được hủy); gọi cancel → đơn revert Chưa soạn (mutation Go thật); backend reject (phiếu COMPLETED) → AntD message từ error envelope.
-   - **"Hoàn tất soạn"** (D11): batch-level action → `PUT /fulfillment/complete-picking` (body `{batchCode}`) → batch COMPLETED + đơn Đã soạn.
-   - **Nút In** → navigate `/hub-store-order/batch/print?batchCode=<code>` (param pin — PrintPage SF-10 đọc; KHÔNG render print page).
-4. i18n keys `fulfillment.*` (VI + EN). Unit tests (mock api-client): filters, COD format, cancel flow, criteria gating.
+> Đọc file này THAY VỊ tự tổng hợp từ bracket + epic + comments.
+> Epic spec: `docs/superpowers/specs/2026-09-06-bff-api-docs-swagger-design.md` ·
+> Plan: `docs/superpowers/plans/2026-09-06-fi326-api-docs-swagger-plan.md` ·
+> Bracket: `docs/superpowers/brackets/fi326-api-docs-swagger.md`
+> Chạy SAU KHI tất cả SF-2..8 merged về nhánh đích `story/fi326-api-docs-swagger`.
 
-## Touch map (SF-9 sở hữu)
+## Spec slice (chỉ phần SF-9 chịu trách nhiệm)
+
+1. **Bring-up nhánh đích**: verify mọi sf-branch đã merged (`git rev-list
+   --count story/fi326-api-docs-swagger..sf-<n>` = 0 từng branch), nhánh
+   đích sạch. Ngữ cảnh: tier-1 chạy 2 wave (SF-2..5 trước, SF-6..8 sau),
+   mỗi SF run tự merge về nhánh đích với ancestor-guard khi Done — bạn chỉ
+   bắt đầu sau khi CẢ 7 merged; KHÔNG tự merge giúp SF nào.
+2. **Full drift-guard 84/84** chạy trên nhánh đích — bật `DRIFT_FULL=1`
+   (assertion NGƯỢC: mọi route harness phải thuộc SOME spec file — semantics
+   SF-1 pin) + chạy lại **negative control** (route giả → đỏ → revert) +
+   **spot-audit examples**: đối chiếu examples/response schema của ≥1 op
+   đại diện mỗi file paths với contract tests thật
+   (`services/bff-gateway/test/*.contract.test.ts`) — bắt shape lệch.
+3. **Spec load pass**: parser load toàn bộ multi-file `$ref` — 0 broken
+   link (UI build không lỗi console).
+4. **UI walkthrough TOÀN BỘ 12 tags** trên nhánh đích (browser, Rule 0
+   DOM/VISUAL/FLOW — evidence từng tag): 84 ops render đúng bảng §4 spec.
+5. **Try-it-out matrix**: ≥1 endpoint mỗi tag (12 tags) chạy OK với dev
+   token (`python3 e2e/scripts/mint_sf11.py manager /tmp/auth.json`) —
+   matrix kết quả ghi Linear.
+6. **Secrets audit BINARY** (spec §5 AC6): `grep -rE
+   "gY0pM9SO7QEmqil_lWHQ|GSzIMCBcUNtcbKwnTn_o"
+   services/bff-gateway/openapi/` = 0 hit + không password example thật.
+7. **Regression**: `pnpm test` toàn workspace + e2e Playwright (`E2E=1 bash
+   scripts/boot-all.sh` rồi `cd e2e && pnpm exec playwright test`) — toàn
+   xanh, KHÔNG test nào phải sửa.
+8. **README**: section "API docs" — cách bật `BFF_ENABLE_API_DOCS=1`, mở
+   `/documentation`, lấy dev token (mint script), đọc spec YAML, quy tắc
+   "sửa route phải sửa spec cùng PR (drift-guard bắt)" vào conventions.
+9. **Story close**: merge state sạch, Linear audit comment epic (SF→issue→
+   merge-hash map + nhánh đích), PR nhánh đích → main (gh pr create) —
+   NGƯỜI merge, agent chỉ mở PR.
+
+## Touch map (files SF-9 tạo/sở hữu)
+
 ```
-apps/fulfillment/**            (scaffold + D2 — SF-10 sẽ THÊM module PrintPage, KHÔNG đụng file của bạn)
-remotes.config.json            (CHỈ entry fulfillment)
-apps/fulfillment/i18n/**
+README.md                       # EDIT: section "API docs" + conventions note
 ```
-READ-ONLY: apps/shell/**, apps/orders/**, packages/**, services/**, api/**.
+Kiểm-toán READ-ONLY: toàn bộ `services/bff-gateway/openapi/**` (chỉ đọc,
+chạy drift + load + UI — KHÔNG sửa nội dung domain; phát hiện sai → flag
+SF owner qua Linear, chỉ fix P0 chặn acceptance với note rõ).
+Regression chạy trên nhánh đích (worktree riêng nếu cần).
 
-## ACCEPTANCE (user-visible — §8b D2, walkthrough browser Rule 0)
-- Mở `/hub-store-order/batch` → bảng với data thật từ Go qua BFF.
-- Search mã phiếu → đúng phiếu; filter trạng thái phiếu → lọc đúng.
-- Click "Hủy phiếu" (phiếu ACTIVE) → confirm + reason → phiếu CANCELLED; assert API: đơn revert Chưa soạn.
-- Hủy phiếu COMPLETED → backend reject + message (hoặc nút disable theo criteria).
-- COD format "15.000.000đ".
-- "Hoàn tất soạn" → phiếu COMPLETED + đơn Đã soạn (assert API).
-- Nút In → URL đổi sang `/hub-store-order/batch/print?batchCode=...` (KHÔNG cần page render — SF-10).
+## ACCEPTANCE (user-visible)
+
+Đúng 7 acceptance criteria epic (spec §5) — từng mục binary:
+1. UI mở được, 84 ops / 12 tags đúng bảng.
+2. Try-it-out: regions + POST /fulfillment/filter (token) + /healthz
+   (không token) OK.
+3. Drift-guard bắt được lệch (test đỏ khi thêm route giả — demo 1 lần).
+4. Spec load pass — UI không broken.
+5. `pnpm test` + e2e toàn xanh.
+6. Secrets grep = 0 hit.
+7. README có section API docs.
 
 ## Boundary (KHÔNG làm)
-- KHÔNG PrintPage/5 tabs/PDF (SF-10 — chỉ nút navigate).
-- KHÔNG sửa shell (SF-6); KHÔNG đụng orders remote (SF-7/8).
-- KHÔNG test cross-remote invalidation (SF-11); KHÔNG sửa proto/BFF/Go.
+
+- KHÔNG merge vào main — chỉ mở PR; merge là quyền người.
+- KHÔNG sửa nội dung spec domain (chỉ flag/fix P0 với note).
+- KHÔNG đụng route/mapper/runtime code.
+- KHÔNG xóa worktree SF khác (cleanup là bước CLOSE của coordinator).

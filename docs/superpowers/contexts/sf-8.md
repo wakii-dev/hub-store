@@ -1,39 +1,88 @@
-# SF-8 Context Pack — Orders remote: D1b CreateBatchingModal
-> Đọc file này THAY VÌ tự tổng hợp. Spec thực thi: docs/superpowers/specs/ict-service-support-polyglot-spec.md (v3 §5 SF-8). Bracket: docs/superpowers/brackets/fi233-polyglot-grpc-mf.md. Epic: FI-233.
-> Tier 4 (deps SF-7, SF-4). SF-7 (cùng remote orders) và SF-4 (Go) đã merge.
+# SF-8 Context Pack — Platform/Admin (users 5 + avatar 2 + notifications 2 + transfer 2 + events 1 + auth 1 = 13 ops)
 
-## Spec slice (SF-8 chịu trách nhiệm)
-1. **CreateBatchingModal 1310×918** — lắp vào placeholder SF-7 để lại, trigger "Tạo phiếu soạn" trên D1:
-   - **Danh sách đơn đã chọn**: bảng sortable — cột Thứ tự giao | Mã đơn RSA | Địa chỉ KH | Khoảng cách (km) | TG hẹn giao | Trạng thái | SL SP | COD. **Rows nhận qua PROPS từ D1 selection** (interface pin — KHÔNG re-fetch).
-   - **DnD sortable → stopOrder** (lib theo SPIKE 3 verdict SF-1): kéo thả đổi THỨ TỰ GIAO.
-   - **Packing suggest**: gọi handler → gợi ý nhóm đơn theo khoảng cách (UI nhóm/màu).
-   - **Recalculate distance**: nút tính lại km.
-   - **Thêm đơn**: search đơn CÙNG kho (`POST /fulfillment/filter` + `shopCode` + `excludeFulfillCodes`) — chỉ trả đơn batchStatus=0; thêm vào cuối danh sách.
-   - **DeliveryStaffSelect**: dropdown từ `GET /master-data/delivery-staff`.
-   - **TG giao**: DatePicker + hint từ `GET /order-promising/time-delivery` (D4).
-2. **Tạo phiếu**: `POST /fulfillment/batches/create` — mutation thật qua Go (validate rule 1 server-side).
-   - **Error UX**: backend reject (khác kho / đơn ≠0) → AntD message với message từ error envelope `details[]` — KHÔNG crash, modal giữ state.
-   - **Success flow**: modal đóng + same-remote tag invalidation (Fulfillment/Batches); cross-remote thấy phiếu nhờ default `refetchOnMount:'always'` (SF-1) — KHÔNG code thêm cho cross-remote.
-3. i18n keys `orders.*` (VI + EN). Unit tests (mock api-client): DnD đổi stopOrder, thêm đơn filter payload, error mapping.
-4. **Tier-gate**: gate test mutation QUA HỆ THỐNG THẬT (phiếu sinh + đơn đổi batchStatus=1, assert qua API) — **KHÔNG test "phiếu hiện ở D2"** (cross-remote → SF-11).
+> Đọc file này THAY VỊ tự tổng hợp từ bracket + epic + comments.
+> Epic spec: `docs/superpowers/specs/2026-09-06-bff-api-docs-swagger-design.md` ·
+> Plan: `docs/superpowers/plans/2026-09-06-fi326-api-docs-swagger-plan.md` ·
+> Bracket: `docs/superpowers/brackets/fi326-api-docs-swagger.md`
+> Context chung (components, drift-guard, plugin): `docs/superpowers/contexts/sf-1.md`.
 
-## Touch map (SF-8 sở hữu)
+## Boot/verify môi trường (PIN — không tự quyết)
+
+- **File của bạn đã được SF-1 pre-wire**: `paths/platform.yaml` là stub
+  `paths: {}` đã được root `$ref` — FILL stub, KHÔNG chạm
+  root/components/plugin/harness.
+- **Drift test riêng**: tạo `test/openapi.drift.platform.test.ts` gọi helper
+  từ `test/openapi.drift.test.ts` (SF-1) — KHÔNG sửa file drift chung.
+  Pass = 13/13 (gồm route conditional /auth/reset-password — nhờ harness
+  option devResetPassword của SF-1).
+- **Bootstrap worktree**: copy `.env` từ main worktree; mặc định try-it-out
+  qua BFF stack `:8080` (token: `python3 e2e/scripts/mint_sf11.py manager
+  /tmp/auth.json`); isolated thì `PORT_BFF=18087`.
+- **Wave 2** (song song SF-6, SF-7) — fork từ nhánh đích đã chứa wave-1
+  merges; nhánh đích tiến trước khi start → re-fork/base mới nhất.
+
+## Spec slice (chỉ phần SF-8 chịu trách nhiệm)
+
+Author `services/bff-gateway/openapi/paths/platform.yaml` — 13 operations,
+2 tags: **Administration (8)** + **Realtime & Transfers (5)** (bảng pin
+spec §4):
+
+1. Administration — Users (role gate `canManageUsers`: Manager ∨ Admin —
+   ghi rõ): `GET /users` (Paginated UserListItem {id, username, enabled,
+   roles[]}); `POST /users` — validation thật: username pattern
+   `^[a-zA-Z0-9._-]{3,64}$`, password min 8, role ∈ KNOWN_ROLES (422
+   details[] từng field); `POST /users/{userId}/set-password`; `PUT
+   /users/{userId}/enabled` (self-lock note — không tự disable); `DELETE
+   /users/{userId}`.
+2. Administration — Avatar: `POST /avatar` — **multipart/form-data** ≤5MB
+   (image types từ route); `GET /avatar/{userId}` — **image binary**
+   (`image/jpeg|png` — content-type thật từ route).
+3. Administration — Auth (dev-only): `POST /auth/reset-password` —
+   `x-dev-only: true` + description rõ: chỉ mount khi
+   `ENABLE_DEV_RESET_PASSWORD=1`, public (không JWT — chính nó cấp lại
+   password), KHÔNG có ở prod.
+4. Realtime & Transfers — Notifications: `GET /notifications` + `GET
+   /api/notifications` — **2 paths ALIAS cùng handler** (nginx strip `/api`
+   khi compose; dev gọi thẳng) — document CẢ HAI paths, drift-guard đếm 2;
+   response `{items, total}` (KHÔNG echo page/pageSize — khác Paginated
+   chuẩn, schema riêng); 503 `{statusCode:503, code:
+   'NOTIFICATIONS_UNAVAILABLE', message}` (fail-open `{items:[],total:0}`
+   khi pool disabled — note).
+5. Realtime & Transfers — SSE: `GET /events` — `security: accessTokenQuery`
+   (scheme từ SF-1: apiKey query `access_token` — EventSource không gửi
+   Authorization header); response `text/event-stream` (`text/event-stream`
+   media type, không JSON envelope — reply.hijack); event payload schemas từ
+   `src/lib/realtime-events.ts`; connection cap per-user (note).
+6. Realtime & Transfers — Transfer tickets: `POST
+   /fulfillment/{code}/transfer-tickets` + `GET
+   /fulfillment/transfer-tickets` — transfer giữa kho CN (shapes từ
+   `mappers/transfer.ts`).
+7. Cross-check vs `mappers/staffArea.ts` + `mappers/transfer.ts` + libs
+   (READ-ONLY) + drift-guard scoped (13/13 — route `/auth/reset-password`
+   có mặt nhờ harness option `devResetPassword` của SF-1).
+
+## Touch map (files SF-8 tạo/sở hữu)
+
 ```
-apps/orders/src/batching/**        (modal + slices bổ sung — KHÔNG đụng file D1 SF-7 ngoài điểm lắp placeholder)
-apps/orders/i18n/** (bổ sung keys batching)
+services/bff-gateway/openapi/paths/platform.yaml   # TẠO — duy nhất file SF-8 sở hữu
 ```
-READ-ONLY: mọi thứ khác. Lắp modal = thay placeholder component SF-7 để lại — sửa tối thiểu file SF-7 (1 điểm import/trigger).
+READ-ONLY: root/components (SF-1), `src/routes/{users,avatar,notifications,
+transfer,events,auth}.ts`, `src/kc-admin.ts`, `src/lib/{realtime-events,
+notifications,onesignal,push-triggers}.ts`, `src/mappers/**`, test/**,
+mint script.
 
-## ACCEPTANCE (user-visible — §8b D1b, walkthrough browser Rule 0)
-- Mở modal → danh sách đơn đã chọn hiện đúng selection D1.
-- Kéo thả hàng → thứ tự giao (stopOrder) thay đổi.
-- "Packing suggest" → gợi ý nhóm theo khoảng cách hiển thị.
-- Thêm đơn (search) → đơn thêm vào cuối (chỉ thấy đơn Chưa soạn cùng kho).
-- Gán shipper dropdown có data; DatePicker + hint TG giao hiện.
-- Tạo phiếu → thành công: modal đóng; assert API thấy phiếu mới + đơn đổi Đang soạn.
-- Tạo phiếu với đơn khác kho (bypass FE bằng devtools) → backend reject + message hiển thị.
+## ACCEPTANCE (user-visible)
+
+- `/documentation`: tag **Administration** đủ 8 ops + **Realtime &
+  Transfers** đủ 5 ops render (notifications đếm 2 paths riêng).
+- Try-it-out token manager: `GET /notifications` → 200 `{items,total}` shape
+  khớp; `GET /users` → 200 (evidence browser).
+- SSE thật: curl `http://localhost:8080/events?access_token=<dev token>` →
+  nhận `text/event-stream` (event format khớp spec — evidence terminal).
+- Drift-guard scoped 13/13; BFF vitest toàn xanh.
 
 ## Boundary (KHÔNG làm)
-- KHÔNG test/verify "phiếu hiện ở D2" (SF-11).
-- KHÔNG sửa Go/Java/BFF; KHÔNG sửa D1 table/bulk logic SF-7 (ngoài điểm lắp).
-- KHÔNG đổi lib DnD nếu không có spike verdict mới (fallback = REQUIREMENT-GAP).
+
+- KHÔNG sửa root/components/plugin/harness/drift-test (SF-1).
+- KHÔNG đụng paths file SF khác; KHÔNG sửa route/lib code — spec-only.
+- KHÔNG README (SF-9).

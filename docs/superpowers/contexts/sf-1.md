@@ -1,45 +1,130 @@
-# SF-1 Context Pack — FE Foundation + Spikes (polyglot gRPC + MF)
-> Đọc file này THAY VÌ tự tổng hợp. Spec thực thi: docs/superpowers/specs/ict-service-support-polyglot-spec.md (v3). Bracket: docs/superpowers/brackets/fi233-polyglot-grpc-mf.md. Epic: FI-233.
-> Tier 0 — mọi SF khác fork từ output. SAFETY > TỐC ĐỘ: contracts + spike verdicts là sản phẩm chính.
+# SF-1 Context Pack — Foundation (toolchain + root spec + shared components + drift-guard + UI mount + pilot system)
 
-## Spec slice (SF-1 chịu trách nhiệm)
-1. **Monorepo scaffold**: pnpm workspaces + turbo; `services/{bff-gateway,fulfillment-service,batching-service,print-service}`, `apps/{shell,orders,fulfillment}`, `packages/{shared,api-client}`, `api/{proto,seed}` (dir placeholders); tsconfig.base; **pin versions mọi root deps**; root `.env` chứa `JWT_DEV_SECRET`; port map dev: bff 8080, shell 3000, orders 3001, fulfillment 3002, gRPC 50051/50052/50053. Turbo CHỈ orchestrate JS/TS — KHÔNG thêm Java/Go/Python vào turbo pipeline.
-2. **packages/shared**: types §4 REQUIREMENTS (HubStoreOrderFilterItem, BatchingItem, Product) + enums (BatchStatus 0-3, OrderStatus 0-2, CoordinationStatus 0-2, BatchStatus-phiếu 0 ACTIVE|1 COMPLETED|2 CANCELLED, PrintType union `bill|delivery|handover_receipt|goods_handover|installation_acceptance`) · formatters: VND (VI `15.000.000đ` / EN `15,000,000 ₫`), `formatPeriodOfTime` (`HH:mm DD/MM/YYYY – HH:mm DD/MM/YYYY` locale-neutral số) · StatusTag (success/error/warning/info tokens) · theme §7 → AntD 4.24 ConfigProvider preset (primary #EB6E09, radius 2px/8px, Roboto, typo scale) · i18n infra (1 instance, namespaces `shell.*`/`orders.*`/`fulfillment.*` + `common.*`) · FilterBar primitives (TextSearch, MultiSelect, DateRange, DateTimeRange; grid 2×4 + Reset/Search) · `useUrlState` (filter ↔ URL query, serialize array) · `usePermissions` role matrix §2 (Coordinator=`Coordinate_Fulfillment_List|Shop` → D1+D2+Print; WarehouseOps=`WarehouseOps_CN_PickingList_View|Batch_Create|PickingList_Print` → D2+Print; Manager=all).
-3. **packages/api-client**: RTK Query singleton + **axiosBaseQuery** (chốt axios) + `setTokenGetter(fn)` registration (shell đăng ký lúc init — KHÔNG truyền token qua React context cross-MF) + tag scheme `Fulfillment`/`Batches`/`MasterData` + **default list-query `refetchOnMount: 'always'`** (cơ chế cross-remote invalidation — mọi remote inherit) + slices skeleton.
-4. **SPIKE 1** (`docs/superpowers/spikes/mf-vite-antd4.md`): MF Vite × AntD4 singleton — plugin candidates `@originjs/vite-plugin-federation` vs `@module-federation/vite` (spike quyết); verify dev + `vite build` + publicPath prod + antd KHÔNG duplicate. Fallback gãy: webpack MF (deviation flag).
-5. **SPIKE 2** (`docs/superpowers/spikes/react-pdf-remote.md`): react-pdf + pdfjs worker trong remote (worker `?url`, optimizeDeps), render 1 PDF tĩnh.
-6. **SPIKE 3** (`docs/superpowers/spikes/dnd-react18.md`): react-sortable-hoc + array-move trên React 18; gãy → dnd-kit (deviation flag, D7).
-7. **Federation scaffold THEO SPIKE 1 VERDICT** — **SPIKES CHẠY TRƯỚC scaffold** (thứ tự bắt buộc trong SF):
-   - Exposes contract PIN: orders=`orders/D1Page`→`/hub-store-order/order`; fulfillment=`fulfillment/BatchListPage`→`/hub-store-order/batch`, `fulfillment/PrintPage`→`/hub-store-order/batch/print`.
-   - Singleton shared: `react, react-dom, antd, @reduxjs/toolkit, react-redux, react-router-dom, i18next, react-i18next` + packages/shared + api-client. RRD singleton → shell owns BrowserRouter.
-   - Shell skeleton + 2 remote skeletons đủ remoteEntry load + fallback message khi remote chưa lên.
-   - `remotes.config.json` **PRE-SEED cả 2 remote entries dạng skeleton** (SF-7/SF-9 chỉ điền giá trị entry của mình — tránh merge conflict).
-8. **fake JWT util dùng chung**: `jose` (Web Crypto async — KHÔNG jwt-simple sync), HS256, `JWT_DEV_SECRET` từ root `.env` (dev-only stub). Payload `{ sub, role }`.
-9. Spike verdict format: checklist dev-pass / build-pass / publicPath-prod-pass / singleton-no-duplicate-bundle + plugin/lib chọn + config snippet.
+> Đọc file này THAY VÌ tự tổng hợp từ bracket + epic + comments.
+> Epic spec: `docs/superpowers/specs/2026-09-06-bff-api-docs-swagger-design.md` ·
+> Plan: `docs/superpowers/plans/2026-09-06-fi326-api-docs-swagger-plan.md` ·
+> Bracket: `docs/superpowers/brackets/fi326-api-docs-swagger.md`
 
-## Touch map (SF-1 sở hữu — SF khác READ-ONLY)
+## Spec slice (chỉ phần SF-1 chịu trách nhiệm)
+
+1. **Toolchain (D1)** — standalone OpenAPI 3.x YAML multi-file là SSOT của
+   docs; deps mới trong `services/bff-gateway/package.json`:
+   `@fastify/swagger@^9` (mode `static`, `specification.path` + `baseDir`
+   trỏ thư mục `openapi/` — multi-file `$ref` resolve được) +
+   `@fastify/swagger-ui@^6`. TASK ĐẦU TIÊN = compat verify: boot harness với
+   2 plugin + Fastify 5.2.1 đọc mini-spec → verdict go/fallback ghi vào
+   Linear notes. **Fallback đúng**: bundle multi-file → 1 YAML (script nhỏ)
+   rồi serve qua `swagger-ui-dist` + `@fastify/static` — fallback thay cách
+   spec-loading, KHÔNG chỉ cách serve UI.
+2. **Root `openapi/openapi.yaml`** — info (title "Hub Store BFF API"),
+   server dev `http://localhost:8080` (URL canonical — KHÔNG parametrize
+   theo PORT_BFF boot thực tế), đúng 12 tags theo BẢNG PIN trong
+   spec §4 (System/Orders/Master Data/Batches/Intake/Webhooks/Field
+   Service/Delivery/COD Settlement/Print/Administration/Realtime &
+   Transfers — tổng 84 ops), securitySchemes đúng 3 tên:
+   `bearerAuth` (HTTP bearer, JWT), `webhookHmac` (apiKey header
+   `X-Signature`), `accessTokenQuery` (apiKey query `access_token`).
+   **Pre-wire root cho tier-1**: root `$ref` sẵn tới CẢ 8 paths file +
+   TẠO 7 STUB file `paths/{fulfillment,batches,intake,tech,delivery,
+   cod-print,platform}.yaml` với nội dung `paths: {}` — tier-1 chỉ fill
+   stub của mình, KHÔNG bao giờ chạm root (tránh merge-conflict 7-way).
+3. **Components (dùng chung)** — `components/envelopes.yaml`: `ErrorEnvelope`
+   `{statusCode:int, message:string, code?:string, details?:ErrorDetail[]}`,
+   `ErrorDetail` `{field, message}`, `Paginated<T>` `{items, total, page,
+   pageSize}` (nguồn truth `packages/shared/src/api-contracts/envelopes.ts`
+   — READ-ONLY, khớp 1:1) + response templates 401/403/404/422/502
+   (`code` values thật: `UNAUTHENTICATED`, `PERMISSION_DENIED`, `NOT_FOUND`,
+   `VALIDATION_ERROR`, `UPSTREAM_UNAVAILABLE`, `BAD_REQUEST`, `INTERNAL` —
+   đọc `lib/envelope.ts` + `app.ts` setErrorHandler + `lib/grpc-error.ts`).
+   `components/enums.yaml`: CHỈ enum dùng chung ≥2 domains (KNOWN_ROLES 7:
+   Coordinator/WarehouseOps/Manager/Admin/WarehouseEmployee/
+   InsideTechnician/OutsideTechnician — `plugins/auth.ts`, batchStatus,
+   orderStatus nếu ≥2 domains dùng). `components/parameters.yaml`:
+   page/pageSize + path params chuẩn hoá (`code`, `fulfillCode`, `userId`,
+   `orderCode`, `batchCode`, `shopCode`, `printerId`).
+4. **Pilot `paths/system.yaml` (3 ops, tag System, KHÔNG `security`)** —
+   shapes THẬT từ code: `GET /healthz` → 200 `{status:'ok'}` (`app.ts:80`);
+   `GET /health` → 200 `{status:'ok', db:{fulfillment:'ok'|'disabled'}}` |
+   503 `{statusCode:503, status:'degraded', db:{fulfillment:'down'}}`
+   (`app.ts:87-99`); `GET /version` → 200 `{version: string|null}`
+   (`routes/meta.ts` — APP_VERSION env ?? null).
+5. **Plugin mount** — `src/plugins/api-docs.ts` (mới): env
+   `BFF_ENABLE_API_DOCS === '1'` (pattern `=== '1'` như
+   `ENABLE_DEV_RESET_PASSWORD` trong `config.ts`) → register swagger static
+   + swagger-ui tại prefix `/documentation`; unset → KHÔNG register (prod
+   fail-safe — "không mount thay vì dựa vào doc"). Wire 3-5 dòng trong
+   `app.ts`.
+6. **Guard skip-list** — `plugins/auth.ts`: thêm prefix
+   `startsWith('/documentation')` (pattern MỚI — file này hiện dùng
+   exact-path + `startsWith('/x?')`); phải phủ UI assets + `/documentation/json`
+   + `oauth2-redirect.html`. KHÔNG đổi behavior route nào khác.
+7. **Drift-guard** — `test/openapi.drift.test.ts` (mới, vitest): load app
+   qua `startHarness()` (`test/harness.ts` — `HarnessOptions` interface
+   dòng 421; hiện hardcode `devResetPassword: false` dòng 536) → extract
+   registered routes → so `spec.paths`. Semantics PIN:
+   (a) test TỰ KHÁM PHÁ mọi `paths/*.yaml` tồn tại — assertion PER-FILE
+   (SF-1 xanh với đúng 3 ops của system.yaml, không đòi 84);
+   (b) assertion NGƯỢC "mọi route harness phải thuộc SOME spec file" (full
+   check) CHỈ BẬT khi env `DRIFT_FULL=1` (SF-9 dùng);
+   (c) normalize `:param` → `{param}` 2 chiều trước khi so (note:
+   find-my-way regex-param `:p(re)` lấy phần tên trước `(`);
+   (d) thêm option `devResetPassword` vào `HarnessOptions` (SF-1 DUY NHẤT
+   được chạm harness — SF khác READ-ONLY), boot drift test với option bật;
+   (e) extract với `BFF_ENABLE_API_DOCS` unset (tránh bắt nhầm
+   `/documentation` routes);
+   (f) FAIL message chỉ rõ method+path (thiếu spec / thiếu route);
+   (g) export helper để SF-2..8 viết test file RIÊNG
+   `test/openapi.drift.<domain>.test.ts` gọi với file paths của mình —
+   không ai sửa file drift chung;
+   (h) **negative control** (exit criteria): thêm 1 route giả vào spec →
+   test ĐỎ với message đúng → revert (chứng minh guard không luôn-xanh).
+8. **Regression** — `pnpm --filter @hub-store/bff-gateway test` toàn xanh
+   (31 test files hiện có không được phá).
+
+## Touch map (files SF-1 tạo/sở hữu)
+
 ```
-package.json, pnpm-workspace.yaml, turbo.json, tsconfig.base.json, .env (JWT_DEV_SECRET)
-packages/shared/**          (SAU SF NÀY FROZEN — trừ api-contracts/ do SF-2 thêm)
-packages/api-client/**
-apps/shell/**               (CHỈ skeleton — SF-6 sở hữu phần thân)
-apps/orders/**              (CHỈ skeleton — SF-7/SF-8 sở hữu phần thân)
-apps/fulfillment/**         (CHỈ skeleton — SF-9/SF-10 sở hữu phần thân)
-remotes.config.json         (pre-seed skeleton)
-docs/superpowers/spikes/{mf-vite-antd4,react-pdf-remote,dnd-react18}.md
+services/bff-gateway/
+├─ openapi/                                  # TẠO MỚI — SF-1 sở hữu root + components
+│  ├─ openapi.yaml                           #   + pre-wire refs 8 paths file
+│  ├─ components/{envelopes,enums,parameters}.yaml
+│  └─ paths/system.yaml                      # pilot (SF-1 author)
+│  └─ paths/{fulfillment,batches,intake,tech,delivery,cod-print,platform}.yaml
+│                                            # 7 STUB paths:{} — tier-1 fill
+├─ src/plugins/api-docs.ts                   # TẠO MỚI
+├─ src/app.ts                                # EDIT: register plugin (flag-gated)
+├─ src/plugins/auth.ts                       # EDIT: skip-list prefix /documentation
+├─ test/openapi.drift.test.ts                # TẠO MỚI + export helper
+├─ test/harness.ts                           # EDIT: HarnessOptions thêm devResetPassword
+└─ package.json                              # EDIT: +2 deps
 ```
-KHÔNG đụng: `services/**` (SF-2..5), `api/**` (SF-2).
+READ-ONLY (nguồn shapes — không sửa): `src/routes/**`, `src/lib/**`,
+`packages/shared/src/api-contracts/**`, `e2e/scripts/mint_sf11.py` (dùng
+lấy dev token — không sửa).
 
 ## ACCEPTANCE (user-visible)
-- `pnpm install && pnpm build` pass sạch trên monorepo.
-- `pnpm dev` root: shell :3000 + 2 remotes (:3001/:3002) lên; shell load 2 remote skeletons vào mount region (placeholder thấy trên browser); remote chưa chạy → fallback message, không trắng trang.
-- VI↔EN toggle chạy ở shell; theme FPT orange #EB6E09 hiện.
-- 3 spike files tồn tại, mỗi file VERDICT rõ (go/fallback + lý do + config) theo 4-item checklist.
-- `pnpm test` smoke xanh (formatters/StatusTag/usePermissions unit tests).
+
+- `BFF_ENABLE_API_DOCS=1 pnpm --filter @hub-store/bff-gateway dev` → mở
+  `http://localhost:8080/documentation`: Swagger UI render, sidebar thấy tag
+  System với 3 ops (healthz/health/version) — evidence browser (Rule 0
+  DOM/VISUAL/FLOW, không tự kết luận).
+- Try-it-out trong UI: `GET /healthz` → 200 `{status:"ok"}` THẬT; `GET
+  /version` → 200 có/null version.
+- `BFF_ENABLE_API_DOCS` unset → `/documentation` 404 (fail-safe) + app boot
+  bình thường.
+- Thêm 1 route giả vào spec (hoặc comment-out route thật) → drift test ĐỎ
+  với message method+path rõ; revert → xanh.
+- `pnpm --filter @hub-store/bff-gateway test` toàn workspace BFF xanh.
 
 ## Boundary (KHÔNG làm)
-- KHÔNG screen business logic (SF-6..10); KHÔNG backend/proto/seed thật (SF-2 — chỉ fake JWT util).
-- KHÔNG AppLayout hoàn chỉnh/role switcher UI (SF-6 — chỉ skeleton + tokens).
-- KHÔNG sửa exposes contract table — đổi tên = toàn DAG gãy → REQUIREMENT-GAP lên epic FI-233.
-- KHÔNG tự chọn fallback nếu spike chưa chạy — verdict dựa trên thử thật.
-- KHÔNG đụng services/** hoặc api/** (SF-2).
+
+- KHÔNG author paths domain (fulfillment/batches/intake/tech/delivery/
+  cod-print/platform.yaml) — SF-2..8 sở hữu.
+- KHÔNG sửa bất kỳ `src/routes/*.ts`, không đổi error/auth runtime behavior
+  (skip-list chỉ thêm /documentation).
+- KHÔNG sửa `components/` hoặc root spec SAU khi tier-1 fork — nếu SF domain
+  phát hiện thiếu component chung → flag coordinator (REQUIREMENT-GAP),
+  không tự sửa (7 SF song song sẽ xung đột).
+- KHÔNG README/CHANGELOG — SF-9.
+- Domain-specific schema/enum viết INLINE trong paths file — không thêm vào
+  `components/enums.yaml` trừ khi ≥2 domains thật sự dùng.

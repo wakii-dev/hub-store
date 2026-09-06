@@ -1,30 +1,65 @@
-# SF-6 Context Pack — Shell app (MF host)
-> Đọc file này THAY VÌ tự tổng hợp. Spec thực thi: docs/superpowers/specs/ict-service-support-polyglot-spec.md (v3 §2). Bracket: docs/superpowers/brackets/fi233-polyglot-grpc-mf.md. Epic: FI-233.
-> Tier 1 (dep SF-1). Chạy SONG SONG với SF-2 — bạn KHÔNG cần BFF để hoàn thành (auth là stub).
+# SF-6 Context Pack — Delivery last-mile + D2C (deliverybatch.ts 6 + d2c.ts 3 = 9 ops)
 
-## Spec slice (SF-6 chịu trách nhiệm)
-1. **MF host theo SPIKE 1 verdict** (SF-1): cấu hình shell load 2 remotes từ `remotes.config.json` (pre-seed SF-1); dynamic remote loading + **fallback message khi remote chưa lên** (không trắng trang). KHÔNG sửa exposes contract table.
-2. **AppLayout** (tokens §7): sidebar 48px + header 55px, FPT orange #EB6E09, Roboto; AntD ConfigProvider wrap VÙNG MOUNT REMOTE (chỉ hiệu lực khi antd singleton — đã pin SF-1).
-3. **Router**: `/hub-store-order/order` → orders/D1Page; `/hub-store-order/batch` → fulfillment/BatchListPage; `/hub-store-order/batch/print` → fulfillment/PrintPage. Shell owns BrowserRouter (RRD singleton — `useNavigate` trong remote hoạt động). 404 page.
-4. **Auth stub**: login giả lập → sinh fake JWT HS256 (`jose`, `JWT_DEV_SECRET` từ root `.env`, payload `{sub, role}`) · **role switcher** UI (Coordinator / Warehouse Ops / Manager) · OIDC config qua env vars (`VITE_OIDC_AUTHORITY`...) — production chỉ đổi env.
-5. **setTokenGetter registration**: shell đăng ký token-getter vào api-client singleton lúc init (context KHÔNG xuyên MF boundary).
-6. **i18next init**: 1 instance; namespaces `shell.*` + wire `orders.*`/`fulfillment.*` (remotes đăng ký sau); VI/EN toggle (VI ngôn ngữ gốc).
-7. **Route gating theo role matrix §2**: Coordinator → thấy D1+D2+Print; WarehouseOps → D2+Print; Manager → tất cả. Gate ở tầng shell route mount.
-8. Smoke test: shell load 2 remote skeletons qua federation.
+> Đọc file này THAY VÌ tự tổng hợp từ bracket + epic + comments.
+> Epic spec: `docs/superpowers/specs/2026-09-06-bff-api-docs-swagger-design.md` ·
+> Plan: `docs/superpowers/plans/2026-09-06-fi326-api-docs-swagger-plan.md` ·
+> Bracket: `docs/superpowers/brackets/fi326-api-docs-swagger.md`
+> Context chung (components, drift-guard, plugin): `docs/superpowers/contexts/sf-1.md`.
 
-## Touch map (SF-6 sở hữu)
+## Boot/verify môi trường (PIN — không tự quyết)
+
+- **File của bạn đã được SF-1 pre-wire**: `paths/delivery.yaml` là stub
+  `paths: {}` đã được root `$ref` — FILL stub, KHÔNG chạm
+  root/components/plugin/harness.
+- **Drift test riêng**: tạo `test/openapi.drift.delivery.test.ts` gọi helper
+  từ `test/openapi.drift.test.ts` (SF-1) — KHÔNG sửa file drift chung.
+  Pass = 9/9.
+- **Bootstrap worktree**: copy `.env` từ main worktree; mặc định try-it-out
+  qua BFF stack `:8080` (token: `python3 e2e/scripts/mint_sf11.py manager
+  /tmp/auth.json`); isolated thì `PORT_BFF=18085`.
+- **Wave 2** (song song SF-7, SF-8) — fork từ nhánh đích đã chứa wave-1
+  merges; nếu nhánh đích tiến trước khi start → re-fork/base mới nhất.
+
+## Spec slice (chỉ phần SF-6 chịu trách nhiệm)
+
+Author `services/bff-gateway/openapi/paths/delivery.yaml` — 9 operations,
+tag **Delivery (9)** (bảng pin spec §4). Domain: giao last-mile qua carrier
+(NVC) + D2C/dropship:
+
+1. `POST /delivery-batch/quotes` — DeliveryQuotesRequest → quotes từ NVC
+   (shape từ route + `api-contracts/delivery-batch.ts`).
+2. `POST /delivery-batch/planning/confirm` + `POST /delivery-batch/booking`
+   — booking shipment với carrier (shapes thật từ route).
+3. `POST /delivery-batch/cancel-delivery-order` + `POST
+   /delivery-batch/cancel-batch` — cancels (state conditions từ route).
+4. `GET /delivery-batch/searchbookingdetail` — query params + response
+   booking detail.
+5. `POST /d2c-orders/filter` — D2cFilterBody (role gate D2C_ROLES:
+   WarehouseEmployee/WarehouseOps/Manager — note description).
+6. `PUT /d2c-orders/{orderCode}/note` + `GET /d2c-orders/export` — export
+   **CSV BOM** (`format: binary`, date range from/to) — đọc route lấy
+   filename/header thật.
+7. Cross-check vs `api-contracts/delivery-batch.ts` + mappers liên quan
+   (READ-ONLY) + drift-guard scoped (9/9).
+
+## Touch map (files SF-6 tạo/sở hữu)
+
 ```
-apps/shell/**            (ngoài skeleton SF-1 — bạn sở hữu phần thân)
+services/bff-gateway/openapi/paths/delivery.yaml   # TẠO — duy nhất file SF-6 sở hữu
 ```
-READ-ONLY: remotes.config.json (chỉ thêm READER — entries do SF-7/SF-9 điền), packages/shared/**, packages/api-client/**, apps/orders|fulfillment/**, services/**, api/**.
+READ-ONLY: root/components (SF-1), `src/routes/{deliverybatch,d2c}.ts`,
+`src/mappers/**` liên quan, packages/shared/**, test/**, mint script.
 
 ## ACCEPTANCE (user-visible)
-- Shell :3000: login stub → vào layout; role switcher đổi routes nhìn thấy được (Coordinator thấy menu D1, Ops không).
-- VI↔EN toggle đổi nhãn layout (sidebar/header).
-- 2 remotes skeletons load vào mount region; tắt 1 remote → fallback message.
-- Fake JWT sinh được (decode thấy role); api-client nhận token qua setTokenGetter.
+
+- `/documentation`: tag **Delivery** đủ 9 ops render.
+- Try-it-out token manager: `POST /delivery-batch/quotes` body example →
+  response khớp schema; `GET /d2c-orders/export?from=…&to=…` → tải CSV
+  (evidence browser).
+- Drift-guard scoped 9/9; BFF vitest toàn xanh.
 
 ## Boundary (KHÔNG làm)
-- KHÔNG business screen nào (SF-7..10); KHÔNG sửa skeleton federation config SF-1 (trừ đọc remotes.config).
-- KHÔNG gọi BFF thật (SF-2 song song — auth stub tự contain).
-- KHÔNG đụng apps/orders|fulfillment nội dung (SF-7/9).
+
+- KHÔNG sửa root/components/plugin/harness/drift-test (SF-1).
+- KHÔNG đụng paths file SF khác; KHÔNG sửa route/mapper code — spec-only.
+- KHÔNG README (SF-9).
