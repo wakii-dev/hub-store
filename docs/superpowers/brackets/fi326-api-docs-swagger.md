@@ -7,7 +7,7 @@ Contexts: docs/superpowers/contexts/sf-{1..9}.md (bắt buộc đọc per SF)
 
 ## SF-1 Foundation — toolchain, root spec, drift-guard, Swagger UI
 Tier: 0
-linear:
+linear: FI-327
 Design: none
 What: Bật BFF_ENABLE_API_DOCS=1 mở :8080/documentation thấy Swagger UI với tag System (3 pilot public endpoints healthz/health/version) và try-it-out /healthz trả 200 thật; drift-guard vitest chặn thêm/xóa route mà không sửa spec; tắt flag thì UI không tồn tại (fail-safe prod).
 Depends on: —
@@ -15,7 +15,7 @@ Tasks: compat-verify plugins static-mode (fallback bundle) / root openapi.yaml (
 
 ## SF-2 Orders domain docs
 Tier: 1
-linear:
+linear: FI-328
 Design: none
 What: Swagger UI có tag Orders (13 ops: filter/detail/audit/note/delivery-time/assign/complete-picking/history/export CSV/dashboard-stats/status-stats/time-slots/time-delivery) + tag Master Data (3 ops regions/delivery-staff/shops); schemas khớp response thật; try-it-out POST /fulfillment/filter với dev token trả Paginated đúng shape.
 Depends on: SF-1
@@ -23,7 +23,7 @@ Tasks: author fulfillment.yaml filter+export-csv / detail OrderDetail / audit Ma
 
 ## SF-3 Batching docs
 Tier: 1
-linear:
+linear: FI-329
 Design: none
 What: Tag Batches 9 ops đủ schemas — packing-suggest, create, filter, criteria, detail, cancel, recalculate-distance + criteria-presets GET/select; try-it-out /fulfillment/batches/criteria chạy thật.
 Depends on: SF-1
@@ -31,7 +31,7 @@ Tasks: author batches.yaml packing-suggest+create / filter+criteria / detail+can
 
 ## SF-4 Intake + Webhook docs
 Tier: 1
-linear:
+linear: FI-330
 Design: none
 What: Tag Intake 8 ops (tạo đơn lẻ, import template CSV/preview multipart/confirm bulk, fail/redeliver, audit, by-batch) + tag Webhooks 1 op (POST /webhooks/orders HMAC X-Signature/X-Source) với description external-facing cho integrators và example signature chạy thật với dev server.
 Depends on: SF-1
@@ -39,7 +39,7 @@ Tasks: author intake.yaml POST /orders / import flow template-csv+preview-multip
 
 ## SF-5 Field Service docs
 Tier: 1
-linear:
+linear: FI-331
 Design: none
 What: Tag Field Service 13 ops — delivery/service order filters, service-order lifecycle assign/accept/complete/reschedule, technicians suggest, service-employees CRUD+active+payment-account verify; role gates ghi đúng từng endpoint.
 Depends on: SF-1
@@ -47,7 +47,7 @@ Tasks: author tech.yaml delivery-orders-filter / service-orders-filter / lifecyc
 
 ## SF-6 Delivery last-mile + D2C docs
 Tier: 1
-linear:
+linear: FI-332
 Design: none
 What: Tag Delivery 9 ops — quotes/planning-confirm/booking carrier NVC, cancel-delivery-order/cancel-batch, searchbookingdetail, D2C filter/note/export CSV BOM; try-it-out quotes + export CSV chạy thật.
 Depends on: SF-1
@@ -55,7 +55,7 @@ Tasks: author delivery.yaml quotes+planning+booking / 2 cancels / searchbookingd
 
 ## SF-7 COD Settlement + Print docs
 Tier: 1
-linear:
+linear: FI-333
 Design: none
 What: Tag COD Settlement 6 ops (confirm per-order/batch, pending, settlement, settlement CSV, settlement detail per-shop) + tag Print 6 ops (print PDF binary, printers list, print-errors counts, printers CRUD) — PDF tải về mở được, CSV có BOM đúng.
 Depends on: SF-1
@@ -63,7 +63,7 @@ Tasks: author cod-print.yaml cod confirm+confirm-batch / pending+settlement / se
 
 ## SF-8 Platform/Admin docs
 Tier: 1
-linear:
+linear: FI-334
 Design: none
 What: Tag Administration 8 ops (users CRUD+set-password/enabled, avatar upload multipart+serve image binary, reset-password x-dev-only) + tag Realtime & Transfers 5 ops (notifications 2 paths alias, SSE /events access_token query, transfer tickets 2 ops); SSE curl thật nhận event-stream.
 Depends on: SF-1
@@ -71,7 +71,7 @@ Tasks: author platform.yaml users list+create / set-password+enabled+delete / av
 
 ## SF-9 Convergence — verify toàn cục, regression, README, story close
 Tier: 2
-linear:
+linear: FI-335
 Design: none
 What: Trên nhánh đích: Swagger UI walkthrough đủ 84 ops/12 tags, drift-guard full 84/84 xanh, try-it-out ≥1 op mỗi tag, secrets grep 0 hit, pnpm test + e2e toàn xanh không sửa test nào, README có section API docs, PR nhánh đích→main mở sẵn chờ người merge.
 Depends on: SF-2, SF-3, SF-4, SF-5, SF-6, SF-7, SF-8
