@@ -1,0 +1,3 @@
+# STUB — tier-1 SF fill (SF-1 pre-wire). Domain KHÔNG chạm root openapi.yaml;
+# chỉ thêm path-items vào file này. Bundle merge map `paths` vào root tại runtime.
+paths: {}

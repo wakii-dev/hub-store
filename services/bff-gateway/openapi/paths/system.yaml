@@ -1,0 +1,97 @@
+# System — 3 pilot ops (SF-1). Shapes THẬT từ code:
+#   GET /healthz  → app.ts:80   (liveness, luôn {status:'ok'})
+#   GET /health   → app.ts:87-99 (readiness — ping DB audit/notifications; 503 khi down)
+#   GET /version  → routes/meta.ts (APP_VERSION env ?? null)
+# Cả 3 public (guard skip-list) → không khai `security`.
+paths:
+  /healthz:
+    get:
+      tags: [System]
+      operationId: getHealthz
+      summary: Liveness probe
+      description: >
+        Không JWT (public skip-list). Compose/K8s probe dùng — trả ngay khi
+        process sống, KHÔNG ping upstream.
+      responses:
+        '200':
+          description: Process sống.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+  /health:
+    get:
+      tags: [System]
+      operationId: getHealth
+      summary: Readiness probe (ping DB BFF sở hữu)
+      description: >
+        Không JWT (public skip-list — compose probe không có JWT). Ping trực
+        tiếp pool DB fulfillment (notifications dùng chung). BFF không có cred
+        DB batching → không key batching ở đây. Fail-open khi thiếu env DB
+        (host-run/test) → `fulfillment: disabled`.
+      responses:
+        '200':
+          description: Sống — DB ok hoặc disabled (thiếu env DB).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, db]
+                properties:
+                  status:
+                    type: string
+                    example: ok
+                  db:
+                    type: object
+                    required: [fulfillment]
+                    properties:
+                      fulfillment:
+                        type: string
+                        enum: [ok, disabled]
+                        example: ok
+        '503':
+          description: Degraded — DB ping fail.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status, db]
+                properties:
+                  status:
+                    type: string
+                    example: degraded
+                  db:
+                    type: object
+                    required: [fulfillment]
+                    properties:
+                      fulfillment:
+                        type: string
+                        enum: [down]
+                        example: down
+  /version:
+    get:
+      tags: [System]
+      operationId: getVersion
+      summary: Build version của BFF
+      description: >
+        Không JWT (public skip-list). Trả `APP_VERSION` env của build; null
+        khi unset (host-run không inject). VersionCheck của shell dùng để
+        phát hiện "Phiên bản mới" → prompt reload.
+      responses:
+        '200':
+          description: Version hiện tại (null khi chưa set).
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version:
+                    type: string
+                    nullable: true
+                    example: '1.42.0'
