@@ -11,6 +11,12 @@
  * (b) reverse check chỉ DRIFT_FULL=1 · (c) normalize `:param` ↔ `{param}`,
  * regex-param `:p(re)` lấy tên trước `(` · (d) devResetPassword:true ·
  * (e) BFF_ENABLE_API_DOCS unset khi extract · (f) FAIL message method+path.
+ *
+ * SF-9 (FI-335) mở rộng (b): reverse-check so SKELETON shape (param → {*})
+ * thay vì so tên — find-my-way gộp route trùng vị trí param khác tên thành
+ * node `:a|:b`, tên thật không khôi phục được từ printRoutes; static
+ * segments vẫn so exact nên route thừa/thiếu static vẫn đỏ. Forward-check
+ * (spec→app qua hasRoute) giữ nguyên so tên.
  */
 import fs from 'node:fs';
 import path from 'node:path';
@@ -79,13 +85,32 @@ interface ParsedRoute {
   path: string; // dạng ':param'
 }
 
-/** Expand param alternation find-my-way: '/x/:a|:b' → ['/x/:a', '/x/:b']. */
+/**
+ * Expand param alternation find-my-way: '/x/:a|:b' → ['/x/:a', '/x/:b'].
+ * SF-9 fix: alternation nằm TRONG 1 segment — node có con thì suffix sau
+ * segment phải giữ nguyên từng variant ('/x/:a|:b/y' → ['/x/:a/y',
+ * '/x/:b/y']). Bản cũ cắt head tại '/' cuối của variant đầu → mất suffix.
+ */
 function expandParamAlternation(p: string): string[] {
   if (!p.includes('|')) return [p];
-  const parts = p.split('|');
-  const first = parts[0];
-  const head = first.slice(0, first.lastIndexOf('/') + 1); // giữ '/' chung của segment
-  return [first, ...parts.slice(1).map((rest) => head + rest)];
+  let variants: string[] = [''];
+  for (const seg of p.split('/')) {
+    if (!seg) continue; // leading '' từ split('/') — '/' do flatMap thêm
+    const alts = seg.includes('|') ? seg.split('|') : [seg];
+    variants = variants.flatMap((v) => alts.map((a) => `${v}/${a}`));
+  }
+  return variants;
+}
+
+/**
+ * Skeleton path — mọi param (:name / {name}) → {*} để so SHAPE bỏ tên.
+ * SF-9: find-my-way gộp 2 route trùng vị trí param khác tên thành node
+ * in `:a|:b` — tên thật của từng route không khôi phục được từ printRoutes,
+ * so theo tên sẽ false-positive phantom (GET /fulfillment/:code). Static
+ * segments vẫn so chính xác → route khai báo thừa/thiếu vẫn bị bắt.
+ */
+export function skeletonRoutePath(p: string): string {
+  return normalizeRoutePath(p).replace(/:[A-Za-z0-9_]+/g, '{*}');
 }
 
 /**
@@ -119,12 +144,12 @@ export function parsePrintRoutes(output: string): ParsedRoute[] {
   return routes;
 }
 
-/** MỌI ops từ mọi paths/*.yaml (auto-discovery) — set đã normalize. */
+/** MỌI ops từ mọi paths/*.yaml (auto-discovery) — set dạng skeleton. */
 export function loadAllSpecOps(): Set<string> {
   const all = new Set<string>();
   for (const file of fs.readdirSync(PATHS_DIR).filter((f) => f.endsWith('.yaml'))) {
     for (const op of loadSpecFileOps(path.join(PATHS_DIR, file))) {
-      all.add(`${op.method} ${normalizeRoutePath(op.path)}`);
+      all.add(`${op.method} ${skeletonRoutePath(op.path)}`);
     }
   }
   return all;
@@ -132,15 +157,19 @@ export function loadAllSpecOps(): Set<string> {
 
 /**
  * Hướng code→spec (semantics b — CHỈ DRIFT_FULL=1): mọi route harness phải
- * thuộc SOME spec file. Throw liệt kê route thiếu.
+ * thuộc SOME spec file (so skeleton shape — xem skeletonRoutePath). Throw
+ * liệt kê route thiếu.
  */
 export function assertAppRoutesAllInSpec(app: FastifyInstance): void {
   const printRoutes = (app as unknown as { printRoutes: (o: { commonPrefix: boolean }) => string })
     .printRoutes({ commonPrefix: false });
   const specOps = loadAllSpecOps();
-  const missing = parsePrintRoutes(printRoutes).filter(
-    (r) => !specOps.has(`${r.method} ${normalizeRoutePath(r.path)}`),
-  );
+  const missing = parsePrintRoutes(printRoutes).filter((r) => {
+    // OPTIONS * = preflight wildcard của @fastify/cors — không phải API
+    // surface (OpenAPI docs per-path; không SF nào khai OPTIONS op).
+    if (r.method === 'OPTIONS' && r.path === '*') return false;
+    return !specOps.has(`${r.method} ${skeletonRoutePath(r.path)}`);
+  });
   if (missing.length > 0) {
     throw new Error(
       `[drift-guard] ${missing.length} route chưa có trong spec nào (paths/*.yaml):\n` +

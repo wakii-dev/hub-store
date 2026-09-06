@@ -20,6 +20,7 @@ import {
   openDriftHarness,
   parsePrintRoutes,
   PATHS_DIR,
+  skeletonRoutePath,
   type DriftHarness,
 } from './openapi.drift.helpers.js';
 import fs from 'node:fs';
@@ -62,6 +63,33 @@ describe('openapi drift-guard: negative control + DRIFT_FULL', () => {
   );
 
   // Parser printRoutes phải reconstruct đúng fragment-nối-thẳng + param.
+  it('parsePrintRoutes: alternation node CÓ con — suffix giữ nguyên từng variant (SF-9)', () => {
+    // Cây thật DRIFT_FULL gặp: con của node alternation từng bị truncate
+    // (head cắt tại param cuối) → phantom 'POST /fulfillment/:fulfillCode'.
+    const parsed = parsePrintRoutes(
+      [
+        '├── /fulfillment/:fulfillCode|:code (GET, HEAD)',
+        '│   ├── /assign-shop-hub (POST)',
+        '│   └── /transfer-tickets (POST)',
+      ].join('\n'),
+    );
+    const keys = parsed.map((r) => `${r.method} ${r.path}`);
+    expect(keys).toContain('GET /fulfillment/:fulfillCode');
+    expect(keys).toContain('GET /fulfillment/:code');
+    expect(keys).toContain('POST /fulfillment/:fulfillCode/assign-shop-hub');
+    expect(keys).toContain('POST /fulfillment/:code/assign-shop-hub');
+    expect(keys).toContain('POST /fulfillment/:fulfillCode/transfer-tickets');
+    expect(keys).toContain('POST /fulfillment/:code/transfer-tickets');
+    expect(keys).not.toContain('POST /fulfillment/:fulfillCode');
+  });
+
+  it('skeletonRoutePath: param name → {*} — reverse-check so shape (SF-9)', () => {
+    expect(skeletonRoutePath('/fulfillment/:code')).toBe('/fulfillment/{*}');
+    expect(skeletonRoutePath('/fulfillment/{fulfillCode}')).toBe('/fulfillment/{*}');
+    expect(skeletonRoutePath('/users/{userId}/set-password')).toBe('/users/{*}/set-password');
+    expect(skeletonRoutePath('/healthz')).toBe('/healthz');
+  });
+
   it('parsePrintRoutes: fragment nối thẳng + expand param alternation', () => {
     const parsed = parsePrintRoutes(
       [
