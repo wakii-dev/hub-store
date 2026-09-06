@@ -837,3 +837,5 @@ paths:
                 statusCode: 503
                 message: webhook auth unavailable
                 code: SERVICE_UNAVAILABLE
+        '500':
+          $ref: '../components/envelopes.yaml#/components/responses/Internal500'
