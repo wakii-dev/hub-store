@@ -322,6 +322,8 @@ paths:
                   mock: false
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
           description: >
             Upstream INVALID_ARGUMENT → VALIDATION_ERROR hoặc FAILED_PRECONDITION
@@ -429,6 +431,8 @@ paths:
                   mock: false
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
           description: >
             Upstream INVALID_ARGUMENT → VALIDATION_ERROR hoặc FAILED_PRECONDITION
@@ -495,6 +499,8 @@ paths:
                   mock: false
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
           description: >
             Upstream INVALID_ARGUMENT → VALIDATION_ERROR hoặc FAILED_PRECONDITION
@@ -573,6 +579,8 @@ paths:
                   mock: false
         '401':
           $ref: '../components/envelopes.yaml#/components/responses/Unauthorized401'
+        '404':
+          $ref: '../components/envelopes.yaml#/components/responses/NotFound404'
         '422':
           description: >
             Upstream INVALID_ARGUMENT → VALIDATION_ERROR hoặc FAILED_PRECONDITION
