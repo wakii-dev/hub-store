@@ -103,6 +103,50 @@ describe('bundleOpenApiSpec', () => {
     expect(schema.properties.nested.$ref).toBe('#/schemas/Status'); // internal giữ nguyên
   });
 
+  it('root path khai trực tiếp + x-path-files CÙNG LÚC → coexist; trùng → throw', () => {
+    write('openapi.yaml', {
+      paths: {
+        '/root-direct': { get: {} },
+        'x-path-files': ['./paths/system.yaml'],
+      },
+    });
+    write('paths/system.yaml', { paths: { '/from-file': { get: {} } } });
+    const doc = bundleOpenApiSpec(path.join(dir, 'openapi.yaml')) as Record<string, any>;
+    expect(Object.keys(doc.paths).sort()).toEqual(['/from-file', '/root-direct']);
+
+    write('openapi-dup.yaml', {
+      paths: {
+        '/clash': { get: {} },
+        'x-path-files': ['./paths/clash.yaml'],
+      },
+    });
+    write('paths/clash.yaml', { paths: { '/clash': { get: {} } } });
+    expect(() => bundleOpenApiSpec(path.join(dir, 'openapi-dup.yaml'))).toThrowError(/\/clash/);
+  });
+
+  it('pointer miss đuôi (typo target) → THROW, không silent-undefined', () => {
+    write('openapi.yaml', {
+      paths: {
+        '/x': { get: { responses: { $ref: './components/r.yaml#/responses/TypoName' } } },
+      },
+    });
+    write('components/r.yaml', { responses: { Real: { description: 'OK' } } });
+    expect(() => bundleOpenApiSpec(path.join(dir, 'openapi.yaml'))).toThrowError(
+      /TypoName.*không tồn tại/,
+    );
+  });
+
+  it('trùng component giữa 2 file → throw (không silent last-wins)', () => {
+    write('openapi.yaml', {
+      components: { 'x-component-files': ['./components/a.yaml', './components/b.yaml'] },
+    });
+    write('components/a.yaml', { components: { schemas: { Same: { type: 'object' } } } });
+    write('components/b.yaml', { components: { schemas: { Same: { type: 'string' } } } });
+    expect(() => bundleOpenApiSpec(path.join(dir, 'openapi.yaml'))).toThrowError(
+      /schemas\.Same/,
+    );
+  });
+
   it('chuỗi $ref > 32 hop → throw depth-cap (nest sâu hợp lệ KHÔNG bị false-positive)', () => {
     // Chain 33 file: chain-0.yaml → chain-1.yaml → … → chain-32.yaml (terminal).
     for (let i = 0; i <= 32; i++) {

@@ -47,16 +47,23 @@ function loadYaml(absPath: string): Record<string, unknown> {
 /** JSON-pointer lookup theo RFC 6901 (`~1` → `/`, `~0` → `~`). */
 function pointerLookup(doc: unknown, pointer: string): unknown {
   if (pointer === '') return doc;
-  // strip CHỈ '/' đầu (pointer luôn '/a/b'); segment rỗng GIỮ NGUYÊN — lookup
-  // miss → lỗi tường minh thay vì âm thầm bỏ qua (code-review P2).
+  // strip CHỈ '/' đầu (pointer luôn '/a/b'); segment rỗng GIỮ NGUYÊN — miss →
+  // lỗi tường minh thay vì âm thầm bỏ qua (code-review P2).
   const segments = pointer.replace(/^\//, '').split('/');
-  return segments.reduce<unknown>((acc, segment) => {
+  const result = segments.reduce<unknown>((acc, segment) => {
     if (acc === null || typeof acc !== 'object') {
       throw new Error(`openapi-bundle: cannot resolve pointer '${pointer}' (walk hit non-object).`);
     }
     const key = segment.replace(/~1/g, '/').replace(/~0/g, '~');
     return (acc as Record<string, unknown>)[key];
   }, doc);
+  // Trailing miss (vd typo `#/schemas/TypoName`) phải THROW — undefined =
+  // "walk rớt khỏi document"; YAML parse không bao giờ sinh giá trị undefined
+  // nên không có false-positive (code-review round-2 P1).
+  if (result === undefined) {
+    throw new Error(`openapi-bundle: pointer '${pointer}' không tồn tại trong file được ref.`);
+  }
+  return result;
 }
 
 /**
@@ -133,10 +140,16 @@ export function bundleOpenApiSpec(rootPath: string = DEFAULT_ROOT): Record<strin
       const doc = loadYaml(abs);
       const comps = (doc.components ?? {}) as Record<string, unknown>;
       for (const [section, values] of Object.entries(comps)) {
-        mergedComponents[section] = {
-          ...((mergedComponents[section] as Record<string, unknown>) ?? {}),
-          ...(values as Record<string, unknown>),
-        };
+        const target = { ...((mergedComponents[section] as Record<string, unknown>) ?? {}) };
+        // Trùng tên component giữa 2 file = lỗi authoring → throw (symmetry
+        // với paths — code-review round-2 P2: silent last-wins là footgun SF-9).
+        for (const [key, value] of Object.entries(values as Record<string, unknown>)) {
+          if (key in target) {
+            throw new Error(`openapi-bundle: duplicate component '${section}.${key}' (file ${rel}).`);
+          }
+          target[key] = value;
+        }
+        mergedComponents[section] = target;
       }
     }
   }
