@@ -178,7 +178,23 @@ paths:
                     baseFee: 25000
                     etaMinutes: 35
                     isExceedFeeLimit: false
-                    addonServices: []
+                    addonServices:
+                      - code: ROUTE_MULTI
+                        name: 'Giao nhiều điểm'
+                        grp: ROUTE
+                        fee: 15000
+                      - code: LOADING_MAN
+                        name: 'Bốc xếp hàng'
+                        grp: LOADING
+                        fee: 20000
+                      - code: DOCUMENT
+                        name: 'Chứng từ kèm theo'
+                        grp: DOCUMENT
+                        fee: 0
+                      - code: ROUND_TRIP
+                        name: 'Giao rồi về'
+                        grp: ROUND_TRIP
+                        fee: 30000
                 meta:
                   mock: true
         '401':
@@ -613,8 +629,10 @@ paths:
       description: >
         Tra chi tiết booking + timeline vận chuyển theo danh sách planningId —
         `planningIds` comma-separated (convention app gốc, KHÔNG repeated query).
-        Planning chưa book → `booking: null`, `timeline: []`. Booking đã hủy →
-        `cancelledAt`/`cancelReason` có giá trị. Timeline source: BE | PARTNER.
+        Planning chưa book HOẶC đã hủy (booking CANCELLED bị loại khỏi search)
+        → `booking: null`, `timeline: []`. Booking present thì `cancelledAt`/
+        `cancelReason` luôn rỗng (server chỉ giữ booking hiện hành, §3.4).
+        Timeline source: BE | PARTNER.
         gRPC SearchBookingDetail (batching-service). Role: mọi user đã đăng nhập.
       parameters:
         - name: planningIds
@@ -673,11 +691,12 @@ paths:
                             cancelledAt:
                               type: string
                               format: date-time
-                              description: ISO-8601 — chỉ set khi CANCELLED.
-                              example: '2026-09-06T05:00:00.000Z'
+                              description: ISO-8601 — server hiện luôn trả rỗng (search chỉ giữ booking hiện hành, §3.4).
+                              example: ''
                             cancelReason:
                               type: string
-                              example: 'Khách hủy đơn'
+                              description: Luôn rỗng ở hiện tại (booking CANCELLED bị loại khỏi search).
+                              example: ''
                         timeline:
                           type: array
                           description: Các mốc vận chuyển (rỗng khi chưa book).
@@ -710,10 +729,10 @@ paths:
                       driverName: 'Nguyễn Văn A'
                       driverPhone: '0901234501'
                       licensePlate: 51A-123.45
-                      status: CANCELLED
+                      status: DRIVER_FOUND
                       bookedAt: '2026-09-06T03:30:00.000Z'
-                      cancelledAt: '2026-09-06T05:00:00.000Z'
-                      cancelReason: 'Khách hủy đơn'
+                      cancelledAt: ''
+                      cancelReason: ''
                     timeline:
                       - status: ORDER_CREATED
                         source: BE
@@ -723,10 +742,7 @@ paths:
                         source: PARTNER
                         occurredAt: '2026-09-06T03:45:00.000Z'
                         note: 'Đã gán tài xế'
-                      - status: CANCELLED
-                        source: PARTNER
-                        occurredAt: '2026-09-06T05:00:00.000Z'
-                        note: 'Khách hủy đơn'
+                  # planning chưa book hoặc đã hủy (booking CANCELLED bị loại) — entry rỗng:
                   - planningId: '102'
                     booking: null
                     timeline: []
@@ -939,7 +955,7 @@ paths:
                   - orderCode: D2C-934527
                     orderIdInter: 'INT-1814527'
                     deliveryId: 'VTP99D934527'
-                    carrier: GHTK
+                    carrier: ViettelPost
                     shop: 'Shop Thời Trang ABC'
                     exportEmployee: 'Nguyễn Văn Hùng'
                     exportTime: '2026-08-07T08:26:00.000Z'
@@ -1025,7 +1041,7 @@ paths:
                   orderCode: D2C-934527
                   orderIdInter: 'INT-1814527'
                   deliveryId: 'VTP99D934527'
-                  carrier: GHTK
+                  carrier: ViettelPost
                   shop: 'Shop Thời Trang ABC'
                   exportEmployee: 'Nguyễn Văn Hùng'
                   exportTime: '2026-08-07T08:26:00.000Z'
