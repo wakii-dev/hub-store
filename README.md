@@ -324,10 +324,14 @@ Every BFF route is guarded by a drift-guard vitest suite
 (`services/bff-gateway/test/openapi.drift.*.test.ts`):
 
 - each domain spec file (`paths/*.yaml`) is checked against the real
-  Fastify route table — adding/renaming a route without updating its spec
-  file **fails the test** (`pnpm --filter @hub-store/bff-gateway test`);
-- `DRIFT_FULL=1` additionally runs the reverse check (every mounted route
-  must belong to SOME spec file) — used at convergence/CI time;
+  Fastify route table — renaming/removing a route without updating its
+  spec file **fails the default test** (`pnpm --filter
+  @hub-store/bff-gateway test`);
+- the other direction (a route **added** with no spec entry at all) is
+  caught by the reverse check — run it manually at convergence time with
+  `DRIFT_FULL=1 pnpm --filter @hub-store/bff-gateway test` (it is not
+  wired into the default test script or CI, so run it before merging
+  route changes);
 - so: when you touch `src/routes/*`, update the matching
   `openapi/paths/*.yaml` **in the same PR**. If you only changed a
   response shape, update the schema/examples too — the spot-check that
