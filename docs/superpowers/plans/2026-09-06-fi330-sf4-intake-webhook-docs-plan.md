@@ -33,11 +33,11 @@
 - [x] T6: cross-check shapes vs api-contracts/intake.ts + mappers + hmac + webhook-mapping (READ-ONLY probe)
 - [x] T7: drift-guard scoped — test/openapi.drift.intake.test.ts (9/9) + vitest BFF xanh (406 pass; 12 fail đầu = thiếu .env, pre-existing, đã chứng minh bằng stash-check)
 - [x] T8: verify — try-it-out template CSV + curl webhook signature đúng scheme qua dev server (matrix 200/dedupe/401/422 qua Java host-run; +'500' ref Internal500 thêm vào webhook op sau quan sát upstream thật)
-- [ ] T9: browser walkthrough /documentation (Rule 0) + code-reviewer độc lập + merge + story-verify
+- [x] T9: browser walkthrough /documentation (Rule 0) + code-reviewer độc lập + merge + story-verify
 
 ## Verify (Phase 5) — ACCEPTANCE checklist
 
-- [ ] /documentation: tag Intake 8 ops + Webhooks 1 op render (browser evidence)
-- [ ] Try-it-out manager token: GET /orders/import/template tải CSV thật
-- [ ] curl webhook signature đúng lib/hmac.ts scheme → 200 khớp spec (không 401)
-- [ ] Drift-guard scoped 9/9; BFF vitest toàn xanh
+- [x] /documentation: tag Intake 8 ops + Webhooks 1 op render (browser evidence)
+- [x] Try-it-out manager token: GET /orders/import/template tải CSV thật
+- [x] curl webhook signature đúng lib/hmac.ts scheme → 200 khớp spec (không 401)
+- [x] Drift-guard scoped 9/9; BFF vitest toàn xanh
