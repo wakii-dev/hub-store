@@ -1,0 +1,23 @@
+# Enums DÙNG CHUNG ≥2 domains — rule context pack SF-1: CHỈ enum thật sự được
+# ≥2 domain dùng mới nằm đây; enum riêng domain viết INLINE trong paths file.
+#
+# Probe (2026-09-06): KNOWN_ROLES dùng ở 10/19 route files (requireRole/role
+# gate) — đủ điều kiện. batchStatus/orderStatus KHÔNG đủ: BFF là pass-through
+# (grep literal trạng thái trong src/routes = gần 0, shared api-contracts cũng
+# không định nghĩa enum status) — khi domain cần status shape, viết inline.
+components:
+  schemas:
+    KnownRoles:
+      type: string
+      description: >
+        Roles mà app nhận — nguồn truth `src/plugins/auth.ts` KNOWN_ROLES
+        (claim `realm_access.roles` ∩ danh sách này). Role gate per-endpoint
+        ghi trong description từng op; Admin là role write của StaffArea.
+      enum:
+        - Coordinator
+        - WarehouseOps
+        - Manager
+        - Admin
+        - WarehouseEmployee
+        - InsideTechnician
+        - OutsideTechnician
